@@ -722,6 +722,7 @@ jobs:
         protecao-de-envio-nao-congela-o-padrao.spec.ts
         agente-marca-consulta.spec.ts
         agenda-marcar-pela-tela.spec.ts
+        clinic-profissionais-e-bloqueios.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts

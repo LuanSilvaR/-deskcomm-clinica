@@ -6,6 +6,7 @@
  * basta o profissional ter uma delas.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { useT } from "@/hooks/i18n/useT";
@@ -29,14 +30,31 @@ function ExigenciasDoTipo({ tipo, podeEditar }: { tipo: TipoDeAtendimento; podeE
       ).data.specialty_ids,
   });
 
+  // ESTADO LOCAL, trocado NO MESMO EVENTO do clique. O checkbox é controlado:
+  // se o valor novo só chegasse pelo cache do react-query (que avisa num tick
+  // seguinte), o React devolveria o input ao valor velho logo após o evento e
+  // ele piscaria desmarcado — medido no E2E como "Clicking the checkbox did not
+  // change its state". `marcadas` volta a null quando o servidor responde.
+  const [marcadas, setMarcadas] = useState<string[] | null>(null);
+  const atuais = marcadas ?? exigidas.data ?? [];
+
   const salvar = useMutation({
     mutationFn: (ids: string[]) =>
       apiClient.put(`/api/v1/clinic/tipos/${tipo.id}/especialidades`, { specialty_ids: ids }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["clinic"] }),
+    onSuccess: (_r, ids) => qc.setQueryData(chave, ids),
     onError: showApiError,
+    onSettled: () => {
+      setMarcadas(null);
+      void qc.invalidateQueries({ queryKey: ["clinic"] });
+    },
   });
 
-  const atuais = exigidas.data ?? [];
+  const alternar = (id: string, marcar: boolean) => {
+    const ids = marcar ? [...atuais.filter((x) => x !== id), id] : atuais.filter((x) => x !== id);
+    setMarcadas(ids);
+    salvar.mutate(ids);
+  };
+
   const ativas = (especialidades.data ?? []).filter((e) => e.is_active);
 
   return (
@@ -57,9 +75,7 @@ function ExigenciasDoTipo({ tipo, podeEditar }: { tipo: TipoDeAtendimento; podeE
                 type="checkbox"
                 disabled={!podeEditar || salvar.isPending}
                 checked={atuais.includes(esp.id)}
-                onChange={(e) =>
-                  salvar.mutate(e.target.checked ? [...atuais, esp.id] : atuais.filter((id) => id !== esp.id))
-                }
+                onChange={(e) => alternar(esp.id, e.target.checked)}
               />
               {esp.name}
             </label>
