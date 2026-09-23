@@ -50,6 +50,9 @@ export const ApiErrorCodes = {
   agenda_sem_responsavel: "agenda_sem_responsavel",
   // FORK clinic (migration 9001): o dono não tem a especialidade que o tipo exige.
   profissional_nao_habilitado: "profissional_nao_habilitado",
+  // FORK clinic (migration 9002): a ficha cadastral do paciente está incompleta
+  // e a organização exige a ficha na chegada / no "Compareceu".
+  ficha_incompleta: "ficha_incompleta",
   agenda_disponibilidade_invalida: "agenda_disponibilidade_invalida",
   agenda_ja_cancelado: "agenda_ja_cancelado",
   agenda_listagem_sem_recorte: "agenda_listagem_sem_recorte",

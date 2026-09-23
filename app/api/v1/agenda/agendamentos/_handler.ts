@@ -48,6 +48,7 @@ import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import { moverLeadParaEtapaDeAgendamento } from "@/lib/leads/appointment-stage-move";
 import { logger } from "@/lib/logger";
 import { habilitacaoNaConsulta } from "@/lib/clinic/agenda/regras-da-clinica";
+import { fichaPermiteAtendimento } from "@/lib/clinic/pacientes/servidor";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type SB = SupabaseClient;
@@ -468,6 +469,21 @@ export async function alterarAgendamentoHandler(
   if (input.status === "completed" || input.status === "no_show") {
     if (ctx.actor.type !== "user") throw new ApiError(403,"forbidden",undefined,ctx.requestId,"Peça à equipe para confirmar a presença no compromisso. Uma interpretação de texto não registra o fato.");
     if (input.outcome_message_id) mudanca.outcome_message_id=input.outcome_message_id;
+  }
+  // FORK clinic (migration 9002): com a ficha obrigatória ligada, "Compareceu"
+  // exige a ficha cadastral completa — a mesma regra da chegada.
+  if (input.status === "completed" && input.status !== atual.status) {
+    const permite = await fichaPermiteAtendimento(supabase, ctx.organization_id, (atual.contact_id as string | null) ?? null);
+    if (!permite.ok && "erro" in permite) throw new ApiError(500, "internal_error", undefined, ctx.requestId, permite.erro);
+    if (!permite.ok) {
+      throw new ApiError(
+        422,
+        "ficha_incompleta",
+        { faltando: permite.faltando },
+        ctx.requestId,
+        `Complete a ficha do paciente antes de registrar o comparecimento. Falta: ${permite.faltando.join(", ")}.`,
+      );
+    }
   }
   if(input.confirmation_next_at) mudanca.confirmation_next_at=input.confirmation_next_at;
   if (input.notes !== undefined) mudanca.notes = input.notes;
