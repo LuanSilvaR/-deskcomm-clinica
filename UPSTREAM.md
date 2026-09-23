@@ -11,5 +11,8 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | .gitattributes | `CLAUDE.md merge=ours` (requer `git config merge.ours.driver true` em cada clone) | f1ea6ad21 |
 | .claude/settings.json | Permissões + hooks PreToolUse/PostToolUse do fork; SessionStart do upstream mantido | f1ea6ad21 |
 
-## Pendências conhecidas herdadas
-- `tests/unit/skills-embutidas.test.ts`: 13 falhas pelas skills `supabase*` adicionadas em a9fb36837 (fora do padrão de skill embutida). Existe antes da configuração do Claude Code.
+## Skills de terceiros
+As skills `supabase` e `supabase-postgres-best-practices` (supabase/agent-skills) ficam no perfil do usuário
+(`~/.claude/skills`), NÃO no repositório: `.agents/skills` é reservado aos guias do produto e
+`tests/unit/skills-embutidas.test.ts` reprova skill fora desse padrão (removidas em cb03beac1).
+Reinstalar numa máquina nova: `npx skills add supabase/agent-skills -g`.
