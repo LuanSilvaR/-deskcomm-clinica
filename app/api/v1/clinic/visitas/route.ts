@@ -59,6 +59,17 @@ export async function GET(req: NextRequest): Promise<Response> {
         .in("appointment_id", ids)
     : { data: [], error: null };
   if (e2) return fail("internal_error", e2.message, 500, { requestId });
+  // FORK clinic (9004): a confirmação do paciente, quando houve pedido.
+  const { data: confirmacoes } = ids.length
+    ? await supabase
+        .from("clinic_confirmation_requests")
+        .select("appointment_id, status")
+        .eq("organization_id", org)
+        .in("appointment_id", ids)
+    : { data: [] };
+  const confirmacaoPorAgendamento = new Map(
+    (confirmacoes ?? []).map((c) => [c.appointment_id as string, c.status as string]),
+  );
   const porAgendamento = new Map((visitas ?? []).map((v) => [v.appointment_id as string, v]));
 
   const itens = (agendamentos ?? []).map((a) => {
@@ -75,6 +86,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       paciente: nomeDoContato(c),
       status: v && ehStatusDaVisita(v.status) ? v.status : "agendado",
       desde: v?.changed_at ?? null,
+      confirmacao: confirmacaoPorAgendamento.get(a.id as string) ?? null,
     };
   });
   return ok({ dia, itens }, { requestId });

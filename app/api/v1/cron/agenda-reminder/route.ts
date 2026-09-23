@@ -75,6 +75,8 @@ import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { moldeDoDegrau } from "@/lib/agenda/lembretes";
 import { autorizaCron } from "@/lib/auth/cron-auth";
+import { deveAnexarPedido, registrarPedido } from "@/lib/clinic/confirmacao/servidor";
+import { PEDIDO_DE_CONFIRMACAO } from "@/lib/clinic/confirmacao/resposta";
 
 export const dynamic = "force-dynamic";
 
@@ -362,7 +364,7 @@ async function handle(req: NextRequest): Promise<Response> {
 
     const { data: organizacao } = await admin
       .from("organizations")
-      .select("timezone, locale")
+      .select("timezone, locale, settings")
       .eq("id", org)
       .maybeSingle();
 
@@ -378,16 +380,30 @@ async function handle(req: NextRequest): Promise<Response> {
       if (modelo?.body) molde = modelo.body;
     }
 
-    const corpo = montarLembrete({
+    const idioma = normalizarIdioma(organizacao?.locale);
+    const corpoDoLembrete = montarLembrete({
       nomeDoContato: nomeDoContato(contato),
       titulo: linha.title,
       quando: new Date(linha.starts_at),
       timezone: organizacao?.timezone ?? "America/Sao_Paulo",
       local: linha.location_details ?? tipo.location_details ?? null,
-      idioma: normalizarIdioma(organizacao?.locale),
+      idioma,
       molde,
       tipoNome: tipo.name,
     });
+
+    // FORK clinic (9004): o lembrete da véspera pede SIM/NÃO quando a clínica
+    // ligou a confirmação automática. A resposta é lida por
+    // lib/clinic/confirmacao/resposta.handler.ts.
+    const pedeConfirmacao = await deveAnexarPedido(admin, {
+      organizationId: org,
+      appointmentId: linha.id,
+      settings: organizacao?.settings,
+      degraus: pendentes,
+    });
+    const corpo = pedeConfirmacao
+      ? `${corpoDoLembrete}\n\n${traduzir(PEDIDO_DE_CONFIRMACAO, idioma)}`
+      : corpoDoLembrete;
 
     await espacarEnvio(canal.id);
 
@@ -424,6 +440,22 @@ async function handle(req: NextRequest): Promise<Response> {
         .eq("id", linha.id)
         .eq("organization_id", org);
       enviados += 1;
+      if (pedeConfirmacao) {
+        // O lembrete já saiu; falhar aqui só perde o registro do pedido, e a
+        // resposta do paciente continua no inbox.
+        await registrarPedido(admin, {
+          organizationId: org,
+          appointmentId: linha.id,
+          contactId: contato.id,
+          conversationId: conversaId,
+        }).catch((err: unknown) =>
+          logger.error("[agenda-reminder] pedido de confirmação não registrado", {
+            appointmentId: linha.id,
+            error: err instanceof Error ? err.message : String(err),
+            requestId,
+          }),
+        );
+      }
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : String(err);
       logger.error("[agenda-reminder] envio falhou", { appointmentId: linha.id, error: mensagem, requestId });

@@ -31,6 +31,7 @@ import {
 } from "@/lib/clinic/visitas/status";
 
 import { FichaDoPaciente } from "./FichaDoPaciente";
+import { SeloDaConfirmacao } from "./SeloDaConfirmacao";
 
 interface EventoDaVisita {
   id: string;
@@ -45,6 +46,8 @@ interface EventoDaVisita {
 interface Visita {
   visita: { status: StatusDaVisita };
   eventos: EventoDaVisita[];
+  /** FORK clinic (9004): a resposta ao pedido de confirmação, se houve pedido. */
+  confirmacao: { status: string } | null;
 }
 
 export const COR_DO_STATUS: Record<StatusDaVisita, string> = {
@@ -125,6 +128,7 @@ export function VisitaDoPaciente({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-text-muted">{t("Status da visita")}:</span>
         <SeloDaVisita status={atual} />
+        <SeloDaConfirmacao status={consulta.data?.confirmacao?.status} />
       </div>
 
       {podeMudar ? (

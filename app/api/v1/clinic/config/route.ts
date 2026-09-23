@@ -4,6 +4,8 @@
  * `profissionais`: regras de especialidade e bloqueios na agenda (migration 9001).
  * `ficha_obrigatoria`: exigir a ficha completa do paciente na chegada e no
  * "Compareceu" (migration 9002).
+ * `confirmacao_automatica`: o lembrete da véspera pede SIM/NÃO e a falta de
+ * resposta vira tarefa de ligação (migration 9004).
  *
  * GET: qualquer membro lê (as telas precisam saber). PATCH: só admin, pelas
  * funções `fn_clinic_definir_*`, que também exigem MFA provado quando a sessão
@@ -16,6 +18,7 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
 import { clinicProfissionaisLigado } from "@/lib/clinic/flags";
 import { fichaObrigatoriaLigada } from "@/lib/clinic/pacientes/servidor";
 import { requireSupportWrite } from "@/lib/impersonate/support";
@@ -31,6 +34,7 @@ async function lerOpcoes(orgId: string) {
   return {
     profissionais: clinicProfissionaisLigado(settings),
     ficha_obrigatoria: fichaObrigatoriaLigada(settings),
+    confirmacao_automatica: confirmacaoAutomaticaLigada(settings),
   };
 }
 
@@ -42,14 +46,19 @@ export async function GET(): Promise<Response> {
 }
 
 const patchSchema = z
-  .object({ profissionais: z.boolean().optional(), ficha_obrigatoria: z.boolean().optional() })
-  .refine((v) => v.profissionais !== undefined || v.ficha_obrigatoria !== undefined, {
+  .object({
+    profissionais: z.boolean().optional(),
+    ficha_obrigatoria: z.boolean().optional(),
+    confirmacao_automatica: z.boolean().optional(),
+  })
+  .refine((v) => v.profissionais !== undefined || v.ficha_obrigatoria !== undefined || v.confirmacao_automatica !== undefined, {
     message: "Informe se o módulo fica ligado.",
   });
 
 const FUNCAO_DA_OPCAO = {
   profissionais: "fn_clinic_definir_flag",
   ficha_obrigatoria: "fn_clinic_definir_ficha_obrigatoria",
+  confirmacao_automatica: "fn_clinic_definir_confirmacao_automatica",
 } as const;
 
 export async function PATCH(req: NextRequest): Promise<Response> {
@@ -69,7 +78,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   }
 
   const supabase = await createClient();
-  for (const opcao of ["profissionais", "ficha_obrigatoria"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });

@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { SeloDaConfirmacao } from "@/components/clinic/SeloDaConfirmacao";
 import { SeloDaVisita } from "@/components/clinic/VisitaDoPaciente";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,8 @@ interface ItemDoDia {
   paciente: string | null;
   status: StatusDaVisita;
   desde: string | null;
+  /** FORK clinic (9004): resposta ao pedido de confirmação, se houve pedido. */
+  confirmacao: string | null;
 }
 
 const CHAVE_BASE = ["clinic", "recepcao"] as const;
@@ -148,7 +151,10 @@ export function PainelDaRecepcao({
                         {i.titulo} · {nome(i.profissional_id)}
                       </p>
                       <div className="flex items-center justify-between gap-2">
-                        <SeloDaVisita status={i.status} />
+                        <span className="flex flex-wrap items-center gap-1">
+                          <SeloDaVisita status={i.status} />
+                          {coluna === "agendado" ? <SeloDaConfirmacao status={i.confirmacao} /> : null}
+                        </span>
                         {min !== null && coluna !== "agendado" && coluna !== "finalizado" ? (
                           <span className="text-xs text-text-muted">
                             {t("há")} {min} {t("min")}
