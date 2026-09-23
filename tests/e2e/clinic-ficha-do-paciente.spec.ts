@@ -8,6 +8,7 @@
  *   3. na agenda, "Paciente chegou" abre a ficha ali mesmo; a data de nascimento
  *      de menor faz aparecer o responsável; ao salvar completa, a chegada é registrada;
  *   4. a lista mostra "Ficha completa" e o CPF ficou gravado (cifrado);
+ *   4b. ao marcar, a recepção acha a paciente pelo CPF e pela data de nascimento;
  *   5. desliga a exigência (deixa o ambiente como achou).
  */
 import { execFileSync } from "node:child_process";
@@ -144,7 +145,8 @@ test("recepção completa a ficha do paciente na chegada — pela tela", async (
   await foto(page, "03-chegada-abre-a-ficha");
 
   await ficha.getByLabel("Nome completo").fill(`Bruna Souza E2E${sufixo}`);
-  await ficha.getByLabel("CPF", { exact: true }).fill(cpfValidoNovo());
+  const cpfDaPaciente = cpfValidoNovo();
+  await ficha.getByLabel("CPF", { exact: true }).fill(cpfDaPaciente);
   // Menor de idade: a seção do responsável aparece na hora.
   await ficha.getByLabel("Data de nascimento").fill("2012-03-15");
   await expect(ficha.getByLabel("Nome do responsável")).toBeVisible();
@@ -190,6 +192,18 @@ test("recepção completa a ficha do paciente na chegada — pela tela", async (
   await page.getByRole("tab", { name: "Ficha do paciente" }).click();
   await expect(page.getByTestId("ficha-situacao")).toContainText("Ficha completa");
   await foto(page, "07-aba-ficha-do-paciente");
+
+  // ── E1: ao marcar, a recepção acha a paciente por CPF ou por nascimento ────
+  await page.goto("/app/agenda");
+  await page.getByRole("button", { name: /novo agendamento/i }).click();
+  const quem = page.getByTestId("quem-sera-atendido");
+  await quem.fill(cpfDaPaciente.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4"));
+  await expect(page.getByRole("option", { name: new RegExp(`Bruna Souza E2E${sufixo}`) })).toBeVisible({ timeout: 10_000 });
+  await quem.fill("15/03/2012");
+  const porNascimento = page.getByRole("option", { name: new RegExp(`Bruna Souza E2E${sufixo}`) });
+  await expect(porNascimento).toBeVisible({ timeout: 10_000 });
+  await expect(porNascimento).toContainText("15/03/2012");
+  await foto(page, "08-busca-por-nascimento-ao-marcar");
 
   // ── 5. deixa o ambiente como achou ─────────────────────────────────────────
   await exigirFicha(page, false);

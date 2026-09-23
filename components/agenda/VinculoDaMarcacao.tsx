@@ -7,7 +7,7 @@ import { NewContactDialog } from "@/components/contacts/NewContactDialog";
 import { cn } from "@/lib/utils";
 
 type Vinculos = {
-  contacts: Array<{ id: string; name: string }>;
+  contacts: Array<{ id: string; name: string; detalhe?: string | null }>;
   conversations: Array<{ id: string; created_at: string; status: string }>;
 };
 
@@ -58,7 +58,7 @@ export function VinculoDaMarcacao({
   // vira o nome, e o contato volta selecionado.
   const buscou = termo.length > 0 && !contactId;
   const nadaEncontrado = buscou && !lista.isLoading && contatos.length === 0;
-  const opcoes = [
+  const opcoes: Array<{ id: string; name: string; detalhe?: string | null }> = [
     { id: "", name: t("Compromisso pessoal, sem cliente") },
     ...contatos,
   ];
@@ -119,7 +119,7 @@ export function VinculoDaMarcacao({
             aria-activedescendant={aberto ? `${listaId}-${destacado}` : undefined}
             className="mt-1 w-full rounded-md border bg-surface p-2 outline-hidden"
             value={valor}
-            placeholder={t("Compromisso pessoal, sem cliente")}
+            placeholder={t("Nome, telefone, CPF ou nascimento (DD/MM/AAAA)")}
             autoComplete="off"
             onFocus={abrir}
             onChange={(e) => aoDigitar(e.target.value)}
@@ -147,6 +147,9 @@ export function VinculoDaMarcacao({
                   onClick={() => escolher(opcao.id, opcao.name)}
                 >
                   {opcao.name}
+                  {opcao.detalhe ? (
+                    <span className="ml-2 text-xs text-text-muted">{opcao.detalhe}</span>
+                  ) : null}
                 </li>
               ))}
               {nadaEncontrado ? (

@@ -11733,6 +11733,8 @@ export const DICIONARIO: Traducoes = {
   "Histórico de agendamentos e atendimentos": { es: "Historial de citas y atenciones" },
   "Nenhum agendamento ainda.": { es: "Todavía no hay citas." },
   "Ver mais antigos": { es: "Ver más antiguos" },
+  // ── FORK clinic (E1): busca do paciente ao marcar ──
+  "Nome, telefone, CPF ou nascimento (DD/MM/AAAA)": { es: "Nombre, teléfono, CPF o nacimiento (DD/MM/AAAA)" },
 };
 
 /**
