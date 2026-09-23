@@ -109,13 +109,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   const { specialty_ids, ...ficha } = lido.data;
+  // Nome da FICHA (opcional), não a cadeia de nome de contato: sem valor, grava null.
+  const nomeNaFicha = typeof ficha.display_name === "string" ? ficha.display_name : null;
   const { data: salvo, error } = await supabase
     .from("clinic_professionals")
     .upsert(
       {
         organization_id: org,
         user_id: ficha.user_id,
-        display_name: ficha.display_name ?? null,
+        display_name: nomeNaFicha,
         council: ficha.council ?? null,
         council_number: ficha.council_number ?? null,
         council_uf: ficha.council_uf ?? null,

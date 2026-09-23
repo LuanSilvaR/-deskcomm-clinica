@@ -43,12 +43,12 @@ function falsoSupabase() {
         if (["insert", "upsert", "update", "delete"].includes(nome)) {
           c.op = nome;
           c.valor = args[0];
-        } else if (["eq", "in", "gte", "lte", "not"].includes(nome)) {
+        } else if (["eq", "in", "gte", "lte", "not", "is"].includes(nome)) {
           c.filtros.push([nome, String(args[0]), args[args.length - 1]]);
         }
         return cadeia;
       };
-      for (const m of ["select", "insert", "upsert", "update", "delete", "eq", "in", "gte", "lte", "not", "order", "limit"]) {
+      for (const m of ["select", "insert", "upsert", "update", "delete", "eq", "in", "gte", "lte", "not", "is", "order", "limit"]) {
         cadeia[m] = encadeia(m);
       }
       const resolver = () => respostas[`${tabela}:${c.op}`] ?? { data: { id: "novo-id" }, error: null };
