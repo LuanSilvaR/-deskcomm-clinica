@@ -27,6 +27,7 @@ import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { origemDoContato } from "@/lib/leads/origem-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { FichaDoPaciente } from "@/components/clinic/FichaDoPaciente";
+import { HistoricoDeAtendimentos } from "@/components/clinic/HistoricoDeAtendimentos";
 import { DialButton } from "@/components/voice/DialButton";
 
 interface Props {
@@ -293,7 +294,9 @@ export function ContactDetailClient({ contactId }: Props) {
           </Card>
         </TabsContent>
 
-        <TabsContent value="timeline" className="mt-4">
+        <TabsContent value="timeline" className="mt-4 space-y-4">
+          {/* FORK clinic (migration 9003): agendamentos e atendimentos do paciente. */}
+          <HistoricoDeAtendimentos contactId={contactId} />
           <TimelineView contactId={contactId} />
         </TabsContent>
 

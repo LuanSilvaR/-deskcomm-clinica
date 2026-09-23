@@ -12,7 +12,8 @@ import { PainelDaRecepcao } from "./_client";
 
 export const dynamic = "force-dynamic";
 
-export default async function RecepcaoPage() {
+export default async function RecepcaoPage({ searchParams }: { searchParams: Promise<{ dia?: string }> }) {
+  const { dia } = await searchParams;
   const user = await requireAuth();
   const t = (texto: string) => traduzir(texto, user.idioma);
   const activeOrg = await resolveActiveOrg(user);
@@ -28,6 +29,7 @@ export default async function RecepcaoPage() {
       </header>
       <PainelDaRecepcao
         orgId={activeOrg.orgId}
+        dia={dia && /^\d{4}-\d{2}-\d{2}$/.test(dia) ? dia : null}
         usuarioAtualId={user.id}
         podeMudar={ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent || (user.is_platform_admin && !user.support)}
       />

@@ -34,7 +34,7 @@ interface ItemDoDia {
   desde: string | null;
 }
 
-const CHAVE = ["clinic", "recepcao"] as const;
+const CHAVE_BASE = ["clinic", "recepcao"] as const;
 
 function minutosDesde(iso: string | null, agora: number): number | null {
   if (!iso) return null;
@@ -43,13 +43,17 @@ function minutosDesde(iso: string | null, agora: number): number | null {
 
 export function PainelDaRecepcao({
   orgId,
+  dia: diaEscolhido,
   usuarioAtualId,
   podeMudar,
 }: {
   orgId: string;
+  /** `?dia=AAAA-MM-DD` para ver outro dia; ausente = hoje. */
+  dia: string | null;
   usuarioAtualId: string;
   podeMudar: boolean;
 }) {
+  const CHAVE = [...CHAVE_BASE, diaEscolhido ?? "hoje"];
   const t = useT();
   const tagDoIdioma = useTagDeIdioma();
   const qc = useQueryClient();
@@ -63,11 +67,16 @@ export function PainelDaRecepcao({
 
   const dia = useQuery({
     queryKey: CHAVE,
-    queryFn: async () => (await apiClient.get<{ data: { dia: string; itens: ItemDoDia[] } }>("/api/v1/clinic/visitas")).data,
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: { dia: string; itens: ItemDoDia[] } }>(
+          `/api/v1/clinic/visitas${diaEscolhido ? `?dia=${diaEscolhido}` : ""}`,
+        )
+      ).data,
     refetchInterval: 120_000,
   });
 
-  const recarregar = useCallback(() => void qc.invalidateQueries({ queryKey: CHAVE }), [qc]);
+  const recarregar = useCallback(() => void qc.invalidateQueries({ queryKey: CHAVE_BASE }), [qc]);
   const { status: statusDoTempoReal } = useRealtimeChannel({
     name: `recepcao-visitas-${orgId}`,
     postgresChanges: { event: "*", schema: "public", table: "clinic_appointment_visits", filter: `organization_id=eq.${orgId}` },

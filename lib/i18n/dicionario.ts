@@ -11729,6 +11729,10 @@ export const DICIONARIO: Traducoes = {
   "Status inválido.": { es: "Estado inválido." },
   "Para voltar um passo, informe o motivo da correção.": { es: "Para volver un paso, indica el motivo de la corrección." },
   "Você não tem permissão para mudar o status.": { es: "No tienes permiso para cambiar el estado." },
+  // ── FORK clinic (migration 9003): histórico de atendimentos ──
+  "Histórico de agendamentos e atendimentos": { es: "Historial de citas y atenciones" },
+  "Nenhum agendamento ainda.": { es: "Todavía no hay citas." },
+  "Ver mais antigos": { es: "Ver más antiguos" },
 };
 
 /**
