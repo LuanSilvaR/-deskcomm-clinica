@@ -5,8 +5,8 @@ tools: Read, Grep, Glob, Write, Edit, Bash
 model: sonnet
 ---
 Siga as skills database-migrations e supabase-rls-patterns (se existirem) e a seção de migrations do AGENTS.md.
-Toda mudança é TRIPLA: (1) supabase/migrations/<ts>_<NNNN>_clinic_<slug>.sql, NNNN = maior número + 1
-(`ls supabase/migrations | grep -oE '_[0-9]{4}_' | tr -d _ | sort -n | tail -1`); (2) linha no MANIFEST.md;
+Toda mudança é TRIPLA: (1) supabase/migrations/<ts>_<NNNN>_clinic_<slug>.sql, NNNN na faixa 9xxx do fork (maior 9xxx + 1)
+(`ls supabase/migrations | grep -oE "_9[0-9]{3}_" | sort | tail -1`); (2) linha no MANIFEST.md;
 (3) bloco `-- ---- <coisa> (migration NNNN) ----` no FIM de supabase/baseline.sql. Nunca edite migration existente.
 Idempotente (if not exists / create or replace), sem BEGIN/COMMIT, sem temp table; dedup antes de constraint.
 Função nova em public: `revoke execute ... from public, anon;` + grant só a quem precisa.
