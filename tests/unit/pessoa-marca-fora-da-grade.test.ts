@@ -636,3 +636,41 @@ describe("o intervalo antes do atendimento vale na ESCRITA, não só na leitura 
     expect(criados(banco)).toHaveLength(0);
   });
 });
+
+describe("FORK clinic (migration 9005): a trava do banco sai como a MESMA recusa", () => {
+  /**
+   * O banco em memória não roda trigger. Aqui ele responde o que
+   * `trg_clinic_trava_sobreposicao` responde quando duas marcações passam juntas
+   * pela conferência do código: `23P01`. A trava em si é provada no Postgres em
+   * tests/invariants/clinic-trava-de-sobreposicao.test.ts.
+   */
+  const TRAVA = { code: "23P01", message: "agenda_horario_indisponivel" };
+  function comTrava(banco: Banco): SupabaseClient {
+    return {
+      from: (tabela: string) =>
+        tabela === "calendar_appointments"
+          ? {
+              ...(banco.client.from(tabela) as unknown as Linha),
+              insert: () => ({ select: () => ({ single: async () => ({ data: null, error: TRAVA }) }) }),
+            }
+          : banco.client.from(tabela),
+      rpc: async (fn: string, args: Linha) =>
+        fn === "fn_appointment_change" ? { data: null, error: TRAVA } : banco.client.rpc(fn, args),
+    } as unknown as SupabaseClient;
+  }
+
+  it("marcar: o 23P01 do INSERT vira 422 agenda_horario_indisponivel, não 500", async () => {
+    const banco = agenda();
+    await expect(
+      marcarAgendamentoHandler(comTrava(banco), ctx(PESSOA), { event_type_id: TIPO, starts_at: FORA_DA_GRADE }),
+    ).rejects.toMatchObject(RECUSA);
+  });
+
+  it("remarcar: o 23P01 do fn_appointment_change vira 422 agenda_horario_indisponivel", async () => {
+    const meu = { ...agendamento(NA_GRADE, "2026-10-07T14:00:00.000Z"), id: MEU_COMPROMISSO };
+    const banco = agenda({ agendamentos: [meu] });
+    await expect(
+      alterarAgendamentoHandler(comTrava(banco), ctx(PESSOA), { id: MEU_COMPROMISSO, starts_at: FORA_DA_GRADE }),
+    ).rejects.toMatchObject(RECUSA);
+  });
+});
