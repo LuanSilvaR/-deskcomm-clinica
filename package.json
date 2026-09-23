@@ -124,6 +124,7 @@
     "postcss": "^8.5.28",
     "prettier": "^3.9.7",
     "prettier-plugin-tailwindcss": "^0.8.1",
+    "sass": "^1.104.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
