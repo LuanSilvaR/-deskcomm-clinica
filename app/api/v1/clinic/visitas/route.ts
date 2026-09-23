@@ -12,6 +12,7 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { ehStatusDaVisita } from "@/lib/clinic/visitas/status";
+import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       status_do_agendamento: a.status,
       profissional_id: a.owner_user_id,
       paciente_id: a.contact_id,
-      paciente: c?.name || c?.display_name || null,
+      paciente: nomeDoContato(c),
       status: v && ehStatusDaVisita(v.status) ? v.status : "agendado",
       desde: v?.changed_at ?? null,
     };
