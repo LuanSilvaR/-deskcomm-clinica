@@ -29,6 +29,7 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | tests/unit/rpc-do-codigo-nasce-no-schema.test.ts | encrypt_cpf/decrypt_cpf saem da allowlist de RPCs congeladas | ff7f769e9 |
 | tests/unit/credencial-de-enfeite-nao-derruba-a-leitura.test.ts | decrypt_cpf reconhecida como segunda cifra com as mesmas três guardas (teste 1b) | 240cb2694 |
 | tests/invariants/lgpd-cascata-alcanca-quem-guarda-pessoa.test.ts | clinic_patient_profiles declarada: coberta pelo trigger de anonimização, com prova de efeito | 240cb2694 |
+| components/agenda/DetalheDoCompromisso.tsx (de novo), app/app/contacts/[id]/_client.tsx (de novo), lib/navigation/catalogo.ts (de novo) | Status da visita no detalhe, histórico na aba Timeline, porta da Recepção | (E2) |
 | app/api/v1/agenda/agendamentos/_handler.ts (de novo) | Compareceu recusa ficha incompleta (flag clinic.ficha_obrigatoria) | ff7f769e9 |
 | app/app/contacts/**, components/contacts/*, components/inbox/CRMSidePanel.tsx, components/inbox/ConversationHeader.tsx, lib/ai/inbox-destino.ts | Textos "Contato" → "Paciente" (só texto de tela) | 6ac024745 |
 | components/contacts/ContactsTable.tsx, app/app/contacts/[id]/_client.tsx, components/agenda/DetalheDoCompromisso.tsx | Selo da ficha, aba Ficha do paciente, botão Paciente chegou | f9fe73593 |

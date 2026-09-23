@@ -134,7 +134,8 @@ test("recepção completa a ficha do paciente na chegada — pela tela", async (
 
   // ── 3. "Paciente chegou" abre a ficha na agenda ────────────────────────────
   await page.goto(`/app/agenda?compromisso=${agendamentoId}`);
-  const chegou = page.getByTestId("paciente-chegou");
+  // "Paciente chegou" é o primeiro passo do status da visita (migration 9003).
+  const chegou = page.getByTestId("visita-na_recepcao");
   await expect(chegou).toBeVisible({ timeout: 20_000 });
   await chegou.click();
   const ficha = page.getByTestId("ficha-do-paciente-form");
@@ -164,12 +165,12 @@ test("recepção completa a ficha do paciente na chegada — pela tela", async (
 
   const salvar = page.waitForResponse((r) => r.url().includes(`/api/v1/clinic/pacientes/${contatoId}/ficha`) && r.request().method() === "PUT");
   const registrar = page.waitForResponse(
-    (r) => r.url().includes(`/api/v1/clinic/agendamentos/${agendamentoId}/chegada`) && r.request().method() === "POST" && r.status() === 201,
+    (r) => r.url().includes(`/api/v1/clinic/agendamentos/${agendamentoId}/visita`) && r.request().method() === "POST" && r.status() === 200,
   );
   await ficha.getByTestId("ficha-salvar").click();
   expect((await salvar).status()).toBe(200);
   await registrar;
-  await expect(page.getByTestId("chegada-registrada")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("visita-do-paciente").getByTestId("selo-da-visita")).toHaveText("Na recepção", { timeout: 10_000 });
   await foto(page, "05-chegada-registrada");
 
   // ── 4. lista mostra completa; o CPF foi gravado (par hash + cifra) ──────────

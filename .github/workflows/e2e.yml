@@ -724,6 +724,7 @@ jobs:
         agenda-marcar-pela-tela.spec.ts
         clinic-profissionais-e-bloqueios.spec.ts
         clinic-ficha-do-paciente.spec.ts
+        clinic-status-da-visita.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts
