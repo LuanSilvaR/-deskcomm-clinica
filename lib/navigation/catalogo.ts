@@ -169,6 +169,16 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    // FORK clinic (migration 9003): o dia da clínica por status da visita —
+    // na recepção, pronto para atendimento, em atendimento, finalizado.
+    href: "/app/recepcao",
+    label: "Recepção",
+    description: "Quem chegou, quem está pronto para ser chamado e quem está em atendimento, em tempo real.",
+    icon: "ClipboardText",
+    group: "atendimento",
+    sidebar: true,
+  },
+  {
     // Renomeado de "Templates": estes são scripts do atendente, consumidos pelo
     // Composer do inbox. O nome "Templates" fica livre para os da Meta (HSM),
     // onde é o termo técnico correto.

@@ -1,5 +1,5 @@
 /**
- * Rotas da ficha do paciente e da chegada (fork clinic, migration 9002): as
+ * Rotas da ficha do paciente (9002) e do status da visita (9003) — fork clinic: as
  * recusas e a forma do que é gravado. RLS e cifragem são provadas no Postgres
  * real em tests/invariants/clinic-ficha-do-paciente.test.ts.
  */
@@ -8,6 +8,7 @@ import { NextRequest } from "next/server";
 
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { alterarAgendamentoHandler } from "@/app/api/v1/agenda/agendamentos/_handler";
 import { createClient } from "@/lib/supabase/server";
 
 vi.mock("@/lib/audit", () => ({
@@ -16,6 +17,7 @@ vi.mock("@/lib/audit", () => ({
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+vi.mock("@/app/api/v1/agenda/agendamentos/_handler", () => ({ alterarAgendamentoHandler: vi.fn(async () => ({})) }));
 vi.mock("@/lib/impersonate/support", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/impersonate/support")>()),
   requireSupportWrite: vi.fn(async () => null),
@@ -29,6 +31,8 @@ const AGENDAMENTO = "55555555-5555-4555-8555-555555555555";
 type Chamada = { tabela: string; op: string; valor?: unknown };
 let chamadas: Chamada[] = [];
 let rpcs: { nome: string; args: unknown }[] = [];
+/** Quando preenchido, o RPC de status devolve este erro (simula a recusa do banco). */
+let erroNoRpc: string | null = null;
 /** Respostas por `tabela:op` — uma fila; a última se repete. */
 let respostas: Record<string, { data: unknown; error: unknown }[]> = {};
 
@@ -64,7 +68,13 @@ function falsoSupabase() {
     },
     rpc: vi.fn(async (nome: string, args: unknown) => {
       rpcs.push({ nome, args });
-      return nome === "encrypt_cpf" ? { data: "\\xcifra", error: null } : { data: null, error: null };
+      if (nome === "encrypt_cpf") return { data: "\\xcifra", error: null };
+      if (nome === "fn_clinic_mudar_status_visita") {
+        if (erroNoRpc) return { data: null, error: { message: erroNoRpc, code: "22023" } };
+        const a = args as { p_status: string };
+        return { data: { status: a.p_status, de: "agendado", mudou: true, correcao: false }, error: null };
+      }
+      return { data: null, error: null };
     }),
   };
 }
@@ -100,60 +110,87 @@ beforeEach(() => {
   chamadas = [];
   rpcs = [];
   respostas = {};
+  erroNoRpc = null;
+  vi.mocked(alterarAgendamentoHandler).mockClear();
   vi.mocked(audit).mockClear();
   vi.stubEnv("CPF_ENCRYPTION_KEY", "chave-de-teste-com-mais-de-16");
   vi.mocked(createClient).mockResolvedValue(falsoSupabase() as never);
 });
 
-describe("POST /api/v1/clinic/agendamentos/:id/chegada", () => {
-  const rota = () => import("@/app/api/v1/clinic/agendamentos/[id]/chegada/route");
+describe("POST /api/v1/clinic/agendamentos/:id/visita", () => {
+  const rota = () => import("@/app/api/v1/clinic/agendamentos/[id]/visita/route");
   const ctx = { params: Promise.resolve({ id: AGENDAMENTO }) };
-  const chegar = async () => (await rota()).POST(pedido(`/api/v1/clinic/agendamentos/${AGENDAMENTO}/chegada`, "POST"), ctx);
+  const mudar = async (corpo: unknown) =>
+    (await rota()).POST(pedido(`/api/v1/clinic/agendamentos/${AGENDAMENTO}/visita`, "POST", corpo), ctx);
 
-  it("com a ficha obrigatória e a ficha incompleta: 422 ficha_incompleta com o que falta, nada gravado", async () => {
+  it("chegada com a ficha obrigatória e incompleta: 422 ficha_incompleta com o que falta, status não muda", async () => {
     autorizado("agent");
-    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO, status: "confirmed" } });
+    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO } });
     responder("organizations:select", { data: { settings: { clinic: { ficha_obrigatoria: true } } } });
     responder("contacts:select", { data: CONTATO_SO_WHATSAPP });
-    const res = await chegar();
+    const res = await mudar({ status: "na_recepcao" });
     expect(res.status).toBe(422);
     const corpo = (await res.json()) as { error: { code: string; details: { faltando: string[] } } };
     expect(corpo.error.code).toBe("ficha_incompleta");
     expect(corpo.error.details.faltando).toContain("CPF");
-    expect(corpo.error.details.faltando).toContain("Nome completo");
-    expect(chamadas.some((c) => c.op === "insert")).toBe(false);
+    expect(rpcs.some((r) => r.nome === "fn_clinic_mudar_status_visita")).toBe(false);
   });
 
-  it("com a regra desligada registra a chegada mesmo com ficha incompleta", async () => {
+  it("com a regra desligada, a chegada muda o status e audita", async () => {
     autorizado("agent");
-    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO, status: "confirmed" } });
+    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO } });
     responder("organizations:select", { data: { settings: {} } });
-    responder("clinic_appointment_arrivals:insert", { data: { id: "chegada", arrived_at: "2026-09-23T12:00:00Z" } });
-    const res = await chegar();
-    expect(res.status).toBe(201);
-    const insert = chamadas.find((c) => c.op === "insert");
-    expect(insert?.valor).toMatchObject({ organization_id: ORG, appointment_id: AGENDAMENTO, contact_id: CONTATO, registered_by: EU });
-    expect(vi.mocked(audit)).toHaveBeenCalledWith(expect.objectContaining({ action: "clinic.chegada_registrada" }));
-  });
-
-  it("segunda chegada do mesmo agendamento devolve a primeira (idempotente)", async () => {
-    autorizado("agent");
-    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO, status: "confirmed" } });
-    responder("clinic_appointment_arrivals:select", { data: { id: "chegada", arrived_at: "2026-09-23T12:00:00Z" } });
-    const res = await chegar();
+    const res = await mudar({ status: "na_recepcao" });
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { data: { ja_registrada: boolean } }).data.ja_registrada).toBe(true);
+    expect(rpcs).toContainEqual({
+      nome: "fn_clinic_mudar_status_visita",
+      args: { p_org: ORG, p_appointment: AGENDAMENTO, p_status: "na_recepcao", p_reason: null },
+    });
+    expect(vi.mocked(audit)).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "clinic.visita_status_alterado", metadata: expect.objectContaining({ para: "na_recepcao" }) }),
+    );
   });
 
-  it("agendamento sem paciente: 422", async () => {
+  it("pronto para atendimento não exige ficha de novo", async () => {
     autorizado("agent");
-    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: null, status: "confirmed" } });
-    expect((await chegar()).status).toBe(422);
+    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO } });
+    responder("clinic_appointment_visits:select", { data: { status: "na_recepcao" } });
+    const res = await mudar({ status: "pronto" });
+    expect(res.status).toBe(200);
+    expect(chamadas.some((c) => c.tabela === "organizations")).toBe(false);
   });
 
-  it("visualizador não registra chegada", async () => {
+  it("correção sem motivo: o banco recusa e a rota responde 422 com a frase certa", async () => {
+    autorizado("agent");
+    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO } });
+    responder("clinic_appointment_visits:select", { data: { status: "pronto" } });
+    erroNoRpc = "visita_correcao_sem_motivo";
+    const res = await mudar({ status: "na_recepcao" });
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/motivo/);
+  });
+
+  it("finalizar grava Compareceu no núcleo antes de mudar o status", async () => {
+    autorizado("agent");
+    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO } });
+    responder("clinic_appointment_visits:select", { data: { status: "em_atendimento" } });
+    const res = await mudar({ status: "finalizado" });
+    expect(res.status).toBe(200);
+    expect(vi.mocked(alterarAgendamentoHandler)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ organization_id: ORG }),
+      { id: AGENDAMENTO, status: "completed" },
+    );
+  });
+
+  it("status fora do vocabulário: 422", async () => {
+    autorizado("agent");
+    expect((await mudar({ status: "atendido" })).status).toBe(422);
+  });
+
+  it("visualizador não muda status", async () => {
     autorizado("viewer");
-    expect((await chegar()).status).toBe(403);
+    expect((await mudar({ status: "na_recepcao" })).status).toBe(403);
   });
 });
 
