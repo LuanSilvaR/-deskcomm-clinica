@@ -11529,6 +11529,30 @@ export const DICIONARIO: Traducoes = {
   "Conecte um banco de dados de outro sistema para o agente consultar em tempo real.": {
     es: "Conecta una base de datos de otro sistema para que el agente la consulte en tiempo real.",
   },
+  // ── FORK clinic (migration 9001): profissionais, especialidades e bloqueios ──
+  "Alguma especialidade não existe nesta empresa.": { es: "Alguna especialidad no existe en esta empresa." },
+  "Bloqueio não encontrado.": { es: "Bloqueo no encontrado." },
+  "Confirme a verificação em duas etapas para mudar esta opção.": { es: "Confirma la verificación en dos pasos para cambiar esta opción." },
+  "Especialidade não encontrada.": { es: "Especialidad no encontrada." },
+  "Essa pessoa não é membro da equipe.": { es: "Esa persona no es miembro del equipo." },
+  "id inválido.": { es: "id inválido." },
+  "Informe se o módulo fica ligado.": { es: "Indica si el módulo queda activado." },
+  "Já existe um cadastro igual.": { es: "Ya existe un registro igual." },
+  "Já existe uma especialidade com esse nome.": { es: "Ya existe una especialidad con ese nombre." },
+  "Lista de especialidades inválida.": { es: "Lista de especialidades inválida." },
+  "Os dados não passaram na validação do banco.": { es: "Los datos no pasaron la validación de la base de datos." },
+  "Só quem administra a empresa pode mudar esta opção.": { es: "Solo quien administra la empresa puede cambiar esta opción." },
+  "Tipo de atendimento não encontrado.": { es: "Tipo de atención no encontrado." },
+  "Você só pode bloquear a sua própria agenda. Agenda de colega e da clínica toda é com a gerência.": { es: "Solo puedes bloquear tu propia agenda. La agenda de un colega y la de toda la clínica son de la gerencia." },
+  "Informe o nome.": { es: "Indica el nombre." },
+  "Nome muito longo.": { es: "Nombre demasiado largo." },
+  "Cor inválida (use #RRGGBB)": { es: "Color inválido (usa #RRGGBB)" },
+  "UF com duas letras": { es: "Estado con dos letras" },
+  "Use uma data em AAAA-MM-DD": { es: "Usa una fecha en AAAA-MM-DD" },
+  "O fim precisa ser depois do começo.": { es: "El fin debe ser después del inicio." },
+  "A data final precisa ser igual ou depois da inicial.": { es: "La fecha final debe ser igual o posterior a la inicial." },
+  "O período pode ter no máximo um ano.": { es: "El período puede tener como máximo un año." },
+  "Escolha um profissional OU a clínica toda.": { es: "Elige un profesional O toda la clínica." },
 };
 
 /**
