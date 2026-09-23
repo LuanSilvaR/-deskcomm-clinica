@@ -31,6 +31,11 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | tests/invariants/lgpd-cascata-alcanca-quem-guarda-pessoa.test.ts | clinic_patient_profiles declarada: coberta pelo trigger de anonimização, com prova de efeito | 240cb2694 |
 | components/agenda/DetalheDoCompromisso.tsx (de novo), app/app/contacts/[id]/_client.tsx (de novo), lib/navigation/catalogo.ts (de novo) | Status da visita no detalhe, histórico na aba Timeline, porta da Recepção | 9f79d5292 |
 | app/api/v1/agenda/vinculos/route.ts, components/agenda/VinculoDaMarcacao.tsx | Busca do paciente ao marcar por nome, telefone, CPF (hash) ou nascimento, com fim do telefone e nascimento para homônimos | 0d7091ae7 |
+| lib/navigation/catalogo.ts (de novo), app/app/agenda/_client.tsx (de novo) | Recepção sai do menu lateral (teto de 15 itens) e ganha o botão "Painel da recepção" no cabeçalho da Agenda | 50974e6fe |
+| app/api/v1/cron/agenda-reminder/route.ts | Lembrete de 12 h ou mais pede SIM/NÃO e registra o pedido quando `clinic.confirmacao_automatica` está ligada | 4170bf147 |
+| lib/event-log/register-handlers.ts | Consumidor clinic-confirmacao-resposta.v1 de message.received | 4170bf147 |
+| docker/scheduler/entrypoint.sh | Cron clinic-confirmacao-sem-resposta a cada 15 min | 4170bf147 |
+| lib/audit/actions.ts (de novo), lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Ação clinic.confirmacao_sem_resposta, espanhol da confirmação, spec clinic-confirmacao-de-consulta | 4170bf147 |
 | app/api/v1/agenda/agendamentos/_handler.ts (de novo) | Compareceu recusa ficha incompleta (flag clinic.ficha_obrigatoria) | ff7f769e9 |
 | app/app/contacts/**, components/contacts/*, components/inbox/CRMSidePanel.tsx, components/inbox/ConversationHeader.tsx, lib/ai/inbox-destino.ts | Textos "Contato" → "Paciente" (só texto de tela) | 6ac024745 |
 | components/contacts/ContactsTable.tsx, app/app/contacts/[id]/_client.tsx, components/agenda/DetalheDoCompromisso.tsx | Selo da ficha, aba Ficha do paciente, botão Paciente chegou | f9fe73593 |
