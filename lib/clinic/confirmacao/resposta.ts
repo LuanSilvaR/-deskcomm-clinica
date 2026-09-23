@@ -29,6 +29,10 @@ const SIM = new Set([
   "estarei la",
   "vou sim",
   "pode confirmar",
+  // espanhol (o pedido sai em espanhol quando a organização usa es)
+  "si",
+  "si confirmo",
+  "confirmo si",
   "👍",
   "✅",
 ]);
@@ -48,6 +52,10 @@ const NAO = new Set([
   "quero remarcar",
   "preciso remarcar",
   "nao confirmo",
+  "no",
+  "no puedo",
+  "reprogramar",
+  "cancelar cita",
   "👎",
   "❌",
 ]);

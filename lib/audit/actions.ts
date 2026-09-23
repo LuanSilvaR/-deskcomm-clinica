@@ -873,6 +873,8 @@ export const AUDIT_ACTIONS = [
   "clinic.chegada_registrada",
   // FORK clinic (migration 9003): cada mudança do status da visita (e correção).
   "clinic.visita_status_alterado",
+  // FORK clinic (9004): confirmação de consulta
+  "clinic.confirmacao_sem_resposta",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

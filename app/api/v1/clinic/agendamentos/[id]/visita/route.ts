@@ -32,7 +32,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const org = authz.org.orgId;
 
   const supabase = await createClient();
-  const [{ data: visita, error: e1 }, { data: eventos, error: e2 }] = await Promise.all([
+  const [{ data: visita, error: e1 }, { data: eventos, error: e2 }, { data: confirmacao }] = await Promise.all([
     supabase
       .from("clinic_appointment_visits")
       .select("status, changed_at, changed_by, arrived_at, ready_at, started_at, finished_at")
@@ -46,9 +46,19 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
       .eq("appointment_id", id)
       .order("created_at", { ascending: true })
       .limit(200),
+    // FORK clinic (9004): a resposta do paciente ao pedido de confirmação.
+    supabase
+      .from("clinic_confirmation_requests")
+      .select("status, requested_at, answered_at")
+      .eq("organization_id", org)
+      .eq("appointment_id", id)
+      .maybeSingle(),
   ]);
   if (e1 || e2) return fail("internal_error", (e1 ?? e2)!.message, 500, { requestId });
-  return ok({ visita: visita ?? { status: "agendado" }, eventos: eventos ?? [] }, { requestId });
+  return ok(
+    { visita: visita ?? { status: "agendado" }, eventos: eventos ?? [], confirmacao: confirmacao ?? null },
+    { requestId },
+  );
 }
 
 const postSchema = z.object({

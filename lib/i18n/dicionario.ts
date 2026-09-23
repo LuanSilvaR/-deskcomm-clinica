@@ -11708,6 +11708,16 @@ export const DICIONARIO: Traducoes = {
   // ── FORK clinic (migration 9003): status da visita e recepção ──
   "Recepção": { es: "Recepción" },
   "Painel da recepção": { es: "Panel de recepción" },
+  // ── FORK clinic (migration 9004): confirmação de consulta ──
+  "Confirmação pedida": { es: "Confirmación solicitada" },
+  "Paciente confirmou": { es: "El paciente confirmó" },
+  "Pediu para remarcar": { es: "Pidió reprogramar" },
+  "Sem resposta — ligar": { es: "Sin respuesta — llamar" },
+  "Confirmação automática ligada": { es: "Confirmación automática activada" },
+  "Confirmação automática desligada": { es: "Confirmación automática desactivada" },
+  "O lembrete de 12 h ou mais antes pede SIM ou NÃO. Sem resposta até 4 h antes, a recepção recebe a tarefa de ligar.": { es: "El recordatorio de 12 h o más antes pide SÍ o NO. Sin respuesta hasta 4 h antes, la recepción recibe la tarea de llamar." },
+  "Ligue para o lembrete da véspera pedir SIM ou NÃO ao paciente. Vale para os tipos de atendimento com lembrete ligado.": { es: "Actívela para que el recordatorio del día anterior pida SÍ o NO al paciente. Vale para los tipos de atención con recordatorio activado." },
+  "Responda *SIM* para confirmar ou *NÃO* se precisar remarcar.": { es: "Responda *SÍ* para confirmar o *NO* si necesita reprogramar." },
   "Quem chegou, quem está pronto para ser chamado e quem está em atendimento, em tempo real.": { es: "Quién llegó, quién está listo para ser llamado y quién está en atención, en tiempo real." },
   "Os pacientes agendados hoje, do momento em que chegam até o fim do atendimento. Atualiza sozinho.": { es: "Los pacientes agendados hoy, desde que llegan hasta el final de la atención. Se actualiza solo." },
   "Complete a ficha do paciente (abra o agendamento na Agenda).": { es: "Completa la ficha del paciente (abre la cita en la Agenda)." },

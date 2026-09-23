@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 import { interpretarResposta } from "./resposta";
 
 describe("interpretarResposta", () => {
-  it.each(["SIM", "Sim!", "sim.", "Confirmo", "confirmado", "OK", "👍", "Sim, confirmo", "sim confirmada"])(
+  it.each(["SIM", "Sim!", "sim.", "Confirmo", "confirmado", "OK", "👍", "Sim, confirmo", "sim confirmada", "Sí", "si"])(
     "%s → sim",
     (t) => expect(interpretarResposta(t)).toBe("sim"),
   );
 
-  it.each(["Não", "NAO", "não posso", "Não vou poder", "cancelar", "Preciso remarcar", "❌"])("%s → não", (t) =>
+  it.each(["Não", "NAO", "não posso", "Não vou poder", "cancelar", "Preciso remarcar", "❌", "No", "no puedo"])("%s → não", (t) =>
     expect(interpretarResposta(t)).toBe("nao"),
   );
 

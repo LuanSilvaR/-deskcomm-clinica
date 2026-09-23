@@ -16,15 +16,33 @@ import { apiClient } from "@/lib/api/client";
 interface Props {
   ligadoInicial: boolean;
   fichaObrigatoriaInicial: boolean;
+  confirmacaoInicial: boolean;
   podeLigar: boolean;
   ehGerencia: boolean;
   usuarioAtualId: string;
 }
 
-export function ProfissionaisClient({ ligadoInicial, fichaObrigatoriaInicial, podeLigar, ehGerencia, usuarioAtualId }: Props) {
+export function ProfissionaisClient({
+  ligadoInicial,
+  fichaObrigatoriaInicial,
+  confirmacaoInicial,
+  podeLigar,
+  ehGerencia,
+  usuarioAtualId,
+}: Props) {
   const t = useT();
   const [ligado, setLigado] = useState(ligadoInicial);
   const [fichaObrigatoria, setFichaObrigatoria] = useState(fichaObrigatoriaInicial);
+  const [confirmacao, setConfirmacao] = useState(confirmacaoInicial);
+
+  const alternarConfirmacao = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { confirmacao_automatica: boolean } }>("/api/v1/clinic/config", {
+        confirmacao_automatica: valor,
+      }),
+    onSuccess: (r) => setConfirmacao(r.data.confirmacao_automatica),
+    onError: showApiError,
+  });
 
   const alternarFicha = useMutation({
     mutationFn: (valor: boolean) =>
@@ -92,6 +110,32 @@ export function ProfissionaisClient({ ligadoInicial, fichaObrigatoriaInicial, po
             onClick={() => alternarFicha.mutate(!fichaObrigatoria)}
           >
             {fichaObrigatoria ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${confirmacao ? "" : "bg-muted"}`}
+        data-testid="clinic-confirmacao"
+      >
+        <div>
+          <p className="font-medium">
+            {confirmacao ? t("Confirmação automática ligada") : t("Confirmação automática desligada")}
+          </p>
+          <p className="text-sm text-text-muted">
+            {confirmacao
+              ? t("O lembrete de 12 h ou mais antes pede SIM ou NÃO. Sem resposta até 4 h antes, a recepção recebe a tarefa de ligar.")
+              : t("Ligue para o lembrete da véspera pedir SIM ou NÃO ao paciente. Vale para os tipos de atendimento com lembrete ligado.")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-confirmacao-alternar"
+            variant={confirmacao ? "outline" : "default"}
+            disabled={alternarConfirmacao.isPending}
+            onClick={() => alternarConfirmacao.mutate(!confirmacao)}
+          >
+            {confirmacao ? t("Desligar") : t("Ligar")}
           </Button>
         ) : null}
       </section>
