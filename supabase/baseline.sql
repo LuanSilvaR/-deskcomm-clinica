@@ -36668,12 +36668,24 @@ security invoker
 set search_path = public, extensions, pg_temp
 as $$
 begin
+  -- As três guardas de fn_decrypt_oauth (issue #754), na mesma ordem, antes de
+  -- decifrar: sem valor, curto demais para ser pacote (o menor que pgp_sym_encrypt
+  -- aes256 produz tem 66 bytes) ou sem cara de pacote PGP (bit 7 do 1º byte) é
+  -- "sem CPF", não erro. `get_byte` vem DEPOIS do tamanho: em bytea vazio ele estoura.
   if p_ciphertext is null then
+    return null;
+  end if;
+  if octet_length(p_ciphertext) < 66 then
+    return null;
+  end if;
+  if get_byte(p_ciphertext, 0) < 128 then
     return null;
   end if;
   if p_key is null or length(p_key) < 16 then
     raise exception 'cpf_key_ausente' using errcode = '22023';
   end if;
+  -- Daqui para baixo só chega pacote de verdade: se não abrir, é chave trocada
+  -- ou dado corrompido, e isso tem de aparecer.
   return pgp_sym_decrypt(p_ciphertext, p_key);
 end $$;
 

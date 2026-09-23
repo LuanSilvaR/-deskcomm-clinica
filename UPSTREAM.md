@@ -27,6 +27,8 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | tests/invariants/rls-completude-varredura.test.ts | Tabelas clinic_* em PROVA_PROPRIA | 410cca27f |
 | lib/contacts/cpf.ts, app/api/v1/contacts/_handler.ts, app/api/v1/contacts/import/route.ts | Conserto da cifragem de CPF (par hash + cifra; encrypt_cpf/decrypt_cpf criados na 9002) — candidato a PR no upstream | 0d9522e9b |
 | tests/unit/rpc-do-codigo-nasce-no-schema.test.ts | encrypt_cpf/decrypt_cpf saem da allowlist de RPCs congeladas | ff7f769e9 |
+| tests/unit/credencial-de-enfeite-nao-derruba-a-leitura.test.ts | decrypt_cpf reconhecida como segunda cifra com as mesmas três guardas (teste 1b) | (E0) |
+| tests/invariants/lgpd-cascata-alcanca-quem-guarda-pessoa.test.ts | clinic_patient_profiles declarada: coberta pelo trigger de anonimização, com prova de efeito | (E0) |
 | app/api/v1/agenda/agendamentos/_handler.ts (de novo) | Compareceu recusa ficha incompleta (flag clinic.ficha_obrigatoria) | ff7f769e9 |
 | app/app/contacts/**, components/contacts/*, components/inbox/CRMSidePanel.tsx, components/inbox/ConversationHeader.tsx, lib/ai/inbox-destino.ts | Textos "Contato" → "Paciente" (só texto de tela) | 6ac024745 |
 | components/contacts/ContactsTable.tsx, app/app/contacts/[id]/_client.tsx, components/agenda/DetalheDoCompromisso.tsx | Selo da ficha, aba Ficha do paciente, botão Paciente chegou | f9fe73593 |

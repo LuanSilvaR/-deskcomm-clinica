@@ -111,6 +111,14 @@ describe("CPF — cifragem do núcleo consertada", () => {
     expect(ultimaLinha(sql(`select public.decrypt_cpf(public.encrypt_cpf('123456789XI000', '${CHAVE}'), '${CHAVE}');`))).toBe("123456789XI000");
   });
 
+  it("cifra de enfeite (byte \\x00, bytea vazio, texto) volta como 'sem CPF', sem erro (guarda da #754)", () => {
+    expect(ultimaLinha(sql(`select coalesce(public.decrypt_cpf('\\x00'::bytea, '${CHAVE}'), 'NULO');`))).toBe("NULO");
+    expect(ultimaLinha(sql(`select coalesce(public.decrypt_cpf(''::bytea, '${CHAVE}'), 'NULO');`))).toBe("NULO");
+    expect(
+      ultimaLinha(sql(`select coalesce(public.decrypt_cpf(convert_to(repeat('x', 80), 'UTF8'), '${CHAVE}'), 'NULO');`)),
+    ).toBe("NULO");
+  });
+
   it("o par hash + cifra grava no contato sem violar contacts_cpf_consistency", () => {
     const erro = erroComo(
       MANAGER_A,
