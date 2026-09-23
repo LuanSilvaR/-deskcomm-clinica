@@ -72,7 +72,7 @@ const putSchema = z.object({
   estado_civil: z
     .enum(["solteiro", "casado", "uniao_estavel", "separado", "divorciado", "viuvo", "nao_informado"])
     .nullish(),
-  como_conheceu: texto(120),
+  origem: texto(120),
   cep: z
     .string()
     .nullish()
@@ -161,7 +161,7 @@ export async function PUT(req: NextRequest, ctx: Ctx): Promise<Response> {
     rg_uf: d.rg_uf ? d.rg_uf : null,
     profession: d.profissao,
     marital_status: d.estado_civil ?? null,
-    referral_source: d.como_conheceu,
+    referral_source: d.origem,
     cep: d.cep,
     street: d.logradouro,
     number: d.numero,

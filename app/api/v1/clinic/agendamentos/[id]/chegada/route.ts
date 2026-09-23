@@ -25,6 +25,24 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+/** A chegada registrada deste agendamento, ou `null` (viewer: a tela só lê). */
+export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
+  const requestId = randomUUID();
+  const authz = await requireRole("viewer", { requestId, resource: "clinic_appointment_arrivals" });
+  if (!authz.ok) return authz.response;
+  const { id } = await ctx.params;
+  if (!z.string().uuid().safeParse(id).success) return fail("validation_failed", "id inválido", 422, { requestId });
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("clinic_appointment_arrivals")
+    .select("id, arrived_at")
+    .eq("organization_id", authz.org.orgId)
+    .eq("appointment_id", id)
+    .maybeSingle();
+  if (error) return fail("internal_error", error.message, 500, { requestId });
+  return ok(data ?? null, { requestId });
+}
+
 export async function POST(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;

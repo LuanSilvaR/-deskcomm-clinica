@@ -15,14 +15,23 @@ import { apiClient } from "@/lib/api/client";
 
 interface Props {
   ligadoInicial: boolean;
+  fichaObrigatoriaInicial: boolean;
   podeLigar: boolean;
   ehGerencia: boolean;
   usuarioAtualId: string;
 }
 
-export function ProfissionaisClient({ ligadoInicial, podeLigar, ehGerencia, usuarioAtualId }: Props) {
+export function ProfissionaisClient({ ligadoInicial, fichaObrigatoriaInicial, podeLigar, ehGerencia, usuarioAtualId }: Props) {
   const t = useT();
   const [ligado, setLigado] = useState(ligadoInicial);
+  const [fichaObrigatoria, setFichaObrigatoria] = useState(fichaObrigatoriaInicial);
+
+  const alternarFicha = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { ficha_obrigatoria: boolean } }>("/api/v1/clinic/config", { ficha_obrigatoria: valor }),
+    onSuccess: (r) => setFichaObrigatoria(r.data.ficha_obrigatoria),
+    onError: showApiError,
+  });
 
   const alternar = useMutation({
     mutationFn: (valor: boolean) =>
@@ -59,6 +68,32 @@ export function ProfissionaisClient({ ligadoInicial, podeLigar, ehGerencia, usua
         ) : (
           <span className="text-sm text-text-muted">{t("Só quem administra a empresa liga ou desliga.")}</span>
         )}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${fichaObrigatoria ? "" : "bg-muted"}`}
+        data-testid="clinic-ficha-obrigatoria"
+      >
+        <div>
+          <p className="font-medium">
+            {fichaObrigatoria ? t("Ficha do paciente exigida na chegada") : t("Ficha do paciente não é exigida")}
+          </p>
+          <p className="text-sm text-text-muted">
+            {fichaObrigatoria
+              ? t("\"Paciente chegou\" e \"Compareceu\" só são registrados com a ficha cadastral completa.")
+              : t("Ligue para exigir a ficha cadastral completa ao registrar a chegada e o comparecimento.")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-ficha-obrigatoria-alternar"
+            variant={fichaObrigatoria ? "outline" : "default"}
+            disabled={alternarFicha.isPending}
+            onClick={() => alternarFicha.mutate(!fichaObrigatoria)}
+          >
+            {fichaObrigatoria ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
       </section>
 
       <Tabs defaultValue={ehGerencia ? "profissionais" : "bloqueios"}>

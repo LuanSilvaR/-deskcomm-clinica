@@ -37,6 +37,8 @@ import { useDeleteContact } from "@/hooks/contacts/useDeleteContact";
 import type { ContactOrderBy } from "@/lib/schemas/contacts";
 import type { Contact } from "@/lib/types/contacts";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { SeloDaFicha } from "@/components/clinic/FichaDoPaciente";
+import { useSituacaoDasFichas } from "@/components/clinic/useSituacaoDasFichas";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 
 interface Props {
@@ -108,6 +110,8 @@ function SortableHead({
 }
 
 export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
+  // FORK clinic: o selo da ficha cadastral do paciente (migration 9002).
+  const situacaoDasFichas = useSituacaoDasFichas(contacts.map((c) => c.id));
   const localeDaData = useLocaleDeData();
   const t = useT();
   const clientesLigado = useActiveOrg()?.cliente_pela_agenda === true;
@@ -199,7 +203,8 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
             <TableCell className="font-medium">
               <Link href={`/app/contacts/${c.id}`} className="hover:underline">
                 {displayName(c)}
-              </Link>
+              </Link>{" "}
+              <SeloDaFicha situacao={situacaoDasFichas.data?.[c.id]} />
             </TableCell>
             <TableCell className="text-muted-foreground">
               {c.email ?? "—"}
