@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { EntradaDaAgenda } from "@/components/agenda/EntradaDaAgenda";
@@ -449,6 +450,13 @@ export function AgendaClient({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {/* FORK clinic (9003): a porta diária do painel da recepção — ele saiu
+              do menu lateral, que está no teto da dobra. */}
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/app/recepcao" data-testid="agenda-abrir-recepcao">
+              {t("Painel da recepção")}
+            </Link>
+          </Button>
           {/* "Hoje" é o hoje DA ORGANIZAÇÃO. Com `new Date()` o botão desfazia a
               âncora do servidor e devolvia a semana do navegador — o defeito que
               a tela acabou de fechar, a um clique de distância. */}

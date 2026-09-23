@@ -11707,6 +11707,7 @@ export const DICIONARIO: Traducoes = {
   "Já existe outro paciente com este CPF.": { es: "Ya existe otro paciente con este CPF." },
   // ── FORK clinic (migration 9003): status da visita e recepção ──
   "Recepção": { es: "Recepción" },
+  "Painel da recepção": { es: "Panel de recepción" },
   "Quem chegou, quem está pronto para ser chamado e quem está em atendimento, em tempo real.": { es: "Quién llegó, quién está listo para ser llamado y quién está en atención, en tiempo real." },
   "Os pacientes agendados hoje, do momento em que chegam até o fim do atendimento. Atualiza sozinho.": { es: "Los pacientes agendados hoy, desde que llegan hasta el final de la atención. Se actualiza solo." },
   "Complete a ficha do paciente (abra o agendamento na Agenda).": { es: "Completa la ficha del paciente (abre la cita en la Agenda)." },
