@@ -259,6 +259,15 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "regra do agente; tests/invariants/tags-cor-de-etiqueta.test.ts prova a " +
       "cor.",
   },
+  {
+    // FORK clinic (migration 9001).
+    fn: "fn_clinic_definir_flag(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.profissionais da organização informada. " +
+      "tests/invariants/clinic-profissionais-rls.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
+  },
 ];
 
 interface Definer {

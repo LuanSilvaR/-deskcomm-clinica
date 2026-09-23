@@ -19,8 +19,8 @@ NÃO use `supabase db reset` como prova.
 3. Tabela nova tenant-aware = `organization_id uuid not null references organizations(id) on delete cascade`
    + RLS `tenant_isolation_<tabela>_all` via `fn_user_org_ids()` + teste de isolamento (2 orgs) em tests/invariants.
 4. Migration = TRIPLA: arquivo `supabase/migrations/<ts>_<NNNN>_clinic_<slug>.sql` + linha no MANIFEST.md
-   + apêndice idempotente no fim de `supabase/baseline.sql` (é o que a instalação aplica). NNNN = maior + 1
-   (`ls supabase/migrations | grep -oE '_[0-9]{4}_' | tr -d _ | sort -n | tail -1`).
+   + apêndice idempotente no fim de `supabase/baseline.sql` (é o que a instalação aplica). NNNN do fork = faixa 9xxx
+   (maior 9xxx + 1: `ls supabase/migrations | grep -oE "_9[0-9]{3}_" | sort | tail -1`), para nunca colidir com o upstream.
 5. Nunca editar migration existente. Função nova em `public`: `revoke execute ... from public, anon`.
 6. Auth: `getUser()`, nunca `getSession()`. Admin client (service role) filtra `organization_id` resolvido de
    fonte confiável (cookie/JWT/token), NUNCA do body. Zod em todo input externo. Respostas via `ok()`/`fail()`.

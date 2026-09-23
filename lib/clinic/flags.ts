@@ -1,0 +1,40 @@
+/**
+ * Flag do módulo clinic: `organizations.settings.clinic.profissionais`.
+ *
+ * Nasce DESLIGADA. Só o booleano `true` liga — mesma régua de
+ * `clientePelaAgendaLigado` (lib/schemas/settings.ts): ausente, `false`, a
+ * string "true" ou lixo é desligado. Quem liga é `fn_clinic_definir_flag`
+ * (migration 9001), nunca UPDATE direto em organizations.
+ *
+ * Mora fora de `settings.agenda` de propósito: `fn_agenda_settings` reescreve
+ * aquele objeto inteiro e recusa chave desconhecida.
+ */
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export function clinicProfissionaisLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).profissionais === true;
+}
+
+/**
+ * Lê a flag da organização. Nunca lança: erro de leitura = desligado, que é o
+ * lado que preserva o comportamento original da agenda.
+ */
+export async function clinicProfissionaisDaOrg(
+  supabase: SupabaseClient,
+  organizationId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("organizations")
+      .select("settings")
+      .eq("id", organizationId)
+      .maybeSingle();
+    if (error || !data) return false;
+    return clinicProfissionaisLigado((data as { settings?: unknown }).settings);
+  } catch {
+    return false;
+  }
+}

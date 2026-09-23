@@ -47,6 +47,7 @@ import { emitLeadActivity } from "@/lib/leads/activity-emitter";
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import { moverLeadParaEtapaDeAgendamento } from "@/lib/leads/appointment-stage-move";
 import { logger } from "@/lib/logger";
+import { habilitacaoNaConsulta } from "@/lib/clinic/agenda/regras-da-clinica";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type SB = SupabaseClient;
@@ -57,6 +58,7 @@ const CODIGO_DA_RECUSA = {
   tipo_desativado: { status: 422, code: "agenda_tipo_desativado" },
   sem_responsavel: { status: 422, code: "agenda_sem_responsavel" },
   jornada_mal_configurada: { status: 422, code: "agenda_disponibilidade_invalida" },
+  profissional_nao_habilitado: { status: 422, code: "profissional_nao_habilitado" },
   erro_interno: { status: 500, code: "internal_error" },
 } as const;
 
@@ -264,6 +266,23 @@ export async function marcarAgendamentoHandler(
       undefined,
       ctx.requestId,
       `"${tipo.name}" não tem responsável definido, e sem responsável não há agenda.`,
+    );
+  }
+
+  // FORK clinic (migration 9001): com o módulo de profissionais ligado, o dono
+  // precisa ter a especialidade que o tipo exige. Fica AQUI, e não só na
+  // consulta de horários, porque o encaixe fora da grade não passa por ela.
+  const clinic = await habilitacaoNaConsulta(supabase, ctx.organization_id, tipo.id, donoId);
+  if (clinic.ligado && "erro" in clinic) {
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, clinic.erro);
+  }
+  if (clinic.ligado && "habilitado" in clinic && !clinic.habilitado) {
+    throw new ApiError(
+      422,
+      "profissional_nao_habilitado",
+      undefined,
+      ctx.requestId,
+      `Este profissional não tem a especialidade que "${tipo.name}" exige.`,
     );
   }
 

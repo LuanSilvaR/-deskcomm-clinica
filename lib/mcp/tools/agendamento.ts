@@ -466,6 +466,9 @@ const ENSINO_POR_CODIGO: Record<string, string> = {
     "esse tipo de atendimento não está sendo agendado agora. Pergunte que outro atendimento serve, ou avise que alguém da equipe confirma.",
   agenda_sem_responsavel:
     "esse atendimento ainda não tem responsável definido. Não invente horários: avise que alguém da equipe confirma.",
+  // FORK clinic (migration 9001): o profissional não tem a especialidade do atendimento.
+  profissional_nao_habilitado:
+    "esse profissional não faz esse atendimento. Não marque com ele: ofereça outro profissional da equipe ou avise que alguém confirma o horário.",
   agenda_disponibilidade_invalida:
     "não consigo ler a agenda desse atendente agora. Não ofereça horários e não diga que está sem vaga — avise que alguém da equipe confirma.",
   agenda_ja_cancelado:

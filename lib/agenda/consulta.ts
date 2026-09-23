@@ -74,6 +74,7 @@ import { nomeDoContato, type ContatoNomeavel } from "@/lib/contacts/rotulo-do-co
 import { diaLocalISO } from "./fuso";
 import { horariosLivres, type ExcecaoDeData, type Slot } from "./horarios-livres";
 import { lerJornadaDoBanco } from "./jornada";
+import { bloqueiosDaClinicaComoExcecoes, habilitacaoNaConsulta } from "@/lib/clinic/agenda/regras-da-clinica";
 import {
   agendaExternaNuncaLida,
   ocupadosDoDono,
@@ -91,6 +92,8 @@ export type CodigoDeRecusaDaConsulta =
   | "tipo_desativado"
   | "sem_responsavel"
   | "jornada_mal_configurada"
+  // FORK clinic (migration 9001): o dono não tem a especialidade que o tipo exige.
+  | "profissional_nao_habilitado"
   | "erro_interno";
 
 export interface ParametrosDaConsulta {
@@ -235,6 +238,26 @@ export async function horariosLivresDaOrg(
     };
   }
 
+  // FORK clinic: com o módulo de profissionais ligado, só quem tem a
+  // especialidade exigida pelo tipo tem agenda para este atendimento.
+  const clinic = await habilitacaoNaConsulta(supabase, organizationId, tipo.id, donoId);
+  if (clinic.ligado && "erro" in clinic) {
+    return {
+      ok: false,
+      codigo: "erro_interno",
+      motivoParaOperador: clinic.erro,
+      motivoParaCliente: `Não consegui consultar a agenda agora. ${NAO_OFERECA}`,
+    };
+  }
+  if (clinic.ligado && "habilitado" in clinic && !clinic.habilitado) {
+    return {
+      ok: false,
+      codigo: "profissional_nao_habilitado",
+      motivoParaOperador: `Este profissional não tem a especialidade que "${tipo.name}" exige.`,
+      motivoParaCliente: `Esse profissional não faz "${tipo.name}". Ofereça outro profissional da equipe ou avise que alguém confirma o horário.`,
+    };
+  }
+
   const { data: disponibilidade, error: erroDisp } = await supabase
     .from("attendant_availability")
     .select("schedule")
@@ -345,6 +368,27 @@ export async function horariosLivresDaOrg(
     inicioMinuto: linha.start_minute,
     fimMinuto: linha.end_minute,
   }));
+
+  // FORK clinic: bloqueios por período, recorrentes e da clínica toda entram
+  // como exceções de indisponibilidade — o motor não muda.
+  if (clinic.ligado) {
+    const extras = await bloqueiosDaClinicaComoExcecoes(
+      supabase,
+      organizationId,
+      donoId,
+      primeiroDiaDaRegra,
+      ultimoDiaDaRegra,
+    );
+    if (!extras.ok) {
+      return {
+        ok: false,
+        codigo: "erro_interno",
+        motivoParaOperador: extras.erro,
+        motivoParaCliente: `Não consegui consultar a agenda agora. ${NAO_OFERECA}`,
+      };
+    }
+    excecoes.push(...extras.excecoes);
+  }
 
   const slots = horariosLivres({
     jornada: leitura.jornada,

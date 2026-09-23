@@ -28,6 +28,7 @@ import { resolverResponsavelDoPainel } from "@/lib/agenda/responsavel-do-painel"
 import { useVinculoDaMarcacao } from "@/lib/agenda/vinculo-da-marcacao";
 import { Button } from "@/components/ui/button";
 import { PainelDeMarcacao } from "@/components/agenda/PainelDeMarcacao";
+import { EscolhaDoProfissional } from "@/components/clinic/EscolhaDoProfissional";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAgendamentos } from "@/hooks/agenda/useAgendamentos";
 import { useHorariosLivres } from "@/hooks/agenda/useHorariosLivres";
@@ -201,6 +202,10 @@ export function AgendaClient({
   // tela. As categorias existiam no banco, no seed e na API — e a tela oferecia
   // uma. Achado escrevendo a spec de marcar, não lendo o código.
   const [tipoId, setTipoId] = React.useState<string | null>(() => tiposIniciais[0]?.id ?? null);
+  // FORK clinic: com as regras de profissionais ligadas, QUEM atende é escolhido
+  // entre os habilitados do tipo (`EscolhaDoProfissional`). Desligadas, fica
+  // `null` e tudo segue com o dono padrão do tipo, como no upstream.
+  const [profissionalClinic, setProfissionalClinic] = React.useState<string | null>(null);
   const tipo = tiposIniciais.find((t) => t.id === tipoId) ?? tiposIniciais[0] ?? null;
   const endereco = enderecoEditado ?? tipo?.localDetalhes ?? "";
   const [visao, setVisao] = React.useState<VisaoDaAgenda>("semana");
@@ -298,7 +303,12 @@ export function AgendaClient({
   // 422 porque ninguém está em `attendant_availability`).
   const { data: horarios, isError: horariosFalharam } = useHorariosLivres(
     marcando && tipo
-      ? { event_type_id: tipo.id, de: janelaDeBusca.de, ate: janelaDeBusca.ate }
+      ? {
+          event_type_id: tipo.id,
+          de: janelaDeBusca.de,
+          ate: janelaDeBusca.ate,
+          ...(profissionalClinic ? { owner_user_id: profissionalClinic } : {}),
+        }
       : null,
   );
 
@@ -776,6 +786,20 @@ export function AgendaClient({
               </>
             ) : null}
           </div>
+          {tipo && !remarcandoId ? (
+            <div className="mt-4">
+              <EscolhaDoProfissional
+                tipoId={tipo.id}
+                donoPadraoId={tipo.donoId}
+                pessoas={pessoas}
+                valor={profissionalClinic}
+                onChange={setProfissionalClinic}
+                instante={horarioEscolhido?.instante ?? null}
+                duracaoMin={tipo.duracaoMin}
+                fuso={horarios?.fuso_da_regra}
+              />
+            </div>
+          ) : null}
           {tipo && (
             <div className="mt-4 lg:min-h-0 lg:flex-1">
               <PainelDeMarcacao
@@ -792,7 +816,7 @@ export function AgendaClient({
                   // regra está em `lib/agenda/responsavel-do-painel.ts`: com a
                   // lista da equipe vazia (o 403 do item 1 da issue 896) este
                   // fallback dizia "Você" para a jornada de OUTRA pessoa.
-                  resolverResponsavelDoPainel({ pessoas, donoId: tipo.donoId, usuarioId })
+                  resolverResponsavelDoPainel({ pessoas, donoId: profissionalClinic ?? tipo.donoId, usuarioId })
                 }
                 tipo={tipo.nome}
                 duracaoMin={tipo.duracaoMin}
@@ -870,6 +894,7 @@ export function AgendaClient({
                   return marcar
                     .mutateAsync({
                       event_type_id: tipo.id,
+                      ...(profissionalClinic ? { owner_user_id: profissionalClinic } : {}),
                       contact_id: contactId || undefined,
                       conversation_id: conversationId || undefined,
                       starts_at: instante,

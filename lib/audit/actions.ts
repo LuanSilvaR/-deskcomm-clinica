@@ -857,6 +857,17 @@ export const AUDIT_ACTIONS = [
   "registration.requested",
   "registration.approved",
   "registration.rejected",
+
+  // ── FORK clinic (migration 9001): profissionais, especialidades, bloqueios ─
+  // Quem liga o módulo, quem habilita quem para cada atendimento e quem fechou
+  // a agenda de alguém (ou da clínica toda) são as perguntas de depois.
+  "clinic.flag_alterada",
+  "clinic.especialidade_criada",
+  "clinic.especialidade_alterada",
+  "clinic.profissional_salvo",
+  "clinic.tipo_especialidades_atualizadas",
+  "clinic.bloqueio_criado",
+  "clinic.bloqueio_removido",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

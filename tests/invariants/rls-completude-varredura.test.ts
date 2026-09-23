@@ -271,6 +271,31 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "`describe.each`. Guarda as UTMs de cada clique no botão da landing " +
       "page e o ref curto que as liga à mensagem do WhatsApp.",
   },
+  {
+    tabela: "clinic_specialties",
+    razao:
+      "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
+  },
+  {
+    tabela: "clinic_professionals",
+    razao:
+      "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
+  },
+  {
+    tabela: "clinic_professional_specialties",
+    razao:
+      "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
+  },
+  {
+    tabela: "clinic_event_type_specialties",
+    razao:
+      "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
+  },
+  {
+    tabela: "clinic_agenda_blocks",
+    razao:
+      "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
+  },
 ];
 
 /**

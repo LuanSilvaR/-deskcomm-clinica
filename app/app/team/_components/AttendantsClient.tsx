@@ -63,7 +63,7 @@ const MODE_LABELS: Record<(typeof ROUTING_MODES)[number], string> = {
   round_robin: "Rodízio (distribui automático)",
 };
 
-interface Attendant {
+export interface Attendant {
   userId: string;
   name: string;
   email: string | null;
@@ -181,7 +181,7 @@ function PresenceBadge({ attendant }: { attendant: Attendant }) {
 }
 
 /** Editor de janela de horário (schedule tz-aware) de um atendente. */
-function ScheduleDialog({
+export function ScheduleDialog({
   attendant,
   open,
   onOpenChange,
