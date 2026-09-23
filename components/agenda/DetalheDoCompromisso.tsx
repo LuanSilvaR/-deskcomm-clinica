@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
-import { ChegadaDoPaciente } from "@/components/clinic/ChegadaDoPaciente";
+import { VisitaDoPaciente } from "@/components/clinic/VisitaDoPaciente";
 import { rotuloDoLocal } from "@/lib/agenda/locais";
 
 type Detalhe = {
@@ -187,14 +187,16 @@ export function DetalheDoCompromisso({
                 <Link href={`/app/contacts/${a.contact_id}`} className="underline">
                   {t("Ver paciente")}
                 </Link>
-                {/* FORK clinic (migration 9002): registrar a chegada exige a ficha. */}
-                <ChegadaDoPaciente
-                  appointmentId={a.id}
-                  contactId={a.contact_id}
-                  status={a.status}
-                  podeRegistrar={podeEditar}
-                />
               </div>
+            ) : null}
+            {a.contact_id ? (
+              /* FORK clinic (migrations 9002/9003): status da visita; a chegada exige a ficha. */
+              <VisitaDoPaciente
+                appointmentId={a.id}
+                contactId={a.contact_id}
+                statusDoAgendamento={a.status}
+                podeMudar={podeEditar}
+              />
             ) : (
               <p>{t("Compromisso pessoal, sem cliente vinculado.")}</p>
             )}

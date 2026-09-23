@@ -5,7 +5,7 @@
  *   1. encrypt_cpf/decrypt_cpf fazem ida e volta com a chave, e falham com a
  *      chave errada — o CPF grava sem violar contacts_cpf_consistency;
  *   2. anon não executa as funções de CPF nem a da flag;
- *   3. clinic_patient_profiles e clinic_appointment_arrivals não vazam entre orgs;
+ *   3. clinic_patient_profiles não vaza entre orgs (chegadas: ver clinic-status-da-visita, 9003);
  *   4. atendente (agent) preenche a ficha e registra chegada; viewer não;
  *   5. anonimizar o contato apaga a ficha (trigger);
  *   6. só admin mexe na flag ficha_obrigatoria.
@@ -140,7 +140,7 @@ describe("CPF — cifragem do núcleo consertada", () => {
 });
 
 describe("ficha do paciente — isolamento e papéis", () => {
-  it.each(["clinic_patient_profiles", "clinic_appointment_arrivals"])(
+  it.each(["clinic_patient_profiles"])(
     "%s: quem é da org A não enxerga a org B",
     (tabela) => {
       const out = sql(comoUsuario(AGENT_A, `select count(*) from public.${tabela} where organization_id = '${ORG_B}';`));
