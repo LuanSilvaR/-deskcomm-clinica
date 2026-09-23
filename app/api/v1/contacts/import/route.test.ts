@@ -35,7 +35,11 @@ function banco(opcoes: {
   pais?: string | null;
 } = {}) {
   const tentativas: Record<string, unknown>[] = [];
-  const rpc = vi.fn().mockResolvedValue({ error: null });
+  // encrypt_cpf devolve uma cifra (migration 9002): o documento só é gravado
+  // com o PAR hash + cifra — o CHECK contacts_cpf_consistency recusa metade.
+  const rpc = vi.fn(async (nome: string) =>
+    nome === "encrypt_cpf" ? { data: "\\xdeadbeef", error: null } : { error: null },
+  );
   const from = vi.fn((tabela: string) => {
     // A régua do documento vem do PAÍS da organização (issue #1033): a rota lê a
     // organização UMA vez, na entrada. O dublê libera só essa leitura e segue
@@ -91,6 +95,7 @@ async function importar(linhas: string[]): Promise<Resumo> {
 }
 
 beforeEach(() => {
+  vi.stubEnv("CPF_ENCRYPTION_KEY", "chave-de-teste-do-import-32-caracteres");
   vi.clearAllMocks();
   vi.mocked(requireSupportWrite).mockResolvedValue(null);
   vi.mocked(requireRole).mockResolvedValue({
@@ -106,6 +111,10 @@ beforeEach(() => {
     },
     org: { orgId: ORG, name: "Org", role: "agent" },
   });
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("POST /api/v1/contacts/import — desfecho por linha", () => {

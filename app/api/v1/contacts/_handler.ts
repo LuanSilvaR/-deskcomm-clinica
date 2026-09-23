@@ -18,7 +18,7 @@ import type { Idioma } from "@/lib/i18n/idiomas";
 import { roleAtLeast } from "@/lib/auth/types";
 import { canonicalPhoneBR, phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { encontrarContatoPorTelefone } from "@/lib/channels/contato-por-telefone";
-import { hashCpf, encryptCpfSql } from "@/lib/contacts/cpf";
+import { cifrarCpf, decifrarCpf, hashCpf } from "@/lib/contacts/cpf";
 import type { Contact } from "@/lib/types/contacts";
 import { ensureConversation, sessaoProntaParaEnvio } from "@/lib/automation/start-conversation";
 import type {
@@ -323,14 +323,13 @@ export async function getContactHandler(
     if (!roleAtLeast(role, "manager")) {
       cpfDecryptDenied = true;
     } else {
-      const { data: dec, error: decErr } = await supabase.rpc("decrypt_cpf", {
-        p_contact_id: input.contactId,
-      });
-      if (decErr) {
-        console.warn("[contacts.get] decrypt_cpf RPC unavailable", decErr.message);
-      } else if (typeof dec === "string") {
-        cpfDecrypted = dec;
-      }
+      const { data: cifra } = await supabase
+        .from("contacts")
+        .select("cpf_encrypted")
+        .eq("id", input.contactId)
+        .eq("organization_id", contact.organization_id)
+        .maybeSingle();
+      cpfDecrypted = await decifrarCpf(supabase, (cifra as { cpf_encrypted?: unknown } | null)?.cpf_encrypted);
       const a = actorAuditPayload(ctx.actor);
       await audit({
         action: "contact.updated",
@@ -395,9 +394,12 @@ export async function createContactHandler(
   };
 
   if (input.cpf) {
-    insertRow.cpf_hash = hashCpf(input.cpf);
-    const enc = await encryptCpfSql(supabase, input.cpf);
-    if (enc) insertRow.cpf_encrypted = enc;
+    // O par (hash + cifra) ou nada: o CHECK contacts_cpf_consistency recusa metade.
+    const par = await cifrarCpf(supabase, input.cpf);
+    if (!par) {
+      throw new ApiError(500, "internal_error", undefined, ctx.requestId, "Não foi possível proteger o CPF agora.");
+    }
+    Object.assign(insertRow, par);
   }
 
   const { data: created, error: insErr } = await supabase
@@ -566,9 +568,11 @@ export async function patchContactHandler(
     patch.consent = { ...anterior, ...input.consent };
   }
   if (input.cpf !== undefined) {
-    patch.cpf_hash = hashCpf(input.cpf);
-    const enc = await encryptCpfSql(supabase, input.cpf);
-    if (enc) patch.cpf_encrypted = enc;
+    const par = await cifrarCpf(supabase, input.cpf);
+    if (!par) {
+      throw new ApiError(500, "internal_error", undefined, ctx.requestId, "Não foi possível proteger o CPF agora.");
+    }
+    Object.assign(patch, par);
   }
 
   if (Object.keys(patch).length === 0) {

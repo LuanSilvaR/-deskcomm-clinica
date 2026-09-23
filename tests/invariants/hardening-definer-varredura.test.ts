@@ -260,6 +260,15 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "cor.",
   },
   {
+    // FORK clinic (migration 9002).
+    fn: "fn_clinic_definir_ficha_obrigatoria(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.ficha_obrigatoria da organização informada. " +
+      "tests/invariants/clinic-ficha-do-paciente.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9001).
     fn: "fn_clinic_definir_flag(uuid,boolean)",
     razao:
