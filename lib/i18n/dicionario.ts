@@ -11602,6 +11602,10 @@ export const DICIONARIO: Traducoes = {
   "Todo profissional é um membro da equipe. Quem ainda não tem acesso entra por convite em Equipe.": { es: "Todo profesional es un miembro del equipo. Quien todavía no tiene acceso entra por invitación en Equipo." },
   "UF": { es: "Estado" },
   "Você pode cadastrar tudo agora. A agenda só passa a usar especialidades e bloqueios quando isto for ligado.": { es: "Puedes registrar todo ahora. La agenda solo usa especialidades y bloqueos cuando esto se active." },
+  "Nenhum profissional tem a especialidade que este atendimento exige.": { es: "Ningún profesional tiene la especialidad que exige esta atención." },
+  "Bloqueado pela agenda": { es: "Bloqueado desde la agenda" },
+  "Horário bloqueado": { es: "Horario bloqueado" },
+  "Bloquear este horário": { es: "Bloquear este horario" },
 };
 
 /**
