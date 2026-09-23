@@ -25,6 +25,12 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | app/app/agenda/_client.tsx | EscolhaDoProfissional (atrás da flag) e owner_user_id na consulta e na marcação | b7d3f72db |
 | .github/workflows/e2e.yml | Spec clinic-profissionais-e-bloqueios na SPECS_PARTE_2 | b9eb7fd0e |
 | tests/invariants/rls-completude-varredura.test.ts | Tabelas clinic_* em PROVA_PROPRIA | 410cca27f |
+| lib/contacts/cpf.ts, app/api/v1/contacts/_handler.ts, app/api/v1/contacts/import/route.ts | Conserto da cifragem de CPF (par hash + cifra; encrypt_cpf/decrypt_cpf criados na 9002) — candidato a PR no upstream | 0d9522e9b |
+| tests/unit/rpc-do-codigo-nasce-no-schema.test.ts | encrypt_cpf/decrypt_cpf saem da allowlist de RPCs congeladas | ff7f769e9 |
+| app/api/v1/agenda/agendamentos/_handler.ts (de novo) | Compareceu recusa ficha incompleta (flag clinic.ficha_obrigatoria) | ff7f769e9 |
+| app/app/contacts/**, components/contacts/*, components/inbox/CRMSidePanel.tsx, components/inbox/ConversationHeader.tsx, lib/ai/inbox-destino.ts | Textos "Contato" → "Paciente" (só texto de tela) | 6ac024745 |
+| components/contacts/ContactsTable.tsx, app/app/contacts/[id]/_client.tsx, components/agenda/DetalheDoCompromisso.tsx | Selo da ficha, aba Ficha do paciente, botão Paciente chegou | f9fe73593 |
+| tests/e2e/* (vários), tests/sonda-inbox-cabe-na-tela.ts, tests/unit/rotulo-tags-do-contato.test.tsx, tests/unit/inbox-header-nao-trava.test.tsx | Seletores acompanham o renome para Paciente | 6ac024745 |
 
 ## Skills de terceiros
 As skills `supabase` e `supabase-postgres-best-practices` (supabase/agent-skills) ficam no perfil do usuário
