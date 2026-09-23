@@ -26,6 +26,7 @@ import { ConversaNoDossie } from "@/components/kanban/ConversaNoDossie";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { origemDoContato } from "@/lib/leads/origem-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
+import { FichaDoPaciente } from "@/components/clinic/FichaDoPaciente";
 import { DialButton } from "@/components/voice/DialButton";
 
 interface Props {
@@ -91,7 +92,7 @@ export function ContactDetailClient({ contactId }: Props) {
   if (q.isError || !q.data) {
     return (
       <div className="p-6">
-        <Card className="p-6 text-center text-sm text-error-fg">{t("Erro ao carregar contato.")}</Card>
+        <Card className="p-6 text-center text-sm text-error-fg">{t("Erro ao carregar paciente.")}</Card>
       </div>
     );
   }
@@ -128,7 +129,7 @@ export function ContactDetailClient({ contactId }: Props) {
         >
           <ShieldCheck size={18} weight="duotone" aria-hidden />
           <span>
-            {t("Contato anonimizado (LGPD)")}
+            {t("Paciente anonimizado (LGPD)")}
             {contact.anonymized_at &&
               ` em ${format(new Date(contact.anonymized_at), "dd/MM/yyyy", { locale: localeDaData })}`}
             {t(" — edição bloqueada.")}
@@ -183,6 +184,7 @@ export function ContactDetailClient({ contactId }: Props) {
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">{t("Visão geral")}</TabsTrigger>
+          <TabsTrigger value="ficha">{t("Ficha do paciente")}</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           {isAdmin && <TabsTrigger value="lgpd">LGPD</TabsTrigger>}
         </TabsList>
@@ -281,6 +283,16 @@ export function ContactDetailClient({ contactId }: Props) {
           </Card>
         </TabsContent>
 
+        {/* FORK clinic (migration 9002): a ficha cadastral do paciente. */}
+        <TabsContent value="ficha" className="mt-4">
+          <Card className="p-4">
+            <FichaDoPaciente
+              contactId={contactId}
+              podeEditar={Boolean(activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent)}
+            />
+          </Card>
+        </TabsContent>
+
         <TabsContent value="timeline" className="mt-4">
           <TimelineView contactId={contactId} />
         </TabsContent>
@@ -298,14 +310,14 @@ export function ContactDetailClient({ contactId }: Props) {
               </div>
               {contact.is_anonymized ? (
                 <p className="text-sm text-muted-foreground">
-                  {t("Este contato já foi anonimizado")}
+                  {t("Este paciente já foi anonimizado")}
                   {contact.anonymized_at &&
                     ` em ${format(new Date(contact.anonymized_at), "dd/MM/yyyy HH:mm", { locale: localeDaData })}`}
                   .
                 </p>
               ) : (
                 <Button variant="destructive" onClick={() => setAnonOpen(true)}>
-                  {t("Anonimizar contato")}
+                  {t("Anonimizar paciente")}
                 </Button>
               )}
             </Card>

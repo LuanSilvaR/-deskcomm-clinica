@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { clinicProfissionaisLigado } from "@/lib/clinic/flags";
+import { fichaObrigatoriaLigada } from "@/lib/clinic/pacientes/servidor";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 
@@ -44,6 +45,7 @@ export default async function ProfissionaisPage() {
       </header>
       <ProfissionaisClient
         ligadoInicial={clinicProfissionaisLigado(org?.settings)}
+        fichaObrigatoriaInicial={fichaObrigatoriaLigada(org?.settings)}
         podeLigar={ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin}
         ehGerencia={ehGerencia}
         usuarioAtualId={user.id}

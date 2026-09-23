@@ -37,6 +37,8 @@ import { useDeleteContact } from "@/hooks/contacts/useDeleteContact";
 import type { ContactOrderBy } from "@/lib/schemas/contacts";
 import type { Contact } from "@/lib/types/contacts";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { SeloDaFicha } from "@/components/clinic/FichaDoPaciente";
+import { useSituacaoDasFichas } from "@/components/clinic/useSituacaoDasFichas";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 
 interface Props {
@@ -108,6 +110,8 @@ function SortableHead({
 }
 
 export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
+  // FORK clinic: o selo da ficha cadastral do paciente (migration 9002).
+  const situacaoDasFichas = useSituacaoDasFichas(contacts.map((c) => c.id));
   const localeDaData = useLocaleDeData();
   const t = useT();
   const clientesLigado = useActiveOrg()?.cliente_pela_agenda === true;
@@ -146,7 +150,7 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
     if (!alvo) return;
     try {
       await del.mutateAsync(alvo.id);
-      toast.success(t("Contato excluído."));
+      toast.success(t("Paciente excluído."));
       setAlvo(null);
     } catch {
       // hook handles toast
@@ -199,7 +203,8 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
             <TableCell className="font-medium">
               <Link href={`/app/contacts/${c.id}`} className="hover:underline">
                 {displayName(c)}
-              </Link>
+              </Link>{" "}
+              <SeloDaFicha situacao={situacaoDasFichas.data?.[c.id]} />
             </TableCell>
             <TableCell className="text-muted-foreground">
               {c.email ?? "—"}
@@ -272,8 +277,8 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-muted-foreground hover:text-error-fg"
-                  title={t("Excluir contato")}
-                  aria-label={`${t("Excluir contato")} ${displayName(c, t)}`}
+                  title={t("Excluir paciente")}
+                  aria-label={`${t("Excluir paciente")} ${displayName(c, t)}`}
                   onClick={() => setAlvo(c)}
                 >
                   <Trash size={16} weight="regular" aria-hidden />
@@ -288,7 +293,7 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
     <AlertDialog open={alvo !== null} onOpenChange={(open) => { if (!open) setAlvo(null); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{t("Excluir contato?")}</AlertDialogTitle>
+          <AlertDialogTitle>{t("Excluir paciente?")}</AlertDialogTitle>
           <AlertDialogDescription>
             {alvo
               ? `${t("Isso remove")} ${displayName(alvo, t)} ${t("e a conversa associada, se houver. Esta ação não pode ser desfeita.")}`

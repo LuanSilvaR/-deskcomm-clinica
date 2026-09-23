@@ -469,6 +469,9 @@ const ENSINO_POR_CODIGO: Record<string, string> = {
   // FORK clinic (migration 9001): o profissional não tem a especialidade do atendimento.
   profissional_nao_habilitado:
     "esse profissional não faz esse atendimento. Não marque com ele: ofereça outro profissional da equipe ou avise que alguém confirma o horário.",
+  // FORK clinic (migration 9002): a ficha cadastral do paciente está incompleta.
+  ficha_incompleta:
+    "a ficha cadastral do paciente ainda não está completa. Não registre o comparecimento: avise que a recepção completa a ficha quando o paciente chegar.",
   agenda_disponibilidade_invalida:
     "não consigo ler a agenda desse atendente agora. Não ofereça horários e não diga que está sem vaga — avise que alguém da equipe confirma.",
   agenda_ja_cancelado:

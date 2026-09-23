@@ -723,6 +723,7 @@ jobs:
         agente-marca-consulta.spec.ts
         agenda-marcar-pela-tela.spec.ts
         clinic-profissionais-e-bloqueios.spec.ts
+        clinic-ficha-do-paciente.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts

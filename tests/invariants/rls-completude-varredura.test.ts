@@ -272,6 +272,16 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "page e o ref curto que as liga à mensagem do WhatsApp.",
   },
   {
+    tabela: "clinic_patient_profiles",
+    razao:
+      "tests/invariants/clinic-ficha-do-paciente.test.ts (FORK clinic, migration 9002): 2 orgs, quem é da A lê 0 linhas da B, atendente escreve e visualizador não, e anonimizar o contato apaga a ficha.",
+  },
+  {
+    tabela: "clinic_appointment_arrivals",
+    razao:
+      "tests/invariants/clinic-ficha-do-paciente.test.ts (FORK clinic, migration 9002): 2 orgs, quem é da A lê 0 linhas da B, atendente escreve e visualizador não, e anonimizar o contato apaga a ficha.",
+  },
+  {
     tabela: "clinic_specialties",
     razao:
       "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
