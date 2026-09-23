@@ -43,7 +43,7 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
     try {
       const r = await importar.mutateAsync(file);
       setResumo(r);
-      if (r.imported > 0) toast.success(`${r.imported} ${t("contato(s) importado(s)")}`);
+      if (r.imported > 0) toast.success(`${r.imported} ${t("paciente(s) importado(s)")}`);
       if (r.errors.length > 0) toast.warning(`${r.errors.length} ${t("linha(s) com problema")}`);
     } catch (err) {
       // Falha de requisição (arquivo grande, formato errado…): mostra no rodapé.
@@ -65,7 +65,7 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("Importar contatos de planilha")}</DialogTitle>
+          <DialogTitle>{t("Importar pacientes de planilha")}</DialogTitle>
           <DialogDescription>
             {t(
               "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.",

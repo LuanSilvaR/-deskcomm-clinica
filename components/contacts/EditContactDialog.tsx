@@ -88,7 +88,7 @@ export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs
     }
     try {
       await update.mutateAsync(parsed.data as ContactPatch);
-      toast.success(t("Contato atualizado"));
+      toast.success(t("Paciente atualizado"));
       onOpenChange(false);
     } catch {
       // hook handles toast
@@ -99,8 +99,8 @@ export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("Editar contato")}</DialogTitle>
-          <DialogDescription>{t("Atualize os dados deste contato.")}</DialogDescription>
+          <DialogTitle>{t("Editar paciente")}</DialogTitle>
+          <DialogDescription>{t("Atualize os dados deste paciente.")}</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">

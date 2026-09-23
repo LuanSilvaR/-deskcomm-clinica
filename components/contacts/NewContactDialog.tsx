@@ -77,7 +77,7 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
 
     try {
       const resposta = await create.mutateAsync(parsed.data as ContactCreate);
-      toast.success(t("Contato criado"));
+      toast.success(t("Paciente criado"));
       form.reset();
       onOpenChange(false);
       // `.data` é o envelope do `ok()`, e dentro dele mora `{ contact, action }`.
@@ -95,7 +95,7 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("Novo contato")}</DialogTitle>
+          <DialogTitle>{t("Novo paciente")}</DialogTitle>
           <DialogDescription>
             {t("Preencha pelo menos um identificador (email ou telefone).")}
           </DialogDescription>
@@ -138,7 +138,7 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
               {t("Cancelar")}
             </Button>
             <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? t("Criando…") : t("Criar contato")}
+              {create.isPending ? t("Criando…") : t("Criar paciente")}
             </Button>
           </DialogFooter>
         </form>

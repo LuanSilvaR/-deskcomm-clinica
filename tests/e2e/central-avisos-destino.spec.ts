@@ -115,7 +115,7 @@ test("agent abre contexto, volta ainda aberto, resolve e reabre; RLS e menu ocul
   await expect(row(page, "Conversa própria")).toHaveCount(0);
   await page.getByRole("tab", { name: /^Abertos/ }).click();
   await expect(row(page, "Conversa própria")).toBeVisible(); expect(patches).toHaveLength(2);
-  await row(page, "Contato para conferir").getByRole("link", { name: "Ver contato" }).click();
+  await row(page, "Contato para conferir").getByRole("link", { name: "Ver paciente" }).click();
   await expect(page).toHaveURL(new RegExp(`/app/contacts/${contacts[0]}`));
   await expect(page.getByText("Cliente Avisos 0", { exact: true }).first()).toBeVisible();
   await page.goBack(); await expect(row(page, "Contato para conferir")).toBeVisible();

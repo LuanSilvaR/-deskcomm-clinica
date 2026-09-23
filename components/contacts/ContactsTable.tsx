@@ -146,7 +146,7 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
     if (!alvo) return;
     try {
       await del.mutateAsync(alvo.id);
-      toast.success(t("Contato excluído."));
+      toast.success(t("Paciente excluído."));
       setAlvo(null);
     } catch {
       // hook handles toast
@@ -272,8 +272,8 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-muted-foreground hover:text-error-fg"
-                  title={t("Excluir contato")}
-                  aria-label={`${t("Excluir contato")} ${displayName(c, t)}`}
+                  title={t("Excluir paciente")}
+                  aria-label={`${t("Excluir paciente")} ${displayName(c, t)}`}
                   onClick={() => setAlvo(c)}
                 >
                   <Trash size={16} weight="regular" aria-hidden />
@@ -288,7 +288,7 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
     <AlertDialog open={alvo !== null} onOpenChange={(open) => { if (!open) setAlvo(null); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{t("Excluir contato?")}</AlertDialogTitle>
+          <AlertDialogTitle>{t("Excluir paciente?")}</AlertDialogTitle>
           <AlertDialogDescription>
             {alvo
               ? `${t("Isso remove")} ${displayName(alvo, t)} ${t("e a conversa associada, se houver. Esta ação não pode ser desfeita.")}`

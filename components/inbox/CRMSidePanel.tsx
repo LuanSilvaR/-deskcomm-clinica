@@ -600,7 +600,7 @@ export function CRMSidePanel({ conversation }: Props) {
   if (!conversation) {
     return (
       <aside className="flex h-full items-center justify-center border-l border-border p-4 text-center text-xs text-muted-foreground">
-        {t("Selecione uma conversa para ver detalhes do contato.")}
+        {t("Selecione uma conversa para ver detalhes do paciente.")}
       </aside>
     );
   }
@@ -609,7 +609,7 @@ export function CRMSidePanel({ conversation }: Props) {
     <aside className="flex h-full flex-col gap-4 overflow-y-auto border-l border-border bg-background p-4">
       <section>
         <h3 className="text-xs font-semibold text-text">
-          {t("Contato")}
+          {t("Paciente")}
         </h3>
         <Card className="mt-2 space-y-2 p-3 text-sm">
           <div className="font-medium">{displayName}</div>
@@ -633,7 +633,7 @@ export function CRMSidePanel({ conversation }: Props) {
               aria-pressed={tagEditorOpen}
               onClick={() => setTagEditorOpen((v) => !v)}
             >
-              <Tag size={12} className="mr-1" weight="regular" aria-hidden /> {t("Tags do contato")}
+              <Tag size={12} className="mr-1" weight="regular" aria-hidden /> {t("Tags do paciente")}
             </Button>
             <Button
               size="sm"
@@ -648,7 +648,7 @@ export function CRMSidePanel({ conversation }: Props) {
             {contactId && (
               <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
                 <Link href={`/app/contacts/${contactId}`}>
-                  {t("Ver contato")}
+                  {t("Ver paciente")}
                   <ArrowRight size={12} className="ml-1" weight="regular" aria-hidden />
                 </Link>
               </Button>
@@ -754,7 +754,7 @@ export function CRMSidePanel({ conversation }: Props) {
       <Separator />
 
       <section data-testid="inbox-memoria">
-        <h3 className="text-xs font-semibold">{t("Memória do contato")}</h3>
+        <h3 className="text-xs font-semibold">{t("Memória do paciente")}</h3>
         <p className="mt-1 text-xs text-muted-foreground">{t("Fatos duráveis registrados nas notas. Pendências pertencem à demanda vigente.")}</p>
         {!sectionsLoading && fatos.map((f) => <details key={f.id} className="mt-2 text-xs"><summary>{f.headline}</summary><p className="mt-1 whitespace-pre-wrap">{f.body}</p></details>)}
         {!sectionsLoading && fatos.length === 0 && <p className="mt-2 text-xs text-muted-foreground">{t("Nenhum fato durável registrado.")}</p>}

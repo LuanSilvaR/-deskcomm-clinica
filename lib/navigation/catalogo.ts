@@ -206,7 +206,7 @@ export const NAV_CATALOG = [
     // herda, e só sabe deixar mais devagar.
     href: "/app/campaigns",
     label: "Campanhas",
-    description: "Fale com uma lista de contatos que você escolhe, no ritmo do número.",
+    description: "Fale com uma lista de pacientes que você escolhe, no ritmo do número.",
     icon: "Megaphone",
     group: "crm",
     section: "O dia a dia da venda",
@@ -216,7 +216,7 @@ export const NAV_CATALOG = [
   },
   {
     href: "/app/contacts",
-    label: "Contatos",
+    label: "Pacientes",
     description: "As pessoas do outro lado da conversa e seu histórico.",
     icon: "Users",
     group: "crm",

@@ -183,7 +183,7 @@ export function DetalheDoCompromisso({
             </p>
             {a.contact_id ? (
               <Link href={`/app/contacts/${a.contact_id}`} className="underline">
-                {t("Ver contato")}
+                {t("Ver paciente")}
               </Link>
             ) : (
               <p>{t("Compromisso pessoal, sem cliente vinculado.")}</p>

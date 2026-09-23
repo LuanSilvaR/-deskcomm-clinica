@@ -51,9 +51,9 @@ export function AnonymizeDialog({ contactId, open, onOpenChange }: Props) {
       if (res.data.action === "resumed") {
         toast.success(t("Anonimização retomada: o que faltava foi redigido agora."));
       } else if (res.data.action === "already_anonymized") {
-        toast.info(t("Contato já estava anonimizado, e não faltava nada."));
+        toast.info(t("Paciente já estava anonimizado, e não faltava nada."));
       } else {
-        toast.success(t("Contato anonimizado."));
+        toast.success(t("Paciente anonimizado."));
       }
       reset();
       onOpenChange(false);
@@ -71,7 +71,7 @@ export function AnonymizeDialog({ contactId, open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-error-fg">{t("Anonimizar contato (LGPD)")}</DialogTitle>
+          <DialogTitle className="text-error-fg">{t("Anonimizar paciente (LGPD)")}</DialogTitle>
           <DialogDescription>
             {t(
               "Esta ação é irreversível. O nome será substituído por \"Contato Anonimizado #N\", email/telefone/CPF serão limpos, e atividades terão conteúdo redigido.",

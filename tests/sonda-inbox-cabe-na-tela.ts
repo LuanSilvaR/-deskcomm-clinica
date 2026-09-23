@@ -91,12 +91,12 @@ async function main(): Promise<void> {
         var acoes = hdr.children[1];
         var botoes = Array.prototype.slice
           .call(acoes.querySelectorAll("button, a"))
-          .filter(function (x) { return !/Ver contato/.test(x.innerText || ""); });
+          .filter(function (x) { return !/Ver paciente/.test(x.innerText || ""); });
         // A porta para o contato existe em ALGUM lugar da tela — header ou painel.
         var portas = Array.prototype.slice
           .call(document.querySelectorAll("a"))
           .filter(function (x) {
-            return /Ver contato/.test(x.innerText || "") && x.getBoundingClientRect().width > 0;
+            return /Ver paciente/.test(x.innerText || "") && x.getBoundingClientRect().width > 0;
           });
         return {
           viewport: window.innerWidth,

@@ -91,7 +91,7 @@ export function ContactDetailClient({ contactId }: Props) {
   if (q.isError || !q.data) {
     return (
       <div className="p-6">
-        <Card className="p-6 text-center text-sm text-error-fg">{t("Erro ao carregar contato.")}</Card>
+        <Card className="p-6 text-center text-sm text-error-fg">{t("Erro ao carregar paciente.")}</Card>
       </div>
     );
   }
@@ -128,7 +128,7 @@ export function ContactDetailClient({ contactId }: Props) {
         >
           <ShieldCheck size={18} weight="duotone" aria-hidden />
           <span>
-            {t("Contato anonimizado (LGPD)")}
+            {t("Paciente anonimizado (LGPD)")}
             {contact.anonymized_at &&
               ` em ${format(new Date(contact.anonymized_at), "dd/MM/yyyy", { locale: localeDaData })}`}
             {t(" — edição bloqueada.")}
@@ -298,14 +298,14 @@ export function ContactDetailClient({ contactId }: Props) {
               </div>
               {contact.is_anonymized ? (
                 <p className="text-sm text-muted-foreground">
-                  {t("Este contato já foi anonimizado")}
+                  {t("Este paciente já foi anonimizado")}
                   {contact.anonymized_at &&
                     ` em ${format(new Date(contact.anonymized_at), "dd/MM/yyyy HH:mm", { locale: localeDaData })}`}
                   .
                 </p>
               ) : (
                 <Button variant="destructive" onClick={() => setAnonOpen(true)}>
-                  {t("Anonimizar contato")}
+                  {t("Anonimizar paciente")}
                 </Button>
               )}
             </Card>
