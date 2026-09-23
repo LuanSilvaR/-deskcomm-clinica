@@ -29,7 +29,7 @@ export async function idsSaoDaOrg(
   return (data ?? []).length === unicos.length;
 }
 
-/** O usuário é membro (convite aceito) da organização? */
+/** O usuário é membro (convite aceito e não revogado) da organização? */
 export async function eMembroDaOrg(
   supabase: SupabaseClient,
   organizationId: string,
@@ -41,6 +41,7 @@ export async function eMembroDaOrg(
     .eq("organization_id", organizationId)
     .eq("user_id", userId)
     .not("accepted_at", "is", null)
+    .is("revoked_at", null)
     .maybeSingle();
   return !error && data !== null;
 }

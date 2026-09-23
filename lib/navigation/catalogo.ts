@@ -322,6 +322,17 @@ export const NAV_CATALOG = [
     // na navegação" — a porta existia, era outra.
   },
   {
+    // FORK clinic (migration 9001): fichas dos profissionais, especialidades,
+    // o que cada atendimento exige e bloqueios de agenda. Mesmo grupo e seção
+    // de "Tipos de agendamento", que é onde a clínica procura.
+    href: "/app/settings/tenant/profissionais",
+    label: "Profissionais e especialidades",
+    description: "Quem atende, o que cada um faz, quando atende e quando a agenda fica fechada.",
+    icon: "UsersThree",
+    group: "organizacao",
+    section: "Sua empresa",
+  },
+  {
     // O BALCÃO. Fica em CRM, e não em Configurações, porque é uso diário de quem
     // está com a cliente na frente — a tela irmã, em Configurações › Financeiro,
     // é onde o negócio se descreve uma vez.
