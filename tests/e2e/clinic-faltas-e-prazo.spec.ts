@@ -105,7 +105,7 @@ test("faltas do paciente e prazo para desmarcar — pela tela", async ({ page })
 
   // ── 5. o prazo pela tela ──────────────────────────────────────────────────
   await page.goto("/app/settings/tenant/profissionais");
-  const prazo = page.getByTestId("clinic-prazo");
+  const prazo = page.getByRole("main").getByTestId("clinic-prazo");
   await prazo.getByTestId("clinic-prazo-horas").fill("24");
   await prazo.getByTestId("clinic-prazo-salvar").click();
   await expect(prazo).toContainText("Prazo para o paciente desmarcar pelo WhatsApp: 24 h");

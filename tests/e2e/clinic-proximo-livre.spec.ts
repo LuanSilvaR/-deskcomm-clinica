@@ -33,11 +33,11 @@ async function foto(page: Page, nome: string): Promise<void> {
 
 async function modulo(page: Page, ligar: boolean): Promise<void> {
   await page.goto("/app/settings/tenant/profissionais");
-  const bloco = page.getByTestId("clinic-modulo");
+  const bloco = page.getByRole("main").getByTestId("clinic-modulo");
   await expect(bloco).toBeVisible({ timeout: 20_000 });
   const ligado = await bloco.getByText("Regras de profissionais ligadas").isVisible();
   if (ligado !== ligar) {
-    await page.getByTestId("clinic-modulo-alternar").click();
+    await page.getByRole("main").getByTestId("clinic-modulo-alternar").click();
     await expect(bloco.getByText(ligar ? "Regras de profissionais ligadas" : "Regras de profissionais desligadas")).toBeVisible();
   }
 }

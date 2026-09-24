@@ -118,10 +118,10 @@ test("clínica cadastra especialidade, habilita profissional e bloqueia a agenda
 
   // ── 0. módulo desligado: a régua ───────────────────────────────────────────
   await page.goto("/app/settings/tenant/profissionais");
-  const modulo = page.getByTestId("clinic-modulo");
+  const modulo = page.getByRole("main").getByTestId("clinic-modulo");
   await expect(modulo).toBeVisible({ timeout: 20_000 });
   if (await modulo.getByText("Regras de profissionais ligadas").isVisible()) {
-    await page.getByTestId("clinic-modulo-alternar").click();
+    await page.getByRole("main").getByTestId("clinic-modulo-alternar").click();
     await expect(modulo.getByText("Regras de profissionais desligadas")).toBeVisible();
   }
   const antes = await horarios(page, tipoId, atendente.id, d1, d3);
@@ -130,7 +130,7 @@ test("clínica cadastra especialidade, habilita profissional e bloqueia a agenda
   await foto(page, "00-modulo-desligado");
 
   // ── 1. liga, cria a especialidade e exige-a no tipo ────────────────────────
-  await page.getByTestId("clinic-modulo-alternar").click();
+  await page.getByRole("main").getByTestId("clinic-modulo-alternar").click();
   await expect(modulo.getByText("Regras de profissionais ligadas")).toBeVisible();
 
   await page.getByRole("tab", { name: "Especialidades" }).click();
@@ -231,7 +231,7 @@ test("clínica cadastra especialidade, habilita profissional e bloqueia a agenda
   const desfazer = page.waitForResponse((r) => r.url().includes(`/api/v1/clinic/tipos/${tipoId}/especialidades`) && r.request().method() === "PUT");
   await page.getByTestId("exigencias-do-tipo").filter({ hasText: nomeDoTipo }).getByLabel(especialidade).uncheck();
   expect((await desfazer).status()).toBe(200);
-  await page.getByTestId("clinic-modulo-alternar").click();
+  await page.getByRole("main").getByTestId("clinic-modulo-alternar").click();
   await expect(modulo.getByText("Regras de profissionais desligadas")).toBeVisible();
 
   const depois = await horarios(page, tipoId, atendente.id, d1, d3);

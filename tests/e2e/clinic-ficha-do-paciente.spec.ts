@@ -70,11 +70,11 @@ async function buscarNaLista(page: Page, termo: string): Promise<void> {
 
 async function exigirFicha(page: Page, ligar: boolean): Promise<void> {
   await page.goto("/app/settings/tenant/profissionais");
-  const bloco = page.getByTestId("clinic-ficha-obrigatoria");
+  const bloco = page.getByRole("main").getByTestId("clinic-ficha-obrigatoria");
   await expect(bloco).toBeVisible({ timeout: 20_000 });
   const ligada = await bloco.getByText("Ficha do paciente exigida na chegada").isVisible();
   if (ligada !== ligar) {
-    await page.getByTestId("clinic-ficha-obrigatoria-alternar").click();
+    await page.getByRole("main").getByTestId("clinic-ficha-obrigatoria-alternar").click();
     await expect(
       bloco.getByText(ligar ? "Ficha do paciente exigida na chegada" : "Ficha do paciente não é exigida"),
     ).toBeVisible();

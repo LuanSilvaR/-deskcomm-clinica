@@ -694,6 +694,16 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    // FORK clinic (E6): faltas, ocupação por profissional, espera na recepção e
+    // confirmação. Sem `sidebar`: mora atrás de "Ver tudo em Análise"; porta
+    // diária também na tela de Faltas.
+    href: "/app/agenda/indicadores",
+    label: "Indicadores da agenda",
+    description: "Faltas, ocupação de cada profissional, espera na recepção e confirmação pelo WhatsApp.",
+    icon: "ChartBar",
+    group: "analise",
+  },
+  {
     // Logo abaixo de Desempenho porque responde a metade da MESMA pergunta: lá
     // está o que aconteceu depois que a pessoa chegou; aqui, quanto custou
     // trazê-la. Ler as duas juntas é o que fecha a conta do custo por cliente.
