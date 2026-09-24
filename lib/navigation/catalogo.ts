@@ -702,6 +702,8 @@ export const NAV_CATALOG = [
     description: "Faltas, ocupação de cada profissional, espera na recepção e confirmação pelo WhatsApp.",
     icon: "ChartBar",
     group: "analise",
+    section: "Os números do período",
+    minRole: "manager",
   },
   {
     // Logo abaixo de Desempenho porque responde a metade da MESMA pergunta: lá
