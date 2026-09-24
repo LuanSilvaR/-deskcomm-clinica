@@ -29,7 +29,7 @@ import { resolverResponsavelDoPainel } from "@/lib/agenda/responsavel-do-painel"
 import { useVinculoDaMarcacao } from "@/lib/agenda/vinculo-da-marcacao";
 import { Button } from "@/components/ui/button";
 import { PainelDeMarcacao } from "@/components/agenda/PainelDeMarcacao";
-import { EscolhaDoProfissional, useRegrasDeProfissionaisLigadas } from "@/components/clinic/EscolhaDoProfissional";
+import { EscolhaDoProfissional, useAgendaDoDiaLigada, useRegrasDeProfissionaisLigadas } from "@/components/clinic/EscolhaDoProfissional";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAgendamentos } from "@/hooks/agenda/useAgendamentos";
 import { useHorariosLivres } from "@/hooks/agenda/useHorariosLivres";
@@ -209,6 +209,7 @@ export function AgendaClient({
   const [profissionalClinic, setProfissionalClinic] = React.useState<string | null>(null);
   // FORK clinic (E1.4): a porta do "Dia por profissional" só aparece com as regras ligadas.
   const regrasDeProfissionais = useRegrasDeProfissionaisLigadas();
+  const agendaDoDia = useAgendaDoDiaLigada();
   const tipo = tiposIniciais.find((t) => t.id === tipoId) ?? tiposIniciais[0] ?? null;
   const endereco = enderecoEditado ?? tipo?.localDetalhes ?? "";
   const [visao, setVisao] = React.useState<VisaoDaAgenda>("semana");
@@ -452,6 +453,14 @@ export function AgendaClient({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {/* FORK clinic (9014): a Agenda do dia — lista por profissional com filtros. */}
+          {agendaDoDia ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/app/agenda/dia" data-testid="agenda-abrir-agenda-do-dia">
+                {t("Agenda do dia")}
+              </Link>
+            </Button>
+          ) : null}
           {/* FORK clinic (9003): a porta diária do painel da recepção — ele saiu
               do menu lateral, que está no teto da dobra. */}
           <Button variant="outline" size="sm" asChild>

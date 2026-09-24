@@ -59,6 +59,17 @@ export function useRegrasDeProfissionaisLigadas(): boolean {
   return q.data === true;
 }
 
+/** FORK clinic (9014): a opção "Agenda do dia" — a Agenda mostra o botão só ligada. */
+export function useAgendaDoDiaLigada(): boolean {
+  const q = useQuery({
+    queryKey: ["clinic", "config", "agenda_do_dia"],
+    queryFn: async () =>
+      (await apiClient.get<{ data: { agenda_do_dia?: boolean } }>("/api/v1/clinic/config")).data.agenda_do_dia === true,
+    staleTime: 60_000,
+  });
+  return q.data === true;
+}
+
 export function EscolhaDoProfissional(props: Props) {
   const { tipoId, donoPadraoId, pessoas, valor, onChange, instante, duracaoMin, fuso, onEscolherHorario } = props;
   const t = useT();

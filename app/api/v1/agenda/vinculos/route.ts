@@ -4,8 +4,8 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
-import { hashCpf } from "@/lib/contacts/cpf";
-import { detalheDoPaciente, interpretarBusca } from "@/lib/clinic/pacientes/busca";
+import { detalheDoPaciente } from "@/lib/clinic/pacientes/busca";
+import { filtrarContatosPelaBusca } from "@/lib/clinic/pacientes/busca-no-banco";
 import { contarFaltas } from "@/lib/clinic/agenda/faltas";
 import { traduzir } from "@/lib/i18n/dicionario";
 export async function GET(req: Request) {
@@ -30,13 +30,7 @@ export async function GET(req: Request) {
     // FORK clinic (E1): nome, telefone, CPF (hash exato, nunca em claro) ou data
     // de nascimento num campo só — ver lib/clinic/pacientes/busca.ts. Vírgulas e
     // parênteses delimitam o DSL do PostgREST; a função já os tira do nome.
-    const busca = interpretarBusca(input.data.q);
-    if (busca?.tipo === "nascimento") contacts = contacts.eq("birthdate", busca.data);
-    else if (busca?.tipo === "cpf_ou_telefone")
-      contacts = contacts.or(`cpf_hash.eq.${hashCpf(busca.digitos)},phone_number.ilike.%${busca.digitos}%`);
-    else if (busca?.tipo === "telefone") contacts = contacts.ilike("phone_number", `%${busca.digitos}%`);
-    else if (busca?.tipo === "nome")
-      contacts = contacts.or(`display_name.ilike.%${busca.termo}%,name.ilike.%${busca.termo}%`);
+    contacts = filtrarContatosPelaBusca(contacts, input.data.q);
   }
   const result = await contacts;
   if (result.error)

@@ -147,4 +147,9 @@ export {
   GoogleLogo,
   MapPin,
   ArrowsOutSimple,
+  // FORK clinic (Agenda do dia): o selo de cada status leva ícone, não só cor.
+  DoorOpen,
+  Stethoscope,
+  UserMinus,
+  XCircle,
 } from "@phosphor-icons/react/dist/ssr";
