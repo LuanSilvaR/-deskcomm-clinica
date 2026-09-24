@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { CHAVES_DOS_FILTROS } from "@/lib/clinic/agenda/filtros-da-agenda";
 import { headers } from "next/headers";
 
 import {
@@ -52,7 +53,16 @@ function contatoDoEmbed(c: ContatoNomeavel | ContatoNomeavel[] | null): string |
   return nomeDoContato(Array.isArray(c) ? (c[0] ?? null) : c) ?? undefined;
 }
 
-export default async function AgendaPage() {
+export default async function AgendaPage({
+  searchParams,
+}: {
+  // FORK clinic (melhorias da Agenda): os filtros da clínica nascem da URL.
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const daUrl = (await searchParams) ?? {};
+  const filtrosDaUrl = new URLSearchParams(
+    CHAVES_DOS_FILTROS.flatMap((k) => (typeof daUrl[k] === "string" ? [[k, daUrl[k] as string]] : [])),
+  ).toString();
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
@@ -273,6 +283,9 @@ export default async function AgendaPage() {
       // leitura, que `resolveActiveOrg` resolve como `viewer` — levaria 403. A
       // tela esconder é cortesia: quem decide segue sendo a rota.
       podeMarcar={ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent}
+      // FORK clinic (melhorias da Agenda): filtros, status e lista do dia.
+      orgId={activeOrg.orgId}
+      filtrosDaUrl={filtrosDaUrl}
       tiposIniciais={(tipos ?? []).map((t) => ({
         id: t.id,
         nome: t.name,

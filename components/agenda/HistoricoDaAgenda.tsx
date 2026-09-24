@@ -1,4 +1,5 @@
 "use client";
+import { StatusNaLinha } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
 import Link from "next/link";
 
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
@@ -238,6 +239,8 @@ export function HistoricoDaAgenda({
                   <Badge variant={variante} className="shrink-0">
                     {t(ROTULO_DA_SITUACAO[a.situacao])}
                   </Badge>
+                  {/* FORK clinic: status da visita, confirmação e faltas. */}
+                  <StatusNaLinha agendamento={a} />
                   <div className="flex shrink-0 items-center gap-1">
                     {/*
                       Ação por aba, e a lista de CADA aba tem razão própria.

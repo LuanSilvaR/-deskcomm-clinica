@@ -151,4 +151,9 @@ export {
   Wrench,
   CurrencyCircleDollar,
   Percent,
+  // FORK clinic (melhorias da Agenda): o selo de cada status leva ícone, não só cor.
+  DoorOpen,
+  Stethoscope,
+  UserMinus,
+  XCircle,
 } from "@phosphor-icons/react/dist/ssr";

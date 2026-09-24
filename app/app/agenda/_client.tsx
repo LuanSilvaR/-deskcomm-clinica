@@ -30,6 +30,10 @@ import { useVinculoDaMarcacao } from "@/lib/agenda/vinculo-da-marcacao";
 import { Button } from "@/components/ui/button";
 import { PainelDeMarcacao } from "@/components/agenda/PainelDeMarcacao";
 import { EscolhaDoProfissional, useRegrasDeProfissionaisLigadas } from "@/components/clinic/EscolhaDoProfissional";
+import { BarraDeFiltrosDaAgenda, useFiltrosDaAgenda } from "@/components/clinic/agenda/BarraDeFiltrosDaAgenda";
+import { ProvedorDaInfoDaClinica, useInfoDaClinica } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
+import { ListaDoDiaDaAgenda } from "@/components/clinic/agenda/ListaDoDiaDaAgenda";
+import { algumFiltroAtivo, passaNosFiltros } from "@/lib/clinic/agenda/filtros-da-agenda";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAgendamentos } from "@/hooks/agenda/useAgendamentos";
 import { useHorariosLivres } from "@/hooks/agenda/useHorariosLivres";
@@ -86,6 +90,8 @@ export function AgendaClient({
   tiposIniciais,
   agendamentosIniciais,
   podeMarcar,
+  orgId,
+  filtrosDaUrl = "",
 }: {
   fusoDeApresentacao: string | null;
   /**
@@ -124,6 +130,9 @@ export function AgendaClient({
    * fechar. Esconder aqui é cortesia: quem decide segue sendo a rota.
    */
   podeMarcar: boolean;
+  /** FORK clinic: a organização (tempo real) e os filtros que vieram na URL. */
+  orgId?: string;
+  filtrosDaUrl?: string;
 }) {
   const localeDaData = useLocaleDeData();
   const t = useT();
@@ -233,6 +242,9 @@ export function AgendaClient({
     if (window.matchMedia("(max-width: 767px)").matches) setVisao("dia");
   }, []);
   const [isolada, setIsolada] = React.useState<string | null>(null);
+  // FORK clinic (melhorias da Agenda): filtros da clínica e o modo da visão Dia.
+  const { filtros, mudar: mudarFiltro, limpar: limparFiltros } = useFiltrosDaAgenda(filtrosDaUrl);
+  const [diaEmLista, setDiaEmLista] = React.useState(false);
   /**
    * A ÂNCORA NASCE DO RELÓGIO DA ORGANIZAÇÃO, não do navegador.
    *
@@ -376,10 +388,20 @@ export function AgendaClient({
   const todos: Agendamento[] =
     agendamentosVivos ?? (naJanelaDoServidor ? agendamentosIniciais : []);
 
+  // FORK clinic: status da visita, confirmação, faltas e fichas da janela.
+  const { data: infoDaClinica } = useInfoDaClinica(orgId ?? "", recorteDaGrade, filtros.q);
   const agendamentos = React.useMemo(
-    () => (isolada === null ? todos : todos.filter((a) => a.responsavelId === isolada)),
-    [isolada, todos],
+    () =>
+      (isolada === null ? todos : todos.filter((a) => a.responsavelId === isolada)).filter((a) =>
+        passaNosFiltros(a, filtros, infoDaClinica),
+      ),
+    [isolada, todos, filtros, infoDaClinica],
   );
+  const especialidades = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of Object.values(infoDaClinica?.profissionais ?? {})) for (const e of f.especialidades) m.set(e.id, e.nome);
+    return [...m].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  }, [infoDaClinica]);
 
   // A GRADE não mostra cancelado — ele fica só na aba "Cancelados" do
   // histórico, que lê `agendamentos` (cheio) e o separa sozinha em `separar()`.
@@ -420,6 +442,7 @@ export function AgendaClient({
         : format(ancora, t("EEEE, d 'de' MMMM"), { locale: localeDaData });
 
   return (
+    <ProvedorDaInfoDaClinica valor={infoDaClinica ?? null}>
     <div
       data-testid="tela-agenda"
       data-fonte={agendamentosIniciais.length > 0 ? "api" : "api-sem-dado"}
@@ -573,6 +596,30 @@ export function AgendaClient({
             alternador de visão em silêncio. */}
         <div className="flex flex-wrap items-center gap-3">
           <FiltroDePessoas pessoas={pessoas} isolada={isolada} onIsolar={setIsolada} />
+          {/* FORK clinic: na visão Dia, a lista por profissional (ocupação e vagas). */}
+          {visao === "dia" && orgId ? (
+            <div data-testid="modo-do-dia" className="flex items-center gap-0.5 rounded-md border border-border bg-surface p-0.5">
+              {([
+                [false, "Grade"],
+                [true, "Lista por profissional"],
+              ] as const).map(([lista, rotulo]) => (
+                <button
+                  key={rotulo}
+                  type="button"
+                  data-testid={lista ? "modo-do-dia-lista" : "modo-do-dia-grade"}
+                  aria-pressed={diaEmLista === lista}
+                  onClick={() => setDiaEmLista(lista)}
+                  className={cn(
+                    "rounded-sm px-2.5 py-1 text-xs transition-colors duration-fast ease-out",
+                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500",
+                    diaEmLista === lista ? "bg-accent font-semibold text-accent-foreground" : "text-text-muted hover:bg-surface-elevated hover:text-text",
+                  )}
+                >
+                  {t(rotulo)}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div
             data-testid="alternador-de-visao"
             className="flex items-center gap-0.5 rounded-md border border-border bg-surface p-0.5"
@@ -604,6 +651,17 @@ export function AgendaClient({
         sem dado: as quatro abas com contador zero respondem "não há nada" sem
         gastar um clique, e some-lo faria a tela parecer menor do que é.
       */}
+      {/* FORK clinic (melhorias da Agenda): filtros de especialidade, status,
+          período, paciente e horários livres — valem na grade, na lista do dia
+          e no histórico. */}
+      <BarraDeFiltrosDaAgenda
+        filtros={filtros}
+        mudar={mudarFiltro}
+        limpar={limparFiltros}
+        especialidades={especialidades}
+        total={agendamentos.length}
+      />
+
       <Sheet
         open={marcando}
         onOpenChange={(aberto) => {
@@ -1123,7 +1181,15 @@ export function AgendaClient({
           dados de execuções anteriores) e reprovou no CI, onde o banco nasce
           limpo. O mesmo formato do defeito que `agenda-tela-do-produto` já
           tinha pago: verde por banco sujo. */}
-      {agendamentos.length === 0 ? (
+      {agendamentos.length === 0 && algumFiltroAtivo(filtros) && !filtros.soLivres ? (
+        // FORK clinic: com filtro ativo, "nada aqui" é do filtro, não da agenda.
+        <div className="rounded-lg border border-dashed border-border bg-surface p-4 text-sm" data-testid="agenda-sem-resultado">
+          <p>{t("Nada com esses filtros.")}</p>
+          <Button size="sm" variant="outline" className="mt-2" onClick={limparFiltros}>
+            {t("Limpar filtros")}
+          </Button>
+        </div>
+      ) : agendamentos.length === 0 && !algumFiltroAtivo(filtros) ? (
         <div className="rounded-lg border border-border bg-surface p-4">
           <EmptyAgenda />
         </div>
@@ -1132,6 +1198,26 @@ export function AgendaClient({
           remarca. Toda a fiação (a consulta de horários da janela desenhada, a
           proposta de remarcação, o otimismo com volta atrás) mora em
           `AgendaInterativa`; aqui fica só o que esta tela já sabia. */}
+      {visao === "dia" && diaEmLista && orgId ? (
+        <ListaDoDiaDaAgenda
+          orgId={orgId}
+          dia={format(ancora, "yyyy-MM-dd")}
+          filtros={filtros}
+          isolada={isolada}
+          nomeDaPessoa={(id) => pessoas.find((p) => p.id === id)?.nome}
+          onAbrir={(id) => router.push(`/app/agenda?compromisso=${id}`)}
+          onMarcarEm={
+            podeMarcar
+              ? (profissionalId, instante) => {
+                  setProfissionalClinic(profissionalId);
+                  setHorarioEscolhido({ instante, rotulo: format(new Date(instante), "HH:mm") });
+                  setRemarcandoId(null);
+                  abrirMarcacao();
+                }
+              : undefined
+          }
+        />
+      ) : (
       <AgendaInterativa
         visao={visao}
         ancora={ancora}
@@ -1165,6 +1251,8 @@ export function AgendaClient({
         onAbrirAgendamento={(id) => router.push(`/app/agenda?compromisso=${id}`)}
         className="min-h-0 flex-1"
       />
+      )}
     </div>
+    </ProvedorDaInfoDaClinica>
   );
 }
