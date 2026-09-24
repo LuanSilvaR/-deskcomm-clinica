@@ -4,7 +4,9 @@
  * Na tela de marcar (app/app/agenda/_client.tsx), com as regras de
  * profissionais LIGADAS:
  *   - escolher QUEM atende, entre os habilitados para o tipo de atendimento;
- *   - bloquear o horário clicado na grade, sem ir até Configurações.
+ *   - bloquear o horário clicado na grade, sem ir até Configurações;
+ *   - ver o PRIMEIRO horário livre de cada profissional habilitado (E1.3) e
+ *     escolher profissional e horário num clique.
  *
  * Com as regras desligadas não renderiza nada e devolve `null` como escolha —
  * a tela segue exatamente como no upstream (dono padrão do tipo).
@@ -14,6 +16,7 @@ import { useEffect, useMemo } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
+import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { faixaDoBloqueio, instanteNaParede } from "@/lib/clinic/agenda/instante-local";
@@ -34,6 +37,16 @@ interface Props {
   duracaoMin: number;
   /** Fuso da regra (o da jornada), vindo da consulta de horários. */
   fuso: string | undefined;
+  /**
+   * E1.3: escolher o próximo horário livre de alguém escolhe o profissional E o
+   * horário. Ausente (remarcação), a lista não aparece.
+   */
+  onEscolherHorario?: (userId: string, instante: string) => void;
+}
+
+interface ProximoLivre {
+  profissional_id: string;
+  inicio: string;
 }
 
 export function useRegrasDeProfissionaisLigadas(): boolean {
@@ -47,8 +60,9 @@ export function useRegrasDeProfissionaisLigadas(): boolean {
 }
 
 export function EscolhaDoProfissional(props: Props) {
-  const { tipoId, donoPadraoId, pessoas, valor, onChange, instante, duracaoMin, fuso } = props;
+  const { tipoId, donoPadraoId, pessoas, valor, onChange, instante, duracaoMin, fuso, onEscolherHorario } = props;
   const t = useT();
+  const tagDoIdioma = useTagDeIdioma();
   const qc = useQueryClient();
   const ligado = useRegrasDeProfissionaisLigadas();
 
@@ -61,6 +75,18 @@ export function EscolhaDoProfissional(props: Props) {
           `/api/v1/clinic/profissionais?tipo=${encodeURIComponent(tipoId)}`,
         )
       ).data.habilitados,
+  });
+
+  const proximos = useQuery({
+    queryKey: ["clinic", "proximos-livres", tipoId],
+    enabled: ligado && !!onEscolherHorario,
+    staleTime: 30_000,
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: { proximos: ProximoLivre[]; sem_horario: string[] } }>(
+          `/api/v1/clinic/proximos-livres?event_type_id=${encodeURIComponent(tipoId)}`,
+        )
+      ).data,
   });
 
   const opcoes = useMemo(() => {
@@ -128,6 +154,42 @@ export function EscolhaDoProfissional(props: Props) {
           </select>
         )}
       </label>
+      {onEscolherHorario ? (
+        <div data-testid="clinic-proximos-livres">
+          <span className="block text-sm">{t("Próximos horários livres")}</span>
+          {proximos.isLoading ? (
+            <p className="text-sm text-text-muted">{t("Carregando…")}</p>
+          ) : (proximos.data?.proximos.length ?? 0) === 0 ? (
+            <p className="text-sm text-text-muted">{t("Nenhum profissional tem horário livre nos próximos 30 dias.")}</p>
+          ) : (
+            <ul className="mt-1 space-y-1">
+              {proximos.data?.proximos.slice(0, 6).map((p) => (
+                <li key={p.profissional_id}>
+                  <button
+                    type="button"
+                    data-testid="clinic-proximo-livre"
+                    data-profissional={p.profissional_id}
+                    className="flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-sm hover:bg-muted"
+                    onClick={() => onEscolherHorario(p.profissional_id, p.inicio)}
+                  >
+                    <span className="truncate">{pessoas.find((x) => x.id === p.profissional_id)?.nome ?? t("Profissional")}</span>
+                    <span className="shrink-0 text-text-muted">
+                      {new Date(p.inicio).toLocaleString(tagDoIdioma, {
+                        timeZone: fuso,
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
       {instante && valor && fuso ? (
         <Button
           size="sm"

@@ -11721,6 +11721,9 @@ export const DICIONARIO: Traducoes = {
   // ── FORK clinic (migration 9006): lembrete que falhou ──
   "Lembrete não chegou — ligar": { es: "El recordatorio no llegó — llamar" },
   "Lembrete não saiu — ligar": { es: "El recordatorio no se envió — llamar" },
+  // ── FORK clinic (E1.3): próximos horários livres ──
+  "Próximos horários livres": { es: "Próximos horarios libres" },
+  "Nenhum profissional tem horário livre nos próximos 30 dias.": { es: "Ningún profesional tiene horario libre en los próximos 30 días." },
   // ── FORK clinic (migration 9005): trava de sobreposição ──
   "Trava de horário duplicado ligada": { es: "Bloqueo de horario duplicado activado" },
   "Trava de horário duplicado desligada": { es: "Bloqueo de horario duplicado desactivado" },

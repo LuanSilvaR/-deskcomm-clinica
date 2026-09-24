@@ -805,6 +805,10 @@ export function AgendaClient({
                 instante={horarioEscolhido?.instante ?? null}
                 duracaoMin={tipo.duracaoMin}
                 fuso={horarios?.fuso_da_regra}
+                onEscolherHorario={(userId, instante) => {
+                  setProfissionalClinic(userId);
+                  setHorarioEscolhido({ instante, rotulo: format(new Date(instante), "HH:mm") });
+                }}
               />
             </div>
           ) : null}

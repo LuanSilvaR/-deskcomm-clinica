@@ -727,6 +727,7 @@ jobs:
         clinic-status-da-visita.spec.ts
         clinic-confirmacao-de-consulta.spec.ts
         clinic-trava-de-sobreposicao.spec.ts
+        clinic-proximo-livre.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts
