@@ -15,6 +15,18 @@ vi.mock("@/lib/audit", () => ({
   isServiceRoleConfigured: vi.fn(() => true),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
+// Modo por permissões DESLIGADO (como nasce): exigir a permissão = exigir o
+// nível legado dela, com as permissões do nível (fn_member_permissions, 9009).
+vi.mock("@/lib/clinic/acesso/require-permission", async () => {
+  const { requireRole: exigir } = await import("@/lib/auth/require-role");
+  const { CATALOGO_DE_PERMISSOES, permissoesDoNivel } = await import("@/lib/clinic/acesso/catalogo");
+  return {
+    requirePermission: async (chave: string, opts?: Record<string, unknown>) => {
+      const r = (await exigir(CATALOGO_DE_PERMISSOES[chave]!.nivelBase, opts)) as { ok: boolean; org?: { role: "viewer" | "agent" | "manager" | "admin" } };
+      return r.ok ? { ...r, permissoes: new Set(permissoesDoNivel(r.org!.role)) } : r;
+    },
+  };
+});
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/impersonate/support", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/impersonate/support")>()),

@@ -10,7 +10,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { ehStatusDaVisita } from "@/lib/clinic/visitas/status";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { createClient } from "@/lib/supabase/server";
@@ -26,7 +26,7 @@ function inicioDoDia(dia: string): Date {
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "clinic_appointment_visits" });
+  const authz = await requirePermission("recepcao.ver_painel", { requestId, resource: "clinic_appointment_visits" });
   if (!authz.ok) return authz.response;
 
   const dia =

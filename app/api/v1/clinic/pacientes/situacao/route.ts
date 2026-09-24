@@ -11,7 +11,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import {
   COLUNAS_DO_PERFIL,
   hojeNaClinica,
@@ -27,7 +27,7 @@ const idsSchema = z.array(z.string().uuid()).min(1).max(200);
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "clinic_patient_profiles" });
+  const authz = await requirePermission("pacientes.ver", { requestId, resource: "clinic_patient_profiles" });
   if (!authz.ok) return authz.response;
 
   const bruto = (new URL(req.url).searchParams.get("ids") ?? "").split(",").filter(Boolean);

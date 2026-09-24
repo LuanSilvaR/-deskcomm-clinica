@@ -12,9 +12,9 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { mudarStatusDaVisita } from "@/lib/clinic/visitas/mudar-status";
-import { STATUS_DA_VISITA } from "@/lib/clinic/visitas/status";
+import { STATUS_DA_VISITA, ehCorrecao, ehStatusDaVisita } from "@/lib/clinic/visitas/status";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { contarFaltas } from "@/lib/clinic/agenda/faltas";
@@ -26,7 +26,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "clinic_appointment_visits" });
+  const authz = await requirePermission("recepcao.ver_painel", { requestId, resource: "clinic_appointment_visits" });
   if (!authz.ok) return authz.response;
   const { id } = await ctx.params;
   if (!z.string().uuid().safeParse(id).success) return fail("validation_failed", "id inválido", 422, { requestId });
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("agent", { requestId, resource: "clinic_appointment_visits" });
+  const authz = await requirePermission("recepcao.mudar_status_visita", { requestId, resource: "clinic_appointment_visits" });
   if (!authz.ok) return authz.response;
   const t = (s: string) => traduzir(s, authz.user.idioma);
   const { id } = await ctx.params;
@@ -110,6 +110,25 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     .maybeSingle();
   if (erroAg) return fail("internal_error", erroAg.message, 500, { requestId });
   if (!agendamento) return fail("not_found", t("Agendamento não encontrado."), 404, { requestId });
+
+  // FORK clinic (ACL-012): voltar um passo é CORREÇÃO e pede a permissão própria.
+  const { data: visitaAtual } = await supabase
+    .from("clinic_appointment_visits")
+    .select("status")
+    .eq("organization_id", org)
+    .eq("appointment_id", id)
+    .maybeSingle();
+  const statusAtual = (visitaAtual as { status?: string } | null)?.status;
+  if (
+    ehStatusDaVisita(statusAtual) &&
+    ehCorrecao(statusAtual, lido.data.status) &&
+    !authz.permissoes.has("recepcao.corrigir_status")
+  ) {
+    return fail("forbidden_permission", t("Você não tem permissão para esta ação."), 403, {
+      requestId,
+      details: { permissao: "recepcao.corrigir_status" },
+    });
+  }
 
   try {
     const r = await mudarStatusDaVisita(

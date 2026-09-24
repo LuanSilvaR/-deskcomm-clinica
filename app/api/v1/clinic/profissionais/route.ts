@@ -15,7 +15,7 @@ import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { eMembroDaOrg, falhaDoBanco, idsSaoDaOrg } from "@/lib/clinic/api";
 import { profissionaisHabilitados } from "@/lib/clinic/profissionais/habilitacao";
 import { requireSupportWrite } from "@/lib/impersonate/support";
@@ -45,7 +45,7 @@ function paraResposta(l: LinhaDoBanco) {
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "clinic_professionals" });
+  const authz = await requirePermission("profissionais.ver", { requestId, resource: "clinic_professionals" });
   if (!authz.ok) return authz.response;
 
   const tipo = new URL(req.url).searchParams.get("tipo");
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "clinic_professionals" });
+  const authz = await requirePermission("profissionais.gerenciar", { requestId, resource: "clinic_professionals" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 

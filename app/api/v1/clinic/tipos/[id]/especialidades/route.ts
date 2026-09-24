@@ -10,7 +10,7 @@ import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { falhaDoBanco, idsSaoDaOrg } from "@/lib/clinic/api";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -22,7 +22,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "clinic_event_type_specialties" });
+  const authz = await requirePermission("profissionais.ver", { requestId, resource: "clinic_event_type_specialties" });
   if (!authz.ok) return authz.response;
   const { id } = await ctx.params;
   if (!z.string().uuid().safeParse(id).success) return fail("validation_failed", "id inválido", 422, { requestId });
@@ -44,7 +44,7 @@ export async function PUT(req: NextRequest, ctx: Ctx): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "clinic_event_type_specialties" });
+  const authz = await requirePermission("profissionais.gerenciar", { requestId, resource: "clinic_event_type_specialties" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const { id } = await ctx.params;

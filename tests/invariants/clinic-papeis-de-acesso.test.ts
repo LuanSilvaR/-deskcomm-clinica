@@ -386,3 +386,63 @@ describe("migration 9012: ligar o modo e o nível legado calculado", () => {
     expect(nivel(AT_C)).toBe("viewer");
   });
 });
+
+describe("migration 9013: RLS por permissão nas tabelas sensíveis", () => {
+  const ORG_D = "acc10000-0000-4000-8000-00000000000d";
+  const ADM_D = "acc10000-1111-4000-8000-0000000000d1";
+  const REC_D = "acc10000-1111-4000-8000-0000000000d2";
+  const CONTA_D = "acc10000-5555-4000-8000-0000000000d1";
+  const PACIENTE_D = "acc10000-6666-4000-8000-0000000000d1";
+  const conta = (user: string, tabela: string) =>
+    ultima(sql(como(user, `select count(*) from public.${tabela} where organization_id = '${ORG_D}';`)));
+
+  beforeAll(() => {
+    sql(`
+      insert into auth.users (id, email) values ('${ADM_D}', 'acl-adm-d@invariant.test'), ('${REC_D}', 'acl-rec-d@invariant.test') on conflict (id) do nothing;
+      insert into public.organizations (id, slug, legal_name, display_name) values ('${ORG_D}', 'acl-inv-d', 'ACL Invariant D', 'ACL D') on conflict (id) do nothing;
+      insert into public.user_organizations (user_id, organization_id, role, accepted_at) values
+        ('${ADM_D}', '${ORG_D}', 'admin', now()), ('${REC_D}', '${ORG_D}', 'viewer', now()) on conflict do nothing;
+      insert into public.financial_accounts (id, organization_id, name) values ('${CONTA_D}', '${ORG_D}', 'Caixa') on conflict (id) do nothing;
+      insert into public.financial_entries (organization_id, account_id, direction, amount_cents, description)
+        values ('${ORG_D}', '${CONTA_D}', 'in', 15000, 'Consulta');
+      insert into public.contacts (id, organization_id, name, phone_number) values ('${PACIENTE_D}', '${ORG_D}', 'Paciente D', '+5511990000401') on conflict (id) do nothing;
+      insert into public.clinic_patient_profiles (organization_id, contact_id) values ('${ORG_D}', '${PACIENTE_D}') on conflict do nothing;
+    `);
+  });
+
+  it("modo desligado: o visualizador lê financeiro e ficha como sempre", () => {
+    expect(conta(REC_D, "financial_entries")).toBe("1");
+    expect(conta(REC_D, "clinic_patient_profiles")).toBe("1");
+  });
+
+  it("modo ligado: papel sem Financeiro nem ficha lê 0 linhas DIRETO no PostgREST — mesmo com nível legado maior", () => {
+    const recep = (JSON.parse(
+      ultima(sql(como(ADM_D, `select public.fn_acesso_salvar_papel('${ORG_D}', null, 'Recepção D', null, true,
+        array['agenda.ver','agenda.marcar','pacientes.ver','pacientes.criar']::text[]);`))),
+    ) as { id: string }).id;
+    sql(como(ADM_D, `select public.fn_acesso_atribuir_papeis('${ORG_D}', '${REC_D}', array['${recep}']::uuid[]);`));
+    sql(como(ADM_D, `select public.fn_clinic_definir_acesso_por_permissoes('${ORG_D}', true);`));
+    expect(ultima(sql(`select role from public.user_organizations where organization_id = '${ORG_D}' and user_id = '${REC_D}';`))).toBe("agent");
+    expect(conta(REC_D, "financial_entries")).toBe("0");
+    expect(conta(REC_D, "financial_accounts")).toBe("0");
+    expect(conta(REC_D, "clinic_patient_profiles")).toBe("0");
+    expect(conta(ADM_D, "financial_entries")).toBe("1");
+  });
+
+  it("modo ligado: sem financeiro.lancar não grava lançamento; com, grava", () => {
+    expect(
+      erro(como(REC_D, `insert into public.financial_entries (organization_id, account_id, direction, amount_cents, description)
+                         values ('${ORG_D}', '${CONTA_D}', 'in', 100, 'Tentativa');`)),
+    ).toMatch(/row-level security/);
+    expect(
+      erro(como(ADM_D, `insert into public.financial_entries (organization_id, account_id, direction, amount_cents, description)
+                         values ('${ORG_D}', '${CONTA_D}', 'in', 100, 'Do admin');`)),
+    ).toBeNull();
+  });
+
+  it("modo ligado: sem profissionais.gerenciar não cria especialidade", () => {
+    expect(erro(como(REC_D, `insert into public.clinic_specialties (organization_id, name) values ('${ORG_D}', 'Da recepção');`))).toMatch(
+      /row-level security/,
+    );
+  });
+});

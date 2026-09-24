@@ -12,7 +12,7 @@ import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { falhaDoBanco } from "@/lib/clinic/api";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -24,7 +24,7 @@ const COLUNAS = "id, name, category, is_active";
 
 export async function GET(): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "clinic_resources" });
+  const authz = await requirePermission("profissionais.ver", { requestId, resource: "clinic_resources" });
   if (!authz.ok) return authz.response;
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "clinic_resources" });
+  const authz = await requirePermission("profissionais.gerenciar", { requestId, resource: "clinic_resources" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
@@ -81,7 +81,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "clinic_resources" });
+  const authz = await requirePermission("profissionais.gerenciar", { requestId, resource: "clinic_resources" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 

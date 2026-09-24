@@ -182,7 +182,7 @@ export const NAV_CATALOG = [
     // (teto do menu lateral); porta diária: link no cabeçalho da Recepção.
     href: "/app/agenda/faltas",
     label: "Faltas",
-    permissao: "relatorios.ver",
+    permissao: "agenda.ver",
     description: "Pacientes que faltaram 2 vezes ou mais nos últimos 12 meses, com o próximo horário marcado.",
     icon: "CalendarBlank",
     group: "atendimento",

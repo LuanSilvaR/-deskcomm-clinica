@@ -16,6 +16,19 @@ vi.mock("@/lib/audit", () => ({
   isServiceRoleConfigured: vi.fn(() => true),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
+// Modo por permissões DESLIGADO (como nasce): exigir a permissão = exigir o
+// nível legado dela, com as permissões do nível (fn_member_permissions, 9009).
+vi.mock("@/lib/clinic/acesso/require-permission", async () => {
+  const { requireRole: exigir } = await import("@/lib/auth/require-role");
+  const { CATALOGO_DE_PERMISSOES, permissoesDoNivel } = await import("@/lib/clinic/acesso/catalogo");
+  return {
+    requirePermission: async (chave: string, opts?: Record<string, unknown>) => {
+      const r = (await exigir(CATALOGO_DE_PERMISSOES[chave]!.nivelBase, opts)) as { ok: boolean; org?: { role: "viewer" | "agent" | "manager" | "admin" } };
+      const forcadas = (globalThis as { __permissoesDeTeste?: string[] }).__permissoesDeTeste;
+      return r.ok ? { ...r, permissoes: new Set(forcadas ?? permissoesDoNivel(r.org!.role)) } : r;
+    },
+  };
+});
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/app/api/v1/agenda/agendamentos/_handler", () => ({ alterarAgendamentoHandler: vi.fn(async () => ({})) }));
 vi.mock("@/lib/impersonate/support", async (importOriginal) => ({
@@ -168,6 +181,24 @@ describe("POST /api/v1/clinic/agendamentos/:id/visita", () => {
     const res = await mudar({ status: "na_recepcao" });
     expect(res.status).toBe(422);
     expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/motivo/);
+  });
+
+  it("ACL: papel que avança status mas não corrige recebe 403 ao voltar um passo — antes de chegar ao banco", async () => {
+    autorizado("agent");
+    (globalThis as { __permissoesDeTeste?: string[] }).__permissoesDeTeste = ["recepcao.ver_painel", "recepcao.mudar_status_visita"];
+    try {
+      responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO } });
+      responder("clinic_appointment_visits:select", { data: { status: "pronto" } });
+      const res = await mudar({ status: "na_recepcao", motivo: "Chamei antes da hora" });
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as { error: { details: { permissao: string } } }).error.details.permissao).toBe("recepcao.corrigir_status");
+      expect(rpcs.some((r) => r.nome === "fn_clinic_mudar_status_visita")).toBe(false);
+      // avançar continua podendo
+      responder("clinic_appointment_visits:select", { data: { status: "na_recepcao" } });
+      expect((await mudar({ status: "pronto" })).status).toBe(200);
+    } finally {
+      delete (globalThis as { __permissoesDeTeste?: string[] }).__permissoesDeTeste;
+    }
   });
 
   it("finalizar grava Compareceu no núcleo antes de mudar o status", async () => {

@@ -11,7 +11,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { candidatosDoTipo, proximosLivres } from "@/lib/clinic/agenda/proximos-livres";
 import { clinicProfissionaisDaOrg } from "@/lib/clinic/flags";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -23,7 +23,7 @@ const querySchema = z.object({ event_type_id: z.string().uuid() });
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "agenda" });
+  const authz = await requirePermission("agenda.ver", { requestId, resource: "agenda" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
