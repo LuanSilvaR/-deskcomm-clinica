@@ -169,6 +169,16 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    // FORK clinic (E1.4): o dia em colunas, uma por profissional — jornada,
+    // bloqueios e compromissos. Sem `sidebar` (o menu lateral está no teto);
+    // a porta diária é o botão "Dia por profissional" no cabeçalho da Agenda.
+    href: "/app/agenda/profissionais",
+    label: "Dia por profissional",
+    description: "Quem atende no dia, lado a lado: jornada, bloqueios e compromissos de cada profissional.",
+    icon: "CalendarBlank",
+    group: "atendimento",
+  },
+  {
     // FORK clinic (migration 9003): o dia da clínica por status da visita —
     // na recepção, pronto para atendimento, em atendimento, finalizado.
     //

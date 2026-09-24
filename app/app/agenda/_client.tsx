@@ -29,7 +29,7 @@ import { resolverResponsavelDoPainel } from "@/lib/agenda/responsavel-do-painel"
 import { useVinculoDaMarcacao } from "@/lib/agenda/vinculo-da-marcacao";
 import { Button } from "@/components/ui/button";
 import { PainelDeMarcacao } from "@/components/agenda/PainelDeMarcacao";
-import { EscolhaDoProfissional } from "@/components/clinic/EscolhaDoProfissional";
+import { EscolhaDoProfissional, useRegrasDeProfissionaisLigadas } from "@/components/clinic/EscolhaDoProfissional";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAgendamentos } from "@/hooks/agenda/useAgendamentos";
 import { useHorariosLivres } from "@/hooks/agenda/useHorariosLivres";
@@ -207,6 +207,8 @@ export function AgendaClient({
   // entre os habilitados do tipo (`EscolhaDoProfissional`). Desligadas, fica
   // `null` e tudo segue com o dono padrão do tipo, como no upstream.
   const [profissionalClinic, setProfissionalClinic] = React.useState<string | null>(null);
+  // FORK clinic (E1.4): a porta do "Dia por profissional" só aparece com as regras ligadas.
+  const regrasDeProfissionais = useRegrasDeProfissionaisLigadas();
   const tipo = tiposIniciais.find((t) => t.id === tipoId) ?? tiposIniciais[0] ?? null;
   const endereco = enderecoEditado ?? tipo?.localDetalhes ?? "";
   const [visao, setVisao] = React.useState<VisaoDaAgenda>("semana");
@@ -457,6 +459,13 @@ export function AgendaClient({
               {t("Painel da recepção")}
             </Link>
           </Button>
+          {regrasDeProfissionais ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/app/agenda/profissionais" data-testid="agenda-abrir-dia-por-profissional">
+                {t("Dia por profissional")}
+              </Link>
+            </Button>
+          ) : null}
           {/* "Hoje" é o hoje DA ORGANIZAÇÃO. Com `new Date()` o botão desfazia a
               âncora do servidor e devolvia a semana do navegador — o defeito que
               a tela acabou de fechar, a um clique de distância. */}
