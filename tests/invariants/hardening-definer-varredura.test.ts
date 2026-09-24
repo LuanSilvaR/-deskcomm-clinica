@@ -269,6 +269,36 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-confirmacao-de-consulta.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (ACL, migrations 9009-9010).
+    fn: "fn_member_permissions(uuid)",
+    razao:
+      "lib/clinic/acesso/resolver.ts chama com createClient da sessão; devolve só as permissões do PRÓPRIO auth.uid() na empresa pedida (vínculo ativo) — outra empresa devolve vazio. tests/invariants/clinic-papeis-de-acesso.test.ts prova isolamento e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (ACL, migrations 9009-9010).
+    fn: "fn_has_permission(uuid,text)",
+    razao:
+      "Usada na RLS e no resolver; lê só fn_member_permissions do próprio auth.uid(). tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
+    // FORK clinic (ACL, migrations 9009-9010).
+    fn: "fn_acesso_salvar_papel(uuid,uuid,text,text,boolean,text[])",
+    razao:
+      "app/api/v1/clinic/acesso/papeis (sessão); exige papeis.gerenciar, MFA, suporte com escrita; regra de concessão, dependências e antitravamento no corpo. tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
+    // FORK clinic (ACL, migrations 9009-9010).
+    fn: "fn_acesso_excluir_papel(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/acesso/papeis/[id] (sessão); exige papeis.gerenciar; papel de sistema e papel em uso recusados. tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
+    // FORK clinic (ACL, migrations 9009-9010).
+    fn: "fn_acesso_atribuir_papeis(uuid,uuid,uuid[])",
+    razao:
+      "app/api/v1/clinic/acesso/membros (sessão); exige equipe.atribuir_papeis; só concede o que o ator possui; nunca deixa a empresa sem Administrador. tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
     // FORK clinic (migration 9008).
     fn: "fn_clinic_definir_prazo_do_paciente(uuid,integer)",
     razao:
