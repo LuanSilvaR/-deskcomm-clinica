@@ -11721,6 +11721,21 @@ export const DICIONARIO: Traducoes = {
   // ── FORK clinic (migration 9006): lembrete que falhou ──
   "Lembrete não chegou — ligar": { es: "El recordatorio no llegó — llamar" },
   "Lembrete não saiu — ligar": { es: "El recordatorio no se envió — llamar" },
+  // ── FORK clinic (E1.4): dia por profissional ──
+  "Dia por profissional": { es: "Día por profesional" },
+  "Quem atende no dia, lado a lado: jornada, bloqueios e compromissos de cada profissional.": { es: "Quién atiende en el día, lado a lado: jornada, bloqueos y citas de cada profesional." },
+  "Não foi possível carregar o dia.": { es: "No fue posible cargar el día." },
+  "Ligue as regras de profissionais em Configurações › Profissionais para ver o dia por profissional.": { es: "Active las reglas de profesionales en Configuración › Profesionales para ver el día por profesional." },
+  "Abrir configurações": { es: "Abrir configuración" },
+  "Voltar para a Agenda": { es: "Volver a la Agenda" },
+  "Ninguém tem jornada nem compromisso neste dia.": { es: "Nadie tiene jornada ni citas en este día." },
+  "Fora da jornada (encaixe)": { es: "Fuera de la jornada (encaje)" },
+  "Agenda livre no dia.": { es: "Agenda libre en el día." },
+  "Clínica fechada": { es: "Clínica cerrada" },
+  "Indisponível": { es: "No disponible" },
+  // ── FORK clinic (E1.3): próximos horários livres ──
+  "Próximos horários livres": { es: "Próximos horarios libres" },
+  "Nenhum profissional tem horário livre nos próximos 30 dias.": { es: "Ningún profesional tiene horario libre en los próximos 30 días." },
   // ── FORK clinic (migration 9005): trava de sobreposição ──
   "Trava de horário duplicado ligada": { es: "Bloqueo de horario duplicado activado" },
   "Trava de horário duplicado desligada": { es: "Bloqueo de horario duplicado desactivado" },
