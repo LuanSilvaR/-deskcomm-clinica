@@ -1015,6 +1015,18 @@ export const NAV_CATALOG = [
     // existe onde quem administra o servidor o ligou, em `/admin/sistema`.
     modulo: "banco_externo",
   },
+  {
+    // FORK clinic (migration 9014): a tela inicial do menu da clínica — o
+    // painel com todos os módulos e o resumo do dia. SEM `sidebar`, `minRole` e
+    // `permissao` de propósito: com o menu antigo ela só aparece no ⌘K (o
+    // sidebar de sempre não muda), e cada card dela já passa pelo mesmo filtro
+    // de acesso do menu. No fim do array para não reordenar nenhum grupo.
+    href: "/app/inicio",
+    label: "Início",
+    description: "Todos os módulos da clínica num lugar só, com o resumo do dia.",
+    icon: "House",
+    group: "atendimento",
+  },
 ] as const satisfies readonly NavMetadata[];
 
 export type NavDestinationId = (typeof NAV_CATALOG)[number]["href"];

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
+import { menuClinicaDaOrg } from "@/lib/clinic/navegacao/servidor";
 import { homeDaInterface } from "@/lib/navigation/interface";
 export default async function AppHome() {
   const user = await requireAuth();
@@ -9,6 +10,8 @@ export default async function AppHome() {
       org?.interface_settings,
       user.is_platform_admin && !user.support,
       org?.role ?? null,
+      // FORK clinic (9014): menu da clínica ligado → a casa é o Início.
+      (await menuClinicaDaOrg(org?.orgId)) ? "/app/inicio" : undefined,
     ),
   );
 }

@@ -147,4 +147,8 @@ export {
   GoogleLogo,
   MapPin,
   ArrowsOutSimple,
+  // FORK clinic: módulos do menu da clínica (equipamentos, financeiro, comissões)
+  Wrench,
+  CurrencyCircleDollar,
+  Percent,
 } from "@phosphor-icons/react/dist/ssr";

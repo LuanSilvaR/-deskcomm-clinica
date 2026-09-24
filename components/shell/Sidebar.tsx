@@ -13,6 +13,7 @@ import { LogotipoDoProduto, SimboloDoProduto } from "@/components/branding/Marca
 import { marcaEhADoProduto } from "@/lib/branding";
 import { useMarcaDaInstalacao } from "@/lib/branding/contexto";
 import { GRUPO_NO_RODAPE, sidebarGroups } from "@/lib/navigation/registry";
+import { NavDaClinica, RodapeDaClinica } from "@/components/clinic/navegacao/MenuDaClinica";
 
 const CHAVE_GRUPOS_FECHADOS = "sidebar-grupos-fechados";
 
@@ -116,6 +117,9 @@ export function SidebarContent({
   // Só quando NINGUÉM — nem a instalação, nem a organização — pôs marca própria:
   // é a condição de `lib/branding.ts`, avaliada sobre o que a barra vai mostrar.
   const marcaDoProduto = marcaEhADoProduto({ name: nome, logoUrl: logo ?? null });
+  // FORK clinic (9014): com o menu da clínica ligado, só o miolo e o rodapé de
+  // navegação trocam — marca, versão e o botão de recolher são os mesmos.
+  const menuClinica = activeOrg?.menu_clinica === true;
 
   return (
     <>
@@ -216,6 +220,9 @@ export function SidebarContent({
         o PR: cada linha custa 32px (28px de altura + 4px de `space-y-1`), e
         trocar N destinos do menu por um único link de hub devolve (N-1)×32px.
       */}
+      {menuClinica ? (
+        <NavDaClinica collapsed={collapsed} onNavigate={onNavigate} />
+      ) : (
       <nav className="flex-1 space-y-2 overflow-y-auto p-2" aria-label={t("Navegação principal")}>
         {grupos.map(({ group, items }) => {
           const tituloId = `nav-grupo-${group.id}`;
@@ -310,8 +317,10 @@ export function SidebarContent({
           );
         })}
       </nav>
+      )}
       <div className="border-t p-2">
-        {rodape && (
+        {menuClinica && <RodapeDaClinica collapsed={collapsed} onNavigate={onNavigate} />}
+        {!menuClinica && rodape && (
           <Link
             href={rodape.href}
             title={collapsed ? t(rodape.label) : undefined}
