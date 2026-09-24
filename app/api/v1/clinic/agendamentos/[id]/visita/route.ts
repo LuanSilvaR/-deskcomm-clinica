@@ -32,7 +32,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const org = authz.org.orgId;
 
   const supabase = await createClient();
-  const [{ data: visita, error: e1 }, { data: eventos, error: e2 }, { data: confirmacao }] = await Promise.all([
+  const [{ data: visita, error: e1 }, { data: eventos, error: e2 }, { data: confirmacao }, { data: alocados }] = await Promise.all([
     supabase
       .from("clinic_appointment_visits")
       .select("status, changed_at, changed_by, arrived_at, ready_at, started_at, finished_at")
@@ -53,10 +53,24 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
       .eq("organization_id", org)
       .eq("appointment_id", id)
       .maybeSingle(),
+    // FORK clinic (9007): a sala e o equipamento que o compromisso ocupa.
+    supabase
+      .from("clinic_appointment_resources")
+      .select("clinic_resources(name, category)")
+      .eq("organization_id", org)
+      .eq("appointment_id", id),
   ]);
   if (e1 || e2) return fail("internal_error", (e1 ?? e2)!.message, 500, { requestId });
   return ok(
-    { visita: visita ?? { status: "agendado" }, eventos: eventos ?? [], confirmacao: confirmacao ?? null },
+    {
+      visita: visita ?? { status: "agendado" },
+      eventos: eventos ?? [],
+      confirmacao: confirmacao ?? null,
+      recursos: (alocados ?? []).flatMap((a) => {
+        const r = (a as { clinic_resources: { name: string } | { name: string }[] | null }).clinic_resources;
+        return (Array.isArray(r) ? r : r ? [r] : []).map((x) => x.name);
+      }),
+    },
     { requestId },
   );
 }

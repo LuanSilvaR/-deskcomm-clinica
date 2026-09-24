@@ -674,3 +674,23 @@ describe("FORK clinic (migration 9005): a trava do banco sai como a MESMA recusa
     ).rejects.toMatchObject(RECUSA);
   });
 });
+
+describe("FORK clinic (migration 9007): falta de sala ou equipamento", () => {
+  it("o 23P01 da alocação sai como a mesma recusa, dizendo que falta recurso", async () => {
+    const banco = agenda();
+    const erro = { code: "23P01", message: "recurso_indisponivel" };
+    const client = {
+      from: (tabela: string) =>
+        tabela === "calendar_appointments"
+          ? {
+              ...(banco.client.from(tabela) as unknown as Linha),
+              insert: () => ({ select: () => ({ single: async () => ({ data: null, error: erro }) }) }),
+            }
+          : banco.client.from(tabela),
+      rpc: (fn: string, args: Linha) => banco.client.rpc(fn, args),
+    } as unknown as SupabaseClient;
+    await expect(
+      marcarAgendamentoHandler(client, ctx(PESSOA), { event_type_id: TIPO, starts_at: FORA_DA_GRADE }),
+    ).rejects.toMatchObject({ ...RECUSA, message: expect.stringMatching(/sala ou equipamento/) });
+  });
+});

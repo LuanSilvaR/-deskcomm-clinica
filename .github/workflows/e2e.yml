@@ -729,6 +729,7 @@ jobs:
         clinic-trava-de-sobreposicao.spec.ts
         clinic-proximo-livre.spec.ts
         clinic-dia-por-profissional.spec.ts
+        clinic-salas-e-equipamentos.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts

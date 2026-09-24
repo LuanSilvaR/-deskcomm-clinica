@@ -287,6 +287,21 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-status-da-visita.test.ts (FORK clinic, migration 9003): 2 orgs, quem é da A lê 0 linhas da B, atendente muda status e visualizador não, e o histórico não aceita UPDATE nem DELETE.",
   },
   {
+    tabela: "clinic_resources",
+    razao:
+      "tests/invariants/clinic-salas-e-equipamentos.test.ts (FORK clinic, migration 9007): 2 orgs, quem é da A lê 0 linhas da B; configuração a partir de gerente; alocação só pelo trigger.",
+  },
+  {
+    tabela: "clinic_event_type_resources",
+    razao:
+      "tests/invariants/clinic-salas-e-equipamentos.test.ts (FORK clinic, migration 9007): 2 orgs, quem é da A lê 0 linhas da B; configuração a partir de gerente; alocação só pelo trigger.",
+  },
+  {
+    tabela: "clinic_appointment_resources",
+    razao:
+      "tests/invariants/clinic-salas-e-equipamentos.test.ts (FORK clinic, migration 9007): 2 orgs, quem é da A lê 0 linhas da B; configuração a partir de gerente; alocação só pelo trigger.",
+  },
+  {
     tabela: "clinic_confirmation_requests",
     razao:
       "tests/invariants/clinic-confirmacao-de-consulta.test.ts (FORK clinic, migration 9004): 2 orgs, quem é da A lê 0 linhas da B, atendente escreve e visualizador não.",
