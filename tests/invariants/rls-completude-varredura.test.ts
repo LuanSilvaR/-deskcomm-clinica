@@ -302,6 +302,21 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-salas-e-equipamentos.test.ts (FORK clinic, migration 9007): 2 orgs, quem é da A lê 0 linhas da B; configuração a partir de gerente; alocação só pelo trigger.",
   },
   {
+    tabela: "clinic_roles",
+    razao:
+      "tests/invariants/clinic-papeis-de-acesso.test.ts (FORK clinic, ACL, migrations 9009-9011): 2 orgs, quem é da A lê 0 linhas da B; ninguém escreve direto (só pelas funções fn_acesso_*).",
+  },
+  {
+    tabela: "clinic_role_permissions",
+    razao:
+      "tests/invariants/clinic-papeis-de-acesso.test.ts (FORK clinic, ACL, migrations 9009-9011): 2 orgs, quem é da A lê 0 linhas da B; ninguém escreve direto (só pelas funções fn_acesso_*).",
+  },
+  {
+    tabela: "clinic_member_roles",
+    razao:
+      "tests/invariants/clinic-papeis-de-acesso.test.ts (FORK clinic, ACL, migrations 9009-9011): 2 orgs, quem é da A lê 0 linhas da B; ninguém escreve direto (só pelas funções fn_acesso_*).",
+  },
+  {
     tabela: "clinic_confirmation_requests",
     razao:
       "tests/invariants/clinic-confirmacao-de-consulta.test.ts (FORK clinic, migration 9004): 2 orgs, quem é da A lê 0 linhas da B, atendente escreve e visualizador não.",

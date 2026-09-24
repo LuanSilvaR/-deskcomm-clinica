@@ -37658,6 +37658,668 @@ revoke execute on function public.fn_clinic_definir_prazo_do_paciente(uuid, inte
 grant  execute on function public.fn_clinic_definir_prazo_do_paciente(uuid, integer) to authenticated;
 -- ---- fim clinic (migration 9008, fork) ----
 
+-- ---- clinic: papéis de acesso e permissões (migration 9009, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9009 · clinic — papéis de acesso e permissões por empresa (FORK, ACL-002)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Controle de acesso EM CAMADAS (plano ACL):
+--   clinic_permissions        — espelho do catálogo do código
+--                               (lib/clinic/acesso/catalogo.ts). O cliente cria
+--                               papéis; permissão arbitrária não existe (FK).
+--   clinic_roles              — papéis de CADA empresa (Recepcionista…);
+--                               `is_system` protege o Administrador.
+--   clinic_role_permissions   — o que cada papel pode.
+--   clinic_member_roles       — os papéis de cada membro (vários; a união vale).
+--
+-- FK COMPOSTA (organization_id, role_id) em tudo: um papel da empresa A não
+-- pode ser atribuído nem receber permissão na empresa B, nem por engano.
+--
+-- Escrita SÓ pelas funções da 9010 (lock por empresa, regra de concessão,
+-- antitravamento): nenhuma policy de escrita, e revoke de insert/update/delete.
+--
+-- Leitura das permissões EFETIVAS: `fn_member_permissions(org)`. Enquanto a
+-- empresa não liga `settings.clinic.acesso_por_permissoes` (nasce desligada),
+-- as permissões efetivas são EXATAMENTE as do nível legado (viewer/agent/
+-- manager/admin → as chaves cujo nivel_base cabe nele) — nada muda. Ligada,
+-- vêm dos papéis do membro. Suporte (impersonação): full = todas; somente
+-- leitura = as de nível viewer.
+-- Idempotente.
+
+-- ─── catálogo ──────────────────────────────────────────────────────────────
+create table if not exists public.clinic_permissions (
+  key text primary key,
+  modulo text not null,
+  acao text not null,
+  nivel_base text not null,
+  depende_de text[] not null default '{}',
+  critica boolean not null default false,
+  descricao text not null,
+  constraint clinic_permissions_nivel_check check (nivel_base in ('viewer','agent','manager','admin')),
+  constraint clinic_permissions_chave_formato check (key = modulo || '.' || acao)
+);
+
+insert into public.clinic_permissions (key, modulo, acao, nivel_base, depende_de, critica, descricao) values
+  ('agenda.ver', 'agenda', 'ver', 'viewer', array[]::text[], false, 'Ver a agenda, os horários livres e os compromissos'),
+  ('agenda.marcar', 'agenda', 'marcar', 'agent', array['agenda.ver']::text[], false, 'Marcar compromisso'),
+  ('agenda.remarcar', 'agenda', 'remarcar', 'agent', array['agenda.ver']::text[], false, 'Remarcar compromisso'),
+  ('agenda.cancelar', 'agenda', 'cancelar', 'agent', array['agenda.ver']::text[], false, 'Cancelar compromisso'),
+  ('agenda.registrar_desfecho', 'agenda', 'registrar_desfecho', 'agent', array['agenda.ver']::text[], false, 'Registrar "Compareceu" ou "Faltou"'),
+  ('agenda.bloquear_horario', 'agenda', 'bloquear_horario', 'agent', array['agenda.ver']::text[], false, 'Bloquear horários e dias na agenda'),
+  ('agenda.configurar', 'agenda', 'configurar', 'manager', array['agenda.ver']::text[], false, 'Tipos de atendimento, lembretes e prazos da agenda'),
+  ('recepcao.ver_painel', 'recepcao', 'ver_painel', 'viewer', array[]::text[], false, 'Ver o painel da recepção e o status das visitas'),
+  ('recepcao.mudar_status_visita', 'recepcao', 'mudar_status_visita', 'agent', array['recepcao.ver_painel']::text[], false, 'Avançar o status da visita (chegou, pronto, em atendimento, finalizado)'),
+  ('recepcao.corrigir_status', 'recepcao', 'corrigir_status', 'agent', array['recepcao.ver_painel', 'recepcao.mudar_status_visita']::text[], false, 'Voltar o status da visita (correção com motivo)'),
+  ('pacientes.ver', 'pacientes', 'ver', 'viewer', array[]::text[], false, 'Ver pacientes e o histórico'),
+  ('pacientes.criar', 'pacientes', 'criar', 'agent', array['pacientes.ver']::text[], false, 'Cadastrar paciente'),
+  ('pacientes.editar', 'pacientes', 'editar', 'agent', array['pacientes.ver']::text[], false, 'Editar paciente'),
+  ('pacientes.excluir', 'pacientes', 'excluir', 'agent', array['pacientes.ver']::text[], false, 'Excluir paciente'),
+  ('pacientes.importar', 'pacientes', 'importar', 'agent', array['pacientes.ver']::text[], false, 'Importar pacientes de planilha'),
+  ('pacientes.mesclar', 'pacientes', 'mesclar', 'manager', array['pacientes.ver']::text[], false, 'Juntar cadastros duplicados'),
+  ('pacientes.ver_ficha', 'pacientes', 'ver_ficha', 'viewer', array['pacientes.ver']::text[], false, 'Ver a ficha cadastral (CPF, endereço, responsável)'),
+  ('pacientes.editar_ficha', 'pacientes', 'editar_ficha', 'agent', array['pacientes.ver', 'pacientes.ver_ficha']::text[], false, 'Preencher e alterar a ficha cadastral'),
+  ('conversas.ver', 'conversas', 'ver', 'viewer', array[]::text[], false, 'Ver as conversas'),
+  ('conversas.responder', 'conversas', 'responder', 'agent', array['conversas.ver']::text[], false, 'Responder e iniciar conversas'),
+  ('conversas.transferir', 'conversas', 'transferir', 'agent', array['conversas.ver']::text[], false, 'Assumir, transferir e liberar conversas'),
+  ('conversas.encerrar', 'conversas', 'encerrar', 'agent', array['conversas.ver']::text[], false, 'Encerrar e adiar conversas'),
+  ('conversas.notas', 'conversas', 'notas', 'agent', array['conversas.ver']::text[], false, 'Notas internas nas conversas'),
+  ('conversas.respostas_rapidas', 'conversas', 'respostas_rapidas', 'agent', array['conversas.ver']::text[], false, 'Criar e editar respostas rápidas'),
+  ('crm.ver', 'crm', 'ver', 'viewer', array[]::text[], false, 'Ver funis e negócios'),
+  ('crm.criar', 'crm', 'criar', 'agent', array['crm.ver']::text[], false, 'Criar negócio'),
+  ('crm.editar', 'crm', 'editar', 'agent', array['crm.ver']::text[], false, 'Editar e mover negócio'),
+  ('crm.configurar_funis', 'crm', 'configurar_funis', 'manager', array['crm.ver']::text[], false, 'Criar e alterar funis e etapas'),
+  ('tarefas.ver', 'tarefas', 'ver', 'viewer', array[]::text[], false, 'Ver tarefas'),
+  ('tarefas.gerenciar', 'tarefas', 'gerenciar', 'agent', array['tarefas.ver']::text[], false, 'Criar, editar e concluir tarefas'),
+  ('campanhas.ver', 'campanhas', 'ver', 'manager', array[]::text[], false, 'Ver campanhas e automações'),
+  ('campanhas.gerenciar', 'campanhas', 'gerenciar', 'manager', array['campanhas.ver']::text[], false, 'Criar, enviar e pausar campanhas e automações'),
+  ('ia.ver', 'ia', 'ver', 'agent', array[]::text[], false, 'Ver agentes de IA e o que fizeram'),
+  ('ia.configurar', 'ia', 'configurar', 'manager', array['ia.ver']::text[], false, 'Configurar agentes, conhecimento e follow-ups'),
+  ('ia.administrar', 'ia', 'administrar', 'admin', array['ia.ver', 'ia.configurar']::text[], false, 'Credenciais, publicação e orçamento de IA'),
+  ('canais.gerenciar', 'canais', 'gerenciar', 'admin', array[]::text[], false, 'Conectar e configurar o WhatsApp e outros canais'),
+  ('financeiro.ver', 'financeiro', 'ver', 'viewer', array[]::text[], false, 'Ver lançamentos, comandas e fidelidade'),
+  ('financeiro.lancar', 'financeiro', 'lancar', 'agent', array['financeiro.ver']::text[], false, 'Abrir comanda, lançar itens e finalizar'),
+  ('financeiro.estornar', 'financeiro', 'estornar', 'manager', array['financeiro.ver']::text[], false, 'Estornar comanda e excluir lançamento'),
+  ('financeiro.configurar', 'financeiro', 'configurar', 'manager', array['financeiro.ver']::text[], false, 'Catálogo financeiro e regras'),
+  ('produtos.ver', 'produtos', 'ver', 'viewer', array[]::text[], false, 'Ver produtos'),
+  ('produtos.gerenciar', 'produtos', 'gerenciar', 'manager', array['produtos.ver']::text[], false, 'Cadastrar, importar e alterar produtos'),
+  ('profissionais.ver', 'profissionais', 'ver', 'viewer', array[]::text[], false, 'Ver profissionais, especialidades e salas'),
+  ('profissionais.gerenciar', 'profissionais', 'gerenciar', 'manager', array['profissionais.ver']::text[], false, 'Cadastrar profissionais, especialidades, salas e exigências'),
+  ('relatorios.ver', 'relatorios', 'ver', 'agent', array[]::text[], false, 'Ver desempenho e faltas'),
+  ('relatorios.gerencial', 'relatorios', 'gerencial', 'manager', array['relatorios.ver']::text[], false, 'Ver indicadores gerenciais da agenda'),
+  ('equipe.ver', 'equipe', 'ver', 'manager', array[]::text[], true, 'Ver a equipe e os convites'),
+  ('equipe.convidar', 'equipe', 'convidar', 'admin', array['equipe.ver']::text[], false, 'Convidar e reenviar convites'),
+  ('equipe.revogar', 'equipe', 'revogar', 'admin', array['equipe.ver']::text[], false, 'Revogar e reativar acesso de membros'),
+  ('equipe.atribuir_papeis', 'equipe', 'atribuir_papeis', 'admin', array['equipe.ver', 'papeis.ver']::text[], true, 'Dar e tirar papéis de acesso dos membros'),
+  ('papeis.ver', 'papeis', 'ver', 'admin', array[]::text[], true, 'Ver os papéis de acesso e as permissões'),
+  ('papeis.gerenciar', 'papeis', 'gerenciar', 'admin', array['papeis.ver']::text[], true, 'Criar, editar, duplicar, desativar e excluir papéis'),
+  ('configuracoes.ver', 'configuracoes', 'ver', 'manager', array[]::text[], false, 'Ver as configurações da empresa'),
+  ('configuracoes.gerenciar', 'configuracoes', 'gerenciar', 'manager', array['configuracoes.ver']::text[], false, 'Alterar configurações da empresa (roteamento, campanhas, marca)'),
+  ('configuracoes.opcoes_da_clinica', 'configuracoes', 'opcoes_da_clinica', 'admin', array['configuracoes.ver']::text[], false, 'Ligar e desligar as opções da clínica'),
+  ('configuracoes.tokens_e_integracoes', 'configuracoes', 'tokens_e_integracoes', 'admin', array['configuracoes.ver']::text[], false, 'Tokens de API, webhooks e integrações'),
+  ('lgpd.ver', 'lgpd', 'ver', 'admin', array[]::text[], false, 'Ver pedidos LGPD'),
+  ('lgpd.tratar', 'lgpd', 'tratar', 'admin', array['lgpd.ver']::text[], false, 'Aprovar pedidos e anonimizar titulares'),
+  ('auditoria.ver', 'auditoria', 'ver', 'manager', array[]::text[], false, 'Ver o registro de auditoria'),
+  ('extensoes.ver', 'extensoes', 'ver', 'viewer', array[]::text[], false, 'Ver extensões disponíveis'),
+  ('extensoes.ativar', 'extensoes', 'ativar', 'admin', array['extensoes.ver']::text[], false, 'Ativar, configurar e desativar extensões')
+on conflict (key) do update set
+  modulo = excluded.modulo, acao = excluded.acao, nivel_base = excluded.nivel_base,
+  depende_de = excluded.depende_de, critica = excluded.critica, descricao = excluded.descricao;
+
+-- ─── papéis ────────────────────────────────────────────────────────────────
+create table if not exists public.clinic_roles (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  nome text not null,
+  descricao text,
+  is_system boolean not null default false,
+  system_key text,
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint clinic_roles_nome_tamanho check (char_length(btrim(nome)) between 1 and 60),
+  constraint clinic_roles_descricao_tamanho check (descricao is null or char_length(descricao) <= 300),
+  constraint clinic_roles_org_id_key unique (organization_id, id)
+);
+create unique index if not exists clinic_roles_org_nome_key on public.clinic_roles (organization_id, lower(btrim(nome)));
+create unique index if not exists clinic_roles_org_system_key on public.clinic_roles (organization_id, system_key) where system_key is not null;
+
+drop trigger if exists clinic_roles_updated_at on public.clinic_roles;
+create trigger clinic_roles_updated_at before update on public.clinic_roles
+  for each row execute function public.fn_set_updated_at();
+
+create table if not exists public.clinic_role_permissions (
+  organization_id uuid not null,
+  role_id uuid not null,
+  permission_key text not null references public.clinic_permissions(key) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (role_id, permission_key),
+  constraint clinic_role_permissions_papel_da_org foreign key (organization_id, role_id)
+    references public.clinic_roles (organization_id, id) on delete cascade
+);
+create index if not exists clinic_role_permissions_org_idx on public.clinic_role_permissions (organization_id, role_id);
+
+create table if not exists public.clinic_member_roles (
+  organization_id uuid not null,
+  user_id uuid not null,
+  role_id uuid not null,
+  granted_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (organization_id, user_id, role_id),
+  constraint clinic_member_roles_papel_da_org foreign key (organization_id, role_id)
+    references public.clinic_roles (organization_id, id) on delete cascade,
+  constraint clinic_member_roles_membro foreign key (user_id, organization_id)
+    references public.user_organizations (user_id, organization_id) on delete cascade
+);
+create index if not exists clinic_member_roles_role_idx on public.clinic_member_roles (role_id);
+
+-- ─── RLS: leitura por empresa; escrita só pelas funções (9010) ─────────────
+alter table public.clinic_permissions enable row level security;
+drop policy if exists clinic_permissions_select on public.clinic_permissions;
+create policy clinic_permissions_select on public.clinic_permissions for select to authenticated using (true);
+revoke all on public.clinic_permissions from anon;
+revoke insert, update, delete, truncate on public.clinic_permissions from authenticated;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['clinic_roles','clinic_role_permissions','clinic_member_roles'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format('drop policy if exists %s_select on public.%I', t, t);
+    execute format($p$create policy %s_select on public.%I for select using (
+        (organization_id in (select public.fn_user_org_ids())) or public.fn_is_platform_admin())$p$, t, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end $$;
+
+-- ─── leitura das permissões efetivas ───────────────────────────────────────
+create or replace function public.fn_nivel_rank(p_nivel text)
+returns integer
+language sql
+immutable
+set search_path = public, pg_temp
+as $$
+  select case p_nivel when 'viewer' then 1 when 'agent' then 2 when 'manager' then 3 when 'admin' then 4 else 0 end
+$$;
+revoke execute on function public.fn_nivel_rank(text) from public, anon;
+grant  execute on function public.fn_nivel_rank(text) to authenticated, service_role;
+
+create or replace function public.fn_member_permissions(p_org uuid)
+returns setof text
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_suporte jsonb;
+  v_papel text;
+  v_ligado boolean;
+begin
+  if auth.uid() is null or p_org is null then
+    return;
+  end if;
+
+  v_suporte := public.fn_support_context();
+  if v_suporte ->> 'status' = 'active' and (v_suporte ->> 'organization_id')::uuid = p_org then
+    return query
+      select c.key from public.clinic_permissions c
+       where v_suporte ->> 'access_mode' = 'full' or c.nivel_base = 'viewer';
+    return;
+  end if;
+
+  select uo.role into v_papel
+    from public.user_organizations uo
+   where uo.user_id = auth.uid() and uo.organization_id = p_org and uo.revoked_at is null
+   limit 1;
+  if v_papel is null then
+    return;
+  end if;
+
+  select (o.settings -> 'clinic' -> 'acesso_por_permissoes') = 'true'::jsonb into v_ligado
+    from public.organizations o where o.id = p_org;
+
+  if not coalesce(v_ligado, false) then
+    -- Transição: exatamente o que o nível legado já dava.
+    return query
+      select c.key from public.clinic_permissions c
+       where public.fn_nivel_rank(c.nivel_base) <= public.fn_nivel_rank(v_papel);
+    return;
+  end if;
+
+  return query
+    select distinct rp.permission_key
+      from public.clinic_member_roles mr
+      join public.clinic_roles r on r.organization_id = mr.organization_id and r.id = mr.role_id and r.ativo
+      join public.clinic_role_permissions rp on rp.organization_id = r.organization_id and rp.role_id = r.id
+     where mr.organization_id = p_org and mr.user_id = auth.uid();
+end $$;
+revoke execute on function public.fn_member_permissions(uuid) from public, anon;
+grant  execute on function public.fn_member_permissions(uuid) to authenticated, service_role;
+
+create or replace function public.fn_has_permission(p_org uuid, p_key text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (select 1 from public.fn_member_permissions(p_org) k where k = p_key)
+$$;
+revoke execute on function public.fn_has_permission(uuid, text) from public, anon;
+grant  execute on function public.fn_has_permission(uuid, text) to authenticated, service_role;
+-- ---- fim clinic (migration 9009, fork) ----
+
+-- ---- clinic: escrita de papéis com travas (migration 9010, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9010 · clinic — escrita de papéis de acesso, com as travas no banco (FORK, ACL-003)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- As rotas NUNCA escrevem nas tabelas da 9009 (não há policy de escrita): tudo
+-- passa por estas funções, que aplicam no MESMO lugar, sob lock por empresa:
+--
+--   * quem pede: sessão, suporte com escrita, MFA provado quando há fator, e a
+--     permissão certa (`papeis.gerenciar` / `equipe.atribuir_papeis`);
+--   * REGRA DE CONCESSÃO: só se dá (a papel ou a pessoa) permissão que o próprio
+--     ator TEM — exceto quem tem o papel de sistema Administrador;
+--   * DEPENDÊNCIAS completas (editar exige ver): papel incoerente é recusado;
+--   * ANTITRAVAMENTO: o papel de sistema Administrador não se exclui, não se
+--     desativa, não se renomeia e não perde as permissões críticas; e a empresa
+--     nunca fica sem nenhum membro ativo com o papel Administrador;
+--   * isolamento: todo id é conferido contra a empresa (senão "não encontrado").
+--
+-- `pg_advisory_xact_lock` por empresa fecha a corrida de duas pessoas tirando
+-- o "último administrador" ao mesmo tempo. Idempotente.
+
+create or replace function public.fn_acesso_eh_administrador(p_org uuid, p_user uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+      from public.clinic_member_roles mr
+      join public.clinic_roles r on r.organization_id = mr.organization_id and r.id = mr.role_id
+      join public.user_organizations uo on uo.organization_id = mr.organization_id and uo.user_id = mr.user_id
+     where mr.organization_id = p_org and mr.user_id = p_user
+       and r.system_key = 'administrador' and r.ativo
+       and uo.revoked_at is null)
+$$;
+revoke execute on function public.fn_acesso_eh_administrador(uuid, uuid) from public, anon, authenticated;
+
+-- A pessoa que pede pode mexer nisto? (sessão, suporte, MFA, permissão)
+create or replace function public.fn_acesso_exigir(p_org uuid, p_permissao text)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is null or p_org is null or not public.fn_support_write_allowed(p_org) then
+    raise exception 'acesso_proibido' using errcode = '42501';
+  end if;
+  if not public.fn_session_mfa_proven() then
+    raise exception 'acesso_mfa_exigido' using errcode = '42501';
+  end if;
+  if not public.fn_has_permission(p_org, p_permissao) then
+    raise exception 'acesso_proibido' using errcode = '42501', detail = p_permissao;
+  end if;
+end $$;
+revoke execute on function public.fn_acesso_exigir(uuid, text) from public, anon, authenticated;
+
+-- Regra de concessão: as chaves pedidas cabem no que o ator tem?
+create or replace function public.fn_acesso_exigir_concessao(p_org uuid, p_chaves text[])
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_faltam text[];
+begin
+  if public.fn_acesso_eh_administrador(p_org, auth.uid()) then
+    return;
+  end if;
+  select array_agg(k order by k) into v_faltam
+    from unnest(coalesce(p_chaves, '{}')) k
+   where not exists (select 1 from public.fn_member_permissions(p_org) m where m = k);
+  if v_faltam is not null then
+    raise exception 'acesso_concessao_acima_do_proprio'
+      using errcode = '42501', detail = array_to_string(v_faltam, ',');
+  end if;
+end $$;
+revoke execute on function public.fn_acesso_exigir_concessao(uuid, text[]) from public, anon, authenticated;
+
+-- A empresa ainda tem alguém com o papel Administrador?
+create or replace function public.fn_acesso_exigir_um_administrador(p_org uuid)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not exists (
+    select 1
+      from public.clinic_member_roles mr
+      join public.clinic_roles r on r.organization_id = mr.organization_id and r.id = mr.role_id
+      join public.user_organizations uo on uo.organization_id = mr.organization_id and uo.user_id = mr.user_id
+     where mr.organization_id = p_org and r.system_key = 'administrador' and r.ativo and uo.revoked_at is null
+  ) then
+    raise exception 'acesso_ultimo_administrador' using errcode = '23514';
+  end if;
+end $$;
+revoke execute on function public.fn_acesso_exigir_um_administrador(uuid) from public, anon, authenticated;
+
+-- ─── salvar papel (criar/editar) com a lista de permissões ─────────────────
+create or replace function public.fn_acesso_salvar_papel(
+  p_org uuid,
+  p_id uuid,
+  p_nome text,
+  p_descricao text,
+  p_ativo boolean,
+  p_permissoes text[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_papel public.clinic_roles%rowtype;
+  v_novas text[] := coalesce((select array_agg(distinct k) from unnest(coalesce(p_permissoes, '{}')) k), '{}');
+  v_antigas text[] := '{}';
+  v_adicionadas text[];
+  v_removidas text[];
+  v_invalidas text[];
+  v_faltando text[];
+begin
+  perform pg_advisory_xact_lock(hashtextextended('clinic_acesso:' || p_org::text, 0));
+  perform public.fn_acesso_exigir(p_org, 'papeis.gerenciar');
+
+  select array_agg(k) into v_invalidas from unnest(v_novas) k
+   where not exists (select 1 from public.clinic_permissions c where c.key = k);
+  if v_invalidas is not null then
+    raise exception 'acesso_permissao_desconhecida' using errcode = '22023', detail = array_to_string(v_invalidas, ',');
+  end if;
+  select array_agg(distinct d order by d) into v_faltando
+    from public.clinic_permissions c, unnest(c.depende_de) d
+   where c.key = any(v_novas) and not d = any(v_novas);
+  if v_faltando is not null then
+    raise exception 'acesso_dependencia_faltando' using errcode = '22023', detail = array_to_string(v_faltando, ',');
+  end if;
+
+  if p_id is null then
+    insert into public.clinic_roles (organization_id, nome, descricao, ativo)
+    values (p_org, btrim(p_nome), nullif(btrim(coalesce(p_descricao, '')), ''), coalesce(p_ativo, true))
+    returning * into v_papel;
+  else
+    select * into v_papel from public.clinic_roles where organization_id = p_org and id = p_id for update;
+    if not found then
+      raise exception 'acesso_papel_nao_encontrado' using errcode = 'P0002';
+    end if;
+    select coalesce(array_agg(permission_key), '{}') into v_antigas
+      from public.clinic_role_permissions where organization_id = p_org and role_id = p_id;
+    if v_papel.is_system then
+      if btrim(p_nome) <> v_papel.nome or coalesce(p_ativo, true) is distinct from true then
+        raise exception 'acesso_papel_de_sistema' using errcode = '42501';
+      end if;
+      select array_agg(c.key order by c.key) into v_faltando from public.clinic_permissions c
+       where c.critica and not c.key = any(v_novas);
+      if v_faltando is not null then
+        raise exception 'acesso_papel_de_sistema' using errcode = '42501', detail = array_to_string(v_faltando, ',');
+      end if;
+    end if;
+    update public.clinic_roles
+       set nome = btrim(p_nome), descricao = nullif(btrim(coalesce(p_descricao, '')), ''), ativo = coalesce(p_ativo, true)
+     where id = p_id;
+  end if;
+
+  select coalesce(array_agg(k order by k), '{}') into v_adicionadas from unnest(v_novas) k where not k = any(v_antigas);
+  select coalesce(array_agg(k order by k), '{}') into v_removidas from unnest(v_antigas) k where not k = any(v_novas);
+  perform public.fn_acesso_exigir_concessao(p_org, v_adicionadas);
+
+  delete from public.clinic_role_permissions where organization_id = p_org and role_id = v_papel.id;
+  insert into public.clinic_role_permissions (organization_id, role_id, permission_key)
+  select p_org, v_papel.id, k from unnest(v_novas) k;
+
+  -- desativar um papel pode tirar o último Administrador? (papel de sistema já barrado acima)
+  perform public.fn_acesso_exigir_um_administrador(p_org);
+
+  return jsonb_build_object('id', v_papel.id, 'criado', p_id is null, 'adicionadas', to_jsonb(v_adicionadas), 'removidas', to_jsonb(v_removidas));
+end $$;
+revoke execute on function public.fn_acesso_salvar_papel(uuid, uuid, text, text, boolean, text[]) from public, anon;
+grant  execute on function public.fn_acesso_salvar_papel(uuid, uuid, text, text, boolean, text[]) to authenticated;
+
+-- ─── excluir papel (só custom e sem ninguém nele) ──────────────────────────
+create or replace function public.fn_acesso_excluir_papel(p_org uuid, p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_papel public.clinic_roles%rowtype;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('clinic_acesso:' || p_org::text, 0));
+  perform public.fn_acesso_exigir(p_org, 'papeis.gerenciar');
+  select * into v_papel from public.clinic_roles where organization_id = p_org and id = p_id for update;
+  if not found then
+    raise exception 'acesso_papel_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_papel.is_system then
+    raise exception 'acesso_papel_de_sistema' using errcode = '42501';
+  end if;
+  if exists (select 1 from public.clinic_member_roles where organization_id = p_org and role_id = p_id) then
+    raise exception 'acesso_papel_em_uso' using errcode = '23503';
+  end if;
+  delete from public.clinic_roles where id = p_id;
+  return jsonb_build_object('id', p_id, 'nome', v_papel.nome);
+end $$;
+revoke execute on function public.fn_acesso_excluir_papel(uuid, uuid) from public, anon;
+grant  execute on function public.fn_acesso_excluir_papel(uuid, uuid) to authenticated;
+
+-- ─── os papéis de um membro (substitui a lista) ────────────────────────────
+create or replace function public.fn_acesso_atribuir_papeis(p_org uuid, p_user uuid, p_papeis uuid[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_novos uuid[] := coalesce((select array_agg(distinct x) from unnest(coalesce(p_papeis, '{}')) x), '{}');
+  v_antigos uuid[];
+  v_adicionados uuid[];
+  v_removidos uuid[];
+  v_invalidos int;
+  v_chaves text[];
+begin
+  perform pg_advisory_xact_lock(hashtextextended('clinic_acesso:' || p_org::text, 0));
+  perform public.fn_acesso_exigir(p_org, 'equipe.atribuir_papeis');
+
+  if not exists (select 1 from public.user_organizations where organization_id = p_org and user_id = p_user and revoked_at is null) then
+    raise exception 'acesso_membro_nao_encontrado' using errcode = 'P0002';
+  end if;
+  select count(*) into v_invalidos from unnest(v_novos) x
+   where not exists (select 1 from public.clinic_roles r where r.organization_id = p_org and r.id = x and r.ativo);
+  if v_invalidos > 0 then
+    raise exception 'acesso_papel_nao_encontrado' using errcode = 'P0002';
+  end if;
+
+  select coalesce(array_agg(role_id), '{}') into v_antigos
+    from public.clinic_member_roles where organization_id = p_org and user_id = p_user;
+  select coalesce(array_agg(x), '{}') into v_adicionados from unnest(v_novos) x where not x = any(v_antigos);
+  select coalesce(array_agg(x), '{}') into v_removidos from unnest(v_antigos) x where not x = any(v_novos);
+
+  -- regra de concessão: tudo o que os papéis ADICIONADOS dão, o ator precisa ter
+  select coalesce(array_agg(distinct rp.permission_key), '{}') into v_chaves
+    from public.clinic_role_permissions rp
+   where rp.organization_id = p_org and rp.role_id = any(v_adicionados);
+  perform public.fn_acesso_exigir_concessao(p_org, v_chaves);
+
+  delete from public.clinic_member_roles where organization_id = p_org and user_id = p_user;
+  insert into public.clinic_member_roles (organization_id, user_id, role_id, granted_by)
+  select p_org, p_user, x, auth.uid() from unnest(v_novos) x;
+
+  perform public.fn_acesso_exigir_um_administrador(p_org);
+
+  return jsonb_build_object('user_id', p_user, 'adicionados', to_jsonb(v_adicionados), 'removidos', to_jsonb(v_removidos));
+end $$;
+revoke execute on function public.fn_acesso_atribuir_papeis(uuid, uuid, uuid[]) from public, anon;
+grant  execute on function public.fn_acesso_atribuir_papeis(uuid, uuid, uuid[]) to authenticated;
+-- ---- fim clinic (migration 9010, fork) ----
+
+-- ---- clinic: papéis-modelo e migração dos membros (migration 9011, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9011 · clinic — papéis-modelo em toda empresa e migração dos membros (FORK, ACL-005)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Toda empresa ganha 4 papéis, com as permissões que o nível legado já dava
+-- (a MESMA regra de `permissoesDoNivel` em lib/clinic/acesso/catalogo.ts):
+--   Administrador (is_system — intocável; todas as permissões)
+--   Gerente (≤ manager) · Atendente (≤ agent) · Visualizador (≤ viewer)
+-- Os três últimos são modelos editáveis.
+--
+-- Cada membro recebe o papel do seu nível atual: admin→Administrador,
+-- manager→Gerente, agent→Atendente, viewer→Visualizador. Assim o nível
+-- derivado das permissões == nível atual para TODOS (invariante prova).
+--
+-- Enquanto a empresa NÃO liga `acesso_por_permissoes`, o papel legado manda:
+-- trocar o papel na Equipe (ou convidar) espelha o papel-modelo aqui, para que
+-- ligar o modo depois comece exatamente de onde a empresa está.
+-- Idempotente (reaplicar não duplica nem sobrescreve edição).
+
+create or replace function public.fn_acesso_provisionar_org(p_org uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  m record;
+  v_id uuid;
+begin
+  for m in
+    select * from (values
+      ('administrador', 'Administrador', 'admin', true, 'Acesso total à empresa. Não pode ser excluído nem perder o controle dos papéis.'),
+      ('gerente', 'Gerente', 'manager', false, 'Modelo inicial equivalente ao antigo papel Gerente.'),
+      ('atendente', 'Atendente', 'agent', false, 'Modelo inicial equivalente ao antigo papel Atendente.'),
+      ('visualizador', 'Visualizador', 'viewer', false, 'Modelo inicial equivalente ao antigo papel Visualizador.')
+    ) as t(system_key, nome, nivel, sistema, descricao)
+  loop
+    select id into v_id from public.clinic_roles where organization_id = p_org and system_key = m.system_key;
+    if v_id is null then
+      insert into public.clinic_roles (organization_id, nome, descricao, is_system, system_key)
+      values (
+        p_org,
+        -- nome já usado por um papel criado à mão: não colide
+        case when exists (select 1 from public.clinic_roles r where r.organization_id = p_org and lower(btrim(r.nome)) = lower(m.nome))
+             then m.nome || ' (modelo)' else m.nome end,
+        m.descricao, m.sistema, m.system_key)
+      returning id into v_id;
+      insert into public.clinic_role_permissions (organization_id, role_id, permission_key)
+      select p_org, v_id, c.key from public.clinic_permissions c
+       where public.fn_nivel_rank(c.nivel_base) <= public.fn_nivel_rank(m.nivel)
+      on conflict do nothing;
+    elsif m.sistema then
+      -- o Administrador sempre tem o catálogo inteiro (permissão nova entra sozinha)
+      insert into public.clinic_role_permissions (organization_id, role_id, permission_key)
+      select p_org, v_id, c.key from public.clinic_permissions c
+      on conflict do nothing;
+    end if;
+  end loop;
+end $$;
+revoke execute on function public.fn_acesso_provisionar_org(uuid) from public, anon, authenticated;
+
+create or replace function public.fn_acesso_papel_modelo(p_org uuid, p_nivel text)
+returns uuid
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select id from public.clinic_roles
+   where organization_id = p_org
+     and system_key = case p_nivel when 'admin' then 'administrador' when 'manager' then 'gerente'
+                                   when 'agent' then 'atendente' else 'visualizador' end
+$$;
+revoke execute on function public.fn_acesso_papel_modelo(uuid, text) from public, anon, authenticated;
+
+-- empresa nova nasce com os papéis
+create or replace function public.fn_acesso_provisionar_org_nova()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_acesso_provisionar_org(new.id);
+  return null;
+end $$;
+revoke execute on function public.fn_acesso_provisionar_org_nova() from public, anon, authenticated;
+
+drop trigger if exists trg_acesso_provisionar_org on public.organizations;
+create trigger trg_acesso_provisionar_org
+  after insert on public.organizations
+  for each row execute function public.fn_acesso_provisionar_org_nova();
+
+-- com o modo desligado, o papel legado é espelhado no papel-modelo
+create or replace function public.fn_acesso_espelhar_papel_legado()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ligado boolean;
+  v_modelo uuid;
+begin
+  select (o.settings -> 'clinic' -> 'acesso_por_permissoes') = 'true'::jsonb into v_ligado
+    from public.organizations o where o.id = new.organization_id;
+  if coalesce(v_ligado, false) then
+    return null;
+  end if;
+  perform public.fn_acesso_provisionar_org(new.organization_id);
+  v_modelo := public.fn_acesso_papel_modelo(new.organization_id, new.role);
+  delete from public.clinic_member_roles where organization_id = new.organization_id and user_id = new.user_id;
+  if v_modelo is not null then
+    insert into public.clinic_member_roles (organization_id, user_id, role_id)
+    values (new.organization_id, new.user_id, v_modelo)
+    on conflict do nothing;
+  end if;
+  return null;
+end $$;
+revoke execute on function public.fn_acesso_espelhar_papel_legado() from public, anon, authenticated;
+
+drop trigger if exists trg_acesso_espelhar_papel_legado on public.user_organizations;
+create trigger trg_acesso_espelhar_papel_legado
+  after insert or update of role on public.user_organizations
+  for each row execute function public.fn_acesso_espelhar_papel_legado();
+
+-- ─── backfill: toda empresa e todo membro de hoje ──────────────────────────
+do $$
+declare o record;
+begin
+  for o in select id from public.organizations loop
+    perform public.fn_acesso_provisionar_org(o.id);
+  end loop;
+end $$;
+
+insert into public.clinic_member_roles (organization_id, user_id, role_id)
+select uo.organization_id, uo.user_id, public.fn_acesso_papel_modelo(uo.organization_id, uo.role)
+  from public.user_organizations uo
+ where not exists (
+         select 1 from public.clinic_member_roles mr
+          where mr.organization_id = uo.organization_id and mr.user_id = uo.user_id)
+   and public.fn_acesso_papel_modelo(uo.organization_id, uo.role) is not null
+on conflict do nothing;
+-- ---- fim clinic (migration 9011, fork) ----
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

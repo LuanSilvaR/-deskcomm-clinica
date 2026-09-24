@@ -32,6 +32,8 @@ export const ApiErrorCodes = {
   // 403 — authz
   forbidden: "forbidden",
   forbidden_role: "forbidden_role",
+  // FORK clinic (ACL): falta a permissão pedida (lib/clinic/acesso/require-permission.ts).
+  forbidden_permission: "forbidden_permission",
   forbidden_tenant: "forbidden_tenant",
   lgpd_anonymization_irreversible: "lgpd_anonymization_irreversible",
 
