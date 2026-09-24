@@ -20,6 +20,7 @@ interface Props {
   confirmacaoInicial: boolean;
   travaInicial: boolean;
   recursosInicial: boolean;
+  agendaDoDiaInicial: boolean;
   prazoInicial: number;
   podeLigar: boolean;
   ehGerencia: boolean;
@@ -32,6 +33,7 @@ export function ProfissionaisClient({
   confirmacaoInicial,
   travaInicial,
   recursosInicial,
+  agendaDoDiaInicial,
   prazoInicial,
   podeLigar,
   ehGerencia,
@@ -43,6 +45,7 @@ export function ProfissionaisClient({
   const [confirmacao, setConfirmacao] = useState(confirmacaoInicial);
   const [trava, setTrava] = useState(travaInicial);
   const [recursos, setRecursos] = useState(recursosInicial);
+  const [agendaDoDia, setAgendaDoDia] = useState(agendaDoDiaInicial);
   const [prazo, setPrazo] = useState(prazoInicial);
   const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
 
@@ -53,6 +56,13 @@ export function ProfissionaisClient({
       setPrazo(r.data.prazo_paciente_horas);
       setPrazoDigitado(String(r.data.prazo_paciente_horas));
     },
+    onError: showApiError,
+  });
+
+  const alternarAgendaDoDia = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { agenda_do_dia: boolean } }>("/api/v1/clinic/config", { agenda_do_dia: valor }),
+    onSuccess: (r) => setAgendaDoDia(r.data.agenda_do_dia),
     onError: showApiError,
   });
 
@@ -223,6 +233,30 @@ export function ProfissionaisClient({
             onClick={() => alternarRecursos.mutate(!recursos)}
           >
             {recursos ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${agendaDoDia ? "" : "bg-muted"}`}
+        data-testid="clinic-agenda-do-dia"
+      >
+        <div>
+          <p className="font-medium">{agendaDoDia ? t("Agenda do dia ligada") : t("Agenda do dia desligada")}</p>
+          <p className="text-sm text-text-muted">
+            {agendaDoDia
+              ? t("A tela Agenda do dia mostra cada profissional com a ocupação, os horários livres e o status de cada paciente, com filtros.")
+              : t("Ligue para usar a tela Agenda do dia: um profissional por bloco, ocupação, horários livres e o status de cada paciente.")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-agenda-do-dia-alternar"
+            variant={agendaDoDia ? "outline" : "default"}
+            disabled={alternarAgendaDoDia.isPending}
+            onClick={() => alternarAgendaDoDia.mutate(!agendaDoDia)}
+          >
+            {agendaDoDia ? t("Desligar") : t("Ligar")}
           </Button>
         ) : null}
       </section>
