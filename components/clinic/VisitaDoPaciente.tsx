@@ -50,6 +50,8 @@ interface Visita {
   confirmacao: { status: string; falha: string | null } | null;
   /** FORK clinic (9007): salas e equipamentos alocados. */
   recursos?: string[];
+  /** FORK clinic (E5.1): faltas do paciente nos últimos 12 meses. */
+  faltas?: number;
 }
 
 export const COR_DO_STATUS: Record<StatusDaVisita, string> = {
@@ -132,6 +134,15 @@ export function VisitaDoPaciente({
         <SeloDaVisita status={atual} />
         <SeloDaConfirmacao status={consulta.data?.confirmacao?.status} falha={consulta.data?.confirmacao?.falha} />
       </div>
+      {consulta.data?.faltas ? (
+        <p
+          className={`text-sm ${consulta.data.faltas >= 2 ? "font-medium text-warning" : "text-text-muted"}`}
+          data-testid="faltas-do-paciente"
+        >
+          {t("Faltou")} {consulta.data.faltas}× {t("nos últimos 12 meses")}
+          {consulta.data.faltas >= 2 ? ` — ${t("vale confirmar por telefone")}` : ""}
+        </p>
+      ) : null}
       {consulta.data?.recursos && consulta.data.recursos.length > 0 ? (
         <p className="text-sm text-text-muted" data-testid="recursos-do-compromisso">
           {t("Sala e equipamento")}: {consulta.data.recursos.join(" · ")}

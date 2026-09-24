@@ -6,6 +6,8 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { hashCpf } from "@/lib/contacts/cpf";
 import { detalheDoPaciente, interpretarBusca } from "@/lib/clinic/pacientes/busca";
+import { contarFaltas } from "@/lib/clinic/agenda/faltas";
+import { traduzir } from "@/lib/i18n/dicionario";
 export async function GET(req: Request) {
   const requestId = randomUUID();
   const auth = await requireRole("agent", { requestId, resource: "agenda" });
@@ -52,12 +54,21 @@ export async function GET(req: Request) {
       : { data: [], error: null };
   if (conversations.error)
     return fail("internal_error", "Não foi possível carregar as conversas.", 500, { requestId });
+  // FORK clinic (E5.1): quem faltou nos últimos 12 meses aparece com a contagem.
+  const faltas = await contarFaltas(
+    db,
+    auth.org.orgId,
+    (result.data ?? []).map((c) => c.id as string),
+  );
   return ok(
     {
       contacts: result.data.map((contato) => {
         // `detalhe` (fim do telefone e nascimento) distingue homônimos; sem o que
         // mostrar ele não vai, e o contrato continua `{ id, name }`.
-        const detalhe = detalheDoPaciente(contato.phone_number, contato.birthdate);
+        const n = faltas.get(contato.id as string) ?? 0;
+        const detalhe = [detalheDoPaciente(contato.phone_number, contato.birthdate), n > 0 ? `${traduzir("faltou", auth.user.idioma)} ${n}×` : null]
+          .filter(Boolean)
+          .join(" · ") || null;
         return { id: contato.id, name: rotuloDoContato(contato), ...(detalhe ? { detalhe } : {}) };
       }),
       conversations: conversations.data,

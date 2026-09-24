@@ -45,6 +45,8 @@ export const ApiErrorCodes = {
   // wire sem passar por lista nenhuma, e o consumidor do outro lado nunca sabe
   // que ele existe. Quem confia que a união protege está lendo o arquivo errado.
   agenda_horario_indisponivel: "agenda_horario_indisponivel",
+  // FORK clinic (migration 9008): o agente de IA não desmarca dentro do prazo do paciente.
+  agenda_fora_do_prazo: "agenda_fora_do_prazo",
   agenda_fora_da_jornada: "agenda_fora_da_jornada",
   agenda_tipo_desativado: "agenda_tipo_desativado",
   agenda_sem_responsavel: "agenda_sem_responsavel",

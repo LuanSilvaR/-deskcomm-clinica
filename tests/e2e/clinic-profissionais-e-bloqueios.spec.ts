@@ -166,7 +166,7 @@ test("clínica cadastra especialidade, habilita profissional e bloqueia a agenda
   const ficha = page.getByTestId("ficha-do-profissional");
   await ficha.getByLabel("Conselho").selectOption("CRBM");
   await ficha.getByLabel("Número do registro").fill("12345");
-  await ficha.getByLabel("UF").fill("SP");
+  await ficha.getByLabel("UF", { exact: true }).fill("SP");
   await ficha.getByLabel(especialidade).check();
   // Espera o POST, e não o nome na linha: o formulário aberto também mostra o
   // nome da especialidade, e a checagem passaria antes de salvar.

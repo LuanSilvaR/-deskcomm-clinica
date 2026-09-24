@@ -39,6 +39,7 @@ import {
   VINCULO_DE_AGENDAMENTO,
 } from "@/lib/agenda/tipos";
 import { ApiError } from "@/lib/api/types";
+import { exigePrazoDoPaciente } from "@/lib/clinic/agenda/prazo-do-paciente";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { roleAtLeast } from "@/lib/auth/types";
@@ -499,6 +500,8 @@ export async function alterarAgendamentoHandler(
   let transicao: Transicao | null = null;
 
   if (input.starts_at) {
+    // FORK clinic (migration 9008): dentro do prazo, o agente de IA não remarca.
+    await exigePrazoDoPaciente(supabase, ctx, atual.starts_at as string | null);
     const novoInicio = new Date(input.starts_at);
     const { data: tipo } = await supabase
       .from("calendar_event_types")
@@ -627,6 +630,7 @@ export async function cancelarAgendamentoHandler(
     "event_type_id",
     "status",
     "time_zone",
+    "starts_at",
   ]);
 
   await exigeDonoDoCompromisso(supabase, ctx, atual);
@@ -637,6 +641,8 @@ export async function cancelarAgendamentoHandler(
   if (atual.status === "cancelled") {
     return { id: atual.id, status: "cancelled", ja_estava: true };
   }
+  // FORK clinic (migration 9008): dentro do prazo, o agente de IA não desmarca.
+  await exigePrazoDoPaciente(supabase, ctx, atual.starts_at as string | null);
 
   const salvo = await alteraComRevisao(supabase,ctx,input.id,input.revision ?? Number(atual.revision),{
     status:"cancelled",cancellation_reason:input.reason,

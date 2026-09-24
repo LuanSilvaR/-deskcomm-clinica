@@ -11721,6 +11721,23 @@ export const DICIONARIO: Traducoes = {
   // ── FORK clinic (migration 9006): lembrete que falhou ──
   "Lembrete não chegou — ligar": { es: "El recordatorio no llegó — llamar" },
   "Lembrete não saiu — ligar": { es: "El recordatorio no se envió — llamar" },
+  // ── FORK clinic (E5): faltas e prazo do paciente ──
+  "Faltas": { es: "Ausencias" },
+  "Pacientes que faltaram 2 vezes ou mais nos últimos 12 meses. Vale confirmar por telefone o próximo horário deles.": { es: "Pacientes que faltaron 2 veces o más en los últimos 12 meses. Conviene confirmar por teléfono su próximo horario." },
+  "Pacientes que faltaram 2 vezes ou mais nos últimos 12 meses, com o próximo horário marcado.": { es: "Pacientes que faltaron 2 veces o más en los últimos 12 meses, con el próximo horario agendado." },
+  "Não foi possível carregar as faltas.": { es: "No fue posible cargar las ausencias." },
+  "Nenhum paciente faltou 2 vezes ou mais nos últimos 12 meses.": { es: "Ningún paciente faltó 2 veces o más en los últimos 12 meses." },
+  "Última falta": { es: "Última ausencia" },
+  "Próximo horário": { es: "Próximo horario" },
+  "Nenhum marcado": { es: "Ninguno agendado" },
+  "Ver pacientes que faltam": { es: "Ver pacientes que faltan" },
+  "faltou": { es: "faltó" },
+  "nos últimos 12 meses": { es: "en los últimos 12 meses" },
+  "vale confirmar por telefone": { es: "conviene confirmar por teléfono" },
+  "Prazo para o paciente desmarcar pelo WhatsApp": { es: "Plazo para que el paciente cancele por WhatsApp" },
+  "Sem prazo para o paciente desmarcar pelo WhatsApp": { es: "Sin plazo para que el paciente cancele por WhatsApp" },
+  "Dentro do prazo antes da consulta, o agente de IA não desmarca nem remarca: ele avisa que a recepção vai entrar em contato. A equipe continua podendo tudo. 0 = sem prazo.": { es: "Dentro del plazo antes de la cita, el agente de IA no cancela ni reprograma: avisa que la recepción se pondrá en contacto. El equipo sigue pudiendo todo. 0 = sin plazo." },
+  "Horas de antecedência": { es: "Horas de antelación" },
   // ── FORK clinic (migration 9007): salas e equipamentos ──
   "Salas e equipamentos": { es: "Salas y equipos" },
   "Salas e equipamentos ligados": { es: "Salas y equipos activados" },

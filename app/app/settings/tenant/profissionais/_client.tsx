@@ -20,6 +20,7 @@ interface Props {
   confirmacaoInicial: boolean;
   travaInicial: boolean;
   recursosInicial: boolean;
+  prazoInicial: number;
   podeLigar: boolean;
   ehGerencia: boolean;
   usuarioAtualId: string;
@@ -31,6 +32,7 @@ export function ProfissionaisClient({
   confirmacaoInicial,
   travaInicial,
   recursosInicial,
+  prazoInicial,
   podeLigar,
   ehGerencia,
   usuarioAtualId,
@@ -41,6 +43,18 @@ export function ProfissionaisClient({
   const [confirmacao, setConfirmacao] = useState(confirmacaoInicial);
   const [trava, setTrava] = useState(travaInicial);
   const [recursos, setRecursos] = useState(recursosInicial);
+  const [prazo, setPrazo] = useState(prazoInicial);
+  const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
+
+  const salvarPrazo = useMutation({
+    mutationFn: (horas: number) =>
+      apiClient.patch<{ data: { prazo_paciente_horas: number } }>("/api/v1/clinic/config", { prazo_paciente_horas: horas }),
+    onSuccess: (r) => {
+      setPrazo(r.data.prazo_paciente_horas);
+      setPrazoDigitado(String(r.data.prazo_paciente_horas));
+    },
+    onError: showApiError,
+  });
 
   const alternarRecursos = useMutation({
     mutationFn: (valor: boolean) =>
@@ -210,6 +224,44 @@ export function ProfissionaisClient({
           >
             {recursos ? t("Desligar") : t("Ligar")}
           </Button>
+        ) : null}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${prazo > 0 ? "" : "bg-muted"}`}
+        data-testid="clinic-prazo"
+      >
+        <div>
+          <p className="font-medium">
+            {prazo > 0 ? `${t("Prazo para o paciente desmarcar pelo WhatsApp")}: ${prazo} h` : t("Sem prazo para o paciente desmarcar pelo WhatsApp")}
+          </p>
+          <p className="text-sm text-text-muted">
+            {t("Dentro do prazo antes da consulta, o agente de IA não desmarca nem remarca: ele avisa que a recepção vai entrar em contato. A equipe continua podendo tudo. 0 = sem prazo.")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const n = Number(prazoDigitado);
+              if (Number.isInteger(n) && n >= 0 && n <= 168) salvarPrazo.mutate(n);
+            }}
+          >
+            <input
+              type="number"
+              min={0}
+              max={168}
+              aria-label={t("Horas de antecedência")}
+              data-testid="clinic-prazo-horas"
+              className="w-20 rounded-md border bg-surface p-1.5"
+              value={prazoDigitado}
+              onChange={(e) => setPrazoDigitado(e.target.value)}
+            />
+            <Button type="submit" variant="outline" data-testid="clinic-prazo-salvar" disabled={salvarPrazo.isPending}>
+              {t("Salvar")}
+            </Button>
+          </form>
         ) : null}
       </section>
 

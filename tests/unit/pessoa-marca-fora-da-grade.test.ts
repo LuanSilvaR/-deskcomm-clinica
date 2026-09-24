@@ -52,7 +52,7 @@ vi.mock("@/lib/audit", () => ({
   isServiceRoleConfigured: vi.fn(() => true),
 }));
 
-const { alterarAgendamentoHandler, marcarAgendamentoHandler, podeMarcarForaDaGrade } = await import(
+const { alterarAgendamentoHandler, cancelarAgendamentoHandler, marcarAgendamentoHandler, podeMarcarForaDaGrade } = await import(
   "@/app/api/v1/agenda/agendamentos/_handler"
 );
 
@@ -692,5 +692,40 @@ describe("FORK clinic (migration 9007): falta de sala ou equipamento", () => {
     await expect(
       marcarAgendamentoHandler(client, ctx(PESSOA), { event_type_id: TIPO, starts_at: FORA_DA_GRADE }),
     ).rejects.toMatchObject({ ...RECUSA, message: expect.stringMatching(/sala ou equipamento/) });
+  });
+});
+
+describe("FORK clinic (migration 9008): prazo do paciente para desmarcar", () => {
+  // O compromisso é na quarta 13:00Z; AGORA é segunda 12:00Z — faltam 49 h.
+  function comPrazo(horas: number): Banco {
+    const meu = { ...agendamento(NA_GRADE, "2026-10-07T14:00:00.000Z"), id: MEU_COMPROMISSO, revision: 1 };
+    const banco = agenda({ agendamentos: [meu] });
+    banco.tabelas.organizations = [{ id: ORG, settings: { clinic: { prazo_paciente_horas: horas } } }];
+    return banco;
+  }
+
+  it("a IA dentro do prazo NÃO cancela: agenda_fora_do_prazo, e o compromisso segue de pé", async () => {
+    const banco = comPrazo(72);
+    await expect(
+      cancelarAgendamentoHandler(banco.client, ctx(AGENTE), { id: MEU_COMPROMISSO, reason: "paciente pediu" }),
+    ).rejects.toMatchObject({ status: 422, code: "agenda_fora_do_prazo" });
+    expect(banco.tabelas.calendar_appointments!.find((l) => l.id === MEU_COMPROMISSO)!.status).toBe("confirmed");
+  });
+
+  it("a IA dentro do prazo NÃO remarca", async () => {
+    const banco = comPrazo(72);
+    await expect(
+      alterarAgendamentoHandler(banco.client, ctx(AGENTE), { id: MEU_COMPROMISSO, starts_at: "2026-10-07T16:00:00.000Z" }),
+    ).rejects.toMatchObject({ status: 422, code: "agenda_fora_do_prazo" });
+  });
+
+  it("CONTROLE: fora do prazo (24 h) a IA cancela; e a pessoa da equipe cancela mesmo dentro do prazo", async () => {
+    const fora = comPrazo(24);
+    await cancelarAgendamentoHandler(fora.client, ctx(AGENTE), { id: MEU_COMPROMISSO, reason: "paciente pediu" });
+    expect(fora.tabelas.calendar_appointments!.find((l) => l.id === MEU_COMPROMISSO)!.status).toBe("cancelled");
+
+    const dentro = comPrazo(72);
+    await cancelarAgendamentoHandler(dentro.client, ctx(PESSOA), { id: MEU_COMPROMISSO, reason: "recepção" });
+    expect(dentro.tabelas.calendar_appointments!.find((l) => l.id === MEU_COMPROMISSO)!.status).toBe("cancelled");
   });
 });
