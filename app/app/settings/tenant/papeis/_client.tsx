@@ -7,14 +7,19 @@
  *   - Papéis: lista, criar, editar, duplicar, desativar, excluir; a matriz por
  *     módulo marca as dependências junto (editar exige ver) e, ao desmarcar,
  *     tira também o que dependia daquilo;
- *   - Membros: um ou mais papéis por pessoa, com as permissões efetivas (união).
+ *   - Membros: busca por nome/e-mail (sem acento), filtro por papel, convites em
+ *     aberto na busca e atalho para convidar o e-mail que não existe; cada
+ *     pessoa com um ou mais papéis e as permissões efetivas (união) por módulo.
  * Tudo é conferido de novo no banco (regra de concessão, último Administrador).
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
@@ -183,7 +188,7 @@ function EditorDePapel({
   );
 }
 
-function AbaPapeis({ podeGerenciar }: { podeGerenciar: boolean }) {
+function AbaPapeis({ podeGerenciar, onVerMembros }: { podeGerenciar: boolean; onVerMembros: (papelId: string) => void }) {
   const t = useT();
   const qc = useQueryClient();
   const papeis = useQuery({
@@ -234,7 +239,15 @@ function AbaPapeis({ podeGerenciar }: { podeGerenciar: boolean }) {
                   {!p.ativo ? <span className="ml-2 text-xs text-text-muted">({t("desativado")})</span> : null}
                 </p>
                 <p className="text-xs text-text-muted">
-                  {p.permissoes.length} {t("permissões")} · {p.membros} {t("membros")}
+                  {p.permissoes.length} {t("permissões")} ·{" "}
+                  <button
+                    type="button"
+                    className="underline underline-offset-2 hover:text-text"
+                    data-testid="papel-ver-membros"
+                    onClick={() => onVerMembros(p.id)}
+                  >
+                    {p.membros} {t("membros")}
+                  </button>
                   {p.descricao ? ` · ${p.descricao}` : ""}
                 </p>
               </div>
@@ -276,7 +289,63 @@ function AbaPapeis({ podeGerenciar }: { podeGerenciar: boolean }) {
   );
 }
 
-function AbaMembros({ podeAtribuir }: { podeAtribuir: boolean }) {
+/** Busca sem diferenciar maiúsculas nem acentos ("Joao" acha "João"). */
+function normalizar(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+const NOME_DO_NIVEL: Record<string, string> = {
+  admin: "Administrador",
+  manager: "Gerente",
+  agent: "Atendente",
+  viewer: "Visualizador",
+};
+
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+interface Convite {
+  id: string;
+  email: string;
+  role: string;
+  status: "pendente" | "expirado" | "aceito" | "revogado";
+}
+
+function iniciais(texto: string): string {
+  const partes = texto.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
+  return ((partes[0]?.[0] ?? "") + (partes[1]?.[0] ?? "")).toUpperCase() || "?";
+}
+
+function PermissoesPorModulo({ chaves }: { chaves: string[] }) {
+  const t = useT();
+  if (chaves.length === 0) return <p className="text-xs text-text-muted">{t("Nenhuma")}</p>;
+  const grupos = new Map<string, string[]>();
+  for (const k of chaves) {
+    const m = CATALOGO_DE_PERMISSOES[k]?.modulo ?? k.split(".")[0] ?? k;
+    grupos.set(m, [...(grupos.get(m) ?? []), CATALOGO_DE_PERMISSOES[k]?.descricao ?? k]);
+  }
+  return (
+    <dl className="grid gap-2 text-xs sm:grid-cols-2">
+      {[...grupos].map(([m, itens]) => (
+        <div key={m}>
+          <dt className="font-medium">{t(MODULOS_DE_PERMISSAO[m as ModuloDePermissao] ?? m)}</dt>
+          <dd className="text-text-muted">{itens.map((d) => t(d)).join(" · ")}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function AbaMembros({
+  podeAtribuir,
+  podeConvidar,
+  filtroPapel,
+  onFiltroPapel,
+}: {
+  podeAtribuir: boolean;
+  podeConvidar: boolean;
+  filtroPapel: string;
+  onFiltroPapel: (v: string) => void;
+}) {
   const t = useT();
   const qc = useQueryClient();
   const papeis = useQuery({
@@ -289,84 +358,247 @@ function AbaMembros({ podeAtribuir }: { podeAtribuir: boolean }) {
   });
   const atribuicoes = useQuery({
     queryKey: ["clinic", "acesso", "membros"],
-    queryFn: async () => (await apiClient.get<{ data: { user_id: string; papeis: string[] }[] }>("/api/v1/clinic/acesso/membros")).data,
+    queryFn: async () =>
+      (await apiClient.get<{ data: { user_id: string; nivel_legado: string; papeis: string[] }[] }>("/api/v1/clinic/acesso/membros")).data,
   });
-  const [rascunho, setRascunho] = useState<Record<string, string[]>>({});
+  // Convites em aberto entram na busca: "já convidei esta pessoa?" tem resposta aqui.
+  const convites = useQuery({
+    queryKey: ["clinic", "acesso", "convites"],
+    queryFn: async () => (await apiClient.get<{ data: Convite[] }>("/api/v1/team/invites")).data,
+    retry: false,
+  });
+  const [busca, setBusca] = useState("");
+  const [abertoId, setAbertoId] = useState<string | null>(null);
+  const [rascunho, setRascunho] = useState<string[]>([]);
 
   const salvar = useMutation({
     mutationFn: ({ userId, ids }: { userId: string; ids: string[] }) =>
       apiClient.put(`/api/v1/clinic/acesso/membros/${userId}/papeis`, { papeis: ids }),
-    onSuccess: (_r, v) => {
-      setRascunho((r) => {
-        const n = { ...r };
-        delete n[v.userId];
-        return n;
-      });
+    onSuccess: () => {
+      setAbertoId(null);
       void qc.invalidateQueries({ queryKey: ["clinic", "acesso"] });
     },
     onError: showApiError,
   });
 
+  const porId = useMemo(() => new Map((papeis.data ?? []).map((p) => [p.id, p])), [papeis.data]);
+  const membros = useMemo(() => {
+    const doMembro = new Map((atribuicoes.data ?? []).map((a) => [a.user_id, a]));
+    return (equipe.data ?? [])
+      .filter((m) => !m.revoked_at)
+      .map((m) => ({
+        ...m,
+        rotulo: m.full_name ?? m.email ?? "",
+        papeis: doMembro.get(m.user_id)?.papeis ?? [],
+        nivel: doMembro.get(m.user_id)?.nivel_legado ?? null,
+      }))
+      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+  }, [equipe.data, atribuicoes.data]);
+
   if (papeis.isLoading || equipe.isLoading || atribuicoes.isLoading) return <p className="text-sm text-text-muted">{t("Carregando…")}</p>;
-  const ativos = (papeis.data ?? []).filter((p) => p.ativo);
-  const porId = new Map((papeis.data ?? []).map((p) => [p.id, p]));
-  const doMembro = new Map((atribuicoes.data ?? []).map((a) => [a.user_id, a.papeis]));
+
+  const termo = normalizar(busca);
+  const casaBusca = (...campos: (string | null | undefined)[]) => !termo || campos.some((c) => c && normalizar(c).includes(termo));
+  const visiveis = membros.filter(
+    (m) =>
+      casaBusca(m.full_name, m.email) &&
+      (filtroPapel === "todos" || (filtroPapel === "sem-papel" ? m.papeis.length === 0 : m.papeis.includes(filtroPapel))),
+  );
+  const emailsDeMembros = new Set(membros.map((m) => normalizar(m.email ?? "")));
+  const convitesAbertos = (convites.data ?? []).filter(
+    (c) => (c.status === "pendente" || c.status === "expirado") && !emailsDeMembros.has(normalizar(c.email)),
+  );
+  const convitesVisiveis = termo && filtroPapel === "todos" ? convitesAbertos.filter((c) => casaBusca(c.email)) : [];
+  const buscaEhEmail = EMAIL_VALIDO.test(busca.trim());
+  const emailJaExiste = emailsDeMembros.has(termo) || convitesAbertos.some((c) => normalizar(c.email) === termo);
+  const semPapel = membros.filter((m) => m.papeis.length === 0).length;
+
+  const alternar = (userId: string, atuais: string[]) => {
+    setAbertoId(abertoId === userId ? null : userId);
+    setRascunho(atuais);
+  };
 
   return (
-    <ul className="divide-y rounded-xl border">
-      {(equipe.data ?? [])
-        .filter((m) => !m.revoked_at)
-        .map((m) => {
-          const atuais = rascunho[m.user_id] ?? doMembro.get(m.user_id) ?? [];
-          const efetivas = [...new Set(atuais.flatMap((id) => (porId.get(id)?.ativo ? porId.get(id)!.permissoes : [])))].sort();
-          const mudou = rascunho[m.user_id] !== undefined;
-          return (
-            <li key={m.user_id} className="space-y-2 p-3" data-testid="membro-linha" data-user={m.user_id}>
-              <p className="font-medium">
-                {m.full_name ?? m.email ?? t("Membro")}
-                {m.email && m.full_name ? <span className="ml-2 text-xs text-text-muted">{m.email}</span> : null}
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {ativos.map((p) => (
-                  <label key={p.id} className="flex items-center gap-1 text-sm">
-                    <input
-                      type="checkbox"
-                      data-testid={`membro-papel-${p.nome}`}
-                      disabled={!podeAtribuir || salvar.isPending}
-                      checked={atuais.includes(p.id)}
-                      onChange={(e) =>
-                        setRascunho((r) => ({
-                          ...r,
-                          [m.user_id]: e.target.checked ? [...atuais, p.id] : atuais.filter((x) => x !== p.id),
-                        }))
-                      }
-                    />
-                    {p.nome}
-                  </label>
-                ))}
-              </div>
-              <details className="text-xs text-text-muted">
-                <summary>
-                  {t("Permissões efetivas")}: {efetivas.length}
-                </summary>
-                <p className="mt-1">{efetivas.map((k) => CATALOGO_DE_PERMISSOES[k]?.descricao ?? k).join(" · ") || t("Nenhuma")}</p>
-              </details>
-              {podeAtribuir && mudou ? (
-                <Button size="sm" data-testid="membro-salvar" disabled={salvar.isPending} onClick={() => salvar.mutate({ userId: m.user_id, ids: atuais })}>
-                  {t("Salvar papéis")}
-                </Button>
-              ) : null}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-56 flex-1">
+          <label htmlFor="membros-busca" className="block text-xs text-text-muted">
+            {t("Buscar colaborador")}
+          </label>
+          <Input
+            id="membros-busca"
+            data-testid="membros-busca"
+            type="search"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder={t("Nome ou e-mail")}
+            autoComplete="off"
+          />
+        </div>
+        <div>
+          <label htmlFor="membros-filtro-papel" className="block text-xs text-text-muted">
+            {t("Papel")}
+          </label>
+          <select
+            id="membros-filtro-papel"
+            data-testid="membros-filtro-papel"
+            className="h-9 rounded-md border bg-transparent px-2 text-sm"
+            value={filtroPapel}
+            onChange={(e) => onFiltroPapel(e.target.value)}
+          >
+            <option value="todos">{t("Todos os papéis")}</option>
+            <option value="sem-papel">{t("Sem papel")}</option>
+            {(papeis.data ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.ativo ? p.nome : `${p.nome} (${t("desativado")})`}
+              </option>
+            ))}
+          </select>
+        </div>
+        {podeConvidar ? (
+          <Button asChild variant="outline">
+            <Link href="/app/team/invite" data-testid="membros-convidar">
+              {t("Convidar membro")}
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+
+      <p className="text-xs text-text-muted" data-testid="membros-contagem">
+        {visiveis.length} {t("de")} {membros.length} {t("membros")}
+        {semPapel > 0 ? ` · ${semPapel} ${t("sem papel")}` : ""}
+        {convitesAbertos.length > 0 ? ` · ${convitesAbertos.length} ${t("convites em aberto")}` : ""}
+      </p>
+
+      {visiveis.length === 0 && convitesVisiveis.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-4 text-sm" data-testid="membros-vazio">
+          <p>{termo ? t("Nenhum colaborador encontrado com esta busca.") : t("Nenhum membro com este papel.")}</p>
+          {buscaEhEmail && !emailJaExiste ? (
+            podeConvidar ? (
+              <Button asChild size="sm" className="mt-2">
+                <Link href={`/app/team/invite?email=${encodeURIComponent(busca.trim())}`} data-testid="membros-convidar-email">
+                  {t("Convidar")} {busca.trim()}
+                </Link>
+              </Button>
+            ) : (
+              <p className="mt-1 text-text-muted">{t("Peça a quem administra a equipe para convidar esta pessoa.")}</p>
+            )
+          ) : null}
+        </div>
+      ) : (
+        <ul className="divide-y rounded-xl border">
+          {visiveis.map((m) => {
+            const aberto = abertoId === m.user_id;
+            const atuais = aberto ? rascunho : m.papeis;
+            const efetivas = [...new Set(atuais.flatMap((id) => (porId.get(id)?.ativo ? porId.get(id)!.permissoes : [])))].sort();
+            const mudou = aberto && [...rascunho].sort().join() !== [...m.papeis].sort().join();
+            return (
+              <li key={m.user_id} className="p-3" data-testid="membro-linha" data-user={m.user_id}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                    {iniciais(m.rotulo)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{m.full_name ?? m.email ?? t("Membro")}</p>
+                    {m.email && m.full_name ? <p className="truncate text-xs text-text-muted">{m.email}</p> : null}
+                  </div>
+                  <div className="flex flex-wrap gap-1" data-testid="membro-papeis">
+                    {m.papeis.length === 0 ? (
+                      <Badge variant="warning">{t("Sem papel")}</Badge>
+                    ) : (
+                      m.papeis.map((id) => (
+                        <Badge key={id} variant={porId.get(id)?.ativo ? "default" : "neutral"}>
+                          {porId.get(id)?.nome ?? "?"}
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                  {m.nivel ? (
+                    <span className="text-xs text-text-muted" title={t("Nível usado pelas telas que ainda não perguntam a permissão")}>
+                      {t("Nível")}: {t(NOME_DO_NIVEL[m.nivel] ?? m.nivel)}
+                    </span>
+                  ) : null}
+                  <Button size="sm" variant="outline" data-testid="membro-editar" aria-expanded={aberto} onClick={() => alternar(m.user_id, m.papeis)}>
+                    {aberto ? t("Fechar") : podeAtribuir ? t("Alterar papéis") : t("Ver permissões")}
+                  </Button>
+                </div>
+
+                {aberto ? (
+                  <div className="mt-3 space-y-3 rounded-lg bg-muted p-3" data-testid="membro-editor">
+                    <fieldset>
+                      <legend className="mb-1 text-xs font-medium">{t("Papéis deste membro")}</legend>
+                      <div className="flex flex-wrap gap-3">
+                        {(papeis.data ?? [])
+                          .filter((p) => p.ativo || rascunho.includes(p.id))
+                          .map((p) => (
+                            <label key={p.id} className="flex items-center gap-1 text-sm">
+                              <input
+                                type="checkbox"
+                                data-testid={`membro-papel-${p.nome}`}
+                                disabled={!podeAtribuir || salvar.isPending}
+                                checked={rascunho.includes(p.id)}
+                                onChange={(e) => setRascunho((r) => (e.target.checked ? [...r, p.id] : r.filter((x) => x !== p.id)))}
+                              />
+                              {p.nome}
+                            </label>
+                          ))}
+                      </div>
+                    </fieldset>
+                    <div>
+                      <p className="mb-1 text-xs font-medium">
+                        {t("Permissões efetivas")}: {efetivas.length}
+                      </p>
+                      <PermissoesPorModulo chaves={efetivas} />
+                    </div>
+                    {podeAtribuir ? (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          data-testid="membro-salvar"
+                          disabled={!mudou || salvar.isPending}
+                          onClick={() => salvar.mutate({ userId: m.user_id, ids: rascunho })}
+                        >
+                          {t("Salvar papéis")}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setAbertoId(null)}>
+                          {t("Cancelar")}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+          {convitesVisiveis.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center gap-3 p-3" data-testid="convite-linha" data-email={c.email}>
+              <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed text-xs">
+                {iniciais(c.email)}
+              </span>
+              <p className="min-w-0 flex-1 truncate">{c.email}</p>
+              <Badge variant={c.status === "pendente" ? "info" : "warning"}>
+                {c.status === "pendente" ? t("Convite pendente") : t("Convite expirado")}
+              </Badge>
+              <span className="text-xs text-text-muted">
+                {t("Entra como")} {t(NOME_DO_NIVEL[c.role] ?? c.role)}
+              </span>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/app/team">{t("Ver na Equipe")}</Link>
+              </Button>
             </li>
-          );
-        })}
-    </ul>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
 export function PapeisDeAcesso() {
   const t = useT();
   const qc = useQueryClient();
-  const { can, modoLigado } = usePermissoes();
+  const { can, modoLigado, carregando } = usePermissoes();
+  const [aba, setAba] = useState("papeis");
+  const [filtroPapel, setFiltroPapel] = useState("todos");
 
   const alternarModo = useMutation({
     mutationFn: (ligar: boolean) => apiClient.patch("/api/v1/clinic/config", { acesso_por_permissoes: ligar }),
@@ -382,7 +614,13 @@ export function PapeisDeAcesso() {
       <section
         className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${modoLigado ? "" : "bg-muted"}`}
         data-testid="acesso-modo"
+        data-estado={carregando ? "carregando" : modoLigado ? "ligado" : "desligado"}
       >
+        {/* Sem o estado ainda, não diz nada: "papel de sempre" piscando antes do "ligado" engana. */}
+        {carregando ? (
+          <p className="text-sm text-text-muted">{t("Carregando…")}</p>
+        ) : (
+        <>
         <div>
           <p className="font-medium">{modoLigado ? t("Acesso pelos papéis desta tela") : t("Acesso pelo papel de sempre")}</p>
           <p className="text-sm text-text-muted">
@@ -401,18 +639,31 @@ export function PapeisDeAcesso() {
             {modoLigado ? t("Desligar") : t("Ligar")}
           </Button>
         ) : null}
+        </>
+        )}
       </section>
 
-      <Tabs defaultValue="papeis">
+      <Tabs value={aba} onValueChange={setAba}>
         <TabsList>
           <TabsTrigger value="papeis">{t("Papéis")}</TabsTrigger>
           <TabsTrigger value="membros">{t("Membros")}</TabsTrigger>
         </TabsList>
         <TabsContent value="papeis">
-          <AbaPapeis podeGerenciar={can("papeis.gerenciar")} />
+          <AbaPapeis
+            podeGerenciar={can("papeis.gerenciar")}
+            onVerMembros={(id) => {
+              setFiltroPapel(id);
+              setAba("membros");
+            }}
+          />
         </TabsContent>
         <TabsContent value="membros">
-          <AbaMembros podeAtribuir={can("equipe.atribuir_papeis")} />
+          <AbaMembros
+            podeAtribuir={can("equipe.atribuir_papeis")}
+            podeConvidar={can("equipe.convidar")}
+            filtroPapel={filtroPapel}
+            onFiltroPapel={setFiltroPapel}
+          />
         </TabsContent>
       </Tabs>
     </div>

@@ -10,7 +10,7 @@
  *      efetivas são exatamente as do papel;
  *   5. REVOGAÇÃO: o admin (outra sessão) tira "Bloquear horários" do papel e a
  *      próxima requisição do usuário já recebe 403 — nada no JWT, sem cache;
- *   6. desfaz na ordem certa (papel de volta, modo desligado, papel excluído) —
+ *   6. desfaz na ordem certa (papel de volta, modo como estava, papel excluído) —
  *      o nível legado do usuário volta a viewer;
  *   7. o papel Administrador não pode ser excluído (antitravamento).
  */
@@ -30,6 +30,9 @@ interface Creds {
 }
 const creds = JSON.parse(fs.readFileSync(path.join(RAIZ, ".e2e-creds.json"), "utf8")) as Creds;
 
+// Os dois testes mexem nos papéis do MESMO usuário: um de cada vez.
+test.describe.configure({ mode: "serial" });
+
 async function foto(page: Page, nome: string): Promise<void> {
   fs.mkdirSync(EVIDENCIA, { recursive: true });
   await page.screenshot({ path: path.join(EVIDENCIA, `${nome}.png`), fullPage: true });
@@ -44,15 +47,17 @@ async function entrarComo(page: Page, email: string): Promise<void> {
   await page.waitForURL(/\/app(?:\/|$)/, { timeout: 60_000 });
 }
 
-async function modo(page: Page, ligar: boolean): Promise<void> {
+/** Liga/desliga o modo e devolve como ele ESTAVA (para a limpeza restaurar). */
+async function modo(page: Page, ligar: boolean): Promise<boolean> {
   await page.goto("/app/settings/tenant/papeis");
   const bloco = page.getByRole("main").getByTestId("acesso-modo");
-  await expect(bloco).toBeVisible({ timeout: 20_000 });
-  const ligado = await bloco.getByText("Acesso pelos papéis desta tela").isVisible();
-  if (ligado !== ligar) {
+  await expect(bloco).toHaveAttribute("data-estado", /^(ligado|desligado)$/, { timeout: 20_000 });
+  const estava = (await bloco.getAttribute("data-estado")) === "ligado";
+  if (estava !== ligar) {
     await bloco.getByTestId("acesso-modo-alternar").click();
-    await expect(bloco.getByText(ligar ? "Acesso pelos papéis desta tela" : "Acesso pelo papel de sempre")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("main").getByTestId("acesso-modo")).toHaveAttribute("data-estado", ligar ? "ligado" : "desligado", { timeout: 20_000 });
   }
+  return estava;
 }
 
 async function papeisDoMembro(page: Page, userId: string, marcar: string[], desmarcar: string[]): Promise<void> {
@@ -60,6 +65,7 @@ async function papeisDoMembro(page: Page, userId: string, marcar: string[], desm
   await page.getByRole("tab", { name: "Membros" }).click();
   const linha = page.locator(`[data-testid="membro-linha"][data-user="${userId}"]`);
   await expect(linha).toBeVisible({ timeout: 20_000 });
+  await linha.getByTestId("membro-editar").click();
   for (const n of desmarcar) await linha.getByTestId(`membro-papel-${n}`).uncheck();
   for (const n of marcar) await linha.getByTestId(`membro-papel-${n}`).check();
   const salvou = page.waitForResponse((r) => r.url().includes(`/api/v1/clinic/acesso/membros/${userId}/papeis`) && r.request().method() === "PUT");
@@ -84,7 +90,8 @@ test("papéis de acesso: Recepcionista criada pela tela vale para o usuário —
   if (!visualizador?.id) throw new Error(".e2e-creds.json sem viewer");
   const nome = `Recepcionista E2E${Date.now().toString().slice(-6)}`;
   await loginComoAdmin(page, creds as unknown as CredsE2E);
-  await modo(page, false);
+  // O ambiente local pode estar com o modo ligado por quem testa à mão: no fim, volta como estava.
+  const modoOriginal = await modo(page, false);
 
   // ── 1. a porta pelo hub de Configurações ────────────────────────────────
   await page.goto("/app/settings");
@@ -152,7 +159,7 @@ test("papéis de acesso: Recepcionista criada pela tela vale para o usuário —
     // ── 6. desfaz na ordem certa ─────────────────────────────────────────
     await loginComoAdmin(page, creds as unknown as CredsE2E);
     await papeisDoMembro(page, visualizador.id, ["Visualizador"], [nome]);
-    await modo(page, false);
+    await modo(page, modoOriginal);
     await page.goto("/app/settings/tenant/papeis");
     const excluiu = page.waitForResponse((r) => r.url().includes("/api/v1/clinic/acesso/papeis/") && r.request().method() === "DELETE");
     await page.locator(`[data-testid="papel-linha"][data-nome="${nome}"]`).getByTestId("papel-excluir").click();
@@ -174,4 +181,41 @@ test("papéis de acesso: Recepcionista criada pela tela vale para o usuário —
   const recusa = await page.request.delete(`/api/v1/clinic/acesso/papeis/${administrador.id}`);
   expect(recusa.status()).toBe(422);
   expect(((await recusa.json()) as { error: { code: string } }).error.code).toBe("acesso_papel_de_sistema");
+});
+
+test("papéis de acesso: achar o colaborador, ver o papel dele e convidar quem não existe — pela tela", async ({ page }) => {
+  test.setTimeout(180_000);
+  const visualizador = creds.users.viewer;
+  const atendente = creds.users.agent;
+  if (!visualizador?.id || !atendente?.id) throw new Error(".e2e-creds.json sem viewer/agent");
+  await loginComoAdmin(page, creds as unknown as CredsE2E);
+  await page.goto("/app/settings/tenant/papeis");
+
+  // ── da aba Papéis: "N membros" do Visualizador abre a lista já filtrada ──
+  await page.locator('[data-testid="papel-linha"][data-nome="Visualizador"]').getByTestId("papel-ver-membros").click();
+  const main = page.getByRole("main");
+  await expect(main.getByTestId("membros-filtro-papel")).not.toHaveValue("todos");
+  await expect(main.locator(`[data-testid="membro-linha"][data-user="${visualizador.id}"]`)).toBeVisible({ timeout: 20_000 });
+  await expect(main.locator(`[data-testid="membro-linha"][data-user="${atendente.id}"]`)).toHaveCount(0);
+  await expect(main.locator(`[data-testid="membro-linha"][data-user="${visualizador.id}"]`).getByTestId("membro-papeis")).toContainText("Visualizador");
+  await foto(page, "05-membros-filtrados-por-papel");
+
+  // ── busca por e-mail, sem diferenciar maiúsculas ─────────────────────────
+  await main.getByTestId("membros-filtro-papel").selectOption("todos");
+  await main.getByTestId("membros-busca").fill(visualizador.email.toUpperCase());
+  await expect(main.getByTestId("membro-linha")).toHaveCount(1);
+  await expect(main.getByTestId("membros-contagem")).toContainText("1 de");
+  await main.getByTestId("membro-editar").click();
+  await expect(main.getByTestId("membro-editor")).toContainText("Permissões efetivas");
+  await expect(main.getByTestId("membro-salvar")).toBeDisabled();
+  await foto(page, "06-membro-encontrado");
+
+  // ── e-mail que não existe: convidar com o e-mail já preenchido ───────────
+  const novo = `novo-colaborador-${Date.now()}@exemplo.test`;
+  await main.getByTestId("membros-busca").fill(novo);
+  await expect(main.getByTestId("membros-vazio")).toBeVisible();
+  await foto(page, "07-email-nao-encontrado");
+  await main.getByTestId("membros-convidar-email").click();
+  await expect(page).toHaveURL(/\/app\/team\/invite\?email=/);
+  await expect(page.getByRole("main").locator("textarea").first()).toHaveValue(novo);
 });
