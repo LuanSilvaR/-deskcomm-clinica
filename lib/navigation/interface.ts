@@ -73,9 +73,14 @@ export function permitidos(
   platform: boolean,
   role: Role | null,
   modulos?: readonly ModuloOpcional[],
+  /** FORK clinic (ACL-008): as permissões efetivas, só com o modo por permissões ligado. */
+  permissoes?: readonly string[],
 ): NavMetadata[] {
   return (NAV_CATALOG as readonly NavMetadata[]).filter(
-    (d) => canSee(d, platform, role) && (!modulos || !d.modulo || modulos.includes(d.modulo)),
+    (d) =>
+      canSee(d, platform, role) &&
+      (!modulos || !d.modulo || modulos.includes(d.modulo)) &&
+      (platform || !permissoes || !d.permissao || permissoes.includes(d.permissao)),
   );
 }
 /** Leitura tolera versões antigas/removidas sem lançar no layout. */
@@ -104,9 +109,10 @@ export function destinosDaInterface(
   platform: boolean,
   role: Role | null,
   modulos?: readonly ModuloOpcional[],
+  permissoes?: readonly string[],
 ): NavMetadata[] {
   const { settings } = lerInterface(raw);
-  const allowed = permitidos(platform, role, modulos);
+  const allowed = permitidos(platform, role, modulos, permissoes);
   const chosen =
     settings.destinos ?? (settings.preset === "simplificada" ? SIMPLIFICADA : undefined);
   return allowed.filter(

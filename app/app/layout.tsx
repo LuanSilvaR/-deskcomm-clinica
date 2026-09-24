@@ -15,6 +15,8 @@ import { resolverMarcaDaOrganizacao } from "@/lib/branding/organizacao";
 import { env } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { modulosLigados } from "@/lib/instalacao/modulos";
+import { permissoesParaOMenu } from "@/lib/clinic/acesso/menu";
+import { acessoPorPermissoesLigado } from "@/lib/clinic/acesso/modo";
 import {
   ImpersonateBanner,
 } from "@/components/app/ImpersonateBanner";
@@ -123,6 +125,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       // Mesma linha de `settings` já lida acima — nenhuma consulta a mais.
       cliente_pela_agenda: clientePelaAgendaLigado(orgRow?.settings),
       modulos_ligados: modulos,
+      // FORK clinic (ACL-008): só com o modo por permissões ligado.
+      ...(acessoPorPermissoesLigado(orgRow?.settings) ? { permissoes: await permissoesParaOMenu(activeOrg.orgId) } : {}),
     };
 
     // `marcaDaInstalacao()` é memoizada por TTL no PROCESSO (`lib/branding/

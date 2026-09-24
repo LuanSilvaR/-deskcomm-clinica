@@ -59,6 +59,21 @@ export async function changeMemberRole(
     return fail("state_conflict", t("Membro está revogado."), 409, { requestId });
   }
 
+  // FORK clinic (ACL, migration 9012): com o modo por permissões ligado, o papel
+  // legado é CALCULADO dos papéis de acesso — trocá-lo aqui seria desfeito pelo
+  // banco em silêncio. A recusa diz onde mudar.
+  {
+    const { data: modoLigado } = await supabase.rpc("fn_acesso_modo_ligado", { p_org: activeOrg.orgId });
+    if (modoLigado === true) {
+      return fail(
+        "state_conflict",
+        t("O acesso desta empresa é definido pelos papéis de acesso. Altere em Configurações › Papéis de acesso."),
+        409,
+        { requestId },
+      );
+    }
+  }
+
   if (target.role === "admin" && input.role !== "admin") {
     const { count, error: countErr } = await supabase
       .from("user_organizations")
