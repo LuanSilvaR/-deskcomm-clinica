@@ -43,6 +43,12 @@ export interface NavMetadata {
   minRole?: Role;
   /** Ausente = só no hub. `true` = uso diário, sobe para o sidebar. */
   sidebar?: boolean;
+  /**
+   * FORK clinic (ACL-008): a permissão que abre esta porta. Só vale com o modo
+   * por permissões ligado (o menu recebe as permissões efetivas); desligado,
+   * manda o `minRole` de sempre.
+   */
+  permissao?: string;
   healthDot?: boolean;
   /**
    * A porta de um MÓDULO OPCIONAL da instalação (`lib/instalacao/modulos.ts`).
@@ -135,6 +141,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/inbox",
     label: "Inbox",
+    permissao: "conversas.ver",
     description: "As conversas de WhatsApp, com você e a IA atendendo lado a lado.",
     icon: "Inbox",
     group: "atendimento",
@@ -143,6 +150,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/radar",
     label: "Radar",
+    permissao: "conversas.ver",
     description: "Quem esfriou e ainda está aberto — o que corre risco de morrer sem resposta.",
     icon: "ClockCountdown",
     group: "atendimento",
@@ -163,6 +171,7 @@ export const NAV_CATALOG = [
     // aponta para `/app/team?aba=atendimento`.
     href: "/app/agenda",
     label: "Agenda",
+    permissao: "agenda.ver",
     description: "O que está marcado, com quem, e quem atende — seu e da equipe.",
     icon: "CalendarBlank",
     group: "atendimento",
@@ -173,6 +182,7 @@ export const NAV_CATALOG = [
     // (teto do menu lateral); porta diária: link no cabeçalho da Recepção.
     href: "/app/agenda/faltas",
     label: "Faltas",
+    permissao: "relatorios.ver",
     description: "Pacientes que faltaram 2 vezes ou mais nos últimos 12 meses, com o próximo horário marcado.",
     icon: "CalendarBlank",
     group: "atendimento",
@@ -183,6 +193,7 @@ export const NAV_CATALOG = [
     // a porta diária é o botão "Dia por profissional" no cabeçalho da Agenda.
     href: "/app/agenda/profissionais",
     label: "Dia por profissional",
+    permissao: "agenda.ver",
     description: "Quem atende no dia, lado a lado: jornada, bloqueios e compromissos de cada profissional.",
     icon: "CalendarBlank",
     group: "atendimento",
@@ -196,6 +207,7 @@ export const NAV_CATALOG = [
     // "Painel da recepção" no cabeçalho da Agenda; aqui fica o hub de Atendimento.
     href: "/app/recepcao",
     label: "Recepção",
+    permissao: "recepcao.ver_painel",
     description: "Quem chegou, quem está pronto para ser chamado e quem está em atendimento, em tempo real.",
     icon: "ClipboardText",
     group: "atendimento",
@@ -206,6 +218,7 @@ export const NAV_CATALOG = [
     // onde é o termo técnico correto.
     href: "/app/templates",
     label: "Respostas rápidas",
+    permissao: "conversas.ver",
     description: "Scripts salvos para responder mais rápido, seus ou da equipe.",
     icon: "FileText",
     group: "atendimento",
@@ -226,6 +239,7 @@ export const NAV_CATALOG = [
     // sistema; "funil de vendas" é palavra de quem vende.
     href: "/app/kanban",
     label: "Funis",
+    permissao: "crm.ver",
     description: "Seus funis de venda — clique em um para abrir o quadro de clientes.",
     icon: "Kanban",
     group: "crm",
@@ -238,6 +252,7 @@ export const NAV_CATALOG = [
     // herda, e só sabe deixar mais devagar.
     href: "/app/campaigns",
     label: "Campanhas",
+    permissao: "campanhas.ver",
     description: "Fale com uma lista de pacientes que você escolhe, no ritmo do número.",
     icon: "Megaphone",
     group: "crm",
@@ -249,6 +264,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/contacts",
     label: "Pacientes",
+    permissao: "pacientes.ver",
     description: "As pessoas do outro lado da conversa e seu histórico.",
     icon: "Users",
     group: "crm",
@@ -263,6 +279,7 @@ export const NAV_CATALOG = [
     // pela rota, com `requireRole("agent")`.
     href: "/app/tasks",
     label: "Tarefas",
+    permissao: "tarefas.ver",
     description: "O que ficou combinado, com prazo — e o que já venceu sem ninguém fazer.",
     icon: "ListChecks",
     group: "crm",
@@ -318,6 +335,7 @@ export const NAV_CATALOG = [
     // vender — abre para cadastrar o que vende.
     href: "/app/products",
     label: "Produtos",
+    permissao: "produtos.ver",
     description: "O catálogo da loja, com o preço que o atendente de IA responde.",
     icon: "Storefront",
     group: "crm",
@@ -341,6 +359,7 @@ export const NAV_CATALOG = [
     // eles para sempre.
     href: "/app/settings/tenant/agenda",
     label: "Tipos de agendamento",
+    permissao: "agenda.configurar",
     description: "O que se pode marcar, quanto dura, onde acontece e quem atende.",
     icon: "CalendarBlank",
     group: "organizacao",
@@ -354,11 +373,23 @@ export const NAV_CATALOG = [
     // na navegação" — a porta existia, era outra.
   },
   {
+    // FORK clinic (ACL-009): os papéis de acesso da empresa e quem tem cada um.
+    href: "/app/settings/tenant/papeis",
+    label: "Papéis de acesso",
+    permissao: "papeis.ver",
+    description: "Quem pode fazer o quê: papéis da empresa, permissões e os papéis de cada membro.",
+    icon: "ShieldCheck",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "admin",
+  },
+  {
     // FORK clinic (migration 9001): fichas dos profissionais, especialidades,
     // o que cada atendimento exige e bloqueios de agenda. Mesmo grupo e seção
     // de "Tipos de agendamento", que é onde a clínica procura.
     href: "/app/settings/tenant/profissionais",
     label: "Profissionais e especialidades",
+    permissao: "profissionais.ver",
     description: "Quem atende, o que cada um faz, quando atende e quando a agenda fica fechada.",
     icon: "UsersThree",
     group: "organizacao",
@@ -373,6 +404,7 @@ export const NAV_CATALOG = [
     // quem lança; o que a RLS impede é ele escrever.
     href: "/app/comandas",
     label: "Comandas",
+    permissao: "financeiro.ver",
     description: "O que foi feito, por quem, e quanto o cliente paga.",
     icon: "Receipt",
     group: "crm",
@@ -400,6 +432,7 @@ export const NAV_CATALOG = [
     // tem onde depositar.
     href: "/app/settings/tenant/financeiro",
     label: "Financeiro",
+    permissao: "financeiro.configurar",
     description: "Contas, formas de pagamento e como cada lançamento é classificado.",
     icon: "ChartBar",
     group: "organizacao",
@@ -421,6 +454,7 @@ export const NAV_CATALOG = [
     // que ele significa.
     href: "/app/settings/tenant/pipelines",
     label: "Etapas do funil",
+    permissao: "crm.configurar_funis",
     description: "As colunas de cada funil, o vocabulário do negócio e os motivos de perda.",
     icon: "Funnel",
     group: "crm",
@@ -442,6 +476,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/ai/agents",
     label: "Agentes",
+    permissao: "ia.ver",
     description: "Quem atende por você: instruções, modelo, ferramentas e publicação.",
     icon: "Robot",
     group: "ia",
@@ -452,6 +487,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/ai/followups",
     label: "Follow-ups",
+    permissao: "ia.ver",
     description: "Como o agente retoma uma conversa que esfriou, para nenhuma morrer no silêncio.",
     icon: "FlowArrow",
     group: "ia",
@@ -462,6 +498,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/ai/routers",
     label: "Roteadores",
+    permissao: "ia.ver",
     description: "Qual agente pega qual conversa, e quando o humano assume.",
     icon: "Signpost",
     group: "ia",
@@ -472,6 +509,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/ai/credentials",
     label: "Credenciais",
+    permissao: "ia.administrar",
     description: "A chave do provedor de IA que os agentes usam para pensar.",
     icon: "Key",
     // VOLTOU para "ia"/"Montar o agente" na triagem, e a razão de quem tinha
@@ -490,6 +528,7 @@ export const NAV_CATALOG = [
     // havia onde responder "quem usa IA aqui, e com qual chave?".
     href: "/app/ai/providers",
     label: "Provedores",
+    permissao: "ia.administrar",
     description: "Qual inteligência atende cada parte do sistema — e o que acontece se ela falhar.",
     icon: "Plugs",
     group: "ia",
@@ -504,6 +543,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/ai/knowledge/sources",
     label: "Conhecimento",
+    permissao: "ia.ver",
     description: "Os materiais que o agente consulta antes de responder sobre o seu negócio.",
     icon: "BookOpen",
     group: "ia",
@@ -513,6 +553,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/ai/memory",
     label: "Memória",
+    permissao: "ia.ver",
     description: "O que o agente já aprendeu sobre a sua operação e reaproveita.",
     icon: "Brain",
     group: "ia",
@@ -522,6 +563,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/ai/skills",
     label: "Skills",
+    permissao: "ia.ver",
     description: "As ações que o agente pode executar sozinho durante o atendimento.",
     icon: "PuzzlePiece",
     group: "ia",
@@ -531,6 +573,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/ai/cases",
     label: "Casos",
+    permissao: "ia.ver",
     description: "Os atendimentos que o agente conduziu, do início ao desfecho.",
     icon: "ClipboardText",
     group: "ia",
@@ -540,6 +583,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/ai/inbox",
     label: "Alertas",
+    permissao: "ia.ver",
     description: "O que a IA encontrou e precisa de uma decisão sua.",
     icon: "Flag",
     group: "ia",
@@ -553,6 +597,7 @@ export const NAV_CATALOG = [
     // programa. O rótulo nomeia o CANAL e o destinatário.
     href: "/app/ai/cases/avisos",
     label: "Aviso no WhatsApp",
+    permissao: "ia.ver",
     description: "Receber no WhatsApp quando o assistente abrir um caso.",
     icon: "PaperPlaneTilt",
     group: "ia",
@@ -569,6 +614,7 @@ export const NAV_CATALOG = [
     // melhoria do agente e a fila só era vista por quem soubesse a URL.
     href: "/app/ai/proposals",
     label: "Propostas",
+    permissao: "ia.ver",
     description: "Melhorias que a IA sugere para si mesma, esperando sua decisão.",
     icon: "Lightbulb",
     group: "ia",
@@ -581,6 +627,7 @@ export const NAV_CATALOG = [
     // — llm_calls só registrava sucesso.
     href: "/app/ai/runs",
     label: "Execuções",
+    permissao: "ia.ver",
     description: "O que a IA fez — e, quando falhou, o que aconteceu e o que fazer.",
     icon: "ListChecks",
     group: "ia",
@@ -592,6 +639,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/ai/usage",
     label: "Uso e orçamento",
+    permissao: "ia.ver",
     description: "Quanto a IA consumiu e qual é o teto de gasto do mês.",
     icon: "Gauge",
     group: "ia",
@@ -603,6 +651,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/connections",
     label: "Conexões",
+    permissao: "canais.gerenciar",
     // Cobre os DOIS caminhos desde o PR #105: número por QR e canal oficial da
     // Meta (com os templates dele), cada um numa aba. A descrição cita "oficial"
     // e "Meta" de propósito — é por esses nomes que se procura no ⌘K, e a busca
@@ -619,6 +668,7 @@ export const NAV_CATALOG = [
     // Não tinha link nenhum no app inteiro: só se chegava digitando a URL.
     href: "/app/integrations/nuvemshop",
     label: "Nuvemshop",
+    permissao: "configuracoes.tokens_e_integracoes",
     description: "Conecte a loja para trazer pedidos e clientes para dentro do CRM.",
     icon: "Storefront",
     group: "canais",
@@ -642,6 +692,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/webhooks",
     label: "Webhooks",
+    permissao: "configuracoes.tokens_e_integracoes",
     description: "Avise outros sistemas quando algo acontecer aqui dentro.",
     icon: "WebhooksLogo",
     group: "canais",
@@ -678,6 +729,7 @@ export const NAV_CATALOG = [
     // toda hora.
     href: "/app/faturamento",
     label: "Faturamento",
+    permissao: "financeiro.ver",
     description: "Quanto entrou, de que forma, e quanto cada pessoa tem a receber.",
     icon: "ChartBar",
     group: "analise",
@@ -687,6 +739,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/metrics",
     label: "Desempenho",
+    permissao: "relatorios.ver",
     description: "Funil e performance por atendente nos últimos 30 dias.",
     icon: "ChartBar",
     group: "analise",
@@ -699,6 +752,7 @@ export const NAV_CATALOG = [
     // diária também na tela de Faltas.
     href: "/app/agenda/indicadores",
     label: "Indicadores da agenda",
+    permissao: "relatorios.gerencial",
     description: "Faltas, ocupação de cada profissional, espera na recepção e confirmação pelo WhatsApp.",
     icon: "ChartBar",
     group: "analise",
@@ -740,6 +794,7 @@ export const NAV_CATALOG = [
     // Observabilidade, não configuração: por isso não fica junto dos agentes.
     href: "/app/ai/evolution",
     label: "Evolução da IA",
+    permissao: "ia.ver",
     description: "Se o agente está melhorando, onde ele erra e o que falta ensinar.",
     icon: "ChartLineUp",
     group: "analise",
@@ -749,6 +804,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/audit",
     label: "Audit Log",
+    permissao: "auditoria.ver",
     description: "Quem fez o quê, quando — o histórico que não se apaga.",
     icon: "ClockCounterClockwise",
     group: "analise",
@@ -784,6 +840,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/team",
     label: "Equipe",
+    permissao: "equipe.ver",
     description: "Quem trabalha aqui, com qual papel e quanta conversa cada um aguenta.",
     icon: "UsersThree",
     group: "organizacao",
@@ -795,6 +852,7 @@ export const NAV_CATALOG = [
     // dava para ligar com UPDATE à mão no banco.
     href: "/app/settings/atendimento",
     label: "Distribuição de atendimento",
+    permissao: "configuracoes.gerenciar",
     description: "Quem recebe cada cliente novo, e o que cada atendente enxerga.",
     icon: "UsersThree",
     group: "organizacao",
@@ -815,6 +873,7 @@ export const NAV_CATALOG = [
     // alcance da operação é ao lado do de "Distribuição de atendimento".
     href: "/app/settings/tags",
     label: "Tags",
+    permissao: "configuracoes.gerenciar",
     description:
       "O vocabulário de etiquetas da empresa: onde cada uma é usada e como renomear, juntar ou excluir.",
     icon: "Tag",
@@ -825,6 +884,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/settings/tenant",
     label: "Organização",
+    permissao: "configuracoes.ver",
     description: "Dados da empresa, retenção de dados e encarregado de LGPD.",
     icon: "Buildings",
     group: "organizacao",
@@ -839,6 +899,7 @@ export const NAV_CATALOG = [
     // por qualquer transporte). Ver `lib/plataformas-de-anuncio/types.ts`.
     href: "/app/settings/conversoes",
     label: "Conversões",
+    permissao: "configuracoes.gerenciar",
     description:
       "Devolver ao anúncio as vendas que ele trouxe, e marcar a origem de quem chega pelo site.",
     icon: "ChartLineUp",
@@ -871,6 +932,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/settings/marca",
     label: "Marca",
+    permissao: "configuracoes.gerenciar",
     description: "O nome e a cor que sua empresa mostra dentro do sistema.",
     icon: "Palette",
     group: "organizacao",
@@ -895,6 +957,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/lgpd/requests",
     label: "LGPD",
+    permissao: "lgpd.ver",
     description: "Pedidos de exportação e exclusão de dados feitos por clientes.",
     icon: "ScalesSimple",
     group: "organizacao",
@@ -904,6 +967,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/settings/api-tokens",
     label: "API Tokens",
+    permissao: "configuracoes.tokens_e_integracoes",
     description: "Chaves para outro sistema conversar com o seu CRM.",
     icon: "Lock",
     group: "organizacao",
@@ -922,6 +986,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/extensions",
     label: "Extensões",
+    permissao: "extensoes.ver",
     description:
       "Guias instalados para orientar o trabalho no CRM, com permissões e estado visíveis.",
     icon: "PuzzlePiece",
@@ -937,6 +1002,7 @@ export const NAV_CATALOG = [
     // atendente exatamente a fonte que responde o que o cliente pergunta.
     href: "/app/integracao-dados",
     label: "Dados externos",
+    permissao: "configuracoes.tokens_e_integracoes",
     description:
       "Conecte um banco de dados de outro sistema para o agente consultar em tempo real.",
     icon: "PlugsConnected",

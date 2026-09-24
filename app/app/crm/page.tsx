@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { NavHub } from "@/components/shell/NavHub";
+import { permissoesParaOMenu } from "@/lib/clinic/acesso/menu";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { loadCrmExtensions } from "@/lib/extensions/service";
 import { logger } from "@/lib/logger";
@@ -54,6 +55,7 @@ export default async function CrmHubPage() {
       isPlatformAdmin={user.is_platform_admin && !user.support}
       role={activeOrg?.role ?? null}
       interfaceSettings={activeOrg?.interface_settings}
+      permissoes={await permissoesParaOMenu(activeOrg?.orgId)}
       title={traduzir("CRM", idioma)}
       subtitle={traduzir(
         "Onde a venda acontece — e o que você define uma vez para ela funcionar.",

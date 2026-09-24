@@ -179,6 +179,12 @@ export interface ActiveOrg {
    */
   modulos_ligados?: readonly ModuloOpcional[];
   /**
+   * FORK clinic (ACL-008): as permissões efetivas, preenchidas pelo layout SÓ
+   * com o modo por permissões ligado. Ausente = o menu segue o `role`.
+   * UX apenas: quem decide é o backend e a RLS.
+   */
+  permissoes?: readonly string[];
+  /**
    * O que ESTA organização definiu para si — CAMPO A CAMPO, e só o que ela
    * mesma definiu.
    *

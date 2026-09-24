@@ -306,3 +306,83 @@ describe("permissões das funções", () => {
     expect(ultima(sql(`select has_function_privilege('${papelDb}', '${fn}', 'execute');`))).toBe("f");
   });
 });
+
+describe("migration 9012: ligar o modo e o nível legado calculado", () => {
+  const ORG_C = "acc10000-0000-4000-8000-00000000000c";
+  const ADM_C = "acc10000-1111-4000-8000-0000000000c1";
+  const AT_C = "acc10000-1111-4000-8000-0000000000c2";
+  const nivel = (user: string) =>
+    ultima(sql(`select role from public.user_organizations where organization_id = '${ORG_C}' and user_id = '${user}';`));
+  const definir = (ator: string, v: boolean) => como(ator, `select public.fn_clinic_definir_acesso_por_permissoes('${ORG_C}', ${v});`);
+
+  beforeAll(() => {
+    sql(`
+      insert into auth.users (id, email) values ('${ADM_C}', 'acl-adm-c@invariant.test'), ('${AT_C}', 'acl-at-c@invariant.test') on conflict (id) do nothing;
+      insert into public.organizations (id, slug, legal_name, display_name) values ('${ORG_C}', 'acl-inv-c', 'ACL Invariant C', 'ACL C') on conflict (id) do nothing;
+      insert into public.user_organizations (user_id, organization_id, role, accepted_at) values
+        ('${ADM_C}', '${ORG_C}', 'admin', now()), ('${AT_C}', '${ORG_C}', 'agent', now()) on conflict do nothing;
+    `);
+  });
+
+  it("atendente não liga o modo", () => {
+    expect(erro(definir(AT_C, true))).toMatch(/acesso_proibido/);
+  });
+
+  it("admin liga; nada muda de nível ao ligar (papéis-modelo == legado)", () => {
+    expect(ultima(sql(definir(ADM_C, true)))).toContain('"niveis_recalculados": 0');
+    expect([nivel(ADM_C), nivel(AT_C)]).toEqual(["admin", "agent"]);
+  });
+
+  it("ligado: o nível legado segue as permissões — sobe e desce", () => {
+    const gerente = ultima(sql(`select id from public.clinic_roles where organization_id = '${ORG_C}' and system_key = 'gerente';`));
+    const visualizador = ultima(sql(`select id from public.clinic_roles where organization_id = '${ORG_C}' and system_key = 'visualizador';`));
+    sql(como(ADM_C, `select public.fn_acesso_atribuir_papeis('${ORG_C}', '${AT_C}', array['${gerente}']::uuid[]);`));
+    expect(nivel(AT_C)).toBe("manager");
+    sql(como(ADM_C, `select public.fn_acesso_atribuir_papeis('${ORG_C}', '${AT_C}', array['${visualizador}']::uuid[]);`));
+    expect(nivel(AT_C)).toBe("viewer");
+    sql(como(ADM_C, `select public.fn_acesso_atribuir_papeis('${ORG_C}', '${AT_C}', array[]::uuid[]);`));
+    expect(nivel(AT_C)).toBe("viewer"); // sem papel = sem permissão fina; o piso legado é viewer
+    expect(ultima(sql(como(AT_C, `select count(*) from public.fn_member_permissions('${ORG_C}');`)))).toBe("0");
+  });
+
+  it("ligado: tirar permissão do papel recalcula o nível de quem o tem", () => {
+    const gerente = ultima(sql(`select id from public.clinic_roles where organization_id = '${ORG_C}' and system_key = 'gerente';`));
+    sql(como(ADM_C, `select public.fn_acesso_atribuir_papeis('${ORG_C}', '${AT_C}', array['${gerente}']::uuid[]);`));
+    expect(nivel(AT_C)).toBe("manager");
+    sql(como(ADM_C, `select public.fn_acesso_salvar_papel('${ORG_C}', '${gerente}', 'Gerente', null, true, ${arr(permissoesDoNivel("agent"))});`));
+    expect(nivel(AT_C)).toBe("agent");
+    sql(como(ADM_C, `select public.fn_acesso_salvar_papel('${ORG_C}', '${gerente}', 'Gerente', null, false, ${arr(permissoesDoNivel("agent"))});`));
+    expect(nivel(AT_C)).toBe("viewer"); // papel desativado não conta
+  });
+
+  it("o modo de uma empresa só é revelado a quem é membro dela", () => {
+    expect(ultima(sql(como(ADM_C, `select public.fn_acesso_modo_ligado('${ORG_C}');`)))).toBe("t");
+    expect(ultima(sql(como(AT_A, `select public.fn_acesso_modo_ligado('${ORG_C}');`)))).toBe("f");
+    expect(ultima(sql(`select has_function_privilege('authenticated', 'public.fn_acesso_modo_interno(uuid)', 'execute');`))).toBe("f");
+  });
+
+  it("ligado: escrever o papel legado à mão (rota da Equipe, script) volta ao nível calculado", () => {
+    sql(`update public.user_organizations set role = 'admin' where organization_id = '${ORG_C}' and user_id = '${AT_C}';`);
+    expect(nivel(AT_C)).not.toBe("admin");
+  });
+
+  it("ligado: convite aceito recebe o papel-modelo do nível do convite", () => {
+    const NOVO = "acc10000-1111-4000-8000-0000000000c3";
+    sql(`insert into auth.users (id, email) values ('${NOVO}', 'acl-novo-c@invariant.test') on conflict (id) do nothing;
+         insert into public.user_organizations (user_id, organization_id, role, accepted_at) values ('${NOVO}', '${ORG_C}', 'agent', now()) on conflict do nothing;`);
+    expect(
+      ultima(
+        sql(`select r.system_key from public.clinic_member_roles mr join public.clinic_roles r on r.id = mr.role_id
+              where mr.organization_id = '${ORG_C}' and mr.user_id = '${NOVO}';`),
+      ),
+    ).toBe("atendente");
+    expect(nivel(NOVO)).toBe("agent");
+  });
+
+  it("desligar volta ao papel legado como está; religar recalcula", () => {
+    sql(definir(ADM_C, false));
+    expect(ultima(sql(como(AT_C, `select public.fn_has_permission('${ORG_C}', 'agenda.ver');`)))).toBe("t");
+    sql(definir(ADM_C, true));
+    expect(nivel(AT_C)).toBe("viewer");
+  });
+});

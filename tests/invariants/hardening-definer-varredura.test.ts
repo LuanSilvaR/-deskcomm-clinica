@@ -269,6 +269,18 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-confirmacao-de-consulta.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (ACL, migration 9012).
+    fn: "fn_clinic_definir_acesso_por_permissoes(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (sessão); exige papeis.gerenciar, ser Administrador, MFA e suporte com escrita; liga só com um Administrador na empresa. tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
+    // FORK clinic (ACL, migration 9012).
+    fn: "fn_acesso_modo_ligado(uuid)",
+    razao:
+      "Booleano do modo da empresa, só para quem é membro dela (fn_user_org_ids) ou plataforma; fora disso devolve false. lib/clinic/acesso (sessão). tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
     // FORK clinic (ACL, migrations 9009-9010).
     fn: "fn_member_permissions(uuid)",
     razao:

@@ -878,6 +878,12 @@ export const AUDIT_ACTIONS = [
   // FORK clinic (9007): salas e equipamentos
   "clinic.recurso_salvo",
   "clinic.tipo_recursos_atualizados",
+  // FORK clinic (ACL): papéis de acesso e permissões
+  "acesso.papel_criado",
+  "acesso.papel_alterado",
+  "acesso.papel_excluido",
+  "acesso.papeis_do_membro_alterados",
+  "acesso.modo_permissoes_alterado",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */
