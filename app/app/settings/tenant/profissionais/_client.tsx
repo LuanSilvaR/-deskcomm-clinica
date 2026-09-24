@@ -7,6 +7,7 @@ import { AtendimentosPorEspecialidade } from "@/components/clinic/AtendimentosPo
 import { Bloqueios } from "@/components/clinic/Bloqueios";
 import { Especialidades } from "@/components/clinic/Especialidades";
 import { Profissionais } from "@/components/clinic/Profissionais";
+import { SalasEEquipamentos } from "@/components/clinic/SalasEEquipamentos";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,6 +19,7 @@ interface Props {
   fichaObrigatoriaInicial: boolean;
   confirmacaoInicial: boolean;
   travaInicial: boolean;
+  recursosInicial: boolean;
   podeLigar: boolean;
   ehGerencia: boolean;
   usuarioAtualId: string;
@@ -28,6 +30,7 @@ export function ProfissionaisClient({
   fichaObrigatoriaInicial,
   confirmacaoInicial,
   travaInicial,
+  recursosInicial,
   podeLigar,
   ehGerencia,
   usuarioAtualId,
@@ -37,6 +40,14 @@ export function ProfissionaisClient({
   const [fichaObrigatoria, setFichaObrigatoria] = useState(fichaObrigatoriaInicial);
   const [confirmacao, setConfirmacao] = useState(confirmacaoInicial);
   const [trava, setTrava] = useState(travaInicial);
+  const [recursos, setRecursos] = useState(recursosInicial);
+
+  const alternarRecursos = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { recursos: boolean } }>("/api/v1/clinic/config", { recursos: valor }),
+    onSuccess: (r) => setRecursos(r.data.recursos),
+    onError: showApiError,
+  });
 
   const alternarTrava = useMutation({
     mutationFn: (valor: boolean) =>
@@ -176,11 +187,38 @@ export function ProfissionaisClient({
         ) : null}
       </section>
 
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${recursos ? "" : "bg-muted"}`}
+        data-testid="clinic-recursos"
+      >
+        <div>
+          <p className="font-medium">
+            {recursos ? t("Salas e equipamentos ligados") : t("Salas e equipamentos desligados")}
+          </p>
+          <p className="text-sm text-text-muted">
+            {recursos
+              ? t("A agenda só oferece horário com a sala e o equipamento que o atendimento exige livres, e reserva os dois ao marcar.")
+              : t("Ligue para a agenda considerar salas e equipamentos. Você pode cadastrá-los antes na aba Salas e equipamentos.")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-recursos-alternar"
+            variant={recursos ? "outline" : "default"}
+            disabled={alternarRecursos.isPending}
+            onClick={() => alternarRecursos.mutate(!recursos)}
+          >
+            {recursos ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
+      </section>
+
       <Tabs defaultValue={ehGerencia ? "profissionais" : "bloqueios"}>
         <TabsList>
           {ehGerencia ? <TabsTrigger value="profissionais">{t("Profissionais")}</TabsTrigger> : null}
           {ehGerencia ? <TabsTrigger value="especialidades">{t("Especialidades")}</TabsTrigger> : null}
           {ehGerencia ? <TabsTrigger value="atendimentos">{t("Atendimentos")}</TabsTrigger> : null}
+          {ehGerencia ? <TabsTrigger value="recursos">{t("Salas e equipamentos")}</TabsTrigger> : null}
           <TabsTrigger value="bloqueios">{t("Bloqueios")}</TabsTrigger>
         </TabsList>
         {ehGerencia ? (
@@ -193,6 +231,9 @@ export function ProfissionaisClient({
             </TabsContent>
             <TabsContent value="atendimentos">
               <AtendimentosPorEspecialidade podeEditar={ehGerencia} />
+            </TabsContent>
+            <TabsContent value="recursos">
+              <SalasEEquipamentos podeEditar={ehGerencia} />
             </TabsContent>
           </>
         ) : null}

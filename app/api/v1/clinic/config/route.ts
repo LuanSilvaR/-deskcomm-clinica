@@ -8,6 +8,7 @@
  * resposta vira tarefa de ligação (migration 9004).
  * `trava_sobreposicao`: o banco recusa compromisso que cruza outro na agenda
  * do mesmo profissional (migration 9005).
+ * `recursos`: salas e equipamentos exigidos pelo tipo de atendimento (migration 9007).
  *
  * GET: qualquer membro lê (as telas precisam saber). PATCH: só admin, pelas
  * funções `fn_clinic_definir_*`, que também exigem MFA provado quando a sessão
@@ -21,6 +22,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
+import { recursosLigados } from "@/lib/clinic/agenda/recursos";
 import { clinicProfissionaisLigado, travaSobreposicaoLigada } from "@/lib/clinic/flags";
 import { fichaObrigatoriaLigada } from "@/lib/clinic/pacientes/servidor";
 import { requireSupportWrite } from "@/lib/impersonate/support";
@@ -38,6 +40,7 @@ async function lerOpcoes(orgId: string) {
     ficha_obrigatoria: fichaObrigatoriaLigada(settings),
     confirmacao_automatica: confirmacaoAutomaticaLigada(settings),
     trava_sobreposicao: travaSobreposicaoLigada(settings),
+    recursos: recursosLigados(settings),
   };
 }
 
@@ -54,6 +57,7 @@ const patchSchema = z
     ficha_obrigatoria: z.boolean().optional(),
     confirmacao_automatica: z.boolean().optional(),
     trava_sobreposicao: z.boolean().optional(),
+    recursos: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "Informe se o módulo fica ligado.",
@@ -64,6 +68,7 @@ const FUNCAO_DA_OPCAO = {
   ficha_obrigatoria: "fn_clinic_definir_ficha_obrigatoria",
   confirmacao_automatica: "fn_clinic_definir_confirmacao_automatica",
   trava_sobreposicao: "fn_clinic_definir_trava_sobreposicao",
+  recursos: "fn_clinic_definir_recursos",
 } as const;
 
 export async function PATCH(req: NextRequest): Promise<Response> {
@@ -83,7 +88,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   }
 
   const supabase = await createClient();
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });

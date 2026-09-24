@@ -75,6 +75,7 @@ import { diaLocalISO } from "./fuso";
 import { horariosLivres, type ExcecaoDeData, type Slot } from "./horarios-livres";
 import { lerJornadaDoBanco } from "./jornada";
 import { bloqueiosDaClinicaComoExcecoes, habilitacaoNaConsulta } from "@/lib/clinic/agenda/regras-da-clinica";
+import { ocupadosPorFaltaDeRecurso } from "@/lib/clinic/agenda/recursos";
 import {
   agendaExternaNuncaLida,
   ocupadosDoDono,
@@ -346,6 +347,24 @@ export async function horariosLivresDaOrg(
     };
   }
   const { ocupados, fontesDefasadas } = oQueOcupa;
+
+  // FORK clinic (migration 9007): horário em que falta sala ou equipamento
+  // entra como ocupação — o motor não muda. Opção desligada devolve [].
+  const semRecurso = await ocupadosPorFaltaDeRecurso(supabase, organizationId, {
+    eventTypeId: tipo.id,
+    de: new Date(params.de.getTime() - Number(tipo.buffer_before_minutes ?? 0) * MINUTO),
+    ate: new Date(params.ate.getTime() + Number(tipo.buffer_after_minutes ?? 0) * MINUTO),
+    ignorarAgendamentoId: params.ignorarAgendamentoId,
+  });
+  if (!semRecurso.ok) {
+    return {
+      ok: false,
+      codigo: "erro_interno",
+      motivoParaOperador: semRecurso.erro,
+      motivoParaCliente: `Não consegui consultar a agenda agora. ${NAO_OFERECA}`,
+    };
+  }
+  ocupados.push(...semRecurso.ocupados);
 
   // A situação das conexões do dono, para distinguir "não tem Google" de "tem
   // Google que nunca foi lido". Sem `.select` de erro: conexão ilegível cai no

@@ -14,7 +14,7 @@ import { fail } from "@/lib/api/wrappers";
 /** Confere que TODOS os `ids` existem em `tabela` dentro de `organizationId`. */
 export async function idsSaoDaOrg(
   supabase: SupabaseClient,
-  tabela: "clinic_specialties" | "clinic_professionals" | "calendar_event_types",
+  tabela: "clinic_specialties" | "clinic_professionals" | "calendar_event_types" | "clinic_resources",
   organizationId: string,
   ids: readonly string[],
 ): Promise<boolean> {
