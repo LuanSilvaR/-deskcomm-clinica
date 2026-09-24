@@ -31,17 +31,23 @@ export async function contarFaltas(
   const ids = [...new Set(contactIds)];
   const contagem = new Map<string, number>();
   if (ids.length === 0) return contagem;
-  const { data, error } = await supabase
-    .from("calendar_appointments")
-    .select("contact_id")
-    .eq("organization_id", organizationId)
-    .eq("status", "no_show")
-    .gte("starts_at", inicioDaJanela(agora).toISOString())
-    .in("contact_id", ids)
-    .limit(5000);
-  if (error) return contagem;
-  for (const l of (data ?? []) as { contact_id: string | null }[]) {
-    if (l.contact_id) contagem.set(l.contact_id, (contagem.get(l.contact_id) ?? 0) + 1);
+  // NUNCA lança: a contagem é informação a mais na busca de paciente e no
+  // detalhe do compromisso — falhar aqui não pode derrubar a busca inteira.
+  try {
+    const { data, error } = await supabase
+      .from("calendar_appointments")
+      .select("contact_id")
+      .eq("organization_id", organizationId)
+      .eq("status", "no_show")
+      .gte("starts_at", inicioDaJanela(agora).toISOString())
+      .in("contact_id", ids)
+      .limit(5000);
+    if (error) return contagem;
+    for (const l of (data ?? []) as { contact_id: string | null }[]) {
+      if (l.contact_id) contagem.set(l.contact_id, (contagem.get(l.contact_id) ?? 0) + 1);
+    }
+  } catch {
+    return new Map();
   }
   return contagem;
 }
