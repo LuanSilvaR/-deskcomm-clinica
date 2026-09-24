@@ -7,7 +7,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
-import { ROLE_RANK } from "@/lib/auth/types";
+import { permissoesNaPagina } from "@/lib/clinic/acesso/pagina";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 import { IndicadoresDaAgenda } from "./_client";
@@ -19,7 +19,7 @@ export default async function IndicadoresPage() {
   const t = (texto: string) => traduzir(texto, user.idioma);
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
-  const pode = ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager || user.is_platform_admin;
+  const pode = (await permissoesNaPagina(user, activeOrg.orgId)).has("relatorios.gerencial") || user.is_platform_admin;
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">

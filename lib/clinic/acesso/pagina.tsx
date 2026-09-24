@@ -11,7 +11,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 
-import type { ChaveDePermissao } from "./catalogo";
+import { CATALOGO_DE_PERMISSOES, type ChaveDePermissao } from "./catalogo";
 import { permissoesEfetivas } from "./resolver";
 
 export async function exigePermissaoNaPagina(chave: ChaveDePermissao): Promise<React.ReactElement | null> {
@@ -28,4 +28,18 @@ export async function exigePermissaoNaPagina(chave: ChaveDePermissao): Promise<R
       <p className="text-sm text-text-muted">{t("Seu papel de acesso não inclui esta tela. Fale com quem administra a empresa.")}</p>
     </div>
   );
+}
+
+/**
+ * FORK clinic (ACL-016) — as permissões de quem abre a tela, para decidir o que
+ * ela MOSTRA (botões, abas). Plataforma fora do suporte = todas, como nas rotas.
+ * Falha de leitura = nenhuma (a tela mostra menos; a rota decide de verdade).
+ */
+export async function permissoesNaPagina(
+  user: { is_platform_admin?: boolean; support?: unknown },
+  organizationId: string,
+): Promise<ReadonlySet<string>> {
+  if (user.is_platform_admin && !user.support) return new Set(Object.keys(CATALOGO_DE_PERMISSOES));
+  const efetivas = await permissoesEfetivas(await createClient(), organizationId);
+  return efetivas.ok ? efetivas.permissoes : new Set();
 }

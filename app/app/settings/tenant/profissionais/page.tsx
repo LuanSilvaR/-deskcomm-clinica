@@ -8,7 +8,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
-import { ROLE_RANK } from "@/lib/auth/types";
+import { permissoesNaPagina } from "@/lib/clinic/acesso/pagina";
 import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
 import { prazoDoPacienteHoras } from "@/lib/clinic/agenda/prazo-do-paciente";
 import { recursosLigados } from "@/lib/clinic/agenda/recursos";
@@ -26,7 +26,9 @@ export default async function ProfissionaisPage() {
   const t = (texto: string) => traduzir(texto, user.idioma);
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
-  if (ROLE_RANK[activeOrg.role] < ROLE_RANK.agent && !user.is_platform_admin) redirect("/app");
+  // FORK clinic (ACL-016): quem bloqueia a própria agenda ou cadastra entra.
+  const permissoes = await permissoesNaPagina(user, activeOrg.orgId);
+  if (!permissoes.has("agenda.bloquear_horario") && !permissoes.has("profissionais.gerenciar") && !user.is_platform_admin) redirect("/app");
 
   const supabase = await createClient();
   const { data: org } = await supabase
@@ -35,8 +37,7 @@ export default async function ProfissionaisPage() {
     .eq("id", activeOrg.orgId)
     .maybeSingle();
 
-  const ehGerencia =
-    (user.is_platform_admin && !user.support) || ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
+  const ehGerencia = permissoes.has("profissionais.gerenciar");
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
@@ -53,7 +54,7 @@ export default async function ProfissionaisPage() {
         travaInicial={travaSobreposicaoLigada(org?.settings)}
         recursosInicial={recursosLigados(org?.settings)}
         prazoInicial={prazoDoPacienteHoras(org?.settings)}
-        podeLigar={ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin}
+        podeLigar={permissoes.has("configuracoes.opcoes_da_clinica")}
         ehGerencia={ehGerencia}
         usuarioAtualId={user.id}
       />
