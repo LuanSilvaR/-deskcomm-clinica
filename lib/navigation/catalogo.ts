@@ -169,6 +169,15 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    // FORK clinic (E5.1): os pacientes reincidentes em falta. Sem `sidebar`
+    // (teto do menu lateral); porta diária: link no cabeçalho da Recepção.
+    href: "/app/agenda/faltas",
+    label: "Faltas",
+    description: "Pacientes que faltaram 2 vezes ou mais nos últimos 12 meses, com o próximo horário marcado.",
+    icon: "CalendarBlank",
+    group: "atendimento",
+  },
+  {
     // FORK clinic (E1.4): o dia em colunas, uma por profissional — jornada,
     // bloqueios e compromissos. Sem `sidebar` (o menu lateral está no teto);
     // a porta diária é o botão "Dia por profissional" no cabeçalho da Agenda.

@@ -9,6 +9,8 @@
  * `trava_sobreposicao`: o banco recusa compromisso que cruza outro na agenda
  * do mesmo profissional (migration 9005).
  * `recursos`: salas e equipamentos exigidos pelo tipo de atendimento (migration 9007).
+ * `prazo_paciente_horas`: dentro deste prazo antes da consulta, o agente de IA
+ * não desmarca nem remarca (migration 9008). 0 = sem prazo.
  *
  * GET: qualquer membro lê (as telas precisam saber). PATCH: só admin, pelas
  * funções `fn_clinic_definir_*`, que também exigem MFA provado quando a sessão
@@ -22,6 +24,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
+import { prazoDoPacienteHoras } from "@/lib/clinic/agenda/prazo-do-paciente";
 import { recursosLigados } from "@/lib/clinic/agenda/recursos";
 import { clinicProfissionaisLigado, travaSobreposicaoLigada } from "@/lib/clinic/flags";
 import { fichaObrigatoriaLigada } from "@/lib/clinic/pacientes/servidor";
@@ -41,6 +44,7 @@ async function lerOpcoes(orgId: string) {
     confirmacao_automatica: confirmacaoAutomaticaLigada(settings),
     trava_sobreposicao: travaSobreposicaoLigada(settings),
     recursos: recursosLigados(settings),
+    prazo_paciente_horas: prazoDoPacienteHoras(settings),
   };
 }
 
@@ -58,6 +62,7 @@ const patchSchema = z
     confirmacao_automatica: z.boolean().optional(),
     trava_sobreposicao: z.boolean().optional(),
     recursos: z.boolean().optional(),
+    prazo_paciente_horas: z.number().int().min(0).max(168).optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "Informe se o módulo fica ligado.",
@@ -88,6 +93,32 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   }
 
   const supabase = await createClient();
+  if (lido.data.prazo_paciente_horas !== undefined) {
+    const { data, error } = await supabase.rpc("fn_clinic_definir_prazo_do_paciente", {
+      p_org: authz.org.orgId,
+      p_horas: lido.data.prazo_paciente_horas,
+    });
+    if (error) {
+      if (error.message.includes("mfa_required")) {
+        return fail("mfa_required", t("Confirme a verificação em duas etapas para mudar esta opção."), 403, { requestId });
+      }
+      if (error.code === "42501") {
+        return fail("forbidden", t("Só quem administra a empresa pode mudar esta opção."), 403, { requestId });
+      }
+      return fail("internal_error", error.message, 500, { requestId });
+    }
+    if ((data as { mudou: boolean }).mudou) {
+      void audit({
+        action: "clinic.flag_alterada",
+        actorUserId: authz.user.id,
+        organizationId: authz.org.orgId,
+        resourceType: "organization",
+        resourceId: authz.org.orgId,
+        requestId,
+        metadata: { prazo_paciente_horas: lido.data.prazo_paciente_horas },
+      });
+    }
+  }
   for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;

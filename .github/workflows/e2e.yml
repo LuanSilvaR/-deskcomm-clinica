@@ -730,6 +730,7 @@ jobs:
         clinic-proximo-livre.spec.ts
         clinic-dia-por-profissional.spec.ts
         clinic-salas-e-equipamentos.spec.ts
+        clinic-faltas-e-prazo.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts

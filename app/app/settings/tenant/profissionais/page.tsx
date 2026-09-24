@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
+import { prazoDoPacienteHoras } from "@/lib/clinic/agenda/prazo-do-paciente";
 import { recursosLigados } from "@/lib/clinic/agenda/recursos";
 import { clinicProfissionaisLigado, travaSobreposicaoLigada } from "@/lib/clinic/flags";
 import { fichaObrigatoriaLigada } from "@/lib/clinic/pacientes/servidor";
@@ -51,6 +52,7 @@ export default async function ProfissionaisPage() {
         confirmacaoInicial={confirmacaoAutomaticaLigada(org?.settings)}
         travaInicial={travaSobreposicaoLigada(org?.settings)}
         recursosInicial={recursosLigados(org?.settings)}
+        prazoInicial={prazoDoPacienteHoras(org?.settings)}
         podeLigar={ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin}
         ehGerencia={ehGerencia}
         usuarioAtualId={user.id}

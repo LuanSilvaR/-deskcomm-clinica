@@ -17,6 +17,7 @@ import { mudarStatusDaVisita } from "@/lib/clinic/visitas/mudar-status";
 import { STATUS_DA_VISITA } from "@/lib/clinic/visitas/status";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { contarFaltas } from "@/lib/clinic/agenda/faltas";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -61,11 +62,16 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
       .eq("appointment_id", id),
   ]);
   if (e1 || e2) return fail("internal_error", (e1 ?? e2)!.message, 500, { requestId });
+  // FORK clinic (E5.1): as faltas do paciente nos últimos 12 meses.
+  const { data: ag } = await supabase.from("calendar_appointments").select("contact_id").eq("organization_id", org).eq("id", id).maybeSingle();
+  const contatoId = (ag as { contact_id?: string | null } | null)?.contact_id ?? null;
+  const faltas = contatoId ? ((await contarFaltas(supabase, org, [contatoId])).get(contatoId) ?? 0) : 0;
   return ok(
     {
       visita: visita ?? { status: "agendado" },
       eventos: eventos ?? [],
       confirmacao: confirmacao ?? null,
+      faltas,
       recursos: (alocados ?? []).flatMap((a) => {
         const r = (a as { clinic_resources: { name: string } | { name: string }[] | null }).clinic_resources;
         return (Array.isArray(r) ? r : r ? [r] : []).map((x) => x.name);
