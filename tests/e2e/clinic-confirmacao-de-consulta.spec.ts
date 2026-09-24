@@ -68,11 +68,11 @@ const dia = (iso: string) =>
 
 async function ligarConfirmacao(page: Page, ligar: boolean): Promise<void> {
   await page.goto("/app/settings/tenant/profissionais");
-  const bloco = page.getByTestId("clinic-confirmacao");
+  const bloco = page.getByRole("main").getByTestId("clinic-confirmacao");
   await expect(bloco).toBeVisible({ timeout: 20_000 });
   const ligada = await bloco.getByText("Confirmação automática ligada").isVisible();
   if (ligada !== ligar) {
-    await page.getByTestId("clinic-confirmacao-alternar").click();
+    await page.getByRole("main").getByTestId("clinic-confirmacao-alternar").click();
     await expect(bloco.getByText(ligar ? "Confirmação automática ligada" : "Confirmação automática desligada")).toBeVisible();
   }
 }

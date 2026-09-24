@@ -45,11 +45,11 @@ async function foto(page: Page, nome: string): Promise<void> {
 
 async function opcao(page: Page, ligar: boolean): Promise<void> {
   await page.goto("/app/settings/tenant/profissionais");
-  const bloco = page.getByTestId("clinic-recursos");
+  const bloco = page.getByRole("main").getByTestId("clinic-recursos");
   await expect(bloco).toBeVisible({ timeout: 20_000 });
   const ligado = await bloco.getByText("Salas e equipamentos ligados").isVisible();
   if (ligado !== ligar) {
-    await page.getByTestId("clinic-recursos-alternar").click();
+    await page.getByRole("main").getByTestId("clinic-recursos-alternar").click();
     await expect(bloco.getByText(ligar ? "Salas e equipamentos ligados" : "Salas e equipamentos desligados")).toBeVisible();
   }
 }

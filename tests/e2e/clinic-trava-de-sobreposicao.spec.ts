@@ -32,11 +32,11 @@ async function foto(page: Page, nome: string): Promise<void> {
 
 async function ligarTrava(page: Page, ligar: boolean): Promise<void> {
   await page.goto("/app/settings/tenant/profissionais");
-  const bloco = page.getByTestId("clinic-trava");
+  const bloco = page.getByRole("main").getByTestId("clinic-trava");
   await expect(bloco).toBeVisible({ timeout: 20_000 });
   const ligada = await bloco.getByText("Trava de horário duplicado ligada").isVisible();
   if (ligada !== ligar) {
-    await page.getByTestId("clinic-trava-alternar").click();
+    await page.getByRole("main").getByTestId("clinic-trava-alternar").click();
     await expect(bloco.getByText(ligar ? "Trava de horário duplicado ligada" : "Trava de horário duplicado desligada")).toBeVisible();
   }
 }
