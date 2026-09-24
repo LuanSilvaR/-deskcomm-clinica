@@ -28,9 +28,10 @@ interface ResultState {
   failed: Array<{ email: string; reason: string }>;
 }
 
-export function InviteForm() {
+// FORK clinic: `emailInicial` vem de Papéis de acesso › Membros ("Convidar este e-mail").
+export function InviteForm({ emailInicial = "" }: { emailInicial?: string } = {}) {
   const t = useT();
-  const [emailsRaw, setEmailsRaw] = useState("");
+  const [emailsRaw, setEmailsRaw] = useState(emailInicial);
   const [settings, setSettings] = useState(INTERFACE_COMPLETA);
   const [role, setRole] = useState<Role>("agent");
   const [result, setResult] = useState<ResultState | null>(null);
