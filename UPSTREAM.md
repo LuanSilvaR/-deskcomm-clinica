@@ -35,6 +35,9 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | app/app/agenda/_client.tsx (de novo) | Passa onEscolherHorario à EscolhaDoProfissional: o próximo livre escolhe profissional e horário (E1.3) | 542e352e9 |
 | app/app/agenda/_client.tsx (de novo), lib/navigation/catalogo.ts (de novo), lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Botão e porta do "Dia por profissional" (E1.4); espanhol; spec clinic-dia-por-profissional e clinic-proximo-livre | 5858ce47a |
 | tests/unit/agenda-spec-nao-escolhe-o-periodo-sozinha.test.ts | Dispensa declarada para clinic-proximo-livre.spec.ts (não escolhe dia da grade) | d35f3bf28 |
+| lib/agenda/consulta.ts | horariosLivresDaOrg soma aos ocupados os intervalos sem sala/equipamento (9007, atrás da opção) | 92889c650 |
+| app/api/v1/agenda/agendamentos/_handler.ts (de novo), tests/unit/pessoa-marca-fora-da-grade.test.ts (de novo) | 23P01 da alocação de recurso diz "não há sala ou equipamento livre" | 92889c650 |
+| lib/audit/actions.ts (de novo), lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Ações clinic.recurso_salvo e clinic.tipo_recursos_atualizados; espanhol; spec clinic-salas-e-equipamentos | 92889c650 |
 | app/api/v1/cron/agenda-reminder/route.ts | Lembrete de 12 h ou mais pede SIM/NÃO e registra o pedido quando `clinic.confirmacao_automatica` está ligada | 4170bf147 |
 | app/api/v1/cron/agenda-reminder/route.ts (de novo) | Guarda o id da mensagem do lembrete no pedido de confirmação (9006) | 177b9d733 |
 | lib/event-log/register-handlers.ts | Consumidor clinic-confirmacao-resposta.v1 de message.received | 4170bf147 |
