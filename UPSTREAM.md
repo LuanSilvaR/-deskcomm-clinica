@@ -36,6 +36,9 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | lib/event-log/register-handlers.ts | Consumidor clinic-confirmacao-resposta.v1 de message.received | 4170bf147 |
 | docker/scheduler/entrypoint.sh | Cron clinic-confirmacao-sem-resposta a cada 15 min | 4170bf147 |
 | tests/shell/colisao-de-migration.test.sh | Teste hermético: não herda o GITHUB_REF do runner (reprovava em PR de número 7) — candidato a PR no upstream | 520ab0564 |
+| app/api/v1/agenda/agendamentos/_handler.ts (de novo) | 23P01 da trava de sobreposição (9005) vira o mesmo 422 agenda_horario_indisponivel ao marcar e ao remarcar | 15fcc4dc9 |
+| tests/unit/pessoa-marca-fora-da-grade.test.ts | Dois casos do fork: o 23P01 do banco sai como a mesma recusa | 15fcc4dc9 |
+| lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Espanhol da trava; spec clinic-trava-de-sobreposicao | 15fcc4dc9 |
 | lib/audit/actions.ts (de novo), lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Ação clinic.confirmacao_sem_resposta, espanhol da confirmação, spec clinic-confirmacao-de-consulta | 4170bf147 |
 | app/api/v1/agenda/agendamentos/_handler.ts (de novo) | Compareceu recusa ficha incompleta (flag clinic.ficha_obrigatoria) | ff7f769e9 |
 | app/app/contacts/**, components/contacts/*, components/inbox/CRMSidePanel.tsx, components/inbox/ConversationHeader.tsx, lib/ai/inbox-destino.ts | Textos "Contato" → "Paciente" (só texto de tela) | 6ac024745 |
