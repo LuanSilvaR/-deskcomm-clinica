@@ -199,18 +199,6 @@ export const NAV_CATALOG = [
     group: "atendimento",
   },
   {
-    // FORK clinic (migration 9014): a Agenda do dia — um bloco por profissional
-    // com ocupação, horários livres, status de cada paciente e filtros.
-    // Sem `sidebar` (o menu lateral está no teto); a porta diária é o botão
-    // "Agenda do dia" no cabeçalho da Agenda, com a opção ligada.
-    href: "/app/agenda/dia",
-    label: "Agenda do dia",
-    permissao: "agenda.ver",
-    description: "Cada profissional com a ocupação, os horários livres e o status de cada paciente, com filtros.",
-    icon: "CalendarBlank",
-    group: "atendimento",
-  },
-  {
     // FORK clinic (migration 9003): o dia da clínica por status da visita —
     // na recepção, pronto para atendimento, em atendimento, finalizado.
     //

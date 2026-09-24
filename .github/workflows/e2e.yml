@@ -733,7 +733,6 @@ jobs:
         clinic-faltas-e-prazo.spec.ts
         clinic-indicadores.spec.ts
         clinic-papeis-de-acesso.spec.ts
-        clinic-agenda-do-dia.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts
