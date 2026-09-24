@@ -9,7 +9,6 @@
  * `trava_sobreposicao`: o banco recusa compromisso que cruza outro na agenda
  * do mesmo profissional (migration 9005).
  * `recursos`: salas e equipamentos exigidos pelo tipo de atendimento (migration 9007).
- * `agenda_do_dia`: a tela /app/agenda/dia (migration 9014).
  * `prazo_paciente_horas`: dentro deste prazo antes da consulta, o agente de IA
  * não desmarca nem remarca (migration 9008). 0 = sem prazo.
  * `acesso_por_permissoes`: o acesso passa a vir dos papéis de acesso (ACL,
@@ -32,7 +31,7 @@ import { acessoPorPermissoesLigado } from "@/lib/clinic/acesso/modo";
 import { falhaDeAcesso } from "@/lib/clinic/acesso/erros-do-banco";
 import { prazoDoPacienteHoras } from "@/lib/clinic/agenda/prazo-do-paciente";
 import { recursosLigados } from "@/lib/clinic/agenda/recursos";
-import { agendaDoDiaLigada, clinicProfissionaisLigado, travaSobreposicaoLigada } from "@/lib/clinic/flags";
+import { clinicProfissionaisLigado, travaSobreposicaoLigada } from "@/lib/clinic/flags";
 import { fichaObrigatoriaLigada } from "@/lib/clinic/pacientes/servidor";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -50,7 +49,6 @@ async function lerOpcoes(orgId: string) {
     confirmacao_automatica: confirmacaoAutomaticaLigada(settings),
     trava_sobreposicao: travaSobreposicaoLigada(settings),
     recursos: recursosLigados(settings),
-    agenda_do_dia: agendaDoDiaLigada(settings),
     prazo_paciente_horas: prazoDoPacienteHoras(settings),
     acesso_por_permissoes: acessoPorPermissoesLigado(settings),
   };
@@ -70,7 +68,6 @@ const patchSchema = z
     confirmacao_automatica: z.boolean().optional(),
     trava_sobreposicao: z.boolean().optional(),
     recursos: z.boolean().optional(),
-    agenda_do_dia: z.boolean().optional(),
     prazo_paciente_horas: z.number().int().min(0).max(168).optional(),
     acesso_por_permissoes: z.boolean().optional(),
   })
@@ -84,7 +81,6 @@ const FUNCAO_DA_OPCAO = {
   confirmacao_automatica: "fn_clinic_definir_confirmacao_automatica",
   trava_sobreposicao: "fn_clinic_definir_trava_sobreposicao",
   recursos: "fn_clinic_definir_recursos",
-  agenda_do_dia: "fn_clinic_definir_agenda_do_dia",
 } as const;
 
 export async function PATCH(req: NextRequest): Promise<Response> {
@@ -149,7 +145,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "agenda_do_dia"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });

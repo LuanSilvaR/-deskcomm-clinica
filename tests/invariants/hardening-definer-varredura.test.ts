@@ -320,15 +320,6 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-prazo-do-paciente.test.ts prova gerente recusado (42501), faixa e anon sem EXECUTE.",
   },
   {
-    // FORK clinic (migration 9014).
-    fn: "fn_clinic_definir_agenda_do_dia(uuid,boolean)",
-    razao:
-      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
-      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
-      "e a escrita é só a chave settings.clinic.agenda_do_dia da organização informada. " +
-      "tests/invariants/clinic-agenda-do-dia.test.ts prova gerente e admin de outra empresa recusados (42501) e anon sem EXECUTE.",
-  },
-  {
     // FORK clinic (migration 9007).
     fn: "fn_clinic_definir_recursos(uuid,boolean)",
     razao:

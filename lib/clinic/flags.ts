@@ -50,14 +50,3 @@ export function travaSobreposicaoLigada(settings: unknown): boolean {
   if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
   return (clinic as Record<string, unknown>).trava_sobreposicao === true;
 }
-
-/**
- * `organizations.settings.clinic.agenda_do_dia` (migration 9014): a tela
- * /app/agenda/dia. Mesma régua: só o booleano `true` liga.
- */
-export function agendaDoDiaLigada(settings: unknown): boolean {
-  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
-  const clinic = (settings as Record<string, unknown>).clinic;
-  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
-  return (clinic as Record<string, unknown>).agenda_do_dia === true;
-}
