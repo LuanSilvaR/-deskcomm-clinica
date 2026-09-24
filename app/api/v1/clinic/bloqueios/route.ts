@@ -17,7 +17,7 @@ import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { eMembroDaOrg, falhaDoBanco } from "@/lib/clinic/api";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -31,7 +31,7 @@ const MSG_PROIBIDO = "Você só pode bloquear a sua própria agenda. Agenda de c
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("agent", { requestId, resource: "clinic_agenda_blocks" });
+  const authz = await requirePermission("agenda.bloquear_horario", { requestId, resource: "clinic_agenda_blocks" });
   if (!authz.ok) return authz.response;
 
   const desde = new URL(req.url).searchParams.get("desde") ?? new Date().toISOString().slice(0, 10);
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("agent", { requestId, resource: "clinic_agenda_blocks" });
+  const authz = await requirePermission("agenda.bloquear_horario", { requestId, resource: "clinic_agenda_blocks" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
@@ -150,7 +150,7 @@ export async function DELETE(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("agent", { requestId, resource: "clinic_agenda_blocks" });
+  const authz = await requirePermission("agenda.bloquear_horario", { requestId, resource: "clinic_agenda_blocks" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 

@@ -15,7 +15,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { ehStatusDaVisita } from "@/lib/clinic/visitas/status";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,7 +26,7 @@ const POR_PAGINA = 20;
 
 export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "calendar_appointments" });
+  const authz = await requirePermission("pacientes.ver", { requestId, resource: "calendar_appointments" });
   if (!authz.ok) return authz.response;
   const { contactId } = await ctx.params;
   if (!z.string().uuid().safeParse(contactId).success) return fail("validation_failed", "id inválido", 422, { requestId });

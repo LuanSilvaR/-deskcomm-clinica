@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { falhaDoBanco } from "@/lib/clinic/api";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -25,7 +25,7 @@ const MSG_CONFLITO = "Já existe uma especialidade com esse nome.";
 
 export async function GET(): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "clinic_specialties" });
+  const authz = await requirePermission("profissionais.ver", { requestId, resource: "clinic_specialties" });
   if (!authz.ok) return authz.response;
 
   const supabase = await createClient();
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "clinic_specialties" });
+  const authz = await requirePermission("profissionais.gerenciar", { requestId, resource: "clinic_specialties" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
@@ -95,7 +95,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "clinic_specialties" });
+  const authz = await requirePermission("profissionais.gerenciar", { requestId, resource: "clinic_specialties" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 

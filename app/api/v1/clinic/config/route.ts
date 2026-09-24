@@ -25,6 +25,7 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
 import { acessoPorPermissoesLigado } from "@/lib/clinic/acesso/modo";
 import { falhaDeAcesso } from "@/lib/clinic/acesso/erros-do-banco";
@@ -87,7 +88,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "clinic" });
+  const authz = await requirePermission("configuracoes.opcoes_da_clinica", { requestId, resource: "clinic" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 

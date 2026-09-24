@@ -12,7 +12,7 @@ import { z } from "zod";
 
 import { diaLocalISO, instanteDe } from "@/lib/agenda/fuso";
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import {
   montarColunas,
   type BloqueioComMotivo,
@@ -31,7 +31,7 @@ const DIA = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "agenda" });
+  const authz = await requirePermission("agenda.ver", { requestId, resource: "agenda" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const org = authz.org.orgId;

@@ -14,7 +14,7 @@ import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { falhaDoBanco } from "@/lib/clinic/api";
 import { lerFicha } from "@/lib/clinic/pacientes/servidor";
 import { cifrarCpf } from "@/lib/contacts/cpf";
@@ -36,7 +36,7 @@ function formaDaResposta(f: NonNullable<Extract<Awaited<ReturnType<typeof lerFic
 
 export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "clinic_patient_profiles" });
+  const authz = await requirePermission("pacientes.ver_ficha", { requestId, resource: "clinic_patient_profiles" });
   if (!authz.ok) return authz.response;
   const { contactId } = await ctx.params;
   if (!z.string().uuid().safeParse(contactId).success) return fail("validation_failed", "id inválido", 422, { requestId });
@@ -106,7 +106,7 @@ export async function PUT(req: NextRequest, ctx: Ctx): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("agent", { requestId, resource: "clinic_patient_profiles" });
+  const authz = await requirePermission("pacientes.editar_ficha", { requestId, resource: "clinic_patient_profiles" });
   if (!authz.ok) return authz.response;
   const t = (s: string) => traduzir(s, authz.user.idioma);
   const { contactId } = await ctx.params;

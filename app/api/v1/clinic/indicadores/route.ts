@@ -10,7 +10,7 @@ import { z } from "zod";
 
 import { diaLocalISO } from "@/lib/agenda/fuso";
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { calcularIndicadores, diasDoPeriodo, type JornadaSemanal } from "@/lib/clinic/agenda/indicadores";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -21,7 +21,7 @@ const querySchema = z.object({ dias: z.enum(["7", "30", "90"]).default("30") });
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "agenda" });
+  const authz = await requirePermission("relatorios.gerencial", { requestId, resource: "agenda" });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const lido = querySchema.safeParse({ dias: new URL(req.url).searchParams.get("dias") ?? undefined });

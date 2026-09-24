@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { agruparFaltosos, inicioDaJanela } from "@/lib/clinic/agenda/faltas";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { createClient } from "@/lib/supabase/server";
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("viewer", { requestId, resource: "agenda" });
+  const authz = await requirePermission("agenda.ver", { requestId, resource: "agenda" });
   if (!authz.ok) return authz.response;
   const org = authz.org.orgId;
   const agora = new Date();
