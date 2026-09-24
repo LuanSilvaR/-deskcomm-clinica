@@ -11718,6 +11718,9 @@ export const DICIONARIO: Traducoes = {
   "O lembrete de 12 h ou mais antes pede SIM ou NÃO. Sem resposta até 4 h antes, a recepção recebe a tarefa de ligar.": { es: "El recordatorio de 12 h o más antes pide SÍ o NO. Sin respuesta hasta 4 h antes, la recepción recibe la tarea de llamar." },
   "Ligue para o lembrete da véspera pedir SIM ou NÃO ao paciente. Vale para os tipos de atendimento com lembrete ligado.": { es: "Actívela para que el recordatorio del día anterior pida SÍ o NO al paciente. Vale para los tipos de atención con recordatorio activado." },
   "Responda *SIM* para confirmar ou *NÃO* se precisar remarcar.": { es: "Responda *SÍ* para confirmar o *NO* si necesita reprogramar." },
+  // ── FORK clinic (migration 9006): lembrete que falhou ──
+  "Lembrete não chegou — ligar": { es: "El recordatorio no llegó — llamar" },
+  "Lembrete não saiu — ligar": { es: "El recordatorio no se envió — llamar" },
   // ── FORK clinic (migration 9005): trava de sobreposição ──
   "Trava de horário duplicado ligada": { es: "Bloqueo de horario duplicado activado" },
   "Trava de horário duplicado desligada": { es: "Bloqueo de horario duplicado desactivado" },

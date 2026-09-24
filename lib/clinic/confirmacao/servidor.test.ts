@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   aplicarResposta,
+  marcarLembretesQueFalharam,
+  marcarLembretesQueNaoSairam,
+  registrarPedido,
+  tipoPedeConfirmacao,
   confirmacaoAutomaticaLigada,
   degrauPedeConfirmacao,
   deveAnexarPedido,
@@ -45,6 +49,8 @@ function falso(respostas: Record<string, Partial<Record<Chamada["op"], { data: u
         in: (c: string, v: unknown) => (chamada.filtros.push(["in", c, v]), b),
         gt: (c: string, v: unknown) => (chamada.filtros.push(["gt", c, v]), b),
         lte: (c: string, v: unknown) => (chamada.filtros.push(["lte", c, v]), b),
+        lt: (c: string, v: unknown) => (chamada.filtros.push(["lt", c, v]), b),
+        not: (c: string, op: string, v: unknown) => (chamada.filtros.push(["not", `${c}.${op}`, v]), b),
         order: () => b,
         limit: () => b,
         single: async () => resultado(),
@@ -175,5 +181,94 @@ describe("marcarSemResposta", () => {
     const { cliente, chamadas } = falso({ clinic_confirmation_requests: { select: { data: [] } } });
     await marcarSemResposta(cliente, new Date("2026-10-01T10:00:00Z"));
     expect(chamadas[0]?.filtros).toContainEqual(["lte", "calendar_appointments.starts_at", "2026-10-01T14:00:00.000Z"]);
+  });
+});
+
+describe("FORK clinic (9006): o lembrete que falhou", () => {
+  it("o pedido guarda a mensagem do lembrete (o cron confere o status dela)", async () => {
+    const { cliente, chamadas } = falso({});
+    await registrarPedido(cliente, { organizationId: ORG, appointmentId: "ag-1", contactId: "c1", conversationId: "cv1", reminderMessageId: "msg-1" });
+    expect(chamadas[0]?.valores).toMatchObject({ reminder_message_id: "msg-1", falha: null, status: "aguardando" });
+  });
+
+  it("tipo pede confirmação só com lembrete ligado e degrau de 12 h ou mais", () => {
+    expect(tipoPedeConfirmacao({ reminder_enabled: true, reminder_minutes_before: 1440, reminder_extra_offsets_minutes: null })).toBe(true);
+    expect(tipoPedeConfirmacao({ reminder_enabled: true, reminder_minutes_before: 60, reminder_extra_offsets_minutes: [720] })).toBe(true);
+    expect(tipoPedeConfirmacao({ reminder_enabled: true, reminder_minutes_before: 60, reminder_extra_offsets_minutes: [30] })).toBe(false);
+    expect(tipoPedeConfirmacao({ reminder_enabled: false, reminder_minutes_before: 1440, reminder_extra_offsets_minutes: null })).toBe(false);
+  });
+
+  it("envio falhou: tarefa na hora, pedido vira sem_resposta com falha envio_falhou", async () => {
+    const { cliente, chamadas } = falso({
+      clinic_confirmation_requests: { select: { data: [{ ...pedido(), organization_id: "org-3", contact_id: "c3" }] } },
+      crm_tasks: { insert: { data: { id: "t-falhou" } } },
+    });
+    expect(await marcarLembretesQueFalharam(cliente, new Date("2026-09-30T12:00:00Z"))).toEqual({ marcados: 1, falhas: 0 });
+    // só a mensagem que terminou `failed` conta
+    expect(chamadas[0]?.filtros).toContainEqual(["eq", "mensagem.status", "failed"]);
+    const nova = chamadas.find((c) => c.tabela === "crm_tasks" && c.op === "insert");
+    expect(nova?.valores).toMatchObject({ organization_id: "org-3", title: "O lembrete não chegou — ligar para confirmar", contact_id: "c3" });
+    const req = chamadas.find((c) => c.tabela === "clinic_confirmation_requests" && c.op === "update");
+    expect(req?.valores).toEqual({ status: "sem_resposta", falha: "envio_falhou", task_id: "t-falhou" });
+  });
+
+  it("lembrete que não saiu: cria o pedido em sem_resposta com a tarefa, na organização dele", async () => {
+    const { cliente, chamadas } = falso({
+      organizations: { select: { data: [{ id: "org-4" }] } },
+      calendar_appointments: {
+        select: {
+          data: [
+            {
+              id: "ag-sem",
+              title: "Consulta",
+              starts_at: "2026-10-01T13:00:00Z",
+              contact_id: "c4",
+              calendar_event_types: { reminder_enabled: true, reminder_minutes_before: 1440, reminder_extra_offsets_minutes: null },
+            },
+            {
+              id: "ag-com",
+              title: "Consulta",
+              starts_at: "2026-10-01T13:30:00Z",
+              contact_id: "c5",
+              calendar_event_types: { reminder_enabled: true, reminder_minutes_before: 1440, reminder_extra_offsets_minutes: null },
+            },
+            {
+              id: "ag-curto",
+              title: "Retorno",
+              starts_at: "2026-10-01T13:45:00Z",
+              contact_id: "c6",
+              calendar_event_types: { reminder_enabled: true, reminder_minutes_before: 60, reminder_extra_offsets_minutes: null },
+            },
+          ],
+        },
+      },
+      // `ag-com` já tem pedido: o lembrete saiu e ele segue o caminho normal
+      clinic_confirmation_requests: { select: { data: [{ appointment_id: "ag-com" }] } },
+      crm_tasks: { insert: { data: { id: "t-nao-saiu" } } },
+    });
+    expect(await marcarLembretesQueNaoSairam(cliente, new Date("2026-10-01T10:00:00Z"))).toEqual({ marcados: 1, falhas: 0 });
+    const orgs = chamadas.find((c) => c.tabela === "organizations");
+    expect(orgs?.filtros).toContainEqual(["eq", "settings->clinic->>confirmacao_automatica", "true"]);
+    const ags = chamadas.find((c) => c.tabela === "calendar_appointments");
+    expect(ags?.filtros).toEqual(
+      expect.arrayContaining([
+        ["eq", "organization_id", "org-4"],
+        ["eq", "status", "confirmed"],
+        // compromisso recém-marcado ainda pode receber o lembrete: 30 min de folga
+        ["lt", "created_at", "2026-10-01T09:30:00.000Z"],
+      ]),
+    );
+    const inserido = chamadas.find((c) => c.tabela === "clinic_confirmation_requests" && c.op === "insert");
+    expect(inserido?.valores).toEqual({
+      organization_id: "org-4",
+      appointment_id: "ag-sem",
+      contact_id: "c4",
+      status: "sem_resposta",
+      falha: "nao_enviado",
+      task_id: "t-nao-saiu",
+    });
+    const tarefas = chamadas.filter((c) => c.tabela === "crm_tasks" && c.op === "insert");
+    expect(tarefas).toHaveLength(1);
+    expect(tarefas[0]?.valores).toMatchObject({ title: "O lembrete não saiu — ligar para confirmar", contact_id: "c4" });
   });
 });

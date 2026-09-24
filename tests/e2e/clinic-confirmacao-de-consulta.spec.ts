@@ -13,6 +13,9 @@
  *      selo vira "Sem resposta — ligar";
  *   5. ele responde "não posso": "Pediu para remarcar" e a tarefa de remarcar;
  *   6. desliga a opção (deixa o ambiente como achou).
+ *
+ * Segundo teste (migration 9006): o lembrete que saiu e terminou `failed`, e o
+ * lembrete que nem saiu, viram tarefa de ligar e selo próprio na tela.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -199,8 +202,8 @@ test("confirmação de consulta: SIM, NÃO e sem resposta — pela tela", async 
   // ── 4. sem resposta a menos de 4 h: tarefa de ligar ───────────────────────
   const daquiADuasHoras = new Date(Date.now() + 2 * 3_600_000);
   const bruno = await cenario(`Bruno Silencio${sufixo}`, `+551194${sufixo}`, daquiADuasHoras, sessao);
-  const resultado = (await cron(page, "clinic-confirmacao-sem-resposta")) as { marcados: number };
-  expect(resultado.marcados).toBeGreaterThanOrEqual(1);
+  const resultado = (await cron(page, "clinic-confirmacao-sem-resposta")) as { sem_resposta: number };
+  expect(resultado.sem_resposta).toBeGreaterThanOrEqual(1);
   selo = await seloNoDetalhe(page, bruno);
   await expect(selo).toHaveText("Sem resposta — ligar");
   await foto(page, "05-detalhe-sem-resposta");
@@ -241,5 +244,112 @@ test("confirmação de consulta: SIM, NÃO e sem resposta — pela tela", async 
   ]);
 
   // ── 6. deixa o ambiente como achou ────────────────────────────────────────
+  await ligarConfirmacao(page, false);
+});
+
+test("lembrete que falhou vira tarefa de ligar na hora — pela tela", async ({ page }) => {
+  test.setTimeout(240_000);
+  await loginComoAdmin(page, creds as unknown as CredsE2E);
+  await ligarConfirmacao(page, true);
+  const sessao = await sessaoDoCanal();
+  const sufixo = Date.now().toString().slice(-8);
+
+  // ── o lembrete saiu, mas a mensagem terminou `failed` ─────────────────────
+  const carla = await cenario(`Carla Falhou${sufixo}`, `+551193${sufixo}`, new Date(Date.now() + 20 * 3_600_000), sessao);
+  const { data: msg, error: eMsg } = await admin
+    .from("messages")
+    .insert({
+      organization_id: creds.org_id,
+      conversation_id: carla.conversaId,
+      channel_session_id: sessao,
+      contact_id: carla.contatoId,
+      direction: "outbound",
+      type: "text",
+      body: "Lembrete da consulta — responda SIM ou NÃO",
+      status: "failed",
+    })
+    .select("id")
+    .single();
+  if (eMsg) throw new Error(`mensagem do lembrete: ${eMsg.message}`);
+  await admin
+    .from("clinic_confirmation_requests")
+    .update({ reminder_message_id: (msg as { id: string }).id })
+    .eq("appointment_id", carla.agendamentoId);
+
+  // ── o lembrete nem saiu: consulta a 2 h, tipo que pede confirmação ────────
+  const { data: tipo, error: eTipo } = await admin
+    .from("calendar_event_types")
+    .insert({
+      organization_id: creds.org_id,
+      name: `Consulta com lembrete ${sufixo}`,
+      slug: `consulta-lembrete-${sufixo}`,
+      reminder_enabled: true,
+      reminder_minutes_before: 1440,
+    })
+    .select("id")
+    .single();
+  if (eTipo) throw new Error(`tipo: ${eTipo.message}`);
+  const { data: davi } = await admin
+    .from("contacts")
+    .insert({ organization_id: creds.org_id, name: `Davi Semlembrete${sufixo}`, phone_number: `+551192${sufixo}` })
+    .select("id")
+    .single();
+  const inicioDavi = new Date(Date.now() + 2 * 3_600_000);
+  const { data: agDavi, error: eAg } = await admin
+    .from("calendar_appointments")
+    .insert({
+      organization_id: creds.org_id,
+      event_type_id: (tipo as { id: string }).id,
+      title: "Consulta de avaliação",
+      starts_at: inicioDavi.toISOString(),
+      ends_at: new Date(inicioDavi.getTime() + 30 * 60_000).toISOString(),
+      owner_user_id: creds.users.agent!.id,
+      contact_id: (davi as { id: string }).id,
+      status: "confirmed",
+      // marcado ontem: o lembrete de 24 h já devia ter saído
+      created_at: new Date(Date.now() - 86_400_000).toISOString(),
+    })
+    .select("id")
+    .single();
+  if (eAg) throw new Error(`agendamento: ${eAg.message}`);
+  const agendamentoDavi = (agDavi as { id: string }).id;
+
+  const r = (await cron(page, "clinic-confirmacao-sem-resposta")) as { envio_falhou: number; nao_enviado: number };
+  expect(r.envio_falhou).toBeGreaterThanOrEqual(1);
+  expect(r.nao_enviado).toBeGreaterThanOrEqual(1);
+
+  let selo = await seloNoDetalhe(page, carla);
+  await expect(selo).toHaveText("Lembrete não chegou — ligar");
+  await foto(page, "08-detalhe-lembrete-nao-chegou");
+
+  await page.goto(`/app/agenda?compromisso=${agendamentoDavi}`);
+  selo = page.getByTestId("visita-do-paciente").getByTestId("selo-da-confirmacao");
+  await expect(selo).toHaveText("Lembrete não saiu — ligar", { timeout: 20_000 });
+  await foto(page, "09-detalhe-lembrete-nao-saiu");
+
+  const { data: tarefas } = await admin
+    .from("crm_tasks")
+    .select("title, contact_id")
+    .eq("organization_id", creds.org_id)
+    .in("contact_id", [carla.contatoId, (davi as { id: string }).id]);
+  expect((tarefas ?? []).map((t) => (t as { title: string }).title).sort()).toEqual([
+    "O lembrete não chegou — ligar para confirmar",
+    "O lembrete não saiu — ligar para confirmar",
+  ]);
+  await page.goto("/app/tasks");
+  await expect(page.getByText("O lembrete não saiu — ligar para confirmar").first()).toBeVisible({ timeout: 20_000 });
+  await foto(page, "10-tarefas-lembrete-que-falhou");
+
+  // uma segunda rodada não duplica nada
+  const r2 = (await cron(page, "clinic-confirmacao-sem-resposta")) as { envio_falhou: number; nao_enviado: number };
+  const { count } = await admin
+    .from("crm_tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", creds.org_id)
+    .in("contact_id", [carla.contatoId, (davi as { id: string }).id]);
+  expect(count).toBe(2);
+  expect(r2).toBeTruthy();
+
+  await admin.from("calendar_event_types").update({ is_active: false }).eq("id", (tipo as { id: string }).id);
   await ligarConfirmacao(page, false);
 });

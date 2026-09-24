@@ -193,3 +193,26 @@ describe("opção confirmacao_automatica", () => {
     ).toBe("f");
   });
 });
+
+describe("migration 9006: o lembrete que falhou", () => {
+  it("falha só aceita envio_falhou ou nao_enviado", () => {
+    expect(
+      erroComo(AGENT_A, `update public.clinic_confirmation_requests set falha = 'talvez' where appointment_id = '${AG_A}';`),
+    ).toMatch(/clinic_confirmation_requests_falha_check/);
+    expect(
+      erroComo(AGENT_A, `update public.clinic_confirmation_requests set falha = 'envio_falhou' where appointment_id = '${AG_A}';`),
+    ).toBeNull();
+  });
+
+  it("reminder_message_id aponta para messages (e some com a mensagem, sem apagar o pedido)", () => {
+    const fk = ultima(
+      sql(`select confdeltype from pg_constraint
+            where conrelid = 'public.clinic_confirmation_requests'::regclass
+              and contype = 'f'
+              and conkey = array[(select attnum from pg_attribute
+                                    where attrelid = 'public.clinic_confirmation_requests'::regclass
+                                      and attname = 'reminder_message_id')]::smallint[];`),
+    );
+    expect(fk).toBe("n"); // on delete set null
+  });
+});
