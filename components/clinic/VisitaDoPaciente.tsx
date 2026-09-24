@@ -47,7 +47,7 @@ interface Visita {
   visita: { status: StatusDaVisita };
   eventos: EventoDaVisita[];
   /** FORK clinic (9004): a resposta ao pedido de confirmação, se houve pedido. */
-  confirmacao: { status: string } | null;
+  confirmacao: { status: string; falha: string | null } | null;
 }
 
 export const COR_DO_STATUS: Record<StatusDaVisita, string> = {
@@ -128,7 +128,7 @@ export function VisitaDoPaciente({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-text-muted">{t("Status da visita")}:</span>
         <SeloDaVisita status={atual} />
-        <SeloDaConfirmacao status={consulta.data?.confirmacao?.status} />
+        <SeloDaConfirmacao status={consulta.data?.confirmacao?.status} falha={consulta.data?.confirmacao?.falha} />
       </div>
 
       {podeMudar ? (

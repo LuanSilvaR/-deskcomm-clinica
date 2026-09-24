@@ -63,12 +63,12 @@ export async function GET(req: NextRequest): Promise<Response> {
   const { data: confirmacoes } = ids.length
     ? await supabase
         .from("clinic_confirmation_requests")
-        .select("appointment_id, status")
+        .select("appointment_id, status, falha")
         .eq("organization_id", org)
         .in("appointment_id", ids)
     : { data: [] };
   const confirmacaoPorAgendamento = new Map(
-    (confirmacoes ?? []).map((c) => [c.appointment_id as string, c.status as string]),
+    (confirmacoes ?? []).map((c) => [c.appointment_id as string, { status: c.status as string, falha: (c.falha as string | null) ?? null }]),
   );
   const porAgendamento = new Map((visitas ?? []).map((v) => [v.appointment_id as string, v]));
 
@@ -86,7 +86,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       paciente: nomeDoContato(c),
       status: v && ehStatusDaVisita(v.status) ? v.status : "agendado",
       desde: v?.changed_at ?? null,
-      confirmacao: confirmacaoPorAgendamento.get(a.id as string) ?? null,
+      confirmacao: confirmacaoPorAgendamento.get(a.id as string)?.status ?? null,
+      confirmacao_falha: confirmacaoPorAgendamento.get(a.id as string)?.falha ?? null,
     };
   });
   return ok({ dia, itens }, { requestId });

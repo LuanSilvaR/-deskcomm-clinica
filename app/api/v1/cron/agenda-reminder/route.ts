@@ -413,7 +413,7 @@ async function handle(req: NextRequest): Promise<Response> {
       // o mesmo que `lib/followup/enviar-texto-fixo.ts` usa. O `id` é o
       // compromisso, para o audit da mensagem correlacionar com a linha que a
       // originou.
-      await sendMessageHandler(
+      const mensagem = await sendMessageHandler(
         admin,
         {
           organization_id: org,
@@ -448,6 +448,7 @@ async function handle(req: NextRequest): Promise<Response> {
           appointmentId: linha.id,
           contactId: contato.id,
           conversationId: conversaId,
+          reminderMessageId: mensagem.id,
         }).catch((err: unknown) =>
           logger.error("[agenda-reminder] pedido de confirmação não registrado", {
             appointmentId: linha.id,

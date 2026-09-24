@@ -16,3 +16,16 @@ export const ROTULO_DA_CONFIRMACAO: Record<StatusDaConfirmacao, string> = {
   recusado: "Pediu para remarcar",
   sem_resposta: "Sem resposta — ligar",
 };
+
+/** Por que o paciente não pôde responder (migration 9006). */
+export const FALHAS_DO_LEMBRETE = ["envio_falhou", "nao_enviado"] as const;
+export type FalhaDoLembrete = (typeof FALHAS_DO_LEMBRETE)[number];
+
+export function ehFalhaDoLembrete(v: unknown): v is FalhaDoLembrete {
+  return typeof v === "string" && (FALHAS_DO_LEMBRETE as readonly string[]).includes(v);
+}
+
+export const ROTULO_DA_FALHA: Record<FalhaDoLembrete, string> = {
+  envio_falhou: "Lembrete não chegou — ligar",
+  nao_enviado: "Lembrete não saiu — ligar",
+};

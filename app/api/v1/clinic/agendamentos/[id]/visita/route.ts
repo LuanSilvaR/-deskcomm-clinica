@@ -49,7 +49,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
     // FORK clinic (9004): a resposta do paciente ao pedido de confirmação.
     supabase
       .from("clinic_confirmation_requests")
-      .select("status, requested_at, answered_at")
+      .select("status, falha, requested_at, answered_at")
       .eq("organization_id", org)
       .eq("appointment_id", id)
       .maybeSingle(),

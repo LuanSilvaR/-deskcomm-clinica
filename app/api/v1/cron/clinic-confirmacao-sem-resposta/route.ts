@@ -10,6 +10,10 @@
  * A cada 15 min: a janela de 4 h é larga, e o atraso máximo de 15 min não tira
  * o tempo de ligar.
  *
+ * Desde a 9006 a mesma rodada cobre os dois casos em que o paciente NÃO PODIA
+ * responder: o lembrete saiu e a mensagem terminou `failed` (tarefa na hora) e
+ * o lembrete nem saiu (tarefa a 4 h). Ver `varrerConfirmacoes`.
+ *
  * Não fala com o paciente e não libera o horário — a decisão é da recepção.
  */
 import { randomUUID } from "node:crypto";
@@ -18,7 +22,7 @@ import type { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { autorizaCron } from "@/lib/auth/cron-auth";
-import { marcarSemResposta } from "@/lib/clinic/confirmacao/servidor";
+import { varrerConfirmacoes, type ResultadoDaVarredura } from "@/lib/clinic/confirmacao/servidor";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -31,9 +35,9 @@ async function handle(req: NextRequest): Promise<Response> {
     return fail("forbidden", "Cron secret missing or invalid.", 403, { requestId });
   }
 
-  let resultado: { marcados: number; falhas: number };
+  let resultado: ResultadoDaVarredura;
   try {
-    resultado = await marcarSemResposta(createAdminClient(), new Date());
+    resultado = await varrerConfirmacoes(createAdminClient(), new Date());
   } catch (err) {
     logger.error("[clinic-confirmacao-sem-resposta] varredura falhou", {
       error: err instanceof Error ? err.message : String(err),
@@ -44,12 +48,12 @@ async function handle(req: NextRequest): Promise<Response> {
 
   // Rodada que não abriu tarefa nenhuma não é mutação e não audita
   // (CLAUDE.md §Audit log; tests/unit/cron-audita-so-quando-ha-efeito.test.ts).
-  if (resultado.marcados > 0) {
+  if (resultado.sem_resposta + resultado.envio_falhou + resultado.nao_enviado > 0) {
     await audit({
       action: "clinic.confirmacao_sem_resposta",
       resourceType: "clinic_confirmation_request",
       requestId,
-      metadata: resultado,
+      metadata: { ...resultado },
     });
   }
 
