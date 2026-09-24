@@ -1,5 +1,6 @@
 "use client";
 
+import { StatusNoBloco, useRotuloDoStatusNaAgenda, useTituloDoBloco } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
 import * as React from "react";
 
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
@@ -325,6 +326,9 @@ function BlocoDeAgendamento({
   };
 }) {
   const t = useT();
+  // FORK clinic: ", Na recepção" no aria-label (vazio fora da clínica).
+  const rotuloDoStatus = useRotuloDoStatusNaAgenda(agendamento);
+  const tituloDoBloco = useTituloDoBloco(agendamento);
   const comeca = new Date(agendamento.comeca);
   const termina = new Date(agendamento.termina);
   const duracao = Math.max(differenceInMinutes(termina, comeca), 15);
@@ -370,7 +374,7 @@ function BlocoDeAgendamento({
       // por `t()` fazia "Retorno" virar "Seguimiento" na leitura de tela.
       aria-label={`${agendamento.titulo}, ${format(comeca, "HH:mm")} ${t("às")} ${format(termina, "HH:mm")}${
         agendamento.quemSeraAtendido ? `, ${t("com")} ${agendamento.quemSeraAtendido}` : ""
-      }${pessoa ? `, ${t("atendido por")} ${pessoa.nome}` : ""}${
+      }${pessoa ? `, ${t("atendido por")} ${pessoa.nome}` : ""}${rotuloDoStatus}${
         doGoogle ? `, ${t("ocupado na agenda do Google")}` : ""
       }`}
       className={cn(
@@ -425,7 +429,9 @@ function BlocoDeAgendamento({
         style={{ backgroundColor: doGoogle ? "var(--color-border-strong)" : corDaTrilha(trilha) }}
       />
       <span className="ml-1 truncate text-[11px] font-semibold leading-4 text-text">
-        {agendamento.titulo}
+        {/* FORK clinic: o ícone do status da visita (texto no aria-label). */}
+        <StatusNoBloco agendamento={agendamento} />
+        {tituloDoBloco}
       </span>
       {duracao >= 45 && (
         <span className="ml-1 truncate text-[10px] leading-3 tabular-nums text-text-muted">
