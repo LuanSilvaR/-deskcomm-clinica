@@ -50,3 +50,15 @@ export function travaSobreposicaoLigada(settings: unknown): boolean {
   if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
   return (clinic as Record<string, unknown>).trava_sobreposicao === true;
 }
+
+/**
+ * `organizations.settings.clinic.menu_clinica` (migration 9014): a casca desenha
+ * o menu por módulos da clínica. É apresentação — não concede nem tira acesso.
+ * Mesma régua: só o booleano `true` liga.
+ */
+export function menuClinicaLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).menu_clinica === true;
+}
