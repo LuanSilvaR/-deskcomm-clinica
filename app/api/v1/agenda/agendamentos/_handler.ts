@@ -394,6 +394,9 @@ export async function marcarAgendamentoHandler(
     .select("id, starts_at, ends_at, status, time_zone, revision, meeting_state, meeting_url")
     .single();
   if (erroInsert) {
+    // FORK clinic (9005): a trava de sobreposição do banco fecha a corrida que a
+    // conferência acima não fecha (duas marcações no mesmo instante).
+    if (erroInsert.code === HORARIO_OCUPADO_NO_BANCO) throw horarioOcupadoNoBanco(ctx);
     throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroInsert.message);
   }
 
@@ -1108,8 +1111,25 @@ async function leadAtivoDoContato(
   return rota.routed ? rota.leadId : null;
 }
 
+/**
+ * FORK clinic (migration 9005): `23P01` é a trava de sobreposição do banco
+ * (`trg_clinic_trava_sobreposicao`, ligada por organização). Sai como o MESMO
+ * 422 da conferência do código — para a tela e para a IA é a mesma recusa.
+ */
+const HORARIO_OCUPADO_NO_BANCO = "23P01";
+function horarioOcupadoNoBanco(ctx: HandlerCtx): ApiError {
+  return new ApiError(
+    422,
+    "agenda_horario_indisponivel",
+    undefined,
+    ctx.requestId,
+    "Este horário acabou de ser ocupado na agenda de quem atende. Consulte os horários livres e escolha outro.",
+  );
+}
+
 async function alteraComRevisao(supabase:SB,ctx:HandlerCtx,id:string,revision:number,patch:Record<string,unknown>):Promise<Record<string,unknown>> {
   const {data,error}=await supabase.rpc("fn_appointment_change",{p_org:ctx.organization_id,p_id:id,p_revision:revision,p_patch:patch});
+  if(error?.code === HORARIO_OCUPADO_NO_BANCO) throw horarioOcupadoNoBanco(ctx);
   if(error) throw new ApiError(error.code === "40001" ? 409 : error.code === "42501" ? 403 : error.code === "P0002" ? 404 : 422,
     error.code === "40001" ? "conflict" : error.code === "42501" ? "forbidden" : error.code === "P0002" ? "not_found" : "validation_failed",undefined,ctx.requestId,
     error.code === "40001" ? "Este compromisso mudou. Atualize os dados antes de confirmar novamente." : "Não foi possível alterar este compromisso. Confira a presença, o horário e a mensagem vinculada.");

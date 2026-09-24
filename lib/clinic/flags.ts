@@ -38,3 +38,15 @@ export async function clinicProfissionaisDaOrg(
     return false;
   }
 }
+
+/**
+ * `organizations.settings.clinic.trava_sobreposicao` (migration 9005): o banco
+ * recusa compromisso que cruza outro na agenda do mesmo profissional. Mesma
+ * régua: só o booleano `true` liga.
+ */
+export function travaSobreposicaoLigada(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).trava_sobreposicao === true;
+}

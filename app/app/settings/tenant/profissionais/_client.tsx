@@ -17,6 +17,7 @@ interface Props {
   ligadoInicial: boolean;
   fichaObrigatoriaInicial: boolean;
   confirmacaoInicial: boolean;
+  travaInicial: boolean;
   podeLigar: boolean;
   ehGerencia: boolean;
   usuarioAtualId: string;
@@ -26,6 +27,7 @@ export function ProfissionaisClient({
   ligadoInicial,
   fichaObrigatoriaInicial,
   confirmacaoInicial,
+  travaInicial,
   podeLigar,
   ehGerencia,
   usuarioAtualId,
@@ -34,6 +36,14 @@ export function ProfissionaisClient({
   const [ligado, setLigado] = useState(ligadoInicial);
   const [fichaObrigatoria, setFichaObrigatoria] = useState(fichaObrigatoriaInicial);
   const [confirmacao, setConfirmacao] = useState(confirmacaoInicial);
+  const [trava, setTrava] = useState(travaInicial);
+
+  const alternarTrava = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { trava_sobreposicao: boolean } }>("/api/v1/clinic/config", { trava_sobreposicao: valor }),
+    onSuccess: (r) => setTrava(r.data.trava_sobreposicao),
+    onError: showApiError,
+  });
 
   const alternarConfirmacao = useMutation({
     mutationFn: (valor: boolean) =>
@@ -136,6 +146,32 @@ export function ProfissionaisClient({
             onClick={() => alternarConfirmacao.mutate(!confirmacao)}
           >
             {confirmacao ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${trava ? "" : "bg-muted"}`}
+        data-testid="clinic-trava"
+      >
+        <div>
+          <p className="font-medium">
+            {trava ? t("Trava de horário duplicado ligada") : t("Trava de horário duplicado desligada")}
+          </p>
+          <p className="text-sm text-text-muted">
+            {trava
+              ? t("O banco recusa dois atendimentos que se cruzam na agenda do mesmo profissional, mesmo marcados no mesmo instante pela recepção e pelo agente de IA.")
+              : t("Ligue para o banco recusar atendimentos que se cruzam na agenda do mesmo profissional. O espelho do Google Agenda não é afetado.")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-trava-alternar"
+            variant={trava ? "outline" : "default"}
+            disabled={alternarTrava.isPending}
+            onClick={() => alternarTrava.mutate(!trava)}
+          >
+            {trava ? t("Desligar") : t("Ligar")}
           </Button>
         ) : null}
       </section>

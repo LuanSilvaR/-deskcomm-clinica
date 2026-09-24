@@ -269,6 +269,15 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-confirmacao-de-consulta.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 9005).
+    fn: "fn_clinic_definir_trava_sobreposicao(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.trava_sobreposicao da organização informada. " +
+      "tests/invariants/clinic-trava-de-sobreposicao.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9002).
     fn: "fn_clinic_definir_ficha_obrigatoria(uuid,boolean)",
     razao:

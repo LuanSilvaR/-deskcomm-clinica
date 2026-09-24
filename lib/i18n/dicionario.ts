@@ -11718,6 +11718,12 @@ export const DICIONARIO: Traducoes = {
   "O lembrete de 12 h ou mais antes pede SIM ou NÃO. Sem resposta até 4 h antes, a recepção recebe a tarefa de ligar.": { es: "El recordatorio de 12 h o más antes pide SÍ o NO. Sin respuesta hasta 4 h antes, la recepción recibe la tarea de llamar." },
   "Ligue para o lembrete da véspera pedir SIM ou NÃO ao paciente. Vale para os tipos de atendimento com lembrete ligado.": { es: "Actívela para que el recordatorio del día anterior pida SÍ o NO al paciente. Vale para los tipos de atención con recordatorio activado." },
   "Responda *SIM* para confirmar ou *NÃO* se precisar remarcar.": { es: "Responda *SÍ* para confirmar o *NO* si necesita reprogramar." },
+  // ── FORK clinic (migration 9005): trava de sobreposição ──
+  "Trava de horário duplicado ligada": { es: "Bloqueo de horario duplicado activado" },
+  "Trava de horário duplicado desligada": { es: "Bloqueo de horario duplicado desactivado" },
+  "O banco recusa dois atendimentos que se cruzam na agenda do mesmo profissional, mesmo marcados no mesmo instante pela recepção e pelo agente de IA.": { es: "La base de datos rechaza dos atenciones que se cruzan en la agenda del mismo profesional, incluso si la recepción y el agente de IA las marcan en el mismo instante." },
+  "Ligue para o banco recusar atendimentos que se cruzam na agenda do mesmo profissional. O espelho do Google Agenda não é afetado.": { es: "Actívelo para que la base de datos rechace atenciones que se cruzan en la agenda del mismo profesional. El espejo de Google Calendar no se ve afectado." },
+  "Este horário acabou de ser ocupado na agenda de quem atende. Consulte os horários livres e escolha outro.": { es: "Este horario acaba de ser ocupado en la agenda de quien atiende. Consulte los horarios libres y elija otro." },
   "Quem chegou, quem está pronto para ser chamado e quem está em atendimento, em tempo real.": { es: "Quién llegó, quién está listo para ser llamado y quién está en atención, en tiempo real." },
   "Os pacientes agendados hoje, do momento em que chegam até o fim do atendimento. Atualiza sozinho.": { es: "Los pacientes agendados hoy, desde que llegan hasta el final de la atención. Se actualiza solo." },
   "Complete a ficha do paciente (abra o agendamento na Agenda).": { es: "Completa la ficha del paciente (abre la cita en la Agenda)." },
