@@ -735,6 +735,9 @@ jobs:
         clinic-papeis-de-acesso.spec.ts
         clinic-menu-da-clinica.spec.ts
         clinic-inicio-da-recepcao.spec.ts
+        clinic-atendimento-fila.spec.ts
+        clinic-modelos-clinicos.spec.ts
+        clinic-documentos.spec.ts
         clinic-agenda-melhorias.spec.ts
         clinic-procedimentos.spec.ts
         clinic-pop.spec.ts

@@ -10,6 +10,8 @@ import {
   dependenciasFaltando,
   ehPermissao,
   nivelDerivado,
+  PERMISSOES_CLINICAS,
+  permissoesClinicasDoNivel,
   permissoesDoNivel,
 } from "./catalogo";
 
@@ -55,5 +57,46 @@ describe("catálogo de permissões", () => {
     expect(nivelDerivado([])).toBe("viewer");
     expect(nivelDerivado(["sistema.superpoder"])).toBe("viewer");
     expect(nivelDerivado(["agenda.ver", "financeiro.estornar"])).toBe("manager");
+  });
+});
+
+describe("conteúdo clínico (9016)", () => {
+  it("existe e cobre prontuário, atendimento, planos, fotos e anexos", () => {
+    expect(PERMISSOES_CLINICAS).toEqual(
+      expect.arrayContaining([
+        "prontuario.ver",
+        "atendimento.iniciar",
+        "atendimento.registrar",
+        "atendimento.finalizar",
+        "atendimento.reabrir",
+        "planos.ver",
+        "fotos.ver",
+        "anexos.ver",
+      ]),
+    );
+  });
+
+  it("nenhum papel-modelo (nem o Administrador) recebe chave clínica pelo nível", () => {
+    for (const m of PAPEIS_MODELO) {
+      expect(permissoesDoNivel(m.nivel).filter((k) => PERMISSOES_CLINICAS.includes(k))).toEqual([]);
+    }
+  });
+
+  it("recepção, fila, documentos e configuração de modelos NÃO são clínicas (não expõem prontuário)", () => {
+    for (const k of ["atendimento.ver_fila", "documentos.ver", "documentos.emitir", "documentos.colher_aceite", "modelos_clinicos.gerenciar"]) {
+      expect(CATALOGO_DE_PERMISSOES[k]?.clinica ?? false, k).toBe(false);
+    }
+  });
+
+  it("nenhuma chave clínica é crítica (o Administrador pode viver sem elas)", () => {
+    for (const k of PERMISSOES_CLINICAS) expect(CATALOGO_DE_PERMISSOES[k]!.critica ?? false, k).toBe(false);
+  });
+
+  it("profissional do nível atendente fecha as dependências com o que o nível dá", () => {
+    const chaves = [...permissoesDoNivel("agent"), ...permissoesClinicasDoNivel("agent")];
+    expect(dependenciasFaltando(chaves)).toEqual([]);
+    expect(chaves).not.toContain("atendimento.reabrir");
+    expect(permissoesClinicasDoNivel("manager")).toContain("atendimento.reabrir");
+    expect(permissoesClinicasDoNivel("viewer")).toEqual([]);
   });
 });

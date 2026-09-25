@@ -74,7 +74,7 @@ export function PainelDaRecepcao({
     queryKey: CHAVE,
     queryFn: async () =>
       (
-        await apiClient.get<{ data: { dia: string; itens: ItemDoDia[] } }>(
+        await apiClient.get<{ data: { dia: string; itens: ItemDoDia[]; prontuario?: boolean } }>(
           `/api/v1/clinic/visitas${diaEscolhido ? `?dia=${diaEscolhido}` : ""}`,
         )
       ).data,
@@ -108,6 +108,9 @@ export function PainelDaRecepcao({
 
   const nome = (id: string | null) => pessoas.find((p) => p.id === id)?.nome ?? t("Sem profissional");
   const itens = dia.data?.itens ?? [];
+  // FORK clinic (prontuário F1): com o prontuário ligado, iniciar e finalizar o
+  // atendimento é do profissional, pela fila dele — a recepção só aponta para lá.
+  const prontuario = dia.data?.prontuario === true;
 
   return (
     <div className="space-y-3" data-testid="painel-da-recepcao" data-realtime-status={statusDoTempoReal}>
@@ -163,7 +166,17 @@ export function PainelDaRecepcao({
                           </span>
                         ) : null}
                       </div>
-                      {podeMudar && proximo ? (
+                      {prontuario && proximo && (proximo.para === "em_atendimento" || proximo.para === "finalizado") ? (
+                        <Link
+                          href="/app/atendimentos?todos=1"
+                          className="block text-center text-xs text-text-muted underline-offset-4 hover:underline"
+                          data-testid="recepcao-ver-fila"
+                        >
+                          {proximo.para === "em_atendimento"
+                            ? t("O profissional inicia pela fila de atendimentos")
+                            : t("O profissional finaliza pela fila de atendimentos")}
+                        </Link>
+                      ) : podeMudar && proximo ? (
                         <Button
                           size="sm"
                           variant={destaque ? "default" : "outline"}

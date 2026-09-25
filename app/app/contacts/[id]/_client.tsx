@@ -27,11 +27,18 @@ import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { origemDoContato } from "@/lib/leads/origem-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { FichaDoPaciente } from "@/components/clinic/FichaDoPaciente";
+import { AnexosDoPaciente } from "@/components/clinic/anexos/AnexosDoPaciente";
+import { DocumentosDoPaciente } from "@/components/clinic/documentos/DocumentosDoPaciente";
+import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
+import { ProntuarioDoPaciente } from "@/components/clinic/prontuario/ProntuarioDoPaciente";
+import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
 import { HistoricoDeAtendimentos } from "@/components/clinic/HistoricoDeAtendimentos";
 import { DialButton } from "@/components/voice/DialButton";
 
 interface Props {
   contactId: string;
+  /** FORK clinic (prontuário F2): `?aba=` da URL, lido pela página (servidor). */
+  abaInicial?: string;
 }
 
 /**
@@ -52,9 +59,16 @@ function NivelDaOrigem({ rotulo, valor }: { rotulo: string; valor: string | null
   );
 }
 
-export function ContactDetailClient({ contactId }: Props) {
+export function ContactDetailClient({ contactId, abaInicial }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  // FORK clinic (prontuário F2): a aba Prontuário só existe para quem tem
+  // `prontuario.ver` — administrar o sistema não é ver conteúdo clínico.
+  const { can } = usePermissoes();
+  const verProntuario = can("prontuario.ver");
+  const verPlanos = can("planos.ver");
+  const verDocumentos = can("documentos.ver");
+  const abaPedida = abaInicial ?? null;
   const q = useContact(contactId);
   const { user, activeOrg } = useAuth();
   const clientesLigado = activeOrg?.cliente_pela_agenda === true;
@@ -182,10 +196,30 @@ export function ContactDetailClient({ contactId }: Props) {
         />
       )}
 
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={["prontuario", "planos", "documentos", "anexos"].includes(abaPedida ?? "") ? abaPedida! : "overview"}>
         <TabsList>
           <TabsTrigger value="overview">{t("Visão geral")}</TabsTrigger>
           <TabsTrigger value="ficha">{t("Ficha do paciente")}</TabsTrigger>
+          {verProntuario && (
+            <TabsTrigger value="prontuario" data-testid="aba-prontuario">
+              {t("Prontuário")}
+            </TabsTrigger>
+          )}
+          {verProntuario && (
+            <TabsTrigger value="anexos" data-testid="aba-anexos">
+              {t("Fotos e anexos")}
+            </TabsTrigger>
+          )}
+          {verDocumentos && (
+            <TabsTrigger value="documentos" data-testid="aba-documentos">
+              {t("Documentos")}
+            </TabsTrigger>
+          )}
+          {verPlanos && (
+            <TabsTrigger value="planos" data-testid="aba-planos">
+              {t("Planos")}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           {isAdmin && <TabsTrigger value="lgpd">LGPD</TabsTrigger>}
         </TabsList>
@@ -293,6 +327,35 @@ export function ContactDetailClient({ contactId }: Props) {
             />
           </Card>
         </TabsContent>
+
+        {verProntuario && (
+          <TabsContent value="anexos" className="mt-4">
+            <Card className="p-4">
+              <AnexosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
+        {verDocumentos && (
+          <TabsContent value="documentos" className="mt-4">
+            <Card className="p-4">
+              <DocumentosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
+        {verPlanos && (
+          <TabsContent value="planos" className="mt-4">
+            <Card className="p-4">
+              <PlanosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
+        {verProntuario && (
+          <TabsContent value="prontuario" className="mt-4">
+            <Card className="p-4">
+              <ProntuarioDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="timeline" className="mt-4 space-y-4">
           {/* FORK clinic (migration 9003): agendamentos e atendimentos do paciente. */}
