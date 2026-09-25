@@ -882,6 +882,10 @@ export const AUDIT_ACTIONS = [
   "clinic.atendimento_iniciado",
   "clinic.atendimento_finalizado",
   "clinic.atendimento_visto",
+  // FORK clinic (9017/9018): registros do prontuário — metadados só
+  "clinic.registro_criado",
+  "clinic.adendo_criado",
+  "clinic.prontuario_visto",
   // FORK clinic (ACL): papéis de acesso e permissões
   "acesso.papel_criado",
   "acesso.papel_alterado",

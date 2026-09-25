@@ -64,6 +64,9 @@ export const ApiErrorCodes = {
   atendimento_em_andamento: "atendimento_em_andamento",
   // Atendimento já finalizado (ou anulado) não é reiniciado.
   atendimento_ja_encerrado: "atendimento_ja_encerrado",
+  // FORK clinic (9018): registro finalizado só aceita adendo; finalizar exige o mínimo.
+  prontuario_imutavel: "prontuario_imutavel",
+  requisitos_pendentes: "requisitos_pendentes",
   agenda_disponibilidade_invalida: "agenda_disponibilidade_invalida",
   agenda_ja_cancelado: "agenda_ja_cancelado",
   agenda_listagem_sem_recorte: "agenda_listagem_sem_recorte",

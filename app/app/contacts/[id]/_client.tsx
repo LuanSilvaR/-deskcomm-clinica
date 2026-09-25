@@ -27,6 +27,9 @@ import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { origemDoContato } from "@/lib/leads/origem-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { FichaDoPaciente } from "@/components/clinic/FichaDoPaciente";
+import { ProntuarioDoPaciente } from "@/components/clinic/prontuario/ProntuarioDoPaciente";
+import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
+import { useSearchParams } from "next/navigation";
 import { HistoricoDeAtendimentos } from "@/components/clinic/HistoricoDeAtendimentos";
 import { DialButton } from "@/components/voice/DialButton";
 
@@ -55,6 +58,11 @@ function NivelDaOrigem({ rotulo, valor }: { rotulo: string; valor: string | null
 export function ContactDetailClient({ contactId }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  // FORK clinic (prontuário F2): a aba Prontuário só existe para quem tem
+  // `prontuario.ver` — administrar o sistema não é ver conteúdo clínico.
+  const { can } = usePermissoes();
+  const verProntuario = can("prontuario.ver");
+  const abaPedida = useSearchParams().get("aba");
   const q = useContact(contactId);
   const { user, activeOrg } = useAuth();
   const clientesLigado = activeOrg?.cliente_pela_agenda === true;
@@ -182,10 +190,15 @@ export function ContactDetailClient({ contactId }: Props) {
         />
       )}
 
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={abaPedida === "prontuario" ? "prontuario" : "overview"}>
         <TabsList>
           <TabsTrigger value="overview">{t("Visão geral")}</TabsTrigger>
           <TabsTrigger value="ficha">{t("Ficha do paciente")}</TabsTrigger>
+          {verProntuario && (
+            <TabsTrigger value="prontuario" data-testid="aba-prontuario">
+              {t("Prontuário")}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           {isAdmin && <TabsTrigger value="lgpd">LGPD</TabsTrigger>}
         </TabsList>
@@ -293,6 +306,14 @@ export function ContactDetailClient({ contactId }: Props) {
             />
           </Card>
         </TabsContent>
+
+        {verProntuario && (
+          <TabsContent value="prontuario" className="mt-4">
+            <Card className="p-4">
+              <ProntuarioDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="timeline" className="mt-4 space-y-4">
           {/* FORK clinic (migration 9003): agendamentos e atendimentos do paciente. */}

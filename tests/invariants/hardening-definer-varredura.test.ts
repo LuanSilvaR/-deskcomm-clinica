@@ -320,6 +320,30 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-prazo-do-paciente.test.ts prova gerente recusado (42501), faixa e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 9017).
+    fn: "fn_clinic_salvar_formulario(uuid,uuid,text,uuid,jsonb,integer)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/formularios/[tipo]/route.ts (PUT) chama com createClient da sessão; " +
+      "fn_acesso_exigir exige atendimento.registrar (chave clínica), suporte de escrita e MFA; o atendimento e a versão do modelo são conferidos na organização informada; versão esperada evita sobrescrita. " +
+      "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9018).
+    fn: "fn_clinic_salvar_evolucao(uuid,uuid,text,text,text,text,text,integer)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/evolucao/route.ts (PUT) chama com createClient da sessão; " +
+      "fn_acesso_exigir exige atendimento.registrar (chave clínica), suporte de escrita e MFA; o atendimento é conferido na organização informada; versão esperada evita sobrescrita. " +
+      "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9018).
+    fn: "fn_clinic_adicionar_adendo(uuid,uuid,text,uuid,text,text)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/adendos/route.ts (POST) chama com createClient da sessão; " +
+      "fn_acesso_exigir exige prontuario.adendo (chave clínica), suporte de escrita e MFA; só em atendimento finalizado da organização informada; o alvo precisa ser do atendimento. " +
+      "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9016).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

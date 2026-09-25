@@ -185,6 +185,16 @@ describe("finalizar", () => {
   });
 
   it("profissional finaliza: status, horário, quem e evento; repetir não duplica", () => {
+    // 9018: o mínimo para finalizar é a evolução com conteúdo.
+    expect(erro(como(PROF, `select public.fn_clinic_finalizar_atendimento('${ORG}', '${atendimentoId}');`))).toMatch(
+      /requisitos_pendentes/,
+    );
+    sql(
+      como(
+        PROF,
+        `select public.fn_clinic_salvar_evolucao('${ORG}', '${atendimentoId}', 'Boa resposta.', null, null, null, null, 0);`,
+      ),
+    );
     const r = JSON.parse(ultima(sql(como(PROF, `select public.fn_clinic_finalizar_atendimento('${ORG}', '${atendimentoId}');`)))) as {
       mudou: boolean;
       appointment_id: string;

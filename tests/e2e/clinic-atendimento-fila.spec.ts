@@ -1,12 +1,15 @@
 /**
- * FORK clinic (prontuário F1, migration 9016) — a fila "Meus atendimentos", PELA TELA:
+ * FORK clinic (prontuário F1/F2, migrations 9016–9018) — a fila "Meus atendimentos" e
+ * os registros do atendimento, PELA TELA:
  *
  *   1. o admin liga a opção "prontuario" (config da clínica) e o atendente vira
  *      profissional ativo (service role, só no Supabase local);
  *   2. um paciente com horário agora na agenda do atendente chega (recepção);
  *   3. o atendente vê o paciente em "Aguardando" na fila dele e clica
  *      "Iniciar atendimento" — cai na área do atendimento;
- *   4. finaliza: o status vira "Finalizado";
+ *   4. finalizar sem evolução é barrado (lista do que falta); preenche a anamnese
+ *      (autosave "Salvo às") e a evolução, finaliza: o status vira "Finalizado";
+ *      acrescenta um adendo; a aba Prontuário do paciente mostra o atendimento;
  *   5. a recepção não vê "Iniciar/Finalizar" (aponta para a fila);
  *   6. desfaz: opção desligada e cadastro de profissional removido.
  */
@@ -119,10 +122,45 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     await expect(pAt.getByTestId("recepcao-ver-fila").first()).toBeVisible({ timeout: 20_000 });
     await pAt.goBack();
 
-    // 4. finalizar.
+    // 4. finalizar sem evolução: barrado, com a lista do que falta.
+    const urlDoAtendimento = pAt.url();
+    await pAt.getByTestId("atendimento-finalizar").click();
+    await expect(pAt.getByTestId("atendimento-pendencias")).toContainText("Evolução", { timeout: 20_000 });
+    await expect(pAt.getByTestId("atendimento-status")).toHaveText("Em atendimento");
+
+    // anamnese: escolhe o modelo, digita, o autosave grava.
+    await pAt.getByTestId("nav-anamnese").click();
+    await pAt.getByTestId("secao-anamnese").getByTestId("modelo-anamnese").filter({ hasText: "Anamnese geral" }).click();
+    await pAt.getByTestId("secao-anamnese").getByLabel("Queixa principal").fill("Queixa fictícia de teste E2E.");
+    await expect(pAt.getByTestId("secao-anamnese").getByText(/Salvo às/)).toBeVisible({ timeout: 20_000 });
+
+    // evolução.
+    await pAt.getByTestId("nav-evolucao").click();
+    await pAt.getByTestId("evolucao-resposta").fill("Evolução fictícia de teste E2E.");
+    await expect(pAt.getByTestId("secao-evolucao").getByText(/Salvo às/)).toBeVisible({ timeout: 20_000 });
+    await foto(pAt, "3-registros");
+
     await pAt.getByTestId("atendimento-finalizar").click();
     await expect(pAt.getByTestId("atendimento-status")).toHaveText("Finalizado", { timeout: 20_000 });
-    await foto(pAt, "3-finalizado");
+    await foto(pAt, "4-finalizado");
+
+    // finalizado: só leitura; correção é adendo, ao lado do original.
+    await expect(pAt.getByTestId("evolucao-resposta")).toHaveCount(0);
+    await pAt.getByTestId("secao-evolucao").getByTestId("adendo-abrir").click();
+    await pAt.getByTestId("secao-evolucao").getByLabel("Adendo", { exact: true }).fill("Adendo fictício de teste E2E.");
+    await pAt.getByTestId("secao-evolucao").getByLabel("Motivo", { exact: true }).fill("Complemento");
+    await pAt.getByTestId("secao-evolucao").getByTestId("adendo-salvar").click();
+    await expect(pAt.getByTestId("secao-evolucao").getByTestId("adendo")).toContainText("Adendo fictício de teste E2E.", { timeout: 20_000 });
+    await expect(pAt.getByTestId("secao-evolucao").getByText("Evolução fictícia de teste E2E.")).toBeVisible();
+
+    // aba Prontuário do paciente: a linha do tempo mostra o atendimento.
+    await pAt.goto(`/app/contacts/${(contato as { id: string }).id}?aba=prontuario`);
+    const prontuario = pAt.getByTestId("prontuario-do-paciente");
+    await expect(prontuario.getByText("Evolução fictícia de teste E2E.")).toBeVisible({ timeout: 20_000 });
+    await expect(prontuario.getByText("Queixa fictícia de teste E2E.")).toBeVisible();
+    await expect(prontuario.getByTestId("adendo")).toHaveCount(1);
+    await foto(pAt, "5-prontuario");
+    await pAt.goto(urlDoAtendimento);
     const { data: visita } = await admin.from("clinic_appointment_visits").select("status").eq("appointment_id", agId).single();
     expect((visita as { status: string }).status).toBe("finalizado");
     await pAt.close();

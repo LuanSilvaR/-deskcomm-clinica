@@ -277,6 +277,31 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-ficha-do-paciente.test.ts (FORK clinic, migration 9002): 2 orgs, quem é da A lê 0 linhas da B, atendente escreve e visualizador não, e anonimizar o contato apaga a ficha.",
   },
   {
+    tabela: "clinic_modelos_formulario",
+    razao:
+      "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9017/9018): 2 orgs, quem é da A lê 0 modelos da B; ninguém escreve direto.",
+  },
+  {
+    tabela: "clinic_modelos_formulario_versoes",
+    razao:
+      "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9017/9018): 2 orgs, quem é da A lê 0 versões da B; versões imutáveis.",
+  },
+  {
+    tabela: "clinic_formularios_preenchidos",
+    razao:
+      "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9017/9018): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; imutável após finalizar.",
+  },
+  {
+    tabela: "clinic_evolucoes",
+    razao:
+      "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9017/9018): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; imutável após finalizar.",
+  },
+  {
+    tabela: "clinic_adendos",
+    razao:
+      "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9017/9018): 2 orgs, quem é da A lê 0 linhas da B; append-only.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9016): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

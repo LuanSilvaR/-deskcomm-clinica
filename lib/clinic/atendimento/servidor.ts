@@ -41,6 +41,46 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
     code: "atendimento_ja_encerrado",
     mensagem: "Este atendimento já foi encerrado.",
   },
+  requisitos_pendentes: {
+    status: 422,
+    code: "requisitos_pendentes",
+    mensagem: "Faltam registros obrigatórios para finalizar o atendimento.",
+  },
+  registro_conflito: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Outra pessoa alterou este registro. Recarregue para ver a versão mais nova.",
+  },
+  prontuario_imutavel: {
+    status: 409,
+    code: "prontuario_imutavel",
+    mensagem: "Registro finalizado não pode ser alterado. Use um adendo.",
+  },
+  formulario_modelo_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Modelo de formulário inválido para esta seção.",
+  },
+  formulario_respostas_invalidas: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Respostas inválidas.",
+  },
+  adendo_so_em_finalizado: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Adendo só vale para atendimento finalizado. Enquanto está aberto, edite o registro.",
+  },
+  adendo_alvo_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "O registro do adendo não é deste atendimento.",
+  },
+  adendo_sem_motivo: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Informe o motivo do adendo.",
+  },
   acesso_mfa_exigido: {
     status: 403,
     code: "mfa_required",
@@ -53,11 +93,14 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
   },
 };
 
-function erroDoBanco(error: { message: string; code?: string }, requestId: string): ApiError {
+export function erroDoBanco(error: { message: string; code?: string; details?: string | null }, requestId: string): ApiError {
   const conhecido = Object.entries(ERROS_DO_BANCO).find(([chave]) => error.message.includes(chave));
   if (conhecido) {
-    const [, e] = conhecido;
-    return new ApiError(e.status, e.code, undefined, requestId, e.mensagem);
+    const [chave, e] = conhecido;
+    // `requisitos_pendentes` traz no detail a lista do que falta (ex.: "evolucao,anamnese").
+    const details =
+      chave === "requisitos_pendentes" && error.details ? { faltando: error.details.split(",").filter(Boolean) } : undefined;
+    return new ApiError(e.status, e.code, details, requestId, e.mensagem);
   }
   return new ApiError(500, "internal_error", undefined, requestId, error.message);
 }
@@ -90,22 +133,23 @@ export async function finalizarAtendimento(
   if (e1) throw new ApiError(500, "internal_error", undefined, ctx.requestId, e1.message);
   if (!at) throw new ApiError(404, "not_found", undefined, ctx.requestId, "Atendimento não encontrado.");
 
-  // A visita e o "Compareceu" do núcleo primeiro, pelo mesmo caminho da
-  // recepção. Se o passo seguinte falhar, repetir é seguro: os dois são idempotentes.
-  if (at.status === "em_andamento" && at.appointment_id) {
-    await mudarStatusDaVisita(supabase, ctx, {
-      appointmentId: at.appointment_id as string,
-      contactId: (at.contact_id as string | null) ?? null,
-      para: "finalizado",
-    });
-  }
-
+  // O registro clínico primeiro: é ele que pode recusar (requisitos pendentes).
   const { data, error } = await supabase.rpc("fn_clinic_finalizar_atendimento", {
     p_org: ctx.organization_id,
     p_atendimento: args.atendimentoId,
   });
   if (error) throw erroDoBanco(error, ctx.requestId);
   const r = data as { id: string; mudou: boolean };
+
+  // Depois a visita e o "Compareceu" do núcleo, pelo mesmo caminho da recepção.
+  // Idempotente: se este passo falhar, finalizar de novo o completa.
+  if (at.appointment_id) {
+    await mudarStatusDaVisita(supabase, ctx, {
+      appointmentId: at.appointment_id as string,
+      contactId: (at.contact_id as string | null) ?? null,
+      para: "finalizado",
+    });
+  }
   return { id: r.id, mudou: r.mudou };
 }
 
