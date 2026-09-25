@@ -31,7 +31,9 @@ const PASTAS = [
   "app/api/v1/clinic/anexos",
   "app/api/v1/clinic/modelos",
   "app/api/v1/clinic/requisitos",
-  "app/api/v1/clinic/procedimentos",
+  // Só as opções do procedimento REALIZADO; o resto de /procedimentos é o catálogo
+  // (9015: nome, código e POP do procedimento — sem dado de paciente).
+  "app/api/v1/clinic/procedimentos/opcoes",
   "app/api/v1/publico/termos",
   "app/imprimir",
 ];

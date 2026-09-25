@@ -136,10 +136,9 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
       { href: "/app/contacts", secao: "Cadastro" },
       { href: "/app/kanban", secao: "Jornada do paciente" },
       { href: "/app/settings/tenant/pipelines", secao: "Jornada do paciente" },
-    ],
-    emBreve: [
-      { label: "Prontuário", description: "Anamnese, evolução e assinatura do atendimento." },
-      { label: "Fotos antes e depois", description: "Registro fotográfico por sessão, com consentimento." },
+      // Prontuário (9016–9027): a fila do profissional; o prontuário, as fotos e os
+      // termos moram como abas no detalhe do paciente.
+      { href: "/app/atendimentos", secao: "Prontuário" },
     ],
   },
   {
@@ -298,6 +297,7 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
       { href: "/app/settings/tags", secao: "Sua clínica" },
       { href: "/app/settings/marca", secao: "Sua clínica" },
       { href: "/app/settings/billing", secao: "Sua clínica" },
+      { href: "/app/settings/tenant/modelos-clinicos", secao: "Sua clínica" },
       { href: "/app/connections", secao: "Canais" },
       { href: "/app/webhooks", secao: "Canais" },
       { href: "/app/integrations/nuvemshop", secao: "Canais" },
