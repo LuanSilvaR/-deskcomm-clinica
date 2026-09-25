@@ -42,11 +42,11 @@ async function loginAgente(page: Page): Promise<void> {
 
 async function menuDaClinica(page: Page, ligar: boolean): Promise<void> {
   await page.goto("/app/inicio");
-  const bloco = page.getByTestId("clinic-menu-da-clinica");
+  const bloco = page.getByRole("main").getByTestId("clinic-menu-da-clinica");
   await expect(bloco).toBeVisible({ timeout: 20_000 });
   const ligado = await bloco.getByText("Menu organizado por módulos da clínica").isVisible();
   if (ligado !== ligar) {
-    await page.getByTestId("clinic-menu-da-clinica-alternar").click();
+    await page.getByRole("main").getByTestId("clinic-menu-da-clinica-alternar").click();
     await expect(
       bloco.getByText(ligar ? "Menu organizado por módulos da clínica" : "Experimente o menu da clínica"),
     ).toBeVisible({ timeout: 20_000 });
@@ -94,8 +94,8 @@ test.describe("menu da clínica", () => {
     await expect(sidebar(page).getByRole("link", { name: /Contratos/ })).toHaveCount(0);
 
     // Rodapé fixo, fora da área que rola.
-    await expect(page.getByRole("link", { name: "Configurações" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Perfil e acesso" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Configurações", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Perfil e acesso", exact: true })).toBeVisible();
 
     const rola = await page.evaluate(() => {
       const nav = document.querySelector('nav[aria-label="Navegação principal"]')!;
@@ -120,7 +120,7 @@ test.describe("menu da clínica", () => {
     await page.goto("/app/inicio/agente-de-ia");
     await expect(page.getByRole("heading", { name: "Agente de IA", level: 1 })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Ensinar o agente" })).toBeVisible();
-    await page.getByRole("link", { name: /Conhecimento/ }).click();
+    await page.getByRole("main").getByRole("link", { name: /Conhecimento/ }).click();
     await page.waitForURL(/knowledge\/sources/);
     await foto(page, "2-modulo-ia");
   });
