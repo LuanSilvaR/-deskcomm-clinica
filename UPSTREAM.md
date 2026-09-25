@@ -52,6 +52,8 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | lib/ui/icons.ts | Ícones DoorOpen, Stethoscope, UserMinus, XCircle (selos de status) | (este PR) |
 | lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Espanhol das melhorias da Agenda; spec clinic-agenda-melhorias | (este PR) |
 | lib/ui/icons.ts (de novo), lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Início da recepção: ícone UserPlus, espanhol, spec clinic-inicio-da-recepcao | (este PR) |
+| lib/i18n/dicionario.ts (de novo) | Procedimentos e POP (9015): espanhol dos módulos e permissões novos | (este PR) |
+| lib/navigation/catalogo.ts (de novo), lib/audit/actions.ts (de novo), lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Procedimentos (9015): porta /app/procedimentos (hub Atendimento, sem sidebar), ações clinic.procedimento_*/pop_*, espanhol, spec clinic-procedimentos | (este PR) |
 | app/api/v1/team/[user_id]/_shared.ts | Com o modo por permissões ligado, trocar o papel legado responde 409 apontando para Papéis de acesso | bb210c504 |
 | lib/audit/actions.ts (de novo), lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Ações acesso.*; espanhol do catálogo de permissões e da tela; spec clinic-papeis-de-acesso | bb210c504 |
 | app/api/v1/agenda/vinculos/route.ts (de novo), lib/navigation/catalogo.ts (de novo), lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | "faltou N×" na busca ao marcar; porta da tela Faltas; espanhol; spec clinic-faltas-e-prazo | e20479afe, 4d2f0f26f |

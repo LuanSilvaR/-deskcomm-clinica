@@ -166,9 +166,9 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
   {
     id: "procedimentos",
     label: "Procedimentos",
-    description: "O que a clínica oferece, com preço e duração.",
+    description: "O que a clínica realiza, quem pode realizar e o POP de cada procedimento.",
     icon: "Sparkle",
-    portas: [{ href: "/app/products", secao: "Catálogo" }],
+    portas: [{ href: "/app/procedimentos", secao: "Catálogo" }],
     emBreve: [
       { label: "Protocolos", description: "Sessões, intervalos e cuidados de cada tratamento." },
       { label: "Pacotes", description: "Sessões vendidas juntas, com saldo por paciente." },
@@ -200,6 +200,7 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     icon: "CurrencyCircleDollar",
     portas: [
       { href: "/app/comandas", secao: "O dia do caixa" },
+      { href: "/app/products", secao: "Catálogo" },
       { href: "/app/faturamento", secao: "Indicadores" },
       { href: "/app/settings/tenant/financeiro", secao: "Ajustes do financeiro" },
     ],
