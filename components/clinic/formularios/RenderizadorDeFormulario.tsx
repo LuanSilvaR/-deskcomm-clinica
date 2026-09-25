@@ -127,7 +127,7 @@ export function RenderizadorDeFormulario({
 
         return (
           <div key={c.chave} className={cn("space-y-1", largo && "sm:col-span-2")}>
-            <label htmlFor={id} className="text-sm font-medium">
+            <label htmlFor={id} className="block text-sm font-medium">
               {titulo}
             </label>
             {ajuda}

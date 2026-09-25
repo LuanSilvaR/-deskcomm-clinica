@@ -83,7 +83,7 @@ function Editor({
         const id = `evolucao-${c.chave}-${atendimentoId}`;
         return (
           <div key={c.chave} className="space-y-1">
-            <label htmlFor={id} className="text-sm font-medium">
+            <label htmlFor={id} className="block text-sm font-medium">
               {t(c.rotulo)}
             </label>
             <Textarea

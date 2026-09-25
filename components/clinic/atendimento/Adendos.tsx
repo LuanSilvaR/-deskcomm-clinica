@@ -85,11 +85,11 @@ export function NovoAdendo({
       }}
     >
       <p className="text-xs text-text-muted">{t("O registro original continua como está. O adendo fica ao lado dele, com o seu nome e a data.")}</p>
-      <label htmlFor={idTexto} className="text-sm font-medium">
+      <label htmlFor={idTexto} className="block text-sm font-medium">
         {t("Adendo")}
       </label>
       <Textarea id={idTexto} rows={3} maxLength={5000} value={texto} onChange={(e) => setTexto(e.target.value)} required />
-      <label htmlFor={idMotivo} className="text-sm font-medium">
+      <label htmlFor={idMotivo} className="block text-sm font-medium">
         {t("Motivo")}
       </label>
       <Input id={idMotivo} maxLength={300} value={motivo} onChange={(e) => setMotivo(e.target.value)} required minLength={3} className="h-11 md:h-9" />

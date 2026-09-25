@@ -29,12 +29,13 @@ import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { FichaDoPaciente } from "@/components/clinic/FichaDoPaciente";
 import { ProntuarioDoPaciente } from "@/components/clinic/prontuario/ProntuarioDoPaciente";
 import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
-import { useSearchParams } from "next/navigation";
 import { HistoricoDeAtendimentos } from "@/components/clinic/HistoricoDeAtendimentos";
 import { DialButton } from "@/components/voice/DialButton";
 
 interface Props {
   contactId: string;
+  /** FORK clinic (prontuário F2): `?aba=` da URL, lido pela página (servidor). */
+  abaInicial?: string;
 }
 
 /**
@@ -55,14 +56,14 @@ function NivelDaOrigem({ rotulo, valor }: { rotulo: string; valor: string | null
   );
 }
 
-export function ContactDetailClient({ contactId }: Props) {
+export function ContactDetailClient({ contactId, abaInicial }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
   // FORK clinic (prontuário F2): a aba Prontuário só existe para quem tem
   // `prontuario.ver` — administrar o sistema não é ver conteúdo clínico.
   const { can } = usePermissoes();
   const verProntuario = can("prontuario.ver");
-  const abaPedida = useSearchParams().get("aba");
+  const abaPedida = abaInicial ?? null;
   const q = useContact(contactId);
   const { user, activeOrg } = useAuth();
   const clientesLigado = activeOrg?.cliente_pela_agenda === true;
