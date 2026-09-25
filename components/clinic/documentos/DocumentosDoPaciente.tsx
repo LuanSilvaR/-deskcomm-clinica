@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { copyToClipboard } from "@/lib/clipboard";
 import { opcoesDoTermoSchema, ROTULO_DO_TIPO_DE_DOCUMENTO, type OpcaoDoTermo, type TipoDeDocumento } from "@/lib/clinic/documentos/tipos";
 
 interface Aceite {
@@ -264,7 +265,7 @@ function CartaoDoDocumento({ doc, dados, chave }: { doc: Documento; dados: Dados
           <p>{t("Envie este link ao paciente. Ele vale uma vez só, até")} {quando(link.expira_em)}.</p>
           <div className="flex gap-2">
             <Input readOnly value={link.url} className="h-9 font-mono text-xs" aria-label={t("Link de aceite")} />
-            <Button size="sm" type="button" onClick={() => void navigator.clipboard?.writeText(link.url)}>
+            <Button size="sm" type="button" onClick={() => void copyToClipboard(link.url)}>
               {t("Copiar")}
             </Button>
           </div>
