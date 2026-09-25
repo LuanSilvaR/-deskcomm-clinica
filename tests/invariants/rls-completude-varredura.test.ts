@@ -322,6 +322,16 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-conduta-e-planos.test.ts (FORK clinic, migration 9021): 2 orgs, quem é da A lê 0 linhas da B; sem planos.ver lê 0; coerência planejada/agendada/realizada.",
   },
   {
+    tabela: "clinic_procedimentos_realizados",
+    razao:
+      "tests/invariants/clinic-procedimentos-realizados.test.ts (FORK clinic, migration 9022): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; imutável após finalizar.",
+  },
+  {
+    tabela: "clinic_procedimento_insumos",
+    razao:
+      "tests/invariants/clinic-procedimentos-realizados.test.ts (FORK clinic, migration 9022): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; imutável após finalizar.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

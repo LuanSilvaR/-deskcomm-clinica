@@ -12248,6 +12248,27 @@ export const DICIONARIO: Traducoes = {
   "Dados do plano inválidos.": { es: "Datos del plan inválidos." },
   "Planejada": { es: "Planificada" },
   "Realizada": { es: "Realizada" },
+  // ── FORK clinic (9022): procedimentos realizados e insumos ──
+  "Insumos": { es: "Insumos" },
+  "Lote": { es: "Lote" },
+  "Validade": { es: "Vencimiento" },
+  "Procedimento do catálogo": { es: "Procedimiento del catálogo" },
+  "Região": { es: "Región" },
+  "Parâmetros técnicos": { es: "Parámetros técnicos" },
+  "Parâmetro": { es: "Parámetro" },
+  "Adicionar parâmetro": { es: "Agregar parámetro" },
+  "Produto": { es: "Producto" },
+  "Produto (opcional)": { es: "Producto (opcional)" },
+  "Descrição do insumo": { es: "Descripción del insumo" },
+  "Adicionar insumo": { es: "Agregar insumo" },
+  "Salvar procedimento": { es: "Guardar procedimiento" },
+  "Registrar ao menos um procedimento é obrigatório para finalizar este atendimento.": { es: "Registrar al menos un procedimiento es obligatorio para finalizar esta atención." },
+  "Motivo para anular este procedimento": { es: "Motivo para anular este procedimiento" },
+  "Anular": { es: "Anular" },
+  "Registrar procedimento": { es: "Registrar procedimiento" },
+  "Procedimento inválido: confira o procedimento, o serviço e os produtos.": { es: "Procedimiento inválido: revise el procedimiento, el servicio y los productos." },
+  "Procedimento não encontrado.": { es: "Procedimiento no encontrado." },
+  "Informe o motivo para anular.": { es: "Informe el motivo para anular." },
 };
 
 /**

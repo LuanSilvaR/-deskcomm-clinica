@@ -14,6 +14,7 @@ import Link from "next/link";
 import { ListaDeAdendos } from "@/components/clinic/atendimento/Adendos";
 import { CondutaLidaView } from "@/components/clinic/atendimento/SecaoConduta";
 import { EvolucaoLidaView } from "@/components/clinic/atendimento/SecaoEvolucao";
+import { ProcedimentoLidoView } from "@/components/clinic/atendimento/SecaoProcedimentos";
 import { RespostasLidas } from "@/components/clinic/formularios/RenderizadorDeFormulario";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,15 @@ export function ProntuarioDoPaciente({ contactId }: { contactId: string }) {
                   <ListaDeAdendos adendos={adendosDe(a.conduta.id)} />
                 </section>
               ) : null}
+              {a.procedimentos
+                .filter((p) => p.status !== "anulado")
+                .map((p) => (
+                  <section key={p.id} aria-label={t("Procedimento")} className="rounded-lg border p-3">
+                    <h3 className="mb-2 text-sm font-semibold">{t("Procedimento")}</h3>
+                    <ProcedimentoLidoView p={p} />
+                    <ListaDeAdendos adendos={adendosDe(p.id)} />
+                  </section>
+                ))}
               {a.evolucao ? (
                 <section aria-label={t("Evolução")} className="rounded-lg border p-3">
                   <h3 className="mb-2 text-sm font-semibold">{t("Evolução")}</h3>

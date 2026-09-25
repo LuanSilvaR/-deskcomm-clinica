@@ -416,6 +416,18 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/planos/sessoes/[id]/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige planos.gerenciar; sessão da organização informada; agendamento precisa ser do mesmo paciente. tests/invariants/clinic-conduta-e-planos.test.ts prova agendamento de outro paciente recusado e realizada imutável.",
   },
   {
+    // FORK clinic (migration 9022).
+    fn: "fn_clinic_procedimento_salvar(uuid,uuid,uuid,jsonb,jsonb,integer)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/procedimentos/route.ts (PUT) chama com createClient da sessão; fn_acesso_exigir exige atendimento.registrar (chave clínica), suporte de escrita e MFA; atendimento aberto da organização informada; procedimento, tipo, sessão e produtos conferidos na mesma organização. tests/invariants/clinic-procedimentos-realizados.test.ts prova produto de outra empresa recusado, conflito de versão e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9022).
+    fn: "fn_clinic_procedimento_anular(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/procedimentos/[pid]/anular/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige atendimento.registrar; só rascunho da organização informada, com motivo. tests/invariants/clinic-procedimentos-realizados.test.ts prova anulado em vez de apagado.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

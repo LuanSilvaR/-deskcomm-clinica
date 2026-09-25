@@ -44,9 +44,35 @@ export interface CondutaLida {
   recomendacoes: string | null;
 }
 
+export interface InsumoLido {
+  id: string;
+  product_id: string | null;
+  descricao: string;
+  quantidade: number;
+  unidade: string;
+  lote: string | null;
+  validade: string | null;
+}
+
+export interface ProcedimentoLido {
+  id: string;
+  versao: number;
+  status: "rascunho" | "finalizado" | "anulado";
+  procedure_id: string | null;
+  event_type_id: string | null;
+  plano_sessao_id: string | null;
+  descricao: string;
+  regiao: string | null;
+  parametros: Record<string, string>;
+  intercorrencias: string | null;
+  observacoes: string | null;
+  anulado_motivo: string | null;
+  insumos: InsumoLido[];
+}
+
 export interface AdendoLido {
   id: string;
-  alvo_tipo: "formulario" | "evolucao" | "conduta";
+  alvo_tipo: "formulario" | "evolucao" | "conduta" | "procedimento";
   alvo_id: string;
   texto: string;
   motivo: string;
@@ -58,6 +84,7 @@ export interface RegistrosDoAtendimento {
   formularios: Partial<Record<TipoDeFormulario, FormularioLido>>;
   evolucao: EvolucaoLida | null;
   conduta: CondutaLida | null;
+  procedimentos: ProcedimentoLido[];
   adendos: AdendoLido[];
 }
 
@@ -70,18 +97,26 @@ export function lerCampos(bruto: unknown): Campo[] {
   return r.success ? r.data : [];
 }
 
+/** Parâmetros técnicos gravados: só pares texto → texto sobrevivem à leitura. */
+export function lerParametros(bruto: unknown): Record<string, string> {
+  if (!bruto || typeof bruto !== "object" || Array.isArray(bruto)) return {};
+  return Object.fromEntries(
+    Object.entries(bruto as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === "string"),
+  );
+}
+
 export async function registrosDosAtendimentos(
   supabase: SupabaseClient,
   organizationId: string,
   atendimentoIds: readonly string[],
 ): Promise<Map<string, RegistrosDoAtendimento>> {
   const mapa = new Map<string, RegistrosDoAtendimento>(
-    atendimentoIds.map((id) => [id, { formularios: {}, evolucao: null, conduta: null, adendos: [] }]),
+    atendimentoIds.map((id) => [id, { formularios: {}, evolucao: null, conduta: null, procedimentos: [], adendos: [] }]),
   );
   if (atendimentoIds.length === 0) return mapa;
   const ids = [...atendimentoIds];
 
-  const [forms, evos, condutas, adendos] = await Promise.all([
+  const [forms, evos, condutas, procs, adendos] = await Promise.all([
     supabase
       .from("clinic_formularios_preenchidos")
       .select(
@@ -101,13 +136,23 @@ export async function registrosDosAtendimentos(
       .eq("organization_id", organizationId)
       .in("atendimento_id", ids),
     supabase
+      .from("clinic_procedimentos_realizados")
+      .select(
+        "id, atendimento_id, versao, status, procedure_id, event_type_id, plano_sessao_id, descricao, regiao, parametros, " +
+          "intercorrencias, observacoes, anulado_motivo, created_at, " +
+          "clinic_procedimento_insumos(id, product_id, descricao, quantidade, unidade, lote, validade, created_at)",
+      )
+      .eq("organization_id", organizationId)
+      .in("atendimento_id", ids)
+      .order("created_at", { ascending: true }),
+    supabase
       .from("clinic_adendos")
       .select("id, atendimento_id, alvo_tipo, alvo_id, texto, motivo, autor, created_at")
       .eq("organization_id", organizationId)
       .in("atendimento_id", ids)
       .order("created_at", { ascending: true }),
   ]);
-  const erro = forms.error ?? evos.error ?? condutas.error ?? adendos.error;
+  const erro = forms.error ?? evos.error ?? condutas.error ?? procs.error ?? adendos.error;
   if (erro) throw new Error(erro.message);
 
   // Nome de quem escreveu o adendo: o cadastro de profissional, quando houver.
@@ -152,6 +197,33 @@ export async function registrosDosAtendimentos(
     if (!alvo) continue;
     const { atendimento_id: _ignorado, ...conduta } = c;
     alvo.conduta = conduta;
+  }
+  for (const p of (procs.data ?? []) as unknown as Array<
+    Omit<ProcedimentoLido, "insumos" | "parametros"> & {
+      atendimento_id: string;
+      parametros: unknown;
+      clinic_procedimento_insumos: Array<InsumoLido & { created_at: string }> | null;
+    }
+  >) {
+    const alvo = mapa.get(p.atendimento_id);
+    if (!alvo) continue;
+    alvo.procedimentos.push({
+      id: p.id,
+      versao: p.versao,
+      status: p.status,
+      procedure_id: p.procedure_id,
+      event_type_id: p.event_type_id,
+      plano_sessao_id: p.plano_sessao_id,
+      descricao: p.descricao,
+      regiao: p.regiao,
+      parametros: lerParametros(p.parametros),
+      intercorrencias: p.intercorrencias,
+      observacoes: p.observacoes,
+      anulado_motivo: p.anulado_motivo,
+      insumos: [...(p.clinic_procedimento_insumos ?? [])]
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .map(({ created_at: _c, ...i }) => ({ ...i, quantidade: Number(i.quantidade) })),
+    });
   }
   for (const a of (adendos.data ?? []) as unknown as Array<{
     id: string;

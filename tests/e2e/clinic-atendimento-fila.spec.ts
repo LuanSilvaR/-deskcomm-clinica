@@ -8,6 +8,7 @@
  *   3. o atendente vê o paciente em "Aguardando" na fila dele e clica
  *      "Iniciar atendimento" — cai na área do atendimento;
  *   4. conduta com autosave e um plano de 3 sessões gerado dela (F4);
+ *      procedimento com insumo e lote, que vira evento de estoque (F5);
  *      finalizar sem evolução é barrado (lista do que falta); preenche a anamnese
  *      (autosave "Salvo às") e a evolução, finaliza: o status vira "Finalizado";
  *      acrescenta um adendo; a aba Prontuário do paciente mostra o atendimento;
@@ -151,6 +152,16 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     await plano.getByTestId("sessoes-salvar").click();
     await expect(plano.getByTestId("sessao")).toHaveCount(3, { timeout: 20_000 });
 
+    // procedimento executado com insumo e lote (F5).
+    await pAt.getByTestId("nav-procedimentos").click();
+    await pAt.getByTestId("procedimento-novo").click();
+    await pAt.getByTestId("procedimento-descricao").fill("Procedimento fictício E2E");
+    await pAt.getByTestId("insumo-novo").click();
+    await pAt.getByTestId("insumo-descricao").fill("Insumo fictício");
+    await pAt.getByTestId("insumo-lote").fill("LOTE-E2E");
+    await pAt.getByTestId("procedimento-salvar").click();
+    await expect(pAt.getByTestId("secao-procedimentos").getByTestId("procedimento")).toContainText("LOTE-E2E", { timeout: 20_000 });
+
     // evolução.
     await pAt.getByTestId("nav-evolucao").click();
     await pAt.getByTestId("evolucao-resposta").fill("Evolução fictícia de teste E2E.");
@@ -178,6 +189,13 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     await expect(prontuario.getByTestId("adendo")).toHaveCount(1);
     await foto(pAt, "5-prontuario");
     await pAt.goto(urlDoAtendimento);
+    // o procedimento confirmado virou evento para o estoque, com o lote.
+    const { data: eventos } = await admin
+      .from("event_log")
+      .select("payload")
+      .eq("organization_id", orgId)
+      .eq("event_type", "clinic.procedimento_confirmado");
+    expect(JSON.stringify(eventos ?? [])).toContain("LOTE-E2E");
     const { data: visita } = await admin.from("clinic_appointment_visits").select("status").eq("appointment_id", agId).single();
     expect((visita as { status: string }).status).toBe("finalizado");
     await pAt.close();

@@ -17,6 +17,7 @@ import { useState } from "react";
 
 import { SecaoConduta } from "@/components/clinic/atendimento/SecaoConduta";
 import { SecaoEvolucao } from "@/components/clinic/atendimento/SecaoEvolucao";
+import { SecaoProcedimentos } from "@/components/clinic/atendimento/SecaoProcedimentos";
 import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
 import { SecaoFormulario } from "@/components/clinic/atendimento/SecaoFormulario";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -56,22 +57,24 @@ const ROTULO_DO_STATUS: Record<Atendimento["status"], string> = {
   anulado: "Anulado",
 };
 
-type SecaoAtiva = "anamnese" | "avaliacao" | "conduta" | "plano" | "evolucao";
+type SecaoAtiva = "anamnese" | "avaliacao" | "conduta" | "plano" | "procedimentos" | "evolucao";
 const SECOES: Array<{ id: SecaoAtiva; rotulo: string }> = [
   { id: "anamnese", rotulo: "Anamnese" },
   { id: "avaliacao", rotulo: "Avaliação" },
   { id: "conduta", rotulo: "Conduta" },
   { id: "plano", rotulo: "Plano de tratamento" },
+  { id: "procedimentos", rotulo: "Procedimentos" },
   { id: "evolucao", rotulo: "Evolução" },
 ];
-const EM_BREVE = ["Procedimentos", "Documentos", "Anexos"];
+const EM_BREVE = ["Documentos", "Anexos"];
 const ROTULO_DA_PENDENCIA: Record<string, string> = {
   evolucao: "Evolução",
   anamnese: "Anamnese",
   avaliacao: "Avaliação",
   conduta: "Conduta",
+  procedimento: "Procedimentos",
 };
-const SECOES_COM_PENDENCIA = new Set<string>(["anamnese", "avaliacao", "conduta", "evolucao"]);
+const SECOES_COM_PENDENCIA = new Set<string>(["anamnese", "avaliacao", "conduta", "evolucao", "procedimentos"]);
 
 export function AtendimentoDoDia({ id }: { id: string }) {
   const t = useT();
@@ -102,7 +105,8 @@ export function AtendimentoDoDia({ id }: { id: string }) {
       if (err instanceof ApiError && err.code === "requisitos_pendentes") {
         const lista = ((err.details as { faltando?: string[] } | undefined)?.faltando ?? []).filter(Boolean);
         setFaltando(lista);
-        if (lista[0] && SECOES_COM_PENDENCIA.has(lista[0])) setAtiva(lista[0] as SecaoAtiva);
+        const primeira = lista[0] === "procedimento" ? "procedimentos" : lista[0];
+        if (primeira && SECOES_COM_PENDENCIA.has(primeira)) setAtiva(primeira as SecaoAtiva);
         return;
       }
       showApiError(err);
@@ -126,7 +130,11 @@ export function AtendimentoDoDia({ id }: { id: string }) {
         ? temTexto(r?.conduta && { d: r.conduta.descricao, p: r.conduta.protocolo, x: r.conduta.recomendacoes })
         : s === "plano"
           ? false
-          : !!r?.formularios[s];
+          : s === "procedimentos"
+            ? (r?.procedimentos ?? []).some((p) => p.status !== "anulado")
+            : !!r?.formularios[s];
+  // A pendência "procedimento" (banco) marca a seção "procedimentos" (tela).
+  const pendente = (id: SecaoAtiva) => faltando.includes(id) || (id === "procedimentos" && faltando.includes("procedimento"));
   const secoesVisiveis = SECOES.filter((s) => s.id !== "plano" || can("planos.ver"));
 
   return (
@@ -191,11 +199,11 @@ export function AtendimentoDoDia({ id }: { id: string }) {
                   )}
                 >
                   <span>{t(s.rotulo)}</span>
-                  <span aria-hidden className={preenchida(s.id) ? "text-success" : faltando.includes(s.id) ? "text-destructive" : "text-text-subtle"}>
-                    {preenchida(s.id) ? "✓" : faltando.includes(s.id) ? "!" : "·"}
+                  <span aria-hidden className={preenchida(s.id) ? "text-success" : pendente(s.id) ? "text-destructive" : "text-text-subtle"}>
+                    {preenchida(s.id) ? "✓" : pendente(s.id) ? "!" : "·"}
                   </span>
                   <span className="sr-only">
-                    {preenchida(s.id) ? t("preenchida") : faltando.includes(s.id) ? t("pendente") : t("vazia")}
+                    {preenchida(s.id) ? t("preenchida") : pendente(s.id) ? t("pendente") : t("vazia")}
                   </span>
                 </button>
               </li>
@@ -266,6 +274,17 @@ export function AtendimentoDoDia({ id }: { id: string }) {
                   </section>
                 </div>
               ) : null}
+              <div hidden={ativa !== "procedimentos"}>
+                <SecaoProcedimentos
+                  atendimentoId={id}
+                  procedimentos={r.procedimentos}
+                  adendos={r.adendos}
+                  podeRegistrar={r.pode_registrar && a.status === "em_andamento"}
+                  podeAdendo={r.pode_adendo}
+                  obrigatoria={r.exigidas.includes("procedimento")}
+                  chaveParaRecarregar={chaveRegistros}
+                />
+              </div>
               <div hidden={ativa !== "evolucao"}>
                 <SecaoEvolucao
                   atendimentoId={id}

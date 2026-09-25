@@ -17,6 +17,7 @@ import { automationRulesHandler } from "@/lib/automation/engine.handler";
 import { followupReactivityHandler } from "@/lib/followup/reactivity.handler";
 import { campanhaRespostaHandler } from "@/lib/campanhas/resposta.handler";
 import { clinicConfirmacaoRespostaHandler } from "@/lib/clinic/confirmacao/resposta.handler";
+import { clinicEstoqueConsumoHandler } from "@/lib/clinic/estoque/consumo.handler";
 import { followupGatilhoEtapaHandler } from "@/lib/followup/gatilho-etapa.handler";
 import { followupGatilhoLeadHandler } from "@/lib/followup/gatilho-lead.handler";
 import { followupGatilhoCasoHandler } from "@/lib/followup/gatilho-caso.handler";
@@ -58,6 +59,8 @@ export function ensureHandlersRegistered(): void {
   registerHandler(mediaPersistHandler);
   registerHandler(mediaDeriveHandler);
   registerHandler(webPushInboundHandler);
+  // FORK clinic (9022): insumos de procedimento confirmado → porta de estoque.
+  registerHandler(clinicEstoqueConsumoHandler);
   // Penúltimo, pelo MESMO critério do último: o aviso ao suporte sai por rede de
   // terceiro (o transporte de WhatsApp) e nunca pode atrasar quem escreve no
   // banco — inclusive o `followupGatilhoCasoHandler`, que consome o MESMO evento

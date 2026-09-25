@@ -23,7 +23,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 const corpo = z
   .object({
-    alvo_tipo: z.enum(["formulario", "evolucao", "conduta"]),
+    alvo_tipo: z.enum(["formulario", "evolucao", "conduta", "procedimento"]),
     alvo_id: z.string().uuid(),
     texto: z.string().trim().min(1).max(5000),
     motivo: z.string().trim().min(3).max(300),

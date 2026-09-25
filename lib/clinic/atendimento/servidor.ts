@@ -113,6 +113,14 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
   plano_agendamento_em_uso: { status: 409, code: "conflict", mensagem: "Este agendamento já está ligado a outra sessão." },
   plano_sessao_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo do cancelamento." },
   plano_invalido: { status: 422, code: "validation_failed", mensagem: "Dados do plano inválidos." },
+  // FORK clinic (prontuário F5, 9022).
+  procedimento_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Procedimento inválido: confira o procedimento, o serviço e os produtos.",
+  },
+  procedimento_nao_encontrado: { status: 404, code: "not_found", mensagem: "Procedimento não encontrado." },
+  procedimento_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo para anular." },
   acesso_mfa_exigido: {
     status: 403,
     code: "mfa_required",
