@@ -6,6 +6,7 @@
  * Exige `prontuario.exportar` (chave clínica, gerência); tem limite por pessoa
  * e cada exportação é auditada (só quantos atendimentos, nunca o conteúdo).
  */
+import type { StatusDoDocumento } from "@/lib/clinic/documentos/tipos";
 import { randomUUID } from "node:crypto";
 import { notFound, redirect } from "next/navigation";
 
@@ -23,7 +24,11 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Prontuário", robots: { index: false, follow: false } };
 
-export default async function ImprimirProntuarioPage({ params }: { params: Promise<{ contactId: string }> }) {
+export default async function ImprimirProntuarioPage({
+  params,
+}: {
+  params: Promise<{ contactId: string }>;
+}) {
   const user = await requireAuth();
   const t = (s: string) => traduzir(s, user.idioma);
   const activeOrg = await resolveActiveOrg(user);
@@ -35,26 +40,33 @@ export default async function ImprimirProntuarioPage({ params }: { params: Promi
 
   const limite = await checkRateLimit(`clinic-exportacao:${user.id}`, 10, 3600);
   if (!limite.allowed) {
-    return <p className="p-6 text-sm">{t("Muitas exportações seguidas. Tente de novo mais tarde.")}</p>;
+    return (
+      <p className="p-6 text-sm">{t("Muitas exportações seguidas. Tente de novo mais tarde.")}</p>
+    );
   }
 
   const org = activeOrg.orgId;
   const supabase = await createClient();
   const [{ data: contato }, { data: empresa }] = await Promise.all([
-    supabase.from("contacts").select("name, display_name, phone_number, birthdate").eq("organization_id", org).eq("id", contactId).maybeSingle(),
+    supabase
+      .from("contacts")
+      .select("name, display_name, phone_number, birthdate")
+      .eq("organization_id", org)
+      .eq("id", contactId)
+      .maybeSingle(),
     supabase.from("organizations").select("display_name").eq("id", org).maybeSingle(),
   ]);
   if (!contato) notFound();
   const linha = await lerLinhaDoTempo(supabase, org, contactId, { limite: 500 });
   const documentos = permissoes.has("documentos.ver")
-    ? (
+    ? ((
         await supabase
           .from("clinic_documentos_emitidos")
           .select("titulo, status, sha256, created_at")
           .eq("organization_id", org)
           .eq("contact_id", contactId)
           .order("created_at", { ascending: true })
-      ).data ?? []
+      ).data ?? [])
     : [];
 
   void audit({
@@ -71,10 +83,23 @@ export default async function ImprimirProntuarioPage({ params }: { params: Promi
     <IdiomaProvider locale={user.idioma}>
       <ProntuarioImpressao
         clinica={(empresa?.display_name as string | null) ?? null}
-        paciente={nomeDoContato(contato as { name: string | null; display_name: string | null; phone_number: string | null })}
+        paciente={nomeDoContato(
+          contato as {
+            name: string | null;
+            display_name: string | null;
+            phone_number: string | null;
+          },
+        )}
         nascimento={(contato as { birthdate?: string | null }).birthdate ?? null}
         atendimentos={linha.atendimentos}
-        documentos={documentos as Array<{ titulo: string; status: string; sha256: string; created_at: string }>}
+        documentos={
+          documentos as Array<{
+            titulo: string;
+            status: StatusDoDocumento;
+            sha256: string;
+            created_at: string;
+          }>
+        }
         geradoPor={user.email ?? null}
       />
     </IdiomaProvider>

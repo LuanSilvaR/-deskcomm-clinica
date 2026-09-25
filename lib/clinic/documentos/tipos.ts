@@ -7,7 +7,13 @@
  */
 import { z } from "zod";
 
-export const TIPOS_DE_DOCUMENTO = ["contrato", "consentimento", "autorizacao", "uso_imagem", "ciencia"] as const;
+export const TIPOS_DE_DOCUMENTO = [
+  "contrato",
+  "consentimento",
+  "autorizacao",
+  "uso_imagem",
+  "ciencia",
+] as const;
 export type TipoDeDocumento = (typeof TIPOS_DE_DOCUMENTO)[number];
 
 export const ROTULO_DO_TIPO_DE_DOCUMENTO: Record<TipoDeDocumento, string> = {
@@ -18,11 +24,17 @@ export const ROTULO_DO_TIPO_DE_DOCUMENTO: Record<TipoDeDocumento, string> = {
   ciencia: "Ciência de orientações",
 };
 
+export type StatusDoDocumento = "emitido" | "aceito" | "revogado" | "cancelado";
+export const ROTULO_DO_STATUS_DO_DOCUMENTO: Record<StatusDoDocumento, string> = {
+  emitido: "Aguardando aceite",
+  aceito: "Aceito",
+  revogado: "Revogado",
+  cancelado: "Cancelado",
+};
+
 export const opcaoDoTermoSchema = z
   .object({
-    chave: z
-      .string()
-      .regex(/^[a-z][a-z0-9_]{0,39}$/),
+    chave: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/),
     rotulo: z.string().trim().min(1).max(500),
     obrigatoria: z.boolean().optional(),
   })
@@ -35,10 +47,16 @@ export const opcoesDoTermoSchema = z
   .refine((os) => new Set(os.map((o) => o.chave)).size === os.length, "Opção repetida.");
 
 /** Escolhas do paciente: TODAS as opções respondidas; obrigatórias com sim. */
-export function escolhasCompletas(opcoes: readonly OpcaoDoTermo[], escolhas: Record<string, boolean | undefined>): boolean {
+export function escolhasCompletas(
+  opcoes: readonly OpcaoDoTermo[],
+  escolhas: Record<string, boolean | undefined>,
+): boolean {
   return (
     Object.keys(escolhas).length === opcoes.length &&
-    opcoes.every((o) => typeof escolhas[o.chave] === "boolean" && (!o.obrigatoria || escolhas[o.chave] === true))
+    opcoes.every(
+      (o) =>
+        typeof escolhas[o.chave] === "boolean" && (!o.obrigatoria || escolhas[o.chave] === true),
+    )
   );
 }
 

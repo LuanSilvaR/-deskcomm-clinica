@@ -14,6 +14,10 @@ import { RespostasLidas } from "@/components/clinic/formularios/RenderizadorDeFo
 import { Button } from "@/components/ui/button";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
+import {
+  ROTULO_DO_STATUS_DO_DOCUMENTO,
+  type StatusDoDocumento,
+} from "@/lib/clinic/documentos/tipos";
 import type { AtendimentoNaLinhaDoTempo } from "@/lib/clinic/prontuario/linha-do-tempo";
 
 export function ProntuarioImpressao({
@@ -28,38 +32,54 @@ export function ProntuarioImpressao({
   paciente: string | null;
   nascimento: string | null;
   atendimentos: AtendimentoNaLinhaDoTempo[];
-  documentos: Array<{ titulo: string; status: string; sha256: string; created_at: string }>;
+  documentos: Array<{
+    titulo: string;
+    status: StatusDoDocumento;
+    sha256: string;
+    created_at: string;
+  }>;
   geradoPor: string | null;
 }) {
   const t = useT();
   const tag = useTagDeIdioma();
-  const data = (iso: string) => new Date(iso).toLocaleString(tag, { dateStyle: "short", timeStyle: "short" });
+  const data = (iso: string) =>
+    new Date(iso).toLocaleString(tag, { dateStyle: "short", timeStyle: "short" });
   const cronologico = [...atendimentos].reverse();
   return (
-    <main className="mx-auto max-w-3xl space-y-6 bg-white p-6 text-black print:p-0" data-testid="prontuario-impressao">
+    <main
+      className="mx-auto max-w-3xl space-y-6 bg-white p-6 text-black print:p-0"
+      data-testid="prontuario-impressao"
+    >
       <div className="flex justify-end print:hidden">
         <Button onClick={() => window.print()} data-testid="imprimir">
           {t("Imprimir / salvar PDF")}
         </Button>
       </div>
       <header className="space-y-1 border-b pb-3">
-        <p className="text-xs uppercase tracking-wide">{clinica ?? ""}</p>
+        <p className="text-xs tracking-wide uppercase">{clinica ?? ""}</p>
         <h1 className="text-2xl font-semibold">{t("Prontuário")}</h1>
         <p className="text-sm">
           {t("Paciente")}: <strong>{paciente ?? t("Paciente")}</strong>
-          {nascimento ? ` · ${t("nascimento")} ${new Date(`${nascimento}T12:00:00`).toLocaleDateString(tag)}` : ""}
+          {nascimento
+            ? ` · ${t("nascimento")} ${new Date(`${nascimento}T12:00:00`).toLocaleDateString(tag)}`
+            : ""}
         </p>
         <p className="text-xs">
           {t("Emitido em")} {data(new Date().toISOString())}
-          {geradoPor ? ` · ${t("por")} ${geradoPor}` : ""} · {atendimentos.length} {t("atendimentos")}
+          {geradoPor ? ` · ${t("por")} ${geradoPor}` : ""} · {atendimentos.length}{" "}
+          {t("atendimentos")}
         </p>
-        <p className="text-xs">{t("Documento com dados de saúde. Guarde e compartilhe só com quem tem direito de acesso.")}</p>
+        <p className="text-xs">
+          {t(
+            "Documento com dados de saúde. Guarde e compartilhe só com quem tem direito de acesso.",
+          )}
+        </p>
       </header>
 
       {cronologico.map((a) => {
         const adendosDe = (id: string) => a.adendos.filter((x) => x.alvo_id === id);
         return (
-          <section key={a.id} className="space-y-3 break-inside-avoid-page border-b pb-4">
+          <section key={a.id} className="break-inside-avoid-page space-y-3 border-b pb-4">
             <h2 className="text-base font-semibold">
               {data(a.inicio)}
               {a.servico ? ` · ${a.servico}` : ""}
@@ -115,7 +135,8 @@ export function ProntuarioImpressao({
           <ul className="space-y-1 text-xs">
             {documentos.map((d) => (
               <li key={d.sha256 + d.created_at}>
-                {data(d.created_at)} · {t(d.titulo)} · {d.status} · sha256 {d.sha256}
+                {data(d.created_at)} · {t(d.titulo)} · {t(ROTULO_DO_STATUS_DO_DOCUMENTO[d.status])}{" "}
+                · sha256 {d.sha256}
               </li>
             ))}
           </ul>
