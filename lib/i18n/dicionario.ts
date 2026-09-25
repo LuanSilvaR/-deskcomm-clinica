@@ -11786,6 +11786,7 @@ export const DICIONARIO: Traducoes = {
   "Finalizados": { es: "Finalizados" },
   "Sem confirmação": { es: "Sin confirmación" },
   // ── FORK clinic: procedimentos e POP ──
+  "Alt+F10 leva à barra de formatação; setas andam entre os botões e Esc volta ao texto.": { es: "Alt+F10 lleva a la barra de formato; las flechas recorren los botones y Esc vuelve al texto." },
   "Prontuário ligado": { es: "Historia clínica activada" },
   "Prontuário desligado": { es: "Historia clínica desactivada" },
   "Os profissionais atendem pela fila (Meus atendimentos) e registram anamnese, evolução, fotos e termos. Só profissionais ativos ou papéis clínicos veem o conteúdo clínico; o administrador sozinho não vê.": { es: "Los profesionales atienden por la fila (Mis atenciones) y registran anamnesis, evolución, fotos y términos. Solo los profesionales activos o los roles clínicos ven el contenido clínico; el administrador por sí solo no lo ve." },
