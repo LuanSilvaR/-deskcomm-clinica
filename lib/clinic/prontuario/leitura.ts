@@ -35,9 +35,18 @@ export interface EvolucaoLida {
   proxima_conduta: string | null;
 }
 
+export interface CondutaLida {
+  id: string;
+  versao: number;
+  status: "rascunho" | "finalizado";
+  descricao: string | null;
+  protocolo: string | null;
+  recomendacoes: string | null;
+}
+
 export interface AdendoLido {
   id: string;
-  alvo_tipo: "formulario" | "evolucao";
+  alvo_tipo: "formulario" | "evolucao" | "conduta";
   alvo_id: string;
   texto: string;
   motivo: string;
@@ -48,6 +57,7 @@ export interface AdendoLido {
 export interface RegistrosDoAtendimento {
   formularios: Partial<Record<TipoDeFormulario, FormularioLido>>;
   evolucao: EvolucaoLida | null;
+  conduta: CondutaLida | null;
   adendos: AdendoLido[];
 }
 
@@ -66,12 +76,12 @@ export async function registrosDosAtendimentos(
   atendimentoIds: readonly string[],
 ): Promise<Map<string, RegistrosDoAtendimento>> {
   const mapa = new Map<string, RegistrosDoAtendimento>(
-    atendimentoIds.map((id) => [id, { formularios: {}, evolucao: null, adendos: [] }]),
+    atendimentoIds.map((id) => [id, { formularios: {}, evolucao: null, conduta: null, adendos: [] }]),
   );
   if (atendimentoIds.length === 0) return mapa;
   const ids = [...atendimentoIds];
 
-  const [forms, evos, adendos] = await Promise.all([
+  const [forms, evos, condutas, adendos] = await Promise.all([
     supabase
       .from("clinic_formularios_preenchidos")
       .select(
@@ -86,13 +96,18 @@ export async function registrosDosAtendimentos(
       .eq("organization_id", organizationId)
       .in("atendimento_id", ids),
     supabase
+      .from("clinic_condutas")
+      .select("id, atendimento_id, versao, status, descricao, protocolo, recomendacoes")
+      .eq("organization_id", organizationId)
+      .in("atendimento_id", ids),
+    supabase
       .from("clinic_adendos")
       .select("id, atendimento_id, alvo_tipo, alvo_id, texto, motivo, autor, created_at")
       .eq("organization_id", organizationId)
       .in("atendimento_id", ids)
       .order("created_at", { ascending: true }),
   ]);
-  const erro = forms.error ?? evos.error ?? adendos.error;
+  const erro = forms.error ?? evos.error ?? condutas.error ?? adendos.error;
   if (erro) throw new Error(erro.message);
 
   // Nome de quem escreveu o adendo: o cadastro de profissional, quando houver.
@@ -132,10 +147,16 @@ export async function registrosDosAtendimentos(
     const { atendimento_id: _ignorado, ...evolucao } = e;
     alvo.evolucao = evolucao;
   }
+  for (const c of (condutas.data ?? []) as unknown as Array<CondutaLida & { atendimento_id: string }>) {
+    const alvo = mapa.get(c.atendimento_id);
+    if (!alvo) continue;
+    const { atendimento_id: _ignorado, ...conduta } = c;
+    alvo.conduta = conduta;
+  }
   for (const a of (adendos.data ?? []) as unknown as Array<{
     id: string;
     atendimento_id: string;
-    alvo_tipo: "formulario" | "evolucao";
+    alvo_tipo: AdendoLido["alvo_tipo"];
     alvo_id: string;
     texto: string;
     motivo: string;

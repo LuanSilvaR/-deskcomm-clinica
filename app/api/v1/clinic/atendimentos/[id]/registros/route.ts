@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const supabase = await createClient();
   const { data: at, error } = await supabase
     .from("clinic_atendimentos")
-    .select("id, status, specialty_id")
+    .select("id, status, specialty_id, event_type_id")
     .eq("organization_id", org)
     .eq("id", id)
     .maybeSingle();
@@ -38,12 +38,29 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
 
   try {
     const registros = (await registrosDosAtendimentos(supabase, org, [id])).get(id)!;
+    // FORK clinic (F4): o que a clínica exige para ESTE atendimento (9020), para
+    // a tela avisar antes de o profissional tentar finalizar.
+    const { data: regras } = await supabase
+      .from("clinic_requisitos_finalizacao")
+      .select("secao, event_type_id, specialty_id")
+      .eq("organization_id", org);
+    const exigidas = [
+      ...new Set(
+        (regras ?? [])
+          .filter(
+            (r) =>
+              (!r.event_type_id || r.event_type_id === at.event_type_id) && (!r.specialty_id || r.specialty_id === at.specialty_id),
+          )
+          .map((r) => r.secao as string),
+      ),
+    ];
     return ok(
       {
         status: at.status as string,
         especialidade_id: (at.specialty_id as string | null) ?? null,
         pode_registrar: at.status === "em_andamento" && authz.permissoes.has("atendimento.registrar"),
         pode_adendo: at.status === "finalizado" && authz.permissoes.has("prontuario.adendo"),
+        exigidas,
         ...registros,
       },
       { requestId },

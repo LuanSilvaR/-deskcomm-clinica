@@ -891,6 +891,11 @@ export const AUDIT_ACTIONS = [
   "clinic.modelo_versao_publicada",
   "clinic.modelo_atualizado",
   "clinic.requisitos_definidos",
+  // FORK clinic (9021): planos de tratamento — metadados só
+  "clinic.plano_criado",
+  "clinic.plano_atualizado",
+  "clinic.plano_sessoes_adicionadas",
+  "clinic.plano_sessao_alterada",
   // FORK clinic (ACL): papéis de acesso e permissões
   "acesso.papel_criado",
   "acesso.papel_alterado",

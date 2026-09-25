@@ -7,7 +7,8 @@
  *   2. um paciente com horário agora na agenda do atendente chega (recepção);
  *   3. o atendente vê o paciente em "Aguardando" na fila dele e clica
  *      "Iniciar atendimento" — cai na área do atendimento;
- *   4. finalizar sem evolução é barrado (lista do que falta); preenche a anamnese
+ *   4. conduta com autosave e um plano de 3 sessões gerado dela (F4);
+ *      finalizar sem evolução é barrado (lista do que falta); preenche a anamnese
  *      (autosave "Salvo às") e a evolução, finaliza: o status vira "Finalizado";
  *      acrescenta um adendo; a aba Prontuário do paciente mostra o atendimento;
  *   5. a recepção não vê "Iniciar/Finalizar" (aponta para a fila);
@@ -133,6 +134,22 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     await pAt.getByTestId("secao-anamnese").getByTestId("modelo-anamnese").filter({ hasText: "Anamnese geral" }).click();
     await pAt.getByTestId("secao-anamnese").getByLabel("Queixa principal").fill("Queixa fictícia de teste E2E.");
     await expect(pAt.getByTestId("secao-anamnese").getByText(/Salvo às/)).toBeVisible({ timeout: 20_000 });
+
+    // conduta (F4) e um plano gerado a partir dela.
+    await pAt.getByTestId("nav-conduta").click();
+    await pAt.getByTestId("conduta-descricao").fill("Conduta fictícia: 3 sessões de teste E2E.");
+    await expect(pAt.getByTestId("secao-conduta").getByText(/Salvo às/)).toBeVisible({ timeout: 20_000 });
+    await pAt.getByTestId("nav-plano").click();
+    await pAt.getByTestId("secao-plano").getByTestId("plano-novo").click();
+    await pAt.getByTestId("plano-titulo").fill("Plano fictício E2E");
+    await pAt.getByTestId("plano-criar").click();
+    const plano = pAt.getByTestId("secao-plano").getByTestId("plano").filter({ hasText: "Plano fictício E2E" });
+    await expect(plano).toBeVisible({ timeout: 20_000 });
+    await plano.getByTestId("sessoes-adicionar").click();
+    await plano.getByTestId("sessoes-descricao").fill("Sessão de teste");
+    await plano.getByTestId("sessoes-quantidade").fill("3");
+    await plano.getByTestId("sessoes-salvar").click();
+    await expect(plano.getByTestId("sessao")).toHaveCount(3, { timeout: 20_000 });
 
     // evolução.
     await pAt.getByTestId("nav-evolucao").click();

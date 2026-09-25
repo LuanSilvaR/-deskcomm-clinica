@@ -1,9 +1,7 @@
 /**
- * POST /api/v1/clinic/atendimentos/:id/adendos — correção de registro finalizado.
- *
- * O registro original nunca muda: o adendo fica ao lado dele, com texto, motivo,
- * autor e data. Só em atendimento finalizado e com `prontuario.adendo`
- * (`fn_clinic_adicionar_adendo`, migration 9019).
+ * POST /api/v1/clinic/planos/:id/sessoes — acrescenta N sessões PLANEJADAS
+ * (FORK clinic, prontuário F4), com previsão a cada `intervalo_dias` a partir
+ * de `primeira`.
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -23,10 +21,11 @@ type Ctx = { params: Promise<{ id: string }> };
 
 const corpo = z
   .object({
-    alvo_tipo: z.enum(["formulario", "evolucao", "conduta"]),
-    alvo_id: z.string().uuid(),
-    texto: z.string().trim().min(1).max(5000),
-    motivo: z.string().trim().min(3).max(300),
+    descricao: z.string().trim().min(1).max(200),
+    event_type_id: z.string().uuid().nullish(),
+    quantidade: z.number().int().min(1).max(50),
+    primeira: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+    intervalo_dias: z.number().int().min(0).max(365).default(0),
   })
   .strict();
 
@@ -34,38 +33,39 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
   const requestId = randomUUID();
-  const authz = await requirePermission("prontuario.adendo", { requestId, resource: "clinic_adendos" });
+  const authz = await requirePermission("planos.gerenciar", { requestId, resource: "clinic_plano_sessoes" });
   if (!authz.ok) return authz.response;
   const t = (s: string) => traduzir(s, authz.user.idioma);
-
   const { id } = await ctx.params;
   if (!z.string().uuid().safeParse(id).success) return fail("validation_failed", t("id inválido"), 422, { requestId });
   const lido = corpo.safeParse(await req.json().catch(() => ({})));
-  if (!lido.success) return fail("validation_failed", t("Escreva o adendo e o motivo (mínimo de 3 letras)."), 422, { requestId });
+  if (!lido.success) return fail("validation_failed", t("Dados inválidos."), 422, { requestId });
   const org = authz.org.orgId;
+  const d = lido.data;
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("fn_clinic_adicionar_adendo", {
+  const { data, error } = await supabase.rpc("fn_clinic_plano_adicionar_sessoes", {
     p_org: org,
-    p_atendimento: id,
-    p_alvo_tipo: lido.data.alvo_tipo,
-    p_alvo_id: lido.data.alvo_id,
-    p_texto: lido.data.texto,
-    p_motivo: lido.data.motivo,
+    p_plano: id,
+    p_descricao: d.descricao,
+    p_event_type: d.event_type_id ?? null,
+    p_procedure: null,
+    p_quantidade: d.quantidade,
+    p_primeira: d.primeira ?? null,
+    p_intervalo_dias: d.intervalo_dias,
   });
   if (error) {
     const e = erroDoBanco(error, requestId);
     return fail(e.code, t(e.message), e.status, { requestId });
   }
-  const r = data as { id: string };
   void audit({
-    action: "clinic.adendo_criado",
+    action: "clinic.plano_sessoes_adicionadas",
     actorUserId: authz.user.id,
     organizationId: org,
-    resourceType: "clinic_adendo",
-    resourceId: r.id,
+    resourceType: "clinic_plano_tratamento",
+    resourceId: id,
     requestId,
-    metadata: { alvo_tipo: lido.data.alvo_tipo, atendimento_id: id },
+    metadata: { quantidade: d.quantidade },
   });
-  return ok(r, { requestId, status: 201 });
+  return ok({ adicionadas: data as number }, { requestId });
 }

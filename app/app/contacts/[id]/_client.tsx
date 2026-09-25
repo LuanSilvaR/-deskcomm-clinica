@@ -27,6 +27,7 @@ import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { origemDoContato } from "@/lib/leads/origem-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { FichaDoPaciente } from "@/components/clinic/FichaDoPaciente";
+import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
 import { ProntuarioDoPaciente } from "@/components/clinic/prontuario/ProntuarioDoPaciente";
 import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
 import { HistoricoDeAtendimentos } from "@/components/clinic/HistoricoDeAtendimentos";
@@ -63,6 +64,7 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
   // `prontuario.ver` — administrar o sistema não é ver conteúdo clínico.
   const { can } = usePermissoes();
   const verProntuario = can("prontuario.ver");
+  const verPlanos = can("planos.ver");
   const abaPedida = abaInicial ?? null;
   const q = useContact(contactId);
   const { user, activeOrg } = useAuth();
@@ -191,13 +193,18 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
         />
       )}
 
-      <Tabs defaultValue={abaPedida === "prontuario" ? "prontuario" : "overview"}>
+      <Tabs defaultValue={abaPedida === "prontuario" || abaPedida === "planos" ? abaPedida : "overview"}>
         <TabsList>
           <TabsTrigger value="overview">{t("Visão geral")}</TabsTrigger>
           <TabsTrigger value="ficha">{t("Ficha do paciente")}</TabsTrigger>
           {verProntuario && (
             <TabsTrigger value="prontuario" data-testid="aba-prontuario">
               {t("Prontuário")}
+            </TabsTrigger>
+          )}
+          {verPlanos && (
+            <TabsTrigger value="planos" data-testid="aba-planos">
+              {t("Planos")}
             </TabsTrigger>
           )}
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
@@ -308,6 +315,13 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
           </Card>
         </TabsContent>
 
+        {verPlanos && (
+          <TabsContent value="planos" className="mt-4">
+            <Card className="p-4">
+              <PlanosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
         {verProntuario && (
           <TabsContent value="prontuario" className="mt-4">
             <Card className="p-4">

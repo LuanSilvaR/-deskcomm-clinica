@@ -99,6 +99,20 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
     code: "validation_failed",
     mensagem: "Regras inválidas: confira o tipo de atendimento e a especialidade.",
   },
+  // FORK clinic (prontuário F4, 9021).
+  plano_paciente_invalido: { status: 422, code: "validation_failed", mensagem: "Paciente inválido para este plano." },
+  plano_nao_encontrado: { status: 404, code: "not_found", mensagem: "Plano não encontrado." },
+  plano_sessao_nao_encontrada: { status: 404, code: "not_found", mensagem: "Sessão não encontrada." },
+  plano_encerrado: { status: 409, code: "conflict", mensagem: "Este plano está concluído ou cancelado." },
+  plano_sessao_encerrada: { status: 409, code: "conflict", mensagem: "Esta sessão já foi realizada ou cancelada." },
+  plano_agendamento_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "O agendamento precisa ser deste paciente e não pode estar cancelado.",
+  },
+  plano_agendamento_em_uso: { status: 409, code: "conflict", mensagem: "Este agendamento já está ligado a outra sessão." },
+  plano_sessao_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo do cancelamento." },
+  plano_invalido: { status: 422, code: "validation_failed", mensagem: "Dados do plano inválidos." },
   acesso_mfa_exigido: {
     status: 403,
     code: "mfa_required",

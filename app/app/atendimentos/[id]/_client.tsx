@@ -15,7 +15,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 
+import { SecaoConduta } from "@/components/clinic/atendimento/SecaoConduta";
 import { SecaoEvolucao } from "@/components/clinic/atendimento/SecaoEvolucao";
+import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
 import { SecaoFormulario } from "@/components/clinic/atendimento/SecaoFormulario";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +26,7 @@ import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
+import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
 import type { RegistrosDoAtendimento } from "@/lib/clinic/prontuario/leitura";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +47,7 @@ interface Registros extends RegistrosDoAtendimento {
   especialidade_id: string | null;
   pode_registrar: boolean;
   pode_adendo: boolean;
+  exigidas: string[];
 }
 
 const ROTULO_DO_STATUS: Record<Atendimento["status"], string> = {
@@ -52,19 +56,28 @@ const ROTULO_DO_STATUS: Record<Atendimento["status"], string> = {
   anulado: "Anulado",
 };
 
-type SecaoAtiva = "anamnese" | "avaliacao" | "evolucao";
+type SecaoAtiva = "anamnese" | "avaliacao" | "conduta" | "plano" | "evolucao";
 const SECOES: Array<{ id: SecaoAtiva; rotulo: string }> = [
   { id: "anamnese", rotulo: "Anamnese" },
   { id: "avaliacao", rotulo: "Avaliação" },
+  { id: "conduta", rotulo: "Conduta" },
+  { id: "plano", rotulo: "Plano de tratamento" },
   { id: "evolucao", rotulo: "Evolução" },
 ];
-const EM_BREVE = ["Conduta", "Plano de tratamento", "Procedimentos", "Documentos", "Anexos"];
-const ROTULO_DA_PENDENCIA: Record<string, string> = { evolucao: "Evolução", anamnese: "Anamnese", avaliacao: "Avaliação" };
+const EM_BREVE = ["Procedimentos", "Documentos", "Anexos"];
+const ROTULO_DA_PENDENCIA: Record<string, string> = {
+  evolucao: "Evolução",
+  anamnese: "Anamnese",
+  avaliacao: "Avaliação",
+  conduta: "Conduta",
+};
+const SECOES_COM_PENDENCIA = new Set<string>(["anamnese", "avaliacao", "conduta", "evolucao"]);
 
 export function AtendimentoDoDia({ id }: { id: string }) {
   const t = useT();
   const tag = useTagDeIdioma();
   const qc = useQueryClient();
+  const { can } = usePermissoes();
   const chave = ["clinic", "atendimento", id];
   const chaveRegistros = ["clinic", "atendimento", id, "registros"];
   const [ativa, setAtiva] = useState<SecaoAtiva>("anamnese");
@@ -89,7 +102,7 @@ export function AtendimentoDoDia({ id }: { id: string }) {
       if (err instanceof ApiError && err.code === "requisitos_pendentes") {
         const lista = ((err.details as { faltando?: string[] } | undefined)?.faltando ?? []).filter(Boolean);
         setFaltando(lista);
-        if (lista[0] && (lista[0] === "anamnese" || lista[0] === "avaliacao" || lista[0] === "evolucao")) setAtiva(lista[0]);
+        if (lista[0] && SECOES_COM_PENDENCIA.has(lista[0])) setAtiva(lista[0] as SecaoAtiva);
         return;
       }
       showApiError(err);
@@ -105,8 +118,16 @@ export function AtendimentoDoDia({ id }: { id: string }) {
   const a = at.data;
   const r = reg.data;
 
+  const temTexto = (o: object | null | undefined) => !!o && Object.values(o).some((v) => typeof v === "string" && v.trim() !== "");
   const preenchida = (s: SecaoAtiva) =>
-    s === "evolucao" ? !!r?.evolucao && Object.values(r.evolucao).some((v) => typeof v === "string" && v.trim()) : !!r?.formularios[s];
+    s === "evolucao"
+      ? temTexto(r?.evolucao)
+      : s === "conduta"
+        ? temTexto(r?.conduta && { d: r.conduta.descricao, p: r.conduta.protocolo, x: r.conduta.recomendacoes })
+        : s === "plano"
+          ? false
+          : !!r?.formularios[s];
+  const secoesVisiveis = SECOES.filter((s) => s.id !== "plano" || can("planos.ver"));
 
   return (
     <div className="flex h-full flex-col gap-4 p-4 md:p-6" data-testid="atendimento-do-dia">
@@ -157,7 +178,7 @@ export function AtendimentoDoDia({ id }: { id: string }) {
       <div className="grid gap-4 md:grid-cols-[13rem_1fr]">
         <nav aria-label={t("Seções do atendimento")} className="-mx-1 overflow-x-auto md:mx-0 md:overflow-visible">
           <ul className="flex gap-1 px-1 md:flex-col md:px-0">
-            {SECOES.map((s) => (
+            {secoesVisiveis.map((s) => (
               <li key={s.id} className="shrink-0">
                 <button
                   type="button"
@@ -222,6 +243,29 @@ export function AtendimentoDoDia({ id }: { id: string }) {
                   chaveParaRecarregar={chaveRegistros}
                 />
               </div>
+              <div hidden={ativa !== "conduta"}>
+                <SecaoConduta
+                  atendimentoId={id}
+                  conduta={r.conduta}
+                  adendos={r.adendos}
+                  podeRegistrar={r.pode_registrar && a.status === "em_andamento"}
+                  podeAdendo={r.pode_adendo}
+                  chaveParaRecarregar={chaveRegistros}
+                  obrigatoria={r.exigidas.includes("conduta")}
+                />
+              </div>
+              {can("planos.ver") ? (
+                <div hidden={ativa !== "plano"}>
+                  <section className="space-y-3" data-testid="secao-plano">
+                    <h2 className="text-lg font-semibold">{t("Plano de tratamento")}</h2>
+                    <PlanosDoPaciente
+                      contactId={a.paciente.id}
+                      atendimentoOrigemId={id}
+                      objetivoSugerido={r.conduta?.descricao ?? null}
+                    />
+                  </section>
+                </div>
+              ) : null}
               <div hidden={ativa !== "evolucao"}>
                 <SecaoEvolucao
                   atendimentoId={id}

@@ -12,6 +12,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
 import { ListaDeAdendos } from "@/components/clinic/atendimento/Adendos";
+import { CondutaLidaView } from "@/components/clinic/atendimento/SecaoConduta";
 import { EvolucaoLidaView } from "@/components/clinic/atendimento/SecaoEvolucao";
 import { RespostasLidas } from "@/components/clinic/formularios/RenderizadorDeFormulario";
 import { Badge } from "@/components/ui/badge";
@@ -99,6 +100,13 @@ export function ProntuarioDoPaciente({ contactId }: { contactId: string }) {
                   </section>
                 );
               })}
+              {a.conduta ? (
+                <section aria-label={t("Conduta")} className="rounded-lg border p-3">
+                  <h3 className="mb-2 text-sm font-semibold">{t("Conduta")}</h3>
+                  <CondutaLidaView conduta={a.conduta} />
+                  <ListaDeAdendos adendos={adendosDe(a.conduta.id)} />
+                </section>
+              ) : null}
               {a.evolucao ? (
                 <section aria-label={t("Evolução")} className="rounded-lg border p-3">
                   <h3 className="mb-2 text-sm font-semibold">{t("Evolução")}</h3>

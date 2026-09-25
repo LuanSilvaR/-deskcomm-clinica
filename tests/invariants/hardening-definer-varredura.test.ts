@@ -392,6 +392,30 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 9021).
+    fn: "fn_clinic_salvar_conduta(uuid,uuid,text,text,text,integer)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/conduta/route.ts (PUT) chama com createClient da sessão; fn_acesso_exigir exige atendimento.registrar (chave clínica), suporte de escrita e MFA; atendimento em andamento da organização informada; conflito de versão. tests/invariants/clinic-conduta-e-planos.test.ts prova recusas, conflito, imutabilidade e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9021).
+    fn: "fn_clinic_plano_salvar(uuid,uuid,uuid,text,text,text,date,date,uuid,uuid,text,integer)",
+    razao:
+      "app/api/v1/clinic/pacientes/[contactId]/planos/route.ts (POST) e app/api/v1/clinic/planos/[id]/route.ts (PATCH) chamam com createClient da sessão; fn_acesso_exigir exige planos.gerenciar; paciente, especialidade e atendimento de origem conferidos na organização informada. tests/invariants/clinic-conduta-e-planos.test.ts prova paciente de outra empresa recusado e conflito de versão.",
+  },
+  {
+    // FORK clinic (migration 9021).
+    fn: "fn_clinic_plano_adicionar_sessoes(uuid,uuid,text,uuid,uuid,integer,date,integer)",
+    razao:
+      "app/api/v1/clinic/planos/[id]/sessoes/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige planos.gerenciar; plano, tipo e procedimento conferidos na organização informada. tests/invariants/clinic-conduta-e-planos.test.ts prova plano de outra empresa não encontrado.",
+  },
+  {
+    // FORK clinic (migration 9021).
+    fn: "fn_clinic_plano_sessao_mudar(uuid,uuid,text,uuid,text)",
+    razao:
+      "app/api/v1/clinic/planos/sessoes/[id]/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige planos.gerenciar; sessão da organização informada; agendamento precisa ser do mesmo paciente. tests/invariants/clinic-conduta-e-planos.test.ts prova agendamento de outro paciente recusado e realizada imutável.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

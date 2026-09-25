@@ -1,9 +1,8 @@
 /**
- * POST /api/v1/clinic/atendimentos/:id/adendos — correção de registro finalizado.
- *
- * O registro original nunca muda: o adendo fica ao lado dele, com texto, motivo,
- * autor e data. Só em atendimento finalizado e com `prontuario.adendo`
- * (`fn_clinic_adicionar_adendo`, migration 9019).
+ * POST /api/v1/clinic/planos/sessoes/:id — agendar (liga um agendamento do
+ * paciente), desagendar ou cancelar (com motivo) uma sessão do plano (FORK
+ * clinic, prontuário F4). REALIZADA não se faz aqui: ela nasce quando o
+ * atendimento daquele agendamento é finalizado.
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -21,51 +20,46 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-const corpo = z
-  .object({
-    alvo_tipo: z.enum(["formulario", "evolucao", "conduta"]),
-    alvo_id: z.string().uuid(),
-    texto: z.string().trim().min(1).max(5000),
-    motivo: z.string().trim().min(3).max(300),
-  })
-  .strict();
+const corpo = z.discriminatedUnion("acao", [
+  z.object({ acao: z.literal("agendar"), appointment_id: z.string().uuid() }).strict(),
+  z.object({ acao: z.literal("desagendar") }).strict(),
+  z.object({ acao: z.literal("cancelar"), motivo: z.string().trim().min(3).max(300) }).strict(),
+]);
 
 export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
   const requestId = randomUUID();
-  const authz = await requirePermission("prontuario.adendo", { requestId, resource: "clinic_adendos" });
+  const authz = await requirePermission("planos.gerenciar", { requestId, resource: "clinic_plano_sessoes" });
   if (!authz.ok) return authz.response;
   const t = (s: string) => traduzir(s, authz.user.idioma);
-
   const { id } = await ctx.params;
   if (!z.string().uuid().safeParse(id).success) return fail("validation_failed", t("id inválido"), 422, { requestId });
   const lido = corpo.safeParse(await req.json().catch(() => ({})));
-  if (!lido.success) return fail("validation_failed", t("Escreva o adendo e o motivo (mínimo de 3 letras)."), 422, { requestId });
+  if (!lido.success) return fail("validation_failed", t("Dados inválidos."), 422, { requestId });
   const org = authz.org.orgId;
+  const d = lido.data;
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("fn_clinic_adicionar_adendo", {
+  const { error } = await supabase.rpc("fn_clinic_plano_sessao_mudar", {
     p_org: org,
-    p_atendimento: id,
-    p_alvo_tipo: lido.data.alvo_tipo,
-    p_alvo_id: lido.data.alvo_id,
-    p_texto: lido.data.texto,
-    p_motivo: lido.data.motivo,
+    p_sessao: id,
+    p_acao: d.acao,
+    p_appointment: d.acao === "agendar" ? d.appointment_id : null,
+    p_motivo: d.acao === "cancelar" ? d.motivo : null,
   });
   if (error) {
     const e = erroDoBanco(error, requestId);
     return fail(e.code, t(e.message), e.status, { requestId });
   }
-  const r = data as { id: string };
   void audit({
-    action: "clinic.adendo_criado",
+    action: "clinic.plano_sessao_alterada",
     actorUserId: authz.user.id,
     organizationId: org,
-    resourceType: "clinic_adendo",
-    resourceId: r.id,
+    resourceType: "clinic_plano_sessao",
+    resourceId: id,
     requestId,
-    metadata: { alvo_tipo: lido.data.alvo_tipo, atendimento_id: id },
+    metadata: { acao: d.acao },
   });
-  return ok(r, { requestId, status: 201 });
+  return ok({ id, acao: d.acao }, { requestId });
 }

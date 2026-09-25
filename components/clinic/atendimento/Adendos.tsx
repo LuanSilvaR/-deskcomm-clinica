@@ -46,7 +46,7 @@ export function NovoAdendo({
   chaveParaRecarregar,
 }: {
   atendimentoId: string;
-  alvoTipo: "formulario" | "evolucao";
+  alvoTipo: "formulario" | "evolucao" | "conduta";
   alvoId: string;
   chaveParaRecarregar: readonly unknown[];
 }) {
