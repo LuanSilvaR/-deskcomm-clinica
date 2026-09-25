@@ -156,4 +156,6 @@ export {
   Stethoscope,
   UserMinus,
   XCircle,
+  // FORK clinic (Início da recepção): cadastrar paciente.
+  UserPlus,
 } from "@phosphor-icons/react/dist/ssr";

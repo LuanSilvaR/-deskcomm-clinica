@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PainelDaRecepcao } from "@/components/clinic/inicio/PainelDaRecepcao";
 import { AlternarMenuDaClinica } from "@/components/clinic/navegacao/AlternarMenuDaClinica";
 import { PainelDeModulos } from "@/components/clinic/navegacao/PainelDeModulos";
 import { ResumoDoDiaCards } from "@/components/clinic/navegacao/ResumoDoDiaCards";
@@ -22,6 +23,10 @@ export const metadata: Metadata = { title: "Início" };
  *
  * Com o menu antigo esta tela continua existindo (⌘K), e é aqui que quem
  * administra liga o menu da clínica.
+ *
+ * Para quem vê a agenda, o topo é o PAINEL DA RECEPÇÃO (busca de paciente,
+ * cadastro, contadores do dia, pacientes de hoje, sala de espera, confirmar
+ * para amanhã e vagas). Os módulos ficam recolhidos em "Todos os módulos".
  */
 export default async function InicioPage() {
   const user = await requireAuth();
@@ -48,23 +53,43 @@ export default async function InicioPage() {
   // O próprio Início não entra na grade: já estamos nele.
   const grade = modulos.filter((m) => m.modulo.id !== "inicio");
 
+  const recepcao = Boolean(activeOrg) && podeVer("/app/agenda");
+  const fuso = activeOrg?.timezone || "America/Sao_Paulo";
+  const hojePorExtenso = new Intl.DateTimeFormat(idioma === "es" ? "es" : "pt-BR", {
+    timeZone: fuso,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date());
+  const hora = Number(new Intl.DateTimeFormat("en-US", { timeZone: fuso, hour: "numeric", hourCycle: "h23" }).format(new Date()));
+  const saudacao = hora < 12 ? t("Bom dia") : hora < 18 ? t("Boa tarde") : t("Boa noite");
+  const primeiroNome = (user.full_name ?? "").trim().split(/\s+/)[0];
+
   return (
-    <div className="flex h-full flex-col gap-8 p-6">
+    <div className="flex h-full flex-col gap-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Início")}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t("Todos os módulos da clínica num lugar só, com o resumo do dia.")}
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {primeiroNome ? `${saudacao}, ${primeiroNome}` : t("Início")}
+        </h1>
+        <p className="text-sm text-muted-foreground first-letter:uppercase">
+          {recepcao ? `${hojePorExtenso} · ${t("tudo o que a recepção precisa para o dia")}` : t("Todos os módulos da clínica num lugar só, com o resumo do dia.")}
         </p>
       </header>
 
-      <ResumoDoDiaCards resumo={resumo} locale={idioma} />
+      {recepcao && activeOrg ? (
+        <PainelDaRecepcao orgId={activeOrg.orgId} conversasNaoLidas={resumo.conversasNaoLidas} tarefasAteHoje={resumo.tarefasAteHoje} />
+      ) : (
+        <ResumoDoDiaCards resumo={resumo} locale={idioma} />
+      )}
 
-      <section aria-labelledby="inicio-modulos" className="space-y-3">
-        <h2 id="inicio-modulos" className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-          {t("Módulos")}
-        </h2>
-        <PainelDeModulos modulos={grade} locale={idioma} />
-      </section>
+      <details className="group rounded-xl border p-3" open={!recepcao} data-testid="inicio-todos-os-modulos">
+        <summary className="cursor-pointer text-xs font-medium tracking-wider text-muted-foreground uppercase">
+          {t("Todos os módulos")}
+        </summary>
+        <div className="mt-3">
+          <PainelDeModulos modulos={grade} locale={idioma} />
+        </div>
+      </details>
 
       {podeLigar && activeOrg ? <AlternarMenuDaClinica ligado={ligado} /> : null}
     </div>
