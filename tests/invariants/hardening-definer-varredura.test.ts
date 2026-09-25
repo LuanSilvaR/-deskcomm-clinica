@@ -352,6 +352,30 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 9020).
+    fn: "fn_clinic_definir_requisitos(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/requisitos/route.ts (PUT) chama com createClient da sessão; fn_acesso_exigir exige modelos_clinicos.gerenciar, suporte de escrita e MFA; tipo e especialidade conferidos na organização informada. tests/invariants/clinic-requisitos-e-modelos.test.ts prova recusa sem a permissão, tipo de outra empresa recusado e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9020).
+    fn: "fn_clinic_modelo_criar(uuid,text,text,text,uuid[],jsonb)",
+    razao:
+      "app/api/v1/clinic/modelos/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige modelos_clinicos.gerenciar; especialidades conferidas na organização informada. tests/invariants/clinic-requisitos-e-modelos.test.ts prova recusa sem a permissão e especialidade de outra empresa recusada.",
+  },
+  {
+    // FORK clinic (migration 9020).
+    fn: "fn_clinic_modelo_publicar_versao(uuid,uuid,jsonb,integer)",
+    razao:
+      "app/api/v1/clinic/modelos/[id]/versoes/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige modelos_clinicos.gerenciar; o modelo precisa ser da organização informada; conflito de versão. tests/invariants/clinic-requisitos-e-modelos.test.ts prova versão anterior intacta, conflito e modelo de outra empresa.",
+  },
+  {
+    // FORK clinic (migration 9020).
+    fn: "fn_clinic_modelo_atualizar(uuid,uuid,text,text,uuid[],boolean)",
+    razao:
+      "app/api/v1/clinic/modelos/[id]/route.ts (PATCH) chama com createClient da sessão; fn_acesso_exigir exige modelos_clinicos.gerenciar; o modelo precisa ser da organização informada. tests/invariants/clinic-requisitos-e-modelos.test.ts prova modelo de outra empresa não encontrado.",
+  },
+  {
     // FORK clinic (migration 9019).
     fn: "fn_clinic_salvar_evolucao(uuid,uuid,text,text,text,text,text,integer)",
     razao:

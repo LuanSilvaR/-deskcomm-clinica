@@ -886,6 +886,11 @@ export const AUDIT_ACTIONS = [
   "clinic.registro_criado",
   "clinic.adendo_criado",
   "clinic.prontuario_visto",
+  // FORK clinic (9020): configuração clínica — sem dado de paciente
+  "clinic.modelo_criado",
+  "clinic.modelo_versao_publicada",
+  "clinic.modelo_atualizado",
+  "clinic.requisitos_definidos",
   // FORK clinic (ACL): papéis de acesso e permissões
   "acesso.papel_criado",
   "acesso.papel_alterado",

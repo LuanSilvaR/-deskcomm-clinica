@@ -408,6 +408,18 @@ export const NAV_CATALOG = [
     section: "Sua empresa",
   },
   {
+    // FORK clinic (prontuário F3, migration 9020): modelos de anamnese e
+    // avaliação e o que é obrigatório para finalizar. Configuração, sem
+    // paciente: `modelos_clinicos.gerenciar`.
+    href: "/app/settings/tenant/modelos-clinicos",
+    label: "Modelos clínicos",
+    permissao: "modelos_clinicos.gerenciar",
+    description: "Formulários de anamnese e avaliação e o que é obrigatório para finalizar um atendimento.",
+    icon: "ClipboardText",
+    group: "organizacao",
+    section: "Sua empresa",
+  },
+  {
     // O BALCÃO. Fica em CRM, e não em Configurações, porque é uso diário de quem
     // está com a cliente na frente — a tela irmã, em Configurações › Financeiro,
     // é onde o negócio se descreve uma vez.

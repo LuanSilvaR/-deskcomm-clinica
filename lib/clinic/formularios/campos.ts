@@ -42,6 +42,27 @@ export const camposSchema = z
   .max(80)
   .refine((cs) => new Set(cs.map((c) => c.chave)).size === cs.length, "Chave de campo repetida.");
 
+/**
+ * FORK clinic (prontuário F3): o que o EDITOR pode publicar. Mais estrito que
+ * `camposSchema` (que também lê versões antigas): 1 a 60 campos (o banco
+ * confere o mesmo em `fn_clinic_campos_validos`), escolha/múltipla com opções,
+ * escala com mínimo menor que o máximo.
+ */
+export const camposPublicaveisSchema = camposSchema
+  .refine((cs) => cs.length >= 1 && cs.length <= 60, "Um modelo tem de 1 a 60 campos.")
+  .refine(
+    (cs) => cs.every((c) => (c.tipo !== "escolha" && c.tipo !== "multipla") || (c.opcoes?.length ?? 0) >= 1),
+    "Escolha e múltipla escolha precisam de opções.",
+  )
+  .refine(
+    (cs) => cs.every((c) => c.tipo !== "escala" || (c.min ?? 0) < (c.max ?? 10)),
+    "Na escala, o mínimo precisa ser menor que o máximo.",
+  )
+  .refine(
+    (cs) => cs.every((c) => new Set((c.opcoes ?? []).map((o) => o.valor)).size === (c.opcoes ?? []).length),
+    "Opção repetida.",
+  );
+
 export type Respostas = Record<string, unknown>;
 
 const TEXTO_MAX = 5000;

@@ -734,6 +734,7 @@ jobs:
         clinic-indicadores.spec.ts
         clinic-papeis-de-acesso.spec.ts
         clinic-atendimento-fila.spec.ts
+        clinic-modelos-clinicos.spec.ts
         clinic-agenda-melhorias.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts

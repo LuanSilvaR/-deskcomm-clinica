@@ -81,6 +81,24 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
     code: "validation_failed",
     mensagem: "Informe o motivo do adendo.",
   },
+  // FORK clinic (prontuário F3, 9020). Depois de `formulario_modelo_invalido`:
+  // a busca é por trecho e a primeira que casa vence.
+  modelo_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Os campos do modelo são inválidos: confira chaves, tipos e especialidades.",
+  },
+  modelo_nome_em_uso: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Já existe um modelo com este nome.",
+  },
+  modelo_nao_encontrado: { status: 404, code: "not_found", mensagem: "Modelo não encontrado." },
+  requisitos_invalidos: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Regras inválidas: confira o tipo de atendimento e a especialidade.",
+  },
   acesso_mfa_exigido: {
     status: 403,
     code: "mfa_required",

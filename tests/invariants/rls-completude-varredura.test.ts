@@ -302,6 +302,11 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9018/9019): 2 orgs, quem é da A lê 0 linhas da B; append-only.",
   },
   {
+    tabela: "clinic_requisitos_finalizacao",
+    razao:
+      "tests/invariants/clinic-requisitos-e-modelos.test.ts (FORK clinic, migration 9020): 2 orgs, quem é da A lê 0 linhas da B; ninguém escreve direto.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",
