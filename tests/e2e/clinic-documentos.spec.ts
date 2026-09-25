@@ -91,7 +91,7 @@ test("termos: aceite presencial e por link (uso de imagem) — pela tela", async
     await termo.getByTestId("aceite-confirmar").click();
     await expect(pPac.getByTestId("termo-aceito")).toBeVisible({ timeout: 20_000 });
     await pPac.goto(url);
-    await expect(pPac.getByRole("alert")).toContainText("expirou ou já foi usado", { timeout: 20_000 });
+    await expect(pPac.getByRole("alert").filter({ hasText: "expirou ou já foi usado" })).toBeVisible({ timeout: 20_000 });
     await anonimo.close();
 
     // 5. aceito, com as escolhas.
