@@ -75,7 +75,8 @@ export function EditorDoProcedimento({
   const [erro, setErro] = React.useState<string | null>(null);
 
   const listaDeProfissionais = (profissionais.data ?? []).filter((p) => p.is_active || prof.includes(p.id));
-  const nomeDo = (p: Profissional) => p.display_name ?? nomeDaPessoa(p.user_id) ?? t("Profissional");
+  // Nome do PROFISSIONAL (ficha da clínica ou, sem ela, o da equipe) — não é rótulo de contato.
+  const nomeDo = (p: Profissional) => p.display_name?.trim() || nomeDaPessoa(p.user_id) || t("Profissional");
   const semEspecialidade = listaDeProfissionais.filter((p) => prof.includes(p.id) && !profissionalApto(esp, p)).map((p) => p.id);
 
   const dados = () => ({
