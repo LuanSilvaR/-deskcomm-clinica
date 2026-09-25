@@ -53,6 +53,24 @@ interface DadosDoPop {
 
 const rotulo = (v: { major: number; minor: number }) => `${v.major}.${v.minor}`;
 
+/** Abre o PDF A4 da versão numa aba nova (a rota confere pops.imprimir). */
+function BotaoImprimir({ versaoId, rotuloDaVersao }: { versaoId: string; rotuloDaVersao: string }) {
+  const t = useT();
+  return (
+    <Button asChild variant="outline" size="sm">
+      <a
+        href={`/api/v1/clinic/pops/versoes/${versaoId}/pdf`}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid="pop-imprimir"
+        aria-label={`${t("Imprimir")} — ${t("versão")} ${rotuloDaVersao}`}
+      >
+        {t("Imprimir")}
+      </a>
+    </Button>
+  );
+}
+
 /** Data e hora no idioma de quem lê (a camada de i18n dá a tag). */
 function dataHora(iso: string | null, tag: string): string {
   if (!iso) return "—";
@@ -403,6 +421,7 @@ export function AbaDoPop({ procedimento }: { procedimento: Procedimento }) {
             {t("Descartar rascunho")}
           </Button>
         ) : null}
+        {can("pops.imprimir") ? <BotaoImprimir versaoId={v.id} rotuloDaVersao={rotulo(v)} /> : null}
         {vigente && rascunho ? (
           <span className="self-center text-xs text-text-muted">
             {t("Vigente")}: {t("versão")} {rotulo(vigente)}
@@ -458,6 +477,7 @@ export function AbaDoHistorico({ procedimento }: { procedimento: Procedimento })
   const popId = procedimento.pop?.id ?? null;
   const pop = usePop(popId);
   const tag = useTagDeIdioma();
+  const { can } = usePermissoes();
   const [aberta, setAberta] = React.useState<string | null>(null);
   const doc = useVersao(aberta);
 
@@ -496,6 +516,7 @@ export function AbaDoHistorico({ procedimento }: { procedimento: Procedimento })
                   <p className="text-sm text-text-muted">{t("Carregando…")}</p>
                 ) : (
                   <>
+                    {can("pops.imprimir") ? <BotaoImprimir versaoId={v.id} rotuloDaVersao={rotulo(v)} /> : null}
                     <CabecalhoDoPop codigo={dados.pop.code} procedimento={procedimento.name} versao={doc.data.versao} nomes={{ ...dados.nomes, ...doc.data.nomes }} />
                     <EditorDoPop key={v.id} conteudo={doc.data.versao.content} editavel={false} rotulo={`${t("Conteúdo do POP")} ${rotulo(v)}`} />
                   </>
