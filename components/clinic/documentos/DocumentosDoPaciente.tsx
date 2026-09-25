@@ -12,7 +12,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { FormularioDeAceite, TextoDoTermo } from "@/components/clinic/documentos/FormularioDeAceite";
+import {
+  FormularioDeAceite,
+  TextoDoTermo,
+} from "@/components/clinic/documentos/FormularioDeAceite";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +23,13 @@ import { Input } from "@/components/ui/input";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
-import { opcoesDoTermoSchema, ROTULO_DO_TIPO_DE_DOCUMENTO, type OpcaoDoTermo, type TipoDeDocumento } from "@/lib/clinic/documentos/tipos";
+import {
+  opcoesDoTermoSchema,
+  ROTULO_DO_STATUS_DO_DOCUMENTO,
+  ROTULO_DO_TIPO_DE_DOCUMENTO,
+  type OpcaoDoTermo,
+  type TipoDeDocumento,
+} from "@/lib/clinic/documentos/tipos";
 
 interface Aceite {
   id: string;
@@ -59,33 +68,44 @@ interface ModeloDoc {
   versao_id: string | null;
 }
 
-const ROTULO_DO_STATUS: Record<Documento["status"], string> = {
-  emitido: "Aguardando aceite",
-  aceito: "Aceito",
-  revogado: "Revogado",
-  cancelado: "Cancelado",
-};
 const SELECT = "h-11 w-full rounded-md border bg-surface px-2 text-sm md:h-9";
 const opcoesDe = (d: Documento): OpcaoDoTermo[] => {
   const r = opcoesDoTermoSchema.safeParse(d.opcoes);
   return r.success ? r.data : [];
 };
 
-export function DocumentosDoPaciente({ contactId, atendimentoId }: { contactId: string; atendimentoId?: string }) {
+export function DocumentosDoPaciente({
+  contactId,
+  atendimentoId,
+}: {
+  contactId: string;
+  atendimentoId?: string;
+}) {
   const t = useT();
   const chave = ["clinic", "documentos", contactId];
   const q = useQuery({
     queryKey: chave,
-    queryFn: async () => (await apiClient.get<{ data: Dados }>(`/api/v1/clinic/pacientes/${contactId}/documentos`)).data,
+    queryFn: async () =>
+      (await apiClient.get<{ data: Dados }>(`/api/v1/clinic/pacientes/${contactId}/documentos`))
+        .data,
   });
   if (q.isLoading) return <p className="text-sm text-text-muted">{t("Carregando…")}</p>;
-  if (q.isError || !q.data) return <p className="text-sm text-destructive">{t("Não foi possível carregar os documentos.")}</p>;
+  if (q.isError || !q.data)
+    return (
+      <p className="text-sm text-destructive">{t("Não foi possível carregar os documentos.")}</p>
+    );
   const d = q.data;
-  const lista = atendimentoId ? d.documentos.filter((x) => x.atendimento_id === atendimentoId || x.status === "emitido") : d.documentos;
+  const lista = atendimentoId
+    ? d.documentos.filter((x) => x.atendimento_id === atendimentoId || x.status === "emitido")
+    : d.documentos;
   return (
     <div className="space-y-4" data-testid="documentos-do-paciente">
-      {d.pode_emitir ? <EmitirDocumento contactId={contactId} atendimentoId={atendimentoId} chave={chave} /> : null}
-      {lista.length === 0 ? <p className="text-sm text-text-muted">{t("Nenhum documento emitido.")}</p> : null}
+      {d.pode_emitir ? (
+        <EmitirDocumento contactId={contactId} atendimentoId={atendimentoId} chave={chave} />
+      ) : null}
+      {lista.length === 0 ? (
+        <p className="text-sm text-text-muted">{t("Nenhum documento emitido.")}</p>
+      ) : null}
       <ul className="space-y-3">
         {lista.map((doc) => (
           <CartaoDoDocumento key={doc.id} doc={doc} dados={d} chave={chave} />
@@ -95,7 +115,15 @@ export function DocumentosDoPaciente({ contactId, atendimentoId }: { contactId: 
   );
 }
 
-function EmitirDocumento({ contactId, atendimentoId, chave }: { contactId: string; atendimentoId?: string; chave: readonly unknown[] }) {
+function EmitirDocumento({
+  contactId,
+  atendimentoId,
+  chave,
+}: {
+  contactId: string;
+  atendimentoId?: string;
+  chave: readonly unknown[];
+}) {
   const t = useT();
   const qc = useQueryClient();
   const [versao, setVersao] = useState("");
@@ -103,7 +131,9 @@ function EmitirDocumento({ contactId, atendimentoId, chave }: { contactId: strin
   const [validade, setValidade] = useState("");
   const modelos = useQuery({
     queryKey: ["clinic", "documentos", "modelos"],
-    queryFn: async () => (await apiClient.get<{ data: { modelos: ModeloDoc[] } }>("/api/v1/clinic/documentos/modelos")).data.modelos,
+    queryFn: async () =>
+      (await apiClient.get<{ data: { modelos: ModeloDoc[] } }>("/api/v1/clinic/documentos/modelos"))
+        .data.modelos,
   });
   const escolhido = (modelos.data ?? []).find((m) => m.versao_id === versao);
   const emitir = useMutation({
@@ -132,7 +162,12 @@ function EmitirDocumento({ contactId, atendimentoId, chave }: { contactId: strin
     >
       <label className="block text-sm">
         <span className="block text-xs text-text-muted">{t("Documento")}</span>
-        <select className={`mt-1 ${SELECT}`} value={versao} onChange={(e) => setVersao(e.target.value)} data-testid="documento-modelo">
+        <select
+          className={`mt-1 ${SELECT}`}
+          value={versao}
+          onChange={(e) => setVersao(e.target.value)}
+          data-testid="documento-modelo"
+        >
           <option value="">{t("Escolha o modelo")}</option>
           {(modelos.data ?? [])
             .filter((m) => m.ativo && m.versao_id)
@@ -144,25 +179,50 @@ function EmitirDocumento({ contactId, atendimentoId, chave }: { contactId: strin
         </select>
       </label>
       <label className="block text-sm">
-        <span className="block text-xs text-text-muted">{t("Procedimento (aparece no texto)")}</span>
-        <Input className="mt-1 h-11 md:h-9" value={procedimento} maxLength={200} onChange={(e) => setProcedimento(e.target.value)} />
+        <span className="block text-xs text-text-muted">
+          {t("Procedimento (aparece no texto)")}
+        </span>
+        <Input
+          className="mt-1 h-11 md:h-9"
+          value={procedimento}
+          maxLength={200}
+          onChange={(e) => setProcedimento(e.target.value)}
+        />
       </label>
       {escolhido?.tipo === "uso_imagem" ? (
         <label className="block text-sm">
           <span className="block text-xs text-text-muted">{t("Válido até")}</span>
-          <Input type="date" className="mt-1 h-11 md:h-9" value={validade} onChange={(e) => setValidade(e.target.value)} />
+          <Input
+            type="date"
+            className="mt-1 h-11 md:h-9"
+            value={validade}
+            onChange={(e) => setValidade(e.target.value)}
+          />
         </label>
       ) : (
         <span />
       )}
-      <Button type="submit" className="self-end" disabled={!versao || emitir.isPending} data-testid="documento-emitir">
+      <Button
+        type="submit"
+        className="self-end"
+        disabled={!versao || emitir.isPending}
+        data-testid="documento-emitir"
+      >
         {t("Emitir")}
       </Button>
     </form>
   );
 }
 
-function CartaoDoDocumento({ doc, dados, chave }: { doc: Documento; dados: Dados; chave: readonly unknown[] }) {
+function CartaoDoDocumento({
+  doc,
+  dados,
+  chave,
+}: {
+  doc: Documento;
+  dados: Dados;
+  chave: readonly unknown[];
+}) {
   const t = useT();
   const tag = useTagDeIdioma();
   const qc = useQueryClient();
@@ -171,8 +231,11 @@ function CartaoDoDocumento({ doc, dados, chave }: { doc: Documento; dados: Dados
   const [link, setLink] = useState<{ url: string; expira_em: string } | null>(null);
   const recarregar = () => void qc.invalidateQueries({ queryKey: chave });
   const opcoes = opcoesDe(doc);
-  const aceites = [...(doc.clinic_documento_aceites ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
-  const quando = (iso: string) => new Date(iso).toLocaleString(tag, { dateStyle: "short", timeStyle: "short" });
+  const aceites = [...(doc.clinic_documento_aceites ?? [])].sort((a, b) =>
+    a.created_at.localeCompare(b.created_at),
+  );
+  const quando = (iso: string) =>
+    new Date(iso).toLocaleString(tag, { dateStyle: "short", timeStyle: "short" });
 
   const aceitar = useMutation({
     mutationFn: ({ nome, escolhas }: { nome: string; escolhas: Record<string, boolean> }) =>
@@ -184,17 +247,26 @@ function CartaoDoDocumento({ doc, dados, chave }: { doc: Documento; dados: Dados
     onError: showApiError,
   });
   const gerarLink = useMutation({
-    mutationFn: async () => (await apiClient.post<{ data: { url: string; expira_em: string } }>(`/api/v1/clinic/documentos/${doc.id}/link`, { horas: 72 })).data,
+    mutationFn: async () =>
+      (
+        await apiClient.post<{ data: { url: string; expira_em: string } }>(
+          `/api/v1/clinic/documentos/${doc.id}/link`,
+          { horas: 72 },
+        )
+      ).data,
     onSuccess: setLink,
     onError: showApiError,
   });
   const encerrar = useMutation({
-    mutationFn: (corpo: { acao: "revogar" | "cancelar"; motivo: string }) => apiClient.post(`/api/v1/clinic/documentos/${doc.id}/encerrar`, corpo),
+    mutationFn: (corpo: { acao: "revogar" | "cancelar"; motivo: string }) =>
+      apiClient.post(`/api/v1/clinic/documentos/${doc.id}/encerrar`, corpo),
     onSuccess: recarregar,
     onError: showApiError,
   });
   const pedirMotivo = (acao: "revogar" | "cancelar") => {
-    const motivo = window.prompt(acao === "revogar" ? t("Motivo da revogação") : t("Motivo do cancelamento"));
+    const motivo = window.prompt(
+      acao === "revogar" ? t("Motivo da revogação") : t("Motivo do cancelamento"),
+    );
     if (motivo && motivo.trim().length >= 3) encerrar.mutate({ acao, motivo: motivo.trim() });
   };
 
@@ -205,14 +277,19 @@ function CartaoDoDocumento({ doc, dados, chave }: { doc: Documento; dados: Dados
           <p className="font-medium">{t(doc.titulo)}</p>
           <p className="text-xs text-text-muted">
             {t(ROTULO_DO_TIPO_DE_DOCUMENTO[doc.tipo])} · {t("emitido em")} {quando(doc.created_at)}
-            {doc.validade_ate ? ` · ${t("válido até")} ${new Date(`${doc.validade_ate}T12:00:00`).toLocaleDateString(tag)}` : ""}
+            {doc.validade_ate
+              ? ` · ${t("válido até")} ${new Date(`${doc.validade_ate}T12:00:00`).toLocaleDateString(tag)}`
+              : ""}
           </p>
           <p className="font-mono text-[10px] text-text-subtle" title={doc.sha256}>
             sha256 {doc.sha256.slice(0, 16)}…
           </p>
         </div>
-        <Badge variant={doc.status === "aceito" ? "default" : "secondary"} data-testid="documento-status">
-          {t(ROTULO_DO_STATUS[doc.status])}
+        <Badge
+          variant={doc.status === "aceito" ? "default" : "secondary"}
+          data-testid="documento-status"
+        >
+          {t(ROTULO_DO_STATUS_DO_DOCUMENTO[doc.status])}
         </Badge>
       </div>
 
@@ -225,7 +302,11 @@ function CartaoDoDocumento({ doc, dados, chave }: { doc: Documento; dados: Dados
                 : `${t("Revogado")} · ${quando(a.created_at)}${a.motivo ? ` · ${a.motivo}` : ""}`}
               {a.tipo === "aceite" && opcoes.length > 0 ? (
                 <span className="block">
-                  {opcoes.map((o) => `${o.rotulo}: ${a.opcoes_escolhidas[o.chave] ? t("sim") : t("não")}`).join(" · ")}
+                  {opcoes
+                    .map(
+                      (o) => `${o.rotulo}: ${a.opcoes_escolhidas[o.chave] ? t("sim") : t("não")}`,
+                    )
+                    .join(" · ")}
                 </span>
               ) : null}
             </li>
@@ -239,10 +320,21 @@ function CartaoDoDocumento({ doc, dados, chave }: { doc: Documento; dados: Dados
         </Button>
         {doc.status === "emitido" && dados.pode_colher_aceite ? (
           <>
-            <Button size="sm" variant="outline" onClick={() => setColhendo((v) => !v)} data-testid="documento-colher">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setColhendo((v) => !v)}
+              data-testid="documento-colher"
+            >
               {t("Colher aceite aqui")}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => gerarLink.mutate()} disabled={gerarLink.isPending} data-testid="documento-link">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => gerarLink.mutate()}
+              disabled={gerarLink.isPending}
+              data-testid="documento-link"
+            >
               {t("Gerar link para o paciente")}
             </Button>
           </>
@@ -253,18 +345,37 @@ function CartaoDoDocumento({ doc, dados, chave }: { doc: Documento; dados: Dados
           </Button>
         ) : null}
         {doc.status === "aceito" && dados.pode_revogar ? (
-          <Button size="sm" variant="ghost" onClick={() => pedirMotivo("revogar")} data-testid="documento-revogar">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => pedirMotivo("revogar")}
+            data-testid="documento-revogar"
+          >
             {t("Revogar")}
           </Button>
         ) : null}
       </div>
 
       {link ? (
-        <div className="space-y-1 rounded-lg border bg-muted/40 p-2 text-xs" data-testid="documento-link-gerado">
-          <p>{t("Envie este link ao paciente. Ele vale uma vez só, até")} {quando(link.expira_em)}.</p>
+        <div
+          className="space-y-1 rounded-lg border bg-muted/40 p-2 text-xs"
+          data-testid="documento-link-gerado"
+        >
+          <p>
+            {t("Envie este link ao paciente. Ele vale uma vez só, até")} {quando(link.expira_em)}.
+          </p>
           <div className="flex gap-2">
-            <Input readOnly value={link.url} className="h-9 font-mono text-xs" aria-label={t("Link de aceite")} />
-            <Button size="sm" type="button" onClick={() => void navigator.clipboard?.writeText(link.url)}>
+            <Input
+              readOnly
+              value={link.url}
+              className="h-9 font-mono text-xs"
+              aria-label={t("Link de aceite")}
+            />
+            <Button
+              size="sm"
+              type="button"
+              onClick={() => void navigator.clipboard?.writeText(link.url)}
+            >
               {t("Copiar")}
             </Button>
           </div>
