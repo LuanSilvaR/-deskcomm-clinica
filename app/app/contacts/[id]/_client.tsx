@@ -27,6 +27,7 @@ import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { origemDoContato } from "@/lib/leads/origem-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { FichaDoPaciente } from "@/components/clinic/FichaDoPaciente";
+import { AnexosDoPaciente } from "@/components/clinic/anexos/AnexosDoPaciente";
 import { DocumentosDoPaciente } from "@/components/clinic/documentos/DocumentosDoPaciente";
 import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
 import { ProntuarioDoPaciente } from "@/components/clinic/prontuario/ProntuarioDoPaciente";
@@ -195,13 +196,18 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
         />
       )}
 
-      <Tabs defaultValue={abaPedida === "prontuario" || abaPedida === "planos" || abaPedida === "documentos" ? abaPedida : "overview"}>
+      <Tabs defaultValue={["prontuario", "planos", "documentos", "anexos"].includes(abaPedida ?? "") ? abaPedida! : "overview"}>
         <TabsList>
           <TabsTrigger value="overview">{t("Visão geral")}</TabsTrigger>
           <TabsTrigger value="ficha">{t("Ficha do paciente")}</TabsTrigger>
           {verProntuario && (
             <TabsTrigger value="prontuario" data-testid="aba-prontuario">
               {t("Prontuário")}
+            </TabsTrigger>
+          )}
+          {verProntuario && (
+            <TabsTrigger value="anexos" data-testid="aba-anexos">
+              {t("Fotos e anexos")}
             </TabsTrigger>
           )}
           {verDocumentos && (
@@ -322,6 +328,13 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
           </Card>
         </TabsContent>
 
+        {verProntuario && (
+          <TabsContent value="anexos" className="mt-4">
+            <Card className="p-4">
+              <AnexosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
         {verDocumentos && (
           <TabsContent value="documentos" className="mt-4">
             <Card className="p-4">

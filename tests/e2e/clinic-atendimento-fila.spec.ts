@@ -9,6 +9,7 @@
  *      "Iniciar atendimento" — cai na área do atendimento;
  *   4. conduta com autosave e um plano de 3 sessões gerado dela (F4);
  *      procedimento com insumo e lote, que vira evento de estoque (F5);
+ *      foto comprimida no navegador e guardada no bucket privado (F7);
  *      finalizar sem evolução é barrado (lista do que falta); preenche a anamnese
  *      (autosave "Salvo às") e a evolução, finaliza: o status vira "Finalizado";
  *      acrescenta um adendo; a aba Prontuário do paciente mostra o atendimento;
@@ -40,6 +41,10 @@ if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/.test(URL_SUPABASE)) {
 const admin = createClient(URL_SUPABASE, process.env.SUPABASE_SERVICE_ROLE_KEY ?? "", {
   auth: { autoRefreshToken: false, persistSession: false },
 });
+
+/** PNG 4×4 vermelho: o navegador recomprime como WebP antes de subir. */
+const PNG_4X4 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR4nGP4z8AARwzEcQCukw/x0F8jngAAAABJRU5ErkJggg==";
 
 async function foto(page: Page, nome: string): Promise<void> {
   fs.mkdirSync(EVIDENCIA, { recursive: true });
@@ -161,6 +166,21 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     await pAt.getByTestId("insumo-lote").fill("LOTE-E2E");
     await pAt.getByTestId("procedimento-salvar").click();
     await expect(pAt.getByTestId("secao-procedimentos").getByTestId("procedimento")).toContainText("LOTE-E2E", { timeout: 20_000 });
+
+    // foto clínica (F7): comprimida no navegador, guardada no bucket privado.
+    await pAt.getByTestId("nav-anexos").click();
+    await pAt.getByTestId("secao-anexos").getByTestId("anexo-arquivo").setInputFiles({
+      name: "foto.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(PNG_4X4, "base64"),
+    });
+    await expect(pAt.getByTestId("secao-anexos").getByTestId("anexo")).toHaveCount(1, { timeout: 30_000 });
+    const { data: anexo } = await admin
+      .from("clinic_anexos")
+      .select("mime, storage_key")
+      .eq("contact_id", (contato as { id: string }).id)
+      .single();
+    expect((anexo as { mime: string }).mime).toBe("image/webp");
 
     // evolução.
     await pAt.getByTestId("nav-evolucao").click();

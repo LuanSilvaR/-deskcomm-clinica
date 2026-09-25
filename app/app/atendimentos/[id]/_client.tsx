@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * A área do atendimento (fork clinic, prontuário F1/F2).
+ * A área do atendimento (fork clinic, prontuário F1–F7).
  *
  * Três zonas: cabeçalho fixo (paciente, idade, serviço, especialidade, horários
  * e Finalizar), navegação de seções (lateral no desktop, abas roláveis no
- * tablet/celular) e o painel da seção. Anamnese, Avaliação e Evolução salvam
- * sozinhas (autosave com versão); as demais seções chegam nas próximas fases.
+ * tablet/celular) e o painel da seção. Anamnese, Avaliação, Conduta e Evolução
+ * salvam sozinhas (autosave com versão); Plano, Procedimentos, Documentos e
+ * Fotos têm salvar próprio.
  *
  * Todas as seções ficam MONTADAS e só a ativa aparece: trocar de seção não
  * descarta digitação em curso nem a versão que cada editor conhece.
@@ -18,6 +19,7 @@ import { useState } from "react";
 import { SecaoConduta } from "@/components/clinic/atendimento/SecaoConduta";
 import { SecaoEvolucao } from "@/components/clinic/atendimento/SecaoEvolucao";
 import { SecaoProcedimentos } from "@/components/clinic/atendimento/SecaoProcedimentos";
+import { AnexosDoPaciente } from "@/components/clinic/anexos/AnexosDoPaciente";
 import { DocumentosDoPaciente } from "@/components/clinic/documentos/DocumentosDoPaciente";
 import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
 import { SecaoFormulario } from "@/components/clinic/atendimento/SecaoFormulario";
@@ -58,7 +60,7 @@ const ROTULO_DO_STATUS: Record<Atendimento["status"], string> = {
   anulado: "Anulado",
 };
 
-type SecaoAtiva = "anamnese" | "avaliacao" | "conduta" | "plano" | "procedimentos" | "documentos" | "evolucao";
+type SecaoAtiva = "anamnese" | "avaliacao" | "conduta" | "plano" | "procedimentos" | "documentos" | "anexos" | "evolucao";
 const SECOES: Array<{ id: SecaoAtiva; rotulo: string }> = [
   { id: "anamnese", rotulo: "Anamnese" },
   { id: "avaliacao", rotulo: "Avaliação" },
@@ -66,9 +68,9 @@ const SECOES: Array<{ id: SecaoAtiva; rotulo: string }> = [
   { id: "plano", rotulo: "Plano de tratamento" },
   { id: "procedimentos", rotulo: "Procedimentos" },
   { id: "documentos", rotulo: "Documentos" },
+  { id: "anexos", rotulo: "Fotos e anexos" },
   { id: "evolucao", rotulo: "Evolução" },
 ];
-const EM_BREVE = ["Anexos"];
 const ROTULO_DA_PENDENCIA: Record<string, string> = {
   evolucao: "Evolução",
   anamnese: "Anamnese",
@@ -135,7 +137,7 @@ export function AtendimentoDoDia({ id }: { id: string }) {
           ? false
           : s === "procedimentos"
             ? (r?.procedimentos ?? []).some((p) => p.status !== "anulado")
-            : s === "documentos"
+            : s === "documentos" || s === "anexos"
               ? false
               : !!r?.formularios[s];
   // A pendência "procedimento" (banco) marca a seção "procedimentos" (tela).
@@ -214,13 +216,6 @@ export function AtendimentoDoDia({ id }: { id: string }) {
                     {preenchida(s.id) ? t("preenchida") : pendente(s.id) ? t("pendente") : t("vazia")}
                   </span>
                 </button>
-              </li>
-            ))}
-            {EM_BREVE.map((s) => (
-              <li key={s} className="shrink-0">
-                <span aria-disabled="true" className="flex min-h-11 items-center justify-between gap-2 px-3 text-sm text-text-subtle md:min-h-9">
-                  {t(s)} <span className="text-[10px]">{t("Em breve")}</span>
-                </span>
               </li>
             ))}
           </ul>
@@ -304,6 +299,12 @@ export function AtendimentoDoDia({ id }: { id: string }) {
                   </section>
                 </div>
               ) : null}
+              <div hidden={ativa !== "anexos"}>
+                <section className="space-y-3" data-testid="secao-anexos">
+                  <h2 className="text-lg font-semibold">{t("Fotos e anexos")}</h2>
+                  <AnexosDoPaciente contactId={a.paciente.id} atendimentoId={id} />
+                </section>
+              </div>
               <div hidden={ativa !== "evolucao"}>
                 <SecaoEvolucao
                   atendimentoId={id}

@@ -137,6 +137,20 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
   },
   documento_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo." },
   documento_link_invalido: { status: 410, code: "token_expired", mensagem: "Este link expirou ou já foi usado." },
+  // FORK clinic (prontuário F7, 9024).
+  anexo_invalido: { status: 422, code: "validation_failed", mensagem: "Arquivo inválido para este paciente." },
+  anexo_cota_excedida: {
+    status: 413,
+    code: "payload_too_large",
+    mensagem: "A clínica atingiu o limite de espaço para arquivos. Fale com quem administra o sistema.",
+  },
+  anexo_nao_encontrado: { status: 404, code: "not_found", mensagem: "Arquivo não encontrado." },
+  anexo_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo para anular." },
+  anexo_sem_autorizacao_de_imagem: {
+    status: 403,
+    code: "forbidden_permission",
+    mensagem: "O paciente não autorizou este uso da imagem (ou a autorização venceu ou foi revogada).",
+  },
   acesso_mfa_exigido: {
     status: 403,
     code: "mfa_required",

@@ -905,6 +905,11 @@ export const AUDIT_ACTIONS = [
   "clinic.documento_link_criado",
   "clinic.documento_revogado",
   "clinic.documento_cancelado",
+  // FORK clinic (9024): anexos e fotos — metadados só
+  "clinic.anexo_enviado",
+  "clinic.anexo_visto",
+  "clinic.anexo_anulado",
+  "clinic.foto_divulgacao",
   // FORK clinic (ACL): papéis de acesso e permissões
   "acesso.papel_criado",
   "acesso.papel_alterado",

@@ -458,6 +458,24 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/documentos/[id]/encerrar/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige documentos.revogar (revogar) ou documentos.emitir (cancelar); documento da organização informada; motivo obrigatório. tests/invariants/clinic-documentos-e-aceites.test.ts prova revogação append-only.",
   },
   {
+    // FORK clinic (migration 9024).
+    fn: "fn_clinic_anexo_registrar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/pacientes/[contactId]/anexos/route.ts (POST) chama com createClient da sessão depois de subir o arquivo; fn_acesso_exigir exige fotos.enviar ou anexos.enviar (chaves clínicas), suporte de escrita e MFA; paciente, atendimento, plano e o PREFIXO do caminho conferidos na organização informada; cota com trava. tests/invariants/clinic-anexos-e-fotos.test.ts prova caminho de outra empresa recusado, cota e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9024).
+    fn: "fn_clinic_anexo_mudar(uuid,uuid,text,text)",
+    razao:
+      "app/api/v1/clinic/anexos/[id]/route.ts (PATCH) chama com createClient da sessão; anexo da organização informada; fn_acesso_exigir por tipo; divulgação só com fn_clinic_uso_de_imagem_autorizado. tests/invariants/clinic-anexos-e-fotos.test.ts prova divulgação recusada sem termo e anulado imutável.",
+  },
+  {
+    // FORK clinic (migration 9024).
+    fn: "fn_clinic_uso_de_arquivos(uuid)",
+    razao:
+      "app/api/v1/clinic/pacientes/[contactId]/anexos/route.ts (GET) chama com createClient da sessão; só devolve totais (bytes usados e cota) e exige que a organização esteja em fn_user_org_ids(). tests/invariants/clinic-anexos-e-fotos.test.ts prova outra empresa recusada.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

@@ -357,6 +357,11 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): ninguém lê pela API (policy false); só funções com o hash do token.",
   },
   {
+    tabela: "clinic_anexos",
+    razao:
+      "tests/invariants/clinic-anexos-e-fotos.test.ts (FORK clinic, migration 9024): 2 orgs, quem é da A lê 0 linhas da B; sem fotos.ver/anexos.ver lê 0; ninguém escreve direto; imutável.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",
