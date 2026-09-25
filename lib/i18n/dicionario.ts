@@ -11790,6 +11790,7 @@ export const DICIONARIO: Traducoes = {
   "Prontuário desligado": { es: "Historia clínica desactivada" },
   "Os profissionais atendem pela fila (Meus atendimentos) e registram anamnese, evolução, fotos e termos. Só profissionais ativos ou papéis clínicos veem o conteúdo clínico; o administrador sozinho não vê.": { es: "Los profesionales atienden por la fila (Mis atenciones) y registran anamnesis, evolución, fotos y términos. Solo los profesionales activos o los roles clínicos ven el contenido clínico; el administrador por sí solo no lo ve." },
   "Ligue para atender pela fila e registrar o prontuário do paciente. Só profissionais ativos ou papéis clínicos veem o conteúdo clínico.": { es: "Actívelo para atender por la fila y registrar la historia clínica del paciente. Solo los profesionales activos o los roles clínicos ven el contenido clínico." },
+  "Imprimir": { es: "Imprimir" },
   "Adicionar linha": { es: "Añadir fila" },
   "Aprovado": { es: "Aprobado" },
   "Aprovado por": { es: "Aprobado por" },

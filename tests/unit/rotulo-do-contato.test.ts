@@ -163,6 +163,11 @@ describe("a sétima cópia não nasce", () => {
       trecho: "p.display_name?.trim() || nomeDaPessoa(p.user_id) || t(\"Profissional\")",
       motivo: "nome da ficha do profissional (clinic_professionals.display_name) ou o da equipe; não é rótulo de contato",
     },
+    {
+      arquivo: "app/api/v1/clinic/pops/versoes/[id]/pdf/route.ts",
+      trecho: "nome: marcaCadastrada?.app_name?.trim() || o.display_name || o.legal_name || \"\",",
+      motivo: "nome da CLÍNICA (marca, organizations.display_name ou razão social) no cabeçalho do PDF do POP; não é rótulo de contato",
+    },
     // ── prospecção (PR #963): nenhuma destas é nome de CONTATO ──────────────
     {
       arquivo: "app/app/prospecting/_client.tsx",
