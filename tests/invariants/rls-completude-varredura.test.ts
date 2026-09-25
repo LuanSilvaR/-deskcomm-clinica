@@ -277,6 +277,16 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-ficha-do-paciente.test.ts (FORK clinic, migration 9002): 2 orgs, quem é da A lê 0 linhas da B, atendente escreve e visualizador não, e anonimizar o contato apaga a ficha.",
   },
   {
+    tabela: "clinic_atendimentos",
+    razao:
+      "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9016): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",
+  },
+  {
+    tabela: "clinic_atendimento_eventos",
+    razao:
+      "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9016): 2 orgs, quem é da A lê 0 linhas da B; append-only (UPDATE/DELETE recusados).",
+  },
+  {
     tabela: "clinic_appointment_visits",
     razao:
       "tests/invariants/clinic-status-da-visita.test.ts (FORK clinic, migration 9003): 2 orgs, quem é da A lê 0 linhas da B, atendente muda status e visualizador não, e o histórico não aceita UPDATE nem DELETE.",

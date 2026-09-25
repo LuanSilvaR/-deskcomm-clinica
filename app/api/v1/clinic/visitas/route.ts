@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
+import { prontuarioLigado } from "@/lib/clinic/flags";
 import { ehStatusDaVisita } from "@/lib/clinic/visitas/status";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { createClient } from "@/lib/supabase/server";
@@ -90,5 +91,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       confirmacao_falha: confirmacaoPorAgendamento.get(a.id as string)?.falha ?? null,
     };
   });
-  return ok({ dia, itens }, { requestId });
+  // FORK clinic (prontuário F1): a tela esconde "Iniciar/Finalizar" quando é o profissional quem faz.
+  const { data: orgRow } = await supabase.from("organizations").select("settings").eq("id", org).maybeSingle();
+  return ok({ dia, itens, prontuario: prontuarioLigado((orgRow as { settings?: unknown } | null)?.settings) }, { requestId });
 }

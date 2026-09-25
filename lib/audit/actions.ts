@@ -878,6 +878,10 @@ export const AUDIT_ACTIONS = [
   // FORK clinic (9007): salas e equipamentos
   "clinic.recurso_salvo",
   "clinic.tipo_recursos_atualizados",
+  // FORK clinic (9016): atendimento clínico — metadados só (nunca conteúdo)
+  "clinic.atendimento_iniciado",
+  "clinic.atendimento_finalizado",
+  "clinic.atendimento_visto",
   // FORK clinic (ACL): papéis de acesso e permissões
   "acesso.papel_criado",
   "acesso.papel_alterado",

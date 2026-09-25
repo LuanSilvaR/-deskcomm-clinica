@@ -213,6 +213,18 @@ export const NAV_CATALOG = [
     group: "atendimento",
   },
   {
+    // FORK clinic (prontuário F1, migration 9016): a fila do profissional. Sem
+    // `sidebar` (o menu está no limite medido de 900px); porta pelo ⌘K e pelo
+    // painel da Recepção, que aponta para cá quando o prontuário está ligado.
+    href: "/app/atendimentos",
+    label: "Meus atendimentos",
+    permissao: "atendimento.ver_fila",
+    description: "A fila do profissional: quem está aguardando, em atendimento e os próximos do dia.",
+    icon: "ListChecks",
+    group: "atendimento",
+    minRole: "agent",
+  },
+  {
     // Renomeado de "Templates": estes são scripts do atendente, consumidos pelo
     // Composer do inbox. O nome "Templates" fica livre para os da Meta (HSM),
     // onde é o termo técnico correto.
