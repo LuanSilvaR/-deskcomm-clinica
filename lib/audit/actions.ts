@@ -890,6 +890,44 @@ export const AUDIT_ACTIONS = [
   // FORK clinic (9007): salas e equipamentos
   "clinic.recurso_salvo",
   "clinic.tipo_recursos_atualizados",
+  // FORK clinic (9017): atendimento clínico — metadados só (nunca conteúdo)
+  "clinic.atendimento_iniciado",
+  "clinic.atendimento_finalizado",
+  "clinic.atendimento_visto",
+  // FORK clinic (9018/9019): registros do prontuário — metadados só
+  "clinic.registro_criado",
+  "clinic.adendo_criado",
+  "clinic.prontuario_visto",
+  // FORK clinic (9020): configuração clínica — sem dado de paciente
+  "clinic.modelo_criado",
+  "clinic.modelo_versao_publicada",
+  "clinic.modelo_atualizado",
+  "clinic.requisitos_definidos",
+  // FORK clinic (9021): planos de tratamento — metadados só
+  "clinic.plano_criado",
+  "clinic.plano_atualizado",
+  "clinic.plano_sessoes_adicionadas",
+  "clinic.plano_sessao_alterada",
+  // FORK clinic (9022): procedimento lançado por engano — metadados só
+  "clinic.procedimento_anulado",
+  // FORK clinic (9023): documentos e termos — metadados só
+  "clinic.documento_modelo_salvo",
+  "clinic.documento_emitido",
+  "clinic.documento_aceito",
+  "clinic.documento_link_criado",
+  "clinic.documento_revogado",
+  "clinic.documento_cancelado",
+  // FORK clinic (9024): anexos e fotos — metadados só
+  "clinic.anexo_enviado",
+  "clinic.anexo_visto",
+  "clinic.anexo_anulado",
+  "clinic.foto_divulgacao",
+  // FORK clinic (F8): reabertura e exportação — metadados só
+  "clinic.atendimento_reaberto",
+  "clinic.prontuario_exportado",
+  // FORK clinic (F9): cabeçalho clínico e anulação — metadados só
+  "clinic.cabecalho_alterado",
+  "clinic.atendimento_anulado",
   // FORK clinic (ACL): papéis de acesso e permissões
   "acesso.papel_criado",
   "acesso.papel_alterado",

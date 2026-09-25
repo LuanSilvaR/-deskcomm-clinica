@@ -21,6 +21,7 @@ interface Props {
   travaInicial: boolean;
   recursosInicial: boolean;
   procedimentosInicial: boolean;
+  prontuarioInicial: boolean;
   prazoInicial: number;
   podeLigar: boolean;
   ehGerencia: boolean;
@@ -34,6 +35,7 @@ export function ProfissionaisClient({
   travaInicial,
   recursosInicial,
   procedimentosInicial,
+  prontuarioInicial,
   prazoInicial,
   podeLigar,
   ehGerencia,
@@ -46,6 +48,7 @@ export function ProfissionaisClient({
   const [trava, setTrava] = useState(travaInicial);
   const [recursos, setRecursos] = useState(recursosInicial);
   const [procedimentos, setProcedimentos] = useState(procedimentosInicial);
+  const [prontuario, setProntuario] = useState(prontuarioInicial);
   const [prazo, setPrazo] = useState(prazoInicial);
   const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
 
@@ -63,6 +66,13 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { procedimentos: boolean } }>("/api/v1/clinic/config", { procedimentos: valor }),
     onSuccess: (r) => setProcedimentos(r.data.procedimentos),
+    onError: showApiError,
+  });
+
+  const alternarProntuario = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { prontuario: boolean } }>("/api/v1/clinic/config", { prontuario: valor }),
+    onSuccess: (r) => setProntuario(r.data.prontuario),
     onError: showApiError,
   });
 
@@ -257,6 +267,30 @@ export function ProfissionaisClient({
             onClick={() => alternarProcedimentos.mutate(!procedimentos)}
           >
             {procedimentos ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${prontuario ? "" : "bg-muted"}`}
+        data-testid="clinic-prontuario"
+      >
+        <div>
+          <p className="font-medium">{prontuario ? t("Prontuário ligado") : t("Prontuário desligado")}</p>
+          <p className="text-sm text-text-muted">
+            {prontuario
+              ? t("Os profissionais atendem pela fila (Meus atendimentos) e registram anamnese, evolução, fotos e termos. Só profissionais ativos ou papéis clínicos veem o conteúdo clínico; o administrador sozinho não vê.")
+              : t("Ligue para atender pela fila e registrar o prontuário do paciente. Só profissionais ativos ou papéis clínicos veem o conteúdo clínico.")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-prontuario-alternar"
+            variant={prontuario ? "outline" : "default"}
+            disabled={alternarProntuario.isPending}
+            onClick={() => alternarProntuario.mutate(!prontuario)}
+          >
+            {prontuario ? t("Desligar") : t("Ligar")}
           </Button>
         ) : null}
       </section>

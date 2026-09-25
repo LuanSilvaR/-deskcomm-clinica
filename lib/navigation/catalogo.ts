@@ -224,6 +224,18 @@ export const NAV_CATALOG = [
     group: "atendimento",
   },
   {
+    // FORK clinic (prontuário F1, migration 9017): a fila do profissional. Sem
+    // `sidebar` (o menu está no limite medido de 900px); porta pelo ⌘K e pelo
+    // painel da Recepção, que aponta para cá quando o prontuário está ligado.
+    href: "/app/atendimentos",
+    label: "Meus atendimentos",
+    permissao: "atendimento.ver_fila",
+    description: "A fila do profissional: quem está aguardando, em atendimento e os próximos do dia.",
+    icon: "ListChecks",
+    group: "atendimento",
+    minRole: "agent",
+  },
+  {
     // Renomeado de "Templates": estes são scripts do atendente, consumidos pelo
     // Composer do inbox. O nome "Templates" fica livre para os da Meta (HSM),
     // onde é o termo técnico correto.
@@ -403,6 +415,18 @@ export const NAV_CATALOG = [
     permissao: "profissionais.ver",
     description: "Quem atende, o que cada um faz, quando atende e quando a agenda fica fechada.",
     icon: "UsersThree",
+    group: "organizacao",
+    section: "Sua empresa",
+  },
+  {
+    // FORK clinic (prontuário F3, migration 9020): modelos de anamnese e
+    // avaliação e o que é obrigatório para finalizar. Configuração, sem
+    // paciente: `modelos_clinicos.gerenciar`.
+    href: "/app/settings/tenant/modelos-clinicos",
+    label: "Modelos clínicos",
+    permissao: "modelos_clinicos.gerenciar",
+    description: "Formulários de anamnese e avaliação e o que é obrigatório para finalizar um atendimento.",
+    icon: "ClipboardText",
     group: "organizacao",
     section: "Sua empresa",
   },

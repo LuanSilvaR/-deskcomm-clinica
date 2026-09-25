@@ -39180,6 +39180,4155 @@ revoke execute on function public.fn_clinic_definir_procedimentos(uuid, boolean)
 grant  execute on function public.fn_clinic_definir_procedimentos(uuid, boolean) to authenticated;
 -- ---- fim clinic (migration 9015, fork) ----
 
+-- ---- clinic: acesso clínico (migration 9016, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9016 · clinic — acesso CLÍNICO separado da administração (FORK, prontuário F0)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (seções 10 e 11).
+--
+-- Chaves de conteúdo clínico (prontuário, evolução, fotos, anexos, planos)
+-- ganham a marca `clinica`. Elas NUNCA vêm de brinde:
+--
+--   * suporte (impersonação) não recebe nenhuma, nem no modo "full";
+--   * modo legado (como a empresa nasce): além do nível, a pessoa precisa ser
+--     PROFISSIONAL ativo (`clinic_professionals.is_active`) na empresa;
+--   * modo por papéis: só por papel atribuído — e o papel de sistema
+--     Administrador não as concede (o admin que atende atribui a si um papel
+--     clínico, e a atribuição fica no registro de auditoria);
+--   * papéis-modelo não as recebem no provisionamento.
+--
+-- As chaves não-clínicas novas (fila de atendimento, documentos, modelos)
+-- seguem a regra de sempre (nível legado). Também cria a opção
+-- `settings.clinic.prontuario` (nasce desligada). Nada aqui cria tabela clínica
+-- nem muda o acesso de chave que já existia. Idempotente.
+
+-- ─── marca clínica no catálogo ─────────────────────────────────────────────
+alter table public.clinic_permissions add column if not exists clinica boolean not null default false;
+
+insert into public.clinic_permissions (key, modulo, acao, nivel_base, depende_de, critica, descricao, clinica) values
+  ('atendimento.ver_fila', 'atendimento', 'ver_fila', 'agent', array[]::text[], false, 'Ver a fila de atendimentos e o status de cada paciente (sem conteúdo clínico)', false),
+  ('atendimento.iniciar', 'atendimento', 'iniciar', 'agent', array['atendimento.ver_fila','prontuario.ver']::text[], false, 'Iniciar o atendimento do paciente', true),
+  ('atendimento.registrar', 'atendimento', 'registrar', 'agent', array['prontuario.ver']::text[], false, 'Registrar anamnese, avaliação, conduta, procedimentos e evolução', true),
+  ('atendimento.finalizar', 'atendimento', 'finalizar', 'agent', array['atendimento.registrar']::text[], false, 'Finalizar o atendimento (os registros ficam imutáveis)', true),
+  ('atendimento.reabrir', 'atendimento', 'reabrir', 'manager', array['atendimento.finalizar']::text[], false, 'Reabrir atendimento finalizado, com motivo', true),
+  ('prontuario.ver', 'prontuario', 'ver', 'agent', array[]::text[], false, 'Ver o prontuário e o histórico clínico do paciente', true),
+  ('prontuario.adendo', 'prontuario', 'adendo', 'agent', array['prontuario.ver']::text[], false, 'Acrescentar adendo a registro finalizado', true),
+  ('prontuario.exportar', 'prontuario', 'exportar', 'manager', array['prontuario.ver']::text[], false, 'Exportar o prontuário do paciente', true),
+  ('planos.ver', 'planos', 'ver', 'agent', array['prontuario.ver']::text[], false, 'Ver planos de tratamento e sessões', true),
+  ('planos.gerenciar', 'planos', 'gerenciar', 'agent', array['planos.ver']::text[], false, 'Criar e alterar planos de tratamento e sessões', true),
+  ('fotos.ver', 'fotos', 'ver', 'agent', array['prontuario.ver']::text[], false, 'Ver fotos clínicas (antes e depois)', true),
+  ('fotos.enviar', 'fotos', 'enviar', 'agent', array['fotos.ver']::text[], false, 'Registrar fotos clínicas', true),
+  ('anexos.ver', 'anexos', 'ver', 'agent', array['prontuario.ver']::text[], false, 'Ver e baixar anexos do prontuário', true),
+  ('anexos.enviar', 'anexos', 'enviar', 'agent', array['anexos.ver']::text[], false, 'Anexar documentos e exames ao prontuário', true),
+  ('documentos.ver', 'documentos', 'ver', 'agent', array[]::text[], false, 'Ver contratos e termos emitidos para o paciente', false),
+  ('documentos.emitir', 'documentos', 'emitir', 'agent', array['documentos.ver']::text[], false, 'Emitir contrato ou termo para o paciente', false),
+  ('documentos.colher_aceite', 'documentos', 'colher_aceite', 'agent', array['documentos.ver']::text[], false, 'Registrar o aceite do paciente', false),
+  ('documentos.revogar', 'documentos', 'revogar', 'manager', array['documentos.ver']::text[], false, 'Revogar ou cancelar documento emitido', false),
+  ('modelos_clinicos.gerenciar', 'modelos_clinicos', 'gerenciar', 'admin', array[]::text[], false, 'Configurar modelos de anamnese, avaliação e documentos (sem ver pacientes)', false)
+on conflict (key) do update set
+  modulo = excluded.modulo, acao = excluded.acao, nivel_base = excluded.nivel_base,
+  depende_de = excluded.depende_de, critica = excluded.critica, descricao = excluded.descricao,
+  clinica = excluded.clinica;
+
+-- ─── permissões efetivas ───────────────────────────────────────────────────
+create or replace function public.fn_member_permissions(p_org uuid)
+returns setof text
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_suporte jsonb;
+  v_papel text;
+  v_ligado boolean;
+  v_profissional boolean;
+begin
+  if auth.uid() is null or p_org is null then
+    return;
+  end if;
+
+  v_suporte := public.fn_support_context();
+  if v_suporte ->> 'status' = 'active' and (v_suporte ->> 'organization_id')::uuid = p_org then
+    -- 9016: suporte nunca lê conteúdo clínico.
+    return query
+      select c.key from public.clinic_permissions c
+       where not c.clinica
+         and (v_suporte ->> 'access_mode' = 'full' or c.nivel_base = 'viewer');
+    return;
+  end if;
+
+  select uo.role into v_papel
+    from public.user_organizations uo
+   where uo.user_id = auth.uid() and uo.organization_id = p_org and uo.revoked_at is null
+   limit 1;
+  if v_papel is null then
+    return;
+  end if;
+
+  select (o.settings -> 'clinic' -> 'acesso_por_permissoes') = 'true'::jsonb into v_ligado
+    from public.organizations o where o.id = p_org;
+
+  if not coalesce(v_ligado, false) then
+    -- Transição: o que o nível legado já dava; chave clínica só para profissional ativo.
+    select exists (
+      select 1 from public.clinic_professionals p
+       where p.organization_id = p_org and p.user_id = auth.uid() and p.is_active
+    ) into v_profissional;
+    return query
+      select c.key from public.clinic_permissions c
+       where public.fn_nivel_rank(c.nivel_base) <= public.fn_nivel_rank(v_papel)
+         and (not c.clinica or v_profissional);
+    return;
+  end if;
+
+  return query
+    select distinct rp.permission_key
+      from public.clinic_member_roles mr
+      join public.clinic_roles r on r.organization_id = mr.organization_id and r.id = mr.role_id and r.ativo
+      join public.clinic_role_permissions rp on rp.organization_id = r.organization_id and rp.role_id = r.id
+      join public.clinic_permissions c on c.key = rp.permission_key
+     where mr.organization_id = p_org and mr.user_id = auth.uid()
+       -- 9016: o papel de sistema Administrador não concede conteúdo clínico.
+       and not (c.clinica and r.system_key is not distinct from 'administrador');
+end $$;
+revoke execute on function public.fn_member_permissions(uuid) from public, anon;
+grant  execute on function public.fn_member_permissions(uuid) to authenticated, service_role;
+
+-- ─── provisionamento: papéis-modelo sem chave clínica ──────────────────────
+create or replace function public.fn_acesso_provisionar_org(p_org uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  m record;
+  v_id uuid;
+begin
+  for m in
+    select * from (values
+      ('administrador', 'Administrador', 'admin', true, 'Acesso total à empresa. Não pode ser excluído nem perder o controle dos papéis.'),
+      ('gerente', 'Gerente', 'manager', false, 'Modelo inicial equivalente ao antigo papel Gerente.'),
+      ('atendente', 'Atendente', 'agent', false, 'Modelo inicial equivalente ao antigo papel Atendente.'),
+      ('visualizador', 'Visualizador', 'viewer', false, 'Modelo inicial equivalente ao antigo papel Visualizador.')
+    ) as t(system_key, nome, nivel, sistema, descricao)
+  loop
+    select id into v_id from public.clinic_roles where organization_id = p_org and system_key = m.system_key;
+    if v_id is null then
+      insert into public.clinic_roles (organization_id, nome, descricao, is_system, system_key)
+      values (
+        p_org,
+        case when exists (select 1 from public.clinic_roles r where r.organization_id = p_org and lower(btrim(r.nome)) = lower(m.nome))
+             then m.nome || ' (modelo)' else m.nome end,
+        m.descricao, m.sistema, m.system_key)
+      returning id into v_id;
+      insert into public.clinic_role_permissions (organization_id, role_id, permission_key)
+      select p_org, v_id, c.key from public.clinic_permissions c
+       where public.fn_nivel_rank(c.nivel_base) <= public.fn_nivel_rank(m.nivel)
+         and not c.clinica
+      on conflict do nothing;
+    elsif m.sistema then
+      -- o Administrador tem todo o catálogo NÃO clínico (permissão nova entra sozinha)
+      insert into public.clinic_role_permissions (organization_id, role_id, permission_key)
+      select p_org, v_id, c.key from public.clinic_permissions c
+       where not c.clinica
+      on conflict do nothing;
+    end if;
+  end loop;
+end $$;
+revoke execute on function public.fn_acesso_provisionar_org(uuid) from public, anon, authenticated;
+
+-- ─── empresas que já existem ───────────────────────────────────────────────
+-- Administrador recebe as chaves não-clínicas novas; os modelos não-sistema
+-- recebem SÓ as chaves não-clínicas criadas nesta migration, pelo nível
+-- (edição que a empresa fez nas chaves antigas não é tocada). Nenhum papel de
+-- sistema fica com chave clínica.
+do $$
+declare
+  o record;
+begin
+  for o in select id from public.organizations loop
+    perform public.fn_acesso_provisionar_org(o.id);
+  end loop;
+
+  insert into public.clinic_role_permissions (organization_id, role_id, permission_key)
+  select r.organization_id, r.id, c.key
+    from public.clinic_roles r
+    join public.clinic_permissions c
+      on c.key in ('atendimento.ver_fila','documentos.ver','documentos.emitir','documentos.colher_aceite','documentos.revogar')
+   where r.system_key in ('gerente','atendente')
+     and public.fn_nivel_rank(c.nivel_base) <= public.fn_nivel_rank(case r.system_key when 'gerente' then 'manager' else 'agent' end)
+  on conflict do nothing;
+
+  delete from public.clinic_role_permissions rp
+   using public.clinic_roles r, public.clinic_permissions c
+   where rp.organization_id = r.organization_id and rp.role_id = r.id
+     and c.key = rp.permission_key and c.clinica
+     and r.system_key is not null;
+end $$;
+
+-- ─── a opção: organizations.settings.clinic.prontuario ─────────────────────
+create or replace function public.fn_clinic_definir_prontuario(p_org uuid, p_ligado boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_antes boolean;
+begin
+  if auth.uid() is null
+     or p_org is null
+     or p_ligado is null
+     or not public.fn_role_at_least(p_org, 'admin')
+     or not public.fn_support_write_allowed(p_org) then
+    raise exception 'clinic_flag_forbidden' using errcode = '42501';
+  end if;
+  if not public.fn_session_mfa_proven() then
+    raise exception 'clinic_flag_mfa_required' using errcode = '42501';
+  end if;
+
+  select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb into v_antes
+    from public.organizations o
+   where o.id = p_org;
+  if not found then
+    raise exception 'organization_not_found' using errcode = 'P0002';
+  end if;
+
+  update public.organizations
+     set settings = jsonb_set(
+           coalesce(settings, '{}'::jsonb),
+           '{clinic}',
+           (case when jsonb_typeof(settings -> 'clinic') = 'object' then settings -> 'clinic' else '{}'::jsonb end)
+             || jsonb_build_object('prontuario', p_ligado),
+           true)
+   where id = p_org;
+
+  return jsonb_build_object('ligado', p_ligado, 'mudou', coalesce(v_antes, false) <> p_ligado);
+end $$;
+
+revoke execute on function public.fn_clinic_definir_prontuario(uuid, boolean) from public, anon;
+grant  execute on function public.fn_clinic_definir_prontuario(uuid, boolean) to authenticated;
+-- ---- fim clinic (migration 9016, fork) ----
+
+-- ---- clinic: atendimentos (migration 9017, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9017 · clinic — o ATENDIMENTO clínico (FORK, prontuário F1)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (seções 4–7, fase F1).
+--
+-- Agendamento ≠ atendimento. O agendamento é a reserva de horário; o
+-- ATENDIMENTO é o evento clínico que nasce quando o profissional clica em
+-- "Iniciar atendimento" (visita `pronto` → `em_atendimento`, 9003). Os registros
+-- clínicos das próximas fases (anamnese, evolução, procedimentos) penduram-se
+-- nele.
+--
+--   clinic_atendimentos          um por agendamento (appointment_id unique)
+--   clinic_atendimento_eventos   append-only: iniciado/finalizado/reaberto/anulado
+--
+-- Leitura: membro da empresa COM `prontuario.ver` (chave clínica, 9016) — sem
+-- atalho de platform admin. Escrita: só pelas funções abaixo, que exigem a
+-- permissão, MFA e suporte com escrita (`fn_acesso_exigir`) e a opção
+-- `settings.clinic.prontuario` ligada. Idempotente.
+
+-- ─── atendimento ───────────────────────────────────────────────────────────
+create table if not exists public.clinic_atendimentos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete restrict,
+  appointment_id uuid references public.calendar_appointments(id) on delete restrict,
+  professional_user_id uuid references auth.users(id) on delete set null,
+  specialty_id uuid references public.clinic_specialties(id) on delete set null,
+  event_type_id uuid references public.calendar_event_types(id) on delete set null,
+  status text not null default 'em_andamento',
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  finalizado_por uuid references auth.users(id) on delete set null,
+  versao integer not null default 1,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  constraint clinic_atendimentos_status_check check (status in ('em_andamento', 'finalizado', 'anulado')),
+  constraint clinic_atendimentos_finalizado_check check ((status = 'finalizado') = (finished_at is not null)),
+  constraint clinic_atendimentos_org_id_key unique (organization_id, id),
+  constraint clinic_atendimentos_agendamento_key unique (appointment_id)
+);
+create index if not exists clinic_atendimentos_paciente_idx
+  on public.clinic_atendimentos (organization_id, contact_id, started_at desc);
+create index if not exists clinic_atendimentos_profissional_idx
+  on public.clinic_atendimentos (organization_id, professional_user_id, started_at desc);
+
+drop trigger if exists clinic_atendimentos_updated_at on public.clinic_atendimentos;
+create trigger clinic_atendimentos_updated_at before update on public.clinic_atendimentos
+  for each row execute function public.fn_set_updated_at();
+
+-- ─── eventos (append-only) ─────────────────────────────────────────────────
+create table if not exists public.clinic_atendimento_eventos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  atendimento_id uuid not null,
+  tipo text not null,
+  status_antes text,
+  status_depois text not null,
+  motivo text,
+  ator uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint clinic_atendimento_eventos_tipo_check check (tipo in ('iniciado', 'finalizado', 'reaberto', 'anulado')),
+  constraint clinic_atendimento_eventos_motivo_tamanho check (motivo is null or char_length(motivo) <= 300),
+  constraint clinic_atendimento_eventos_do_atendimento foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id) on delete cascade
+);
+create index if not exists clinic_atendimento_eventos_atendimento_idx
+  on public.clinic_atendimento_eventos (organization_id, atendimento_id, created_at);
+
+-- ─── RLS ───────────────────────────────────────────────────────────────────
+do $$
+declare t text;
+begin
+  foreach t in array array['clinic_atendimentos','clinic_atendimento_eventos'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format('drop policy if exists %s_select on public.%I', t, t);
+    -- Sem `or fn_is_platform_admin()`: conteúdo clínico não tem atalho.
+    execute format($p$create policy %s_select on public.%I for select using (
+        (organization_id in (select public.fn_user_org_ids()))
+        and public.fn_has_permission(organization_id, 'prontuario.ver'))$p$, t, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end $$;
+revoke update, delete, truncate on public.clinic_atendimento_eventos from service_role;
+
+-- ─── iniciar ───────────────────────────────────────────────────────────────
+create or replace function public.fn_clinic_iniciar_atendimento(p_org uuid, p_appointment uuid, p_specialty uuid default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ag record;
+  v_existente record;
+  v_especialidade uuid;
+  v_id uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.iniciar');
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+
+  select a.id, a.contact_id, a.status, a.event_type_id into v_ag
+    from public.calendar_appointments a
+   where a.id = p_appointment and a.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_agendamento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_ag.contact_id is null then
+    raise exception 'atendimento_sem_paciente' using errcode = '22023';
+  end if;
+  if v_ag.status in ('cancelled', 'no_show') then
+    raise exception 'atendimento_agendamento_cancelado' using errcode = '22023';
+  end if;
+
+  select c.id, c.status into v_existente
+    from public.clinic_atendimentos c
+   where c.organization_id = p_org and c.appointment_id = p_appointment;
+  if found then
+    if v_existente.status = 'em_andamento' then
+      return jsonb_build_object('id', v_existente.id, 'criado', false);
+    end if;
+    raise exception 'atendimento_ja_encerrado' using errcode = '22023';
+  end if;
+
+  -- Especialidade: a informada tem de ser do profissional; senão, a única que
+  -- casa o que o tipo exige com o que o profissional tem.
+  if p_specialty is not null then
+    if not exists (
+      select 1 from public.clinic_professional_specialties ps
+        join public.clinic_professionals p on p.id = ps.professional_id and p.organization_id = ps.organization_id
+       where ps.organization_id = p_org and p.user_id = auth.uid() and ps.specialty_id = p_specialty
+    ) then
+      raise exception 'atendimento_especialidade_invalida' using errcode = '22023';
+    end if;
+    v_especialidade := p_specialty;
+  else
+    select min(ps.specialty_id::text)::uuid into v_especialidade
+      from public.clinic_professional_specialties ps
+      join public.clinic_professionals p on p.id = ps.professional_id and p.organization_id = ps.organization_id
+     where ps.organization_id = p_org and p.user_id = auth.uid()
+       and (v_ag.event_type_id is null or not exists (
+              select 1 from public.clinic_event_type_specialties e
+               where e.organization_id = p_org and e.event_type_id = v_ag.event_type_id)
+            or ps.specialty_id in (
+              select e.specialty_id from public.clinic_event_type_specialties e
+               where e.organization_id = p_org and e.event_type_id = v_ag.event_type_id))
+    having count(*) = 1;
+  end if;
+
+  insert into public.clinic_atendimentos
+    (organization_id, contact_id, appointment_id, professional_user_id, specialty_id, event_type_id, created_by, updated_by)
+  values
+    (p_org, v_ag.contact_id, p_appointment, auth.uid(), v_especialidade, v_ag.event_type_id, auth.uid(), auth.uid())
+  returning id into v_id;
+
+  insert into public.clinic_atendimento_eventos (organization_id, atendimento_id, tipo, status_antes, status_depois, ator)
+  values (p_org, v_id, 'iniciado', null, 'em_andamento', auth.uid());
+
+  perform public.fn_clinic_mudar_status_visita(p_org, p_appointment, 'em_atendimento', null);
+
+  return jsonb_build_object('id', v_id, 'criado', true);
+end $$;
+revoke execute on function public.fn_clinic_iniciar_atendimento(uuid, uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_iniciar_atendimento(uuid, uuid, uuid) to authenticated;
+
+-- ─── finalizar ─────────────────────────────────────────────────────────────
+-- Só o registro do atendimento. A visita (`finalizado`) e o "Compareceu" do
+-- núcleo são gravados pela rota, pelo mesmo caminho da recepção.
+create or replace function public.fn_clinic_finalizar_atendimento(p_org uuid, p_atendimento uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.finalizar');
+
+  select c.id, c.status, c.appointment_id into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status = 'finalizado' then
+    return jsonb_build_object('id', v_at.id, 'appointment_id', v_at.appointment_id, 'mudou', false);
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'atendimento_ja_encerrado' using errcode = '22023';
+  end if;
+
+  update public.clinic_atendimentos
+     set status = 'finalizado', finished_at = now(), finalizado_por = auth.uid(),
+         updated_by = auth.uid(), versao = versao + 1
+   where id = v_at.id;
+
+  insert into public.clinic_atendimento_eventos (organization_id, atendimento_id, tipo, status_antes, status_depois, ator)
+  values (p_org, v_at.id, 'finalizado', 'em_andamento', 'finalizado', auth.uid());
+
+  return jsonb_build_object('id', v_at.id, 'appointment_id', v_at.appointment_id, 'mudou', true);
+end $$;
+revoke execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) to authenticated;
+-- ---- fim clinic (migration 9017, fork) ----
+
+-- ---- clinic: formulários (migration 9018, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9018 · clinic — formulários clínicos por MODELO versionado (FORK, prontuário F2)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (fase F2).
+--
+-- Anamnese e avaliação não são formulários fixos de estética: cada empresa tem
+-- MODELOS (Anamnese geral, Anamnese estética, Avaliação facial...), e cada
+-- modelo tem VERSÕES imutáveis — a lista de campos em JSON. O preenchimento
+-- guarda a versão usada, então mudar o modelo amanhã não reescreve o que foi
+-- registrado hoje.
+--
+--   clinic_modelos_formulario          o modelo (tipo, nome, especialidades)
+--   clinic_modelos_formulario_versoes  os campos de cada versão (imutável)
+--   clinic_formularios_preenchidos     as respostas de um atendimento
+--
+-- Campos: {chave, rotulo, tipo, obrigatorio?, opcoes?, min?, max?, ajuda?} com
+-- tipo em texto|texto_longo|numero|data|sim_nao|escolha|multipla|escala. A
+-- validação fina das respostas é do código (lib/clinic/formularios/campos.ts);
+-- o banco garante forma (objeto, tamanho), versão do modelo da MESMA empresa e
+-- do MESMO tipo, conflito de versão e atendimento aberto.
+--
+-- Leitura das respostas: membro + `prontuario.ver`. Modelos não têm dado de
+-- paciente: qualquer membro lê. Escrita só por função. Idempotente.
+
+-- ─── modelos ───────────────────────────────────────────────────────────────
+create table if not exists public.clinic_modelos_formulario (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  tipo text not null,
+  nome text not null,
+  descricao text,
+  especialidades uuid[] not null default '{}',
+  ativo boolean not null default true,
+  padrao boolean not null default false,
+  versao_atual integer not null default 1,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint clinic_modelos_formulario_tipo_check check (tipo in ('anamnese', 'avaliacao')),
+  constraint clinic_modelos_formulario_nome_tamanho check (char_length(btrim(nome)) between 1 and 80),
+  constraint clinic_modelos_formulario_descricao_tamanho check (descricao is null or char_length(descricao) <= 300),
+  constraint clinic_modelos_formulario_org_id_key unique (organization_id, id)
+);
+create unique index if not exists clinic_modelos_formulario_nome_key
+  on public.clinic_modelos_formulario (organization_id, tipo, lower(btrim(nome)));
+
+drop trigger if exists clinic_modelos_formulario_updated_at on public.clinic_modelos_formulario;
+create trigger clinic_modelos_formulario_updated_at before update on public.clinic_modelos_formulario
+  for each row execute function public.fn_set_updated_at();
+
+create table if not exists public.clinic_modelos_formulario_versoes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  modelo_id uuid not null,
+  numero integer not null,
+  campos jsonb not null,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  constraint clinic_modelos_formulario_versoes_campos_check check (jsonb_typeof(campos) = 'array'),
+  constraint clinic_modelos_formulario_versoes_numero_check check (numero >= 1),
+  constraint clinic_modelos_formulario_versoes_modelo_numero_key unique (modelo_id, numero),
+  constraint clinic_modelos_formulario_versoes_org_id_key unique (organization_id, id),
+  constraint clinic_modelos_formulario_versoes_do_modelo foreign key (organization_id, modelo_id)
+    references public.clinic_modelos_formulario (organization_id, id) on delete cascade
+);
+
+-- ─── preenchimentos ────────────────────────────────────────────────────────
+create table if not exists public.clinic_formularios_preenchidos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  atendimento_id uuid not null,
+  tipo text not null,
+  modelo_versao_id uuid not null,
+  respostas jsonb not null default '{}'::jsonb,
+  status text not null default 'rascunho',
+  versao integer not null default 1,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  constraint clinic_formularios_preenchidos_tipo_check check (tipo in ('anamnese', 'avaliacao')),
+  constraint clinic_formularios_preenchidos_status_check check (status in ('rascunho', 'finalizado')),
+  constraint clinic_formularios_preenchidos_respostas_check
+    check (jsonb_typeof(respostas) = 'object' and octet_length(respostas::text) <= 65536),
+  constraint clinic_formularios_preenchidos_atendimento_tipo_key unique (atendimento_id, tipo),
+  constraint clinic_formularios_preenchidos_org_id_key unique (organization_id, id),
+  constraint clinic_formularios_preenchidos_do_atendimento foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id) on delete cascade,
+  constraint clinic_formularios_preenchidos_da_versao foreign key (organization_id, modelo_versao_id)
+    references public.clinic_modelos_formulario_versoes (organization_id, id) on delete restrict
+);
+
+drop trigger if exists clinic_formularios_preenchidos_updated_at on public.clinic_formularios_preenchidos;
+create trigger clinic_formularios_preenchidos_updated_at before update on public.clinic_formularios_preenchidos
+  for each row execute function public.fn_set_updated_at();
+
+-- ─── RLS ───────────────────────────────────────────────────────────────────
+do $$
+declare t text;
+begin
+  foreach t in array array['clinic_modelos_formulario','clinic_modelos_formulario_versoes','clinic_formularios_preenchidos'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format('drop policy if exists %s_select on public.%I', t, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end $$;
+drop policy if exists clinic_modelos_formulario_select on public.clinic_modelos_formulario;
+create policy clinic_modelos_formulario_select on public.clinic_modelos_formulario for select using (
+  organization_id in (select public.fn_user_org_ids()));
+drop policy if exists clinic_modelos_formulario_versoes_select on public.clinic_modelos_formulario_versoes;
+create policy clinic_modelos_formulario_versoes_select on public.clinic_modelos_formulario_versoes for select using (
+  organization_id in (select public.fn_user_org_ids()));
+-- Respostas são conteúdo clínico: sem atalho de platform admin.
+drop policy if exists clinic_formularios_preenchidos_select on public.clinic_formularios_preenchidos;
+create policy clinic_formularios_preenchidos_select on public.clinic_formularios_preenchidos for select using (
+  (organization_id in (select public.fn_user_org_ids()))
+  and public.fn_has_permission(organization_id, 'prontuario.ver'));
+revoke update, delete, truncate on public.clinic_modelos_formulario_versoes from service_role;
+
+-- ─── modelos padrão de cada empresa ────────────────────────────────────────
+create or replace function public.fn_clinic_semear_modelos(p_org uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  m record;
+  v_id uuid;
+begin
+  for m in
+    select * from (values
+      ('anamnese', 'Anamnese geral', 'Para qualquer atendimento.', true, $j$[
+        {"chave":"queixa_principal","rotulo":"Queixa principal","tipo":"texto_longo","obrigatorio":true},
+        {"chave":"objetivo","rotulo":"Objetivo do paciente","tipo":"texto_longo"},
+        {"chave":"historico_relevante","rotulo":"Histórico relevante","tipo":"texto_longo"},
+        {"chave":"tem_alergias","rotulo":"Informa alergias?","tipo":"sim_nao"},
+        {"chave":"alergias","rotulo":"Alergias informadas","tipo":"texto","ajuda":"Somente o que o paciente informou."},
+        {"chave":"medicamentos","rotulo":"Medicamentos em uso","tipo":"texto_longo"},
+        {"chave":"procedimentos_anteriores","rotulo":"Procedimentos anteriores","tipo":"texto_longo"},
+        {"chave":"habitos","rotulo":"Hábitos","tipo":"multipla","opcoes":[
+          {"valor":"tabagismo","rotulo":"Tabagismo"},{"valor":"alcool","rotulo":"Consumo de álcool"},
+          {"valor":"atividade_fisica","rotulo":"Atividade física regular"},{"valor":"exposicao_solar","rotulo":"Exposição solar frequente"}]},
+        {"chave":"observacoes","rotulo":"Observações do profissional","tipo":"texto_longo"}
+      ]$j$),
+      ('anamnese', 'Anamnese estética', 'Procedimentos estéticos faciais e corporais.', false, $j$[
+        {"chave":"queixa_principal","rotulo":"Queixa principal","tipo":"texto_longo","obrigatorio":true},
+        {"chave":"objetivo","rotulo":"Objetivo do paciente","tipo":"texto_longo"},
+        {"chave":"procedimentos_anteriores","rotulo":"Procedimentos estéticos anteriores","tipo":"texto_longo"},
+        {"chave":"usa_acidos","rotulo":"Usa ácidos ou retinoides?","tipo":"sim_nao"},
+        {"chave":"exposicao_solar","rotulo":"Exposição solar","tipo":"escolha","opcoes":[
+          {"valor":"baixa","rotulo":"Baixa"},{"valor":"moderada","rotulo":"Moderada"},{"valor":"alta","rotulo":"Alta"}]},
+        {"chave":"tem_alergias","rotulo":"Informa alergias?","tipo":"sim_nao"},
+        {"chave":"alergias","rotulo":"Alergias informadas","tipo":"texto"},
+        {"chave":"medicamentos","rotulo":"Medicamentos em uso","tipo":"texto_longo"},
+        {"chave":"gestacao","rotulo":"Gestação ou amamentação","tipo":"escolha","opcoes":[
+          {"valor":"nao","rotulo":"Não"},{"valor":"gestante","rotulo":"Gestante"},{"valor":"lactante","rotulo":"Amamentando"},{"valor":"nao_se_aplica","rotulo":"Não se aplica"}]},
+        {"chave":"historico_queloide","rotulo":"Histórico de queloide ou cicatrização difícil?","tipo":"sim_nao"},
+        {"chave":"observacoes","rotulo":"Observações do profissional","tipo":"texto_longo"}
+      ]$j$),
+      ('avaliacao', 'Avaliação geral', 'Para qualquer atendimento.', true, $j$[
+        {"chave":"achados","rotulo":"Achados da avaliação","tipo":"texto_longo","obrigatorio":true},
+        {"chave":"contraindicacoes","rotulo":"Contraindicações identificadas","tipo":"texto_longo"},
+        {"chave":"observacoes","rotulo":"Observações","tipo":"texto_longo"}
+      ]$j$),
+      ('avaliacao', 'Avaliação estética facial', 'Pele e face.', false, $j$[
+        {"chave":"fototipo","rotulo":"Fototipo (Fitzpatrick)","tipo":"escolha","opcoes":[
+          {"valor":"I","rotulo":"I"},{"valor":"II","rotulo":"II"},{"valor":"III","rotulo":"III"},
+          {"valor":"IV","rotulo":"IV"},{"valor":"V","rotulo":"V"},{"valor":"VI","rotulo":"VI"}]},
+        {"chave":"tipo_de_pele","rotulo":"Tipo de pele","tipo":"escolha","opcoes":[
+          {"valor":"seca","rotulo":"Seca"},{"valor":"normal","rotulo":"Normal"},{"valor":"oleosa","rotulo":"Oleosa"},
+          {"valor":"mista","rotulo":"Mista"},{"valor":"sensivel","rotulo":"Sensível"}]},
+        {"chave":"achados","rotulo":"Achados","tipo":"multipla","opcoes":[
+          {"valor":"acne","rotulo":"Acne"},{"valor":"manchas","rotulo":"Manchas"},{"valor":"rugas","rotulo":"Rugas e linhas"},
+          {"valor":"flacidez","rotulo":"Flacidez"},{"valor":"poros","rotulo":"Poros dilatados"},{"valor":"cicatrizes","rotulo":"Cicatrizes"}]},
+        {"chave":"descricao","rotulo":"Descrição da avaliação","tipo":"texto_longo","obrigatorio":true},
+        {"chave":"contraindicacoes","rotulo":"Contraindicações identificadas","tipo":"texto_longo"},
+        {"chave":"observacoes","rotulo":"Observações","tipo":"texto_longo"}
+      ]$j$),
+      ('avaliacao', 'Avaliação corporal', 'Regiões do corpo.', false, $j$[
+        {"chave":"regioes","rotulo":"Regiões avaliadas","tipo":"multipla","opcoes":[
+          {"valor":"abdomen","rotulo":"Abdômen"},{"valor":"flancos","rotulo":"Flancos"},{"valor":"coxas","rotulo":"Coxas"},
+          {"valor":"gluteos","rotulo":"Glúteos"},{"valor":"bracos","rotulo":"Braços"},{"valor":"costas","rotulo":"Costas"}]},
+        {"chave":"achados","rotulo":"Achados","tipo":"multipla","opcoes":[
+          {"valor":"gordura_localizada","rotulo":"Gordura localizada"},{"valor":"flacidez","rotulo":"Flacidez"},
+          {"valor":"celulite","rotulo":"Celulite"},{"valor":"estrias","rotulo":"Estrias"}]},
+        {"chave":"peso_kg","rotulo":"Peso (kg)","tipo":"numero","min":0,"max":400},
+        {"chave":"altura_cm","rotulo":"Altura (cm)","tipo":"numero","min":0,"max":260},
+        {"chave":"descricao","rotulo":"Descrição da avaliação","tipo":"texto_longo","obrigatorio":true},
+        {"chave":"contraindicacoes","rotulo":"Contraindicações identificadas","tipo":"texto_longo"},
+        {"chave":"observacoes","rotulo":"Observações","tipo":"texto_longo"}
+      ]$j$)
+    ) as t(tipo, nome, descricao, padrao, campos)
+  loop
+    select id into v_id from public.clinic_modelos_formulario
+     where organization_id = p_org and tipo = m.tipo and lower(btrim(nome)) = lower(m.nome);
+    if v_id is null then
+      insert into public.clinic_modelos_formulario (organization_id, tipo, nome, descricao, padrao)
+      values (p_org, m.tipo, m.nome, m.descricao, m.padrao)
+      returning id into v_id;
+      insert into public.clinic_modelos_formulario_versoes (organization_id, modelo_id, numero, campos)
+      values (p_org, v_id, 1, m.campos::jsonb);
+    end if;
+  end loop;
+end $$;
+revoke execute on function public.fn_clinic_semear_modelos(uuid) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_semear_modelos_org_nova()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_clinic_semear_modelos(new.id);
+  return null;
+end $$;
+revoke execute on function public.fn_clinic_semear_modelos_org_nova() from public, anon, authenticated;
+
+drop trigger if exists trg_clinic_semear_modelos on public.organizations;
+create trigger trg_clinic_semear_modelos
+  after insert on public.organizations
+  for each row execute function public.fn_clinic_semear_modelos_org_nova();
+
+do $$
+declare o record;
+begin
+  for o in select id from public.organizations loop
+    perform public.fn_clinic_semear_modelos(o.id);
+  end loop;
+end $$;
+
+-- ─── salvar (autosave com versão) ──────────────────────────────────────────
+create or replace function public.fn_clinic_salvar_formulario(
+  p_org uuid,
+  p_atendimento uuid,
+  p_tipo text,
+  p_modelo_versao uuid,
+  p_respostas jsonb,
+  p_versao_esperada integer
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_atual record;
+  v_id uuid;
+  v_versao integer;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.registrar');
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+  if p_tipo is null or p_tipo not in ('anamnese', 'avaliacao') then
+    raise exception 'formulario_tipo_invalido' using errcode = '22023';
+  end if;
+  if p_respostas is null or jsonb_typeof(p_respostas) <> 'object' or octet_length(p_respostas::text) > 65536 then
+    raise exception 'formulario_respostas_invalidas' using errcode = '22023';
+  end if;
+
+  select c.id, c.status into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+
+  if not exists (
+    select 1 from public.clinic_modelos_formulario_versoes v
+      join public.clinic_modelos_formulario m on m.organization_id = v.organization_id and m.id = v.modelo_id
+     where v.id = p_modelo_versao and v.organization_id = p_org and m.tipo = p_tipo
+  ) then
+    raise exception 'formulario_modelo_invalido' using errcode = '22023';
+  end if;
+
+  select f.id, f.versao, f.status into v_atual
+    from public.clinic_formularios_preenchidos f
+   where f.organization_id = p_org and f.atendimento_id = p_atendimento and f.tipo = p_tipo
+   for update;
+
+  if not found then
+    if coalesce(p_versao_esperada, 0) <> 0 then
+      raise exception 'registro_conflito' using errcode = '40001';
+    end if;
+    insert into public.clinic_formularios_preenchidos
+      (organization_id, atendimento_id, tipo, modelo_versao_id, respostas, created_by, updated_by)
+    values (p_org, p_atendimento, p_tipo, p_modelo_versao, p_respostas, auth.uid(), auth.uid())
+    returning id, versao into v_id, v_versao;
+    return jsonb_build_object('id', v_id, 'versao', v_versao, 'criado', true);
+  end if;
+
+  if v_atual.status = 'finalizado' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  if v_atual.versao is distinct from p_versao_esperada then
+    raise exception 'registro_conflito' using errcode = '40001', detail = v_atual.versao::text;
+  end if;
+
+  update public.clinic_formularios_preenchidos
+     set respostas = p_respostas, modelo_versao_id = p_modelo_versao,
+         versao = versao + 1, updated_by = auth.uid()
+   where id = v_atual.id
+  returning versao into v_versao;
+  return jsonb_build_object('id', v_atual.id, 'versao', v_versao, 'criado', false);
+end $$;
+revoke execute on function public.fn_clinic_salvar_formulario(uuid, uuid, text, uuid, jsonb, integer) from public, anon;
+grant  execute on function public.fn_clinic_salvar_formulario(uuid, uuid, text, uuid, jsonb, integer) to authenticated;
+-- ---- fim clinic (migration 9018, fork) ----
+
+-- ---- clinic: evoluções e adendos (migration 9019, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9019 · clinic — evolução, adendos e o prontuário IMUTÁVEL (FORK, prontuário F2)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (fase F2, seção 14).
+--
+--   clinic_evolucoes   a evolução do atendimento (uma por atendimento)
+--   clinic_adendos     correção de registro FINALIZADO: original + texto +
+--                      motivo + autor + data (append-only)
+--
+-- Enquanto o atendimento está em andamento, anamnese, avaliação e evolução são
+-- rascunho (autosave com versão). Ao FINALIZAR (requisito mínimo: evolução com
+-- conteúdo e campos obrigatórios dos formulários preenchidos), tudo vira
+-- `finalizado` e um trigger recusa UPDATE/DELETE — inclusive do service role.
+-- Correção é só por adendo. Idempotente.
+
+-- ─── evolução ──────────────────────────────────────────────────────────────
+create table if not exists public.clinic_evolucoes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  atendimento_id uuid not null,
+  resposta text,
+  observacoes text,
+  intercorrencias text,
+  orientacoes text,
+  proxima_conduta text,
+  status text not null default 'rascunho',
+  versao integer not null default 1,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  constraint clinic_evolucoes_status_check check (status in ('rascunho', 'finalizado')),
+  constraint clinic_evolucoes_tamanhos check (
+    coalesce(char_length(resposta), 0) <= 5000 and coalesce(char_length(observacoes), 0) <= 5000
+    and coalesce(char_length(intercorrencias), 0) <= 5000 and coalesce(char_length(orientacoes), 0) <= 5000
+    and coalesce(char_length(proxima_conduta), 0) <= 5000),
+  constraint clinic_evolucoes_atendimento_key unique (atendimento_id),
+  constraint clinic_evolucoes_org_id_key unique (organization_id, id),
+  constraint clinic_evolucoes_do_atendimento foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id) on delete cascade
+);
+
+drop trigger if exists clinic_evolucoes_updated_at on public.clinic_evolucoes;
+create trigger clinic_evolucoes_updated_at before update on public.clinic_evolucoes
+  for each row execute function public.fn_set_updated_at();
+
+-- ─── adendos (append-only) ─────────────────────────────────────────────────
+create table if not exists public.clinic_adendos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  atendimento_id uuid not null,
+  alvo_tipo text not null,
+  alvo_id uuid not null,
+  texto text not null,
+  motivo text not null,
+  autor uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint clinic_adendos_alvo_tipo_check check (alvo_tipo in ('formulario', 'evolucao')),
+  constraint clinic_adendos_texto_tamanho check (char_length(btrim(texto)) between 1 and 5000),
+  constraint clinic_adendos_motivo_tamanho check (char_length(btrim(motivo)) between 3 and 300),
+  constraint clinic_adendos_do_atendimento foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id) on delete cascade
+);
+create index if not exists clinic_adendos_atendimento_idx
+  on public.clinic_adendos (organization_id, atendimento_id, created_at);
+
+-- ─── RLS ───────────────────────────────────────────────────────────────────
+do $$
+declare t text;
+begin
+  foreach t in array array['clinic_evolucoes','clinic_adendos'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format('drop policy if exists %s_select on public.%I', t, t);
+    execute format($p$create policy %s_select on public.%I for select using (
+        (organization_id in (select public.fn_user_org_ids()))
+        and public.fn_has_permission(organization_id, 'prontuario.ver'))$p$, t, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end $$;
+revoke update, delete, truncate on public.clinic_adendos from service_role;
+
+-- ─── imutabilidade ─────────────────────────────────────────────────────────
+-- DELETE direto: nunca (a cascata de exclusão da empresa passa, por ser aninhada).
+-- UPDATE: só de rascunho, com o atendimento em andamento.
+create or replace function public.fn_clinic_registro_imutavel()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if pg_trigger_depth() = 1 then
+      raise exception 'prontuario_imutavel' using errcode = '55000';
+    end if;
+    return old;
+  end if;
+  if old.status = 'finalizado'
+     or coalesce((select a.status from public.clinic_atendimentos a where a.id = old.atendimento_id), '') <> 'em_andamento' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_registro_imutavel() from public, anon, authenticated;
+
+drop trigger if exists trg_clinic_formulario_imutavel on public.clinic_formularios_preenchidos;
+create trigger trg_clinic_formulario_imutavel before update or delete on public.clinic_formularios_preenchidos
+  for each row execute function public.fn_clinic_registro_imutavel();
+drop trigger if exists trg_clinic_evolucao_imutavel on public.clinic_evolucoes;
+create trigger trg_clinic_evolucao_imutavel before update or delete on public.clinic_evolucoes
+  for each row execute function public.fn_clinic_registro_imutavel();
+
+-- ─── salvar a evolução (autosave com versão) ───────────────────────────────
+create or replace function public.fn_clinic_salvar_evolucao(
+  p_org uuid,
+  p_atendimento uuid,
+  p_resposta text,
+  p_observacoes text,
+  p_intercorrencias text,
+  p_orientacoes text,
+  p_proxima_conduta text,
+  p_versao_esperada integer
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_atual record;
+  v_id uuid;
+  v_versao integer;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.registrar');
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+
+  select c.id, c.status into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+
+  select e.id, e.versao, e.status into v_atual
+    from public.clinic_evolucoes e
+   where e.organization_id = p_org and e.atendimento_id = p_atendimento
+   for update;
+
+  if not found then
+    if coalesce(p_versao_esperada, 0) <> 0 then
+      raise exception 'registro_conflito' using errcode = '40001';
+    end if;
+    insert into public.clinic_evolucoes
+      (organization_id, atendimento_id, resposta, observacoes, intercorrencias, orientacoes, proxima_conduta, created_by, updated_by)
+    values (p_org, p_atendimento, p_resposta, p_observacoes, p_intercorrencias, p_orientacoes, p_proxima_conduta, auth.uid(), auth.uid())
+    returning id, versao into v_id, v_versao;
+    return jsonb_build_object('id', v_id, 'versao', v_versao, 'criado', true);
+  end if;
+
+  if v_atual.status = 'finalizado' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  if v_atual.versao is distinct from p_versao_esperada then
+    raise exception 'registro_conflito' using errcode = '40001', detail = v_atual.versao::text;
+  end if;
+
+  update public.clinic_evolucoes
+     set resposta = p_resposta, observacoes = p_observacoes, intercorrencias = p_intercorrencias,
+         orientacoes = p_orientacoes, proxima_conduta = p_proxima_conduta,
+         versao = versao + 1, updated_by = auth.uid()
+   where id = v_atual.id
+  returning versao into v_versao;
+  return jsonb_build_object('id', v_atual.id, 'versao', v_versao, 'criado', false);
+end $$;
+revoke execute on function public.fn_clinic_salvar_evolucao(uuid, uuid, text, text, text, text, text, integer) from public, anon;
+grant  execute on function public.fn_clinic_salvar_evolucao(uuid, uuid, text, text, text, text, text, integer) to authenticated;
+
+-- ─── adendo ────────────────────────────────────────────────────────────────
+create or replace function public.fn_clinic_adicionar_adendo(
+  p_org uuid,
+  p_atendimento uuid,
+  p_alvo_tipo text,
+  p_alvo_id uuid,
+  p_texto text,
+  p_motivo text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text;
+  v_id uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, 'prontuario.adendo');
+
+  select c.status into v_status
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_status <> 'finalizado' then
+    raise exception 'adendo_so_em_finalizado' using errcode = '22023';
+  end if;
+  if not (
+    (p_alvo_tipo = 'formulario' and exists (
+       select 1 from public.clinic_formularios_preenchidos f
+        where f.id = p_alvo_id and f.organization_id = p_org and f.atendimento_id = p_atendimento))
+    or (p_alvo_tipo = 'evolucao' and exists (
+       select 1 from public.clinic_evolucoes e
+        where e.id = p_alvo_id and e.organization_id = p_org and e.atendimento_id = p_atendimento))
+  ) then
+    raise exception 'adendo_alvo_invalido' using errcode = '22023';
+  end if;
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'adendo_sem_motivo' using errcode = '22023';
+  end if;
+
+  insert into public.clinic_adendos (organization_id, atendimento_id, alvo_tipo, alvo_id, texto, motivo, autor)
+  values (p_org, p_atendimento, p_alvo_tipo, p_alvo_id, btrim(p_texto), btrim(p_motivo), auth.uid())
+  returning id into v_id;
+  return jsonb_build_object('id', v_id);
+end $$;
+revoke execute on function public.fn_clinic_adicionar_adendo(uuid, uuid, text, uuid, text, text) from public, anon;
+grant  execute on function public.fn_clinic_adicionar_adendo(uuid, uuid, text, uuid, text, text) to authenticated;
+
+-- ─── finalizar (substitui a da 9017): requisitos + congelar ────────────────
+create or replace function public.fn_clinic_finalizar_atendimento(p_org uuid, p_atendimento uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_faltam text[] := '{}';
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.finalizar');
+
+  select c.id, c.status, c.appointment_id into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status = 'finalizado' then
+    return jsonb_build_object('id', v_at.id, 'appointment_id', v_at.appointment_id, 'mudou', false);
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'atendimento_ja_encerrado' using errcode = '22023';
+  end if;
+
+  -- Requisito mínimo: evolução com conteúdo.
+  if not exists (
+    select 1 from public.clinic_evolucoes e
+     where e.atendimento_id = v_at.id
+       and coalesce(nullif(btrim(e.resposta), ''), nullif(btrim(e.observacoes), ''), nullif(btrim(e.intercorrencias), ''),
+                    nullif(btrim(e.orientacoes), ''), nullif(btrim(e.proxima_conduta), '')) is not null
+  ) then
+    v_faltam := array_append(v_faltam, 'evolucao');
+  end if;
+  -- Formulário iniciado precisa ter os campos obrigatórios da versão usada.
+  v_faltam := v_faltam || coalesce((
+    select array_agg(f.tipo order by f.tipo)
+      from public.clinic_formularios_preenchidos f
+      join public.clinic_modelos_formulario_versoes v on v.id = f.modelo_versao_id
+     where f.atendimento_id = v_at.id
+       and exists (
+         select 1 from jsonb_array_elements(v.campos) c
+          where coalesce((c ->> 'obrigatorio')::boolean, false)
+            and (not (f.respostas ? (c ->> 'chave'))
+                 or f.respostas -> (c ->> 'chave') in ('null'::jsonb, '""'::jsonb, '[]'::jsonb)))
+  ), '{}');
+  if cardinality(v_faltam) > 0 then
+    raise exception 'requisitos_pendentes' using errcode = '23514', detail = array_to_string(v_faltam, ',');
+  end if;
+
+  update public.clinic_formularios_preenchidos set status = 'finalizado', updated_by = auth.uid()
+   where atendimento_id = v_at.id and status = 'rascunho';
+  update public.clinic_evolucoes set status = 'finalizado', updated_by = auth.uid()
+   where atendimento_id = v_at.id and status = 'rascunho';
+
+  update public.clinic_atendimentos
+     set status = 'finalizado', finished_at = now(), finalizado_por = auth.uid(),
+         updated_by = auth.uid(), versao = versao + 1
+   where id = v_at.id;
+
+  insert into public.clinic_atendimento_eventos (organization_id, atendimento_id, tipo, status_antes, status_depois, ator)
+  values (p_org, v_at.id, 'finalizado', 'em_andamento', 'finalizado', auth.uid());
+
+  return jsonb_build_object('id', v_at.id, 'appointment_id', v_at.appointment_id, 'mudou', true);
+end $$;
+revoke execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) to authenticated;
+-- ---- fim clinic (migration 9019, fork) ----
+
+-- ---- clinic: requisitos de finalização e editor de modelos (migration 9020, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9020 · clinic — requisitos de finalização e editor de modelos (FORK, prontuário F3)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (fase F3).
+--
+-- 1. REQUISITOS DE FINALIZAÇÃO configuráveis. Cada regra diz "para finalizar,
+--    a seção X precisa estar preenchida", valendo para a clínica toda, para um
+--    tipo de atendimento, para uma especialidade ou para os dois juntos. Nada de
+--    `if especialidade = ...` no código: o que muda por especialidade é LINHA
+--    desta tabela. A evolução continua obrigatória sempre (mínimo legal).
+--    `fn_clinic_requisitos_faltando` é o ponto único que diz o que falta; as
+--    fases seguintes (conduta, procedimentos, documentos) só a redefinem.
+--
+-- 2. EDITOR DE MODELOS. Criar modelo, publicar nova versão (a anterior fica
+--    intacta — quem preencheu com ela continua lendo os mesmos campos), mudar
+--    nome/descrição/especialidades e ativar/desativar. Só com
+--    `modelos_clinicos.gerenciar`, que é de configuração: não dá acesso a
+--    paciente nenhum.
+--
+-- Escrita só por função. Idempotente.
+
+-- ─── requisitos ────────────────────────────────────────────────────────────
+create table if not exists public.clinic_requisitos_finalizacao (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  event_type_id uuid references public.calendar_event_types(id) on delete cascade,
+  specialty_id uuid references public.clinic_specialties(id) on delete cascade,
+  secao text not null,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  -- As seções das fases seguintes já cabem aqui; cada fase liga a checagem da
+  -- sua em fn_clinic_requisitos_faltando e a rota só aceita as que existem.
+  constraint clinic_requisitos_finalizacao_secao_check
+    check (secao in ('anamnese', 'avaliacao', 'conduta', 'procedimento', 'documento'))
+);
+create unique index if not exists clinic_requisitos_finalizacao_regra_key
+  on public.clinic_requisitos_finalizacao (
+    organization_id,
+    coalesce(event_type_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    coalesce(specialty_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    secao);
+create index if not exists clinic_requisitos_finalizacao_org_idx
+  on public.clinic_requisitos_finalizacao (organization_id);
+
+alter table public.clinic_requisitos_finalizacao enable row level security;
+drop policy if exists tenant_isolation_clinic_requisitos_finalizacao_all on public.clinic_requisitos_finalizacao;
+drop policy if exists clinic_requisitos_finalizacao_select on public.clinic_requisitos_finalizacao;
+-- Configuração, sem dado de paciente: qualquer membro lê.
+create policy clinic_requisitos_finalizacao_select on public.clinic_requisitos_finalizacao for select using (
+  organization_id in (select public.fn_user_org_ids()));
+revoke all on public.clinic_requisitos_finalizacao from anon;
+revoke insert, update, delete, truncate on public.clinic_requisitos_finalizacao from authenticated;
+
+-- ─── o que falta para finalizar (ponto único) ─────────────────────────────
+create or replace function public.fn_clinic_requisitos_faltando(p_atendimento uuid)
+returns text[]
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_faltam text[] := '{}';
+  v_exigidas text[];
+begin
+  select c.id, c.organization_id, c.event_type_id, c.specialty_id into v_at
+    from public.clinic_atendimentos c where c.id = p_atendimento;
+  if not found then
+    return v_faltam;
+  end if;
+
+  -- Mínimo que nenhuma configuração tira: evolução com conteúdo.
+  if not exists (
+    select 1 from public.clinic_evolucoes e
+     where e.atendimento_id = v_at.id
+       and coalesce(nullif(btrim(e.resposta), ''), nullif(btrim(e.observacoes), ''), nullif(btrim(e.intercorrencias), ''),
+                    nullif(btrim(e.orientacoes), ''), nullif(btrim(e.proxima_conduta), '')) is not null
+  ) then
+    v_faltam := array_append(v_faltam, 'evolucao');
+  end if;
+
+  -- Regras configuradas que valem para este atendimento.
+  select coalesce(array_agg(distinct r.secao), '{}') into v_exigidas
+    from public.clinic_requisitos_finalizacao r
+   where r.organization_id = v_at.organization_id
+     and (r.event_type_id is null or r.event_type_id = v_at.event_type_id)
+     and (r.specialty_id is null or r.specialty_id = v_at.specialty_id);
+
+  if 'anamnese' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_formularios_preenchidos f where f.atendimento_id = v_at.id and f.tipo = 'anamnese') then
+    v_faltam := array_append(v_faltam, 'anamnese');
+  end if;
+  if 'avaliacao' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_formularios_preenchidos f where f.atendimento_id = v_at.id and f.tipo = 'avaliacao') then
+    v_faltam := array_append(v_faltam, 'avaliacao');
+  end if;
+
+  -- Formulário iniciado precisa ter os campos obrigatórios da versão usada.
+  v_faltam := v_faltam || coalesce((
+    select array_agg(f.tipo order by f.tipo)
+      from public.clinic_formularios_preenchidos f
+      join public.clinic_modelos_formulario_versoes v on v.id = f.modelo_versao_id
+     where f.atendimento_id = v_at.id
+       and not (f.tipo = any (v_faltam))
+       and exists (
+         select 1 from jsonb_array_elements(v.campos) c
+          where coalesce((c ->> 'obrigatorio')::boolean, false)
+            and (not (f.respostas ? (c ->> 'chave'))
+                 or f.respostas -> (c ->> 'chave') in ('null'::jsonb, '""'::jsonb, '[]'::jsonb)))
+  ), '{}');
+
+  return v_faltam;
+end $$;
+revoke execute on function public.fn_clinic_requisitos_faltando(uuid) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_finalizar_atendimento(p_org uuid, p_atendimento uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_faltam text[];
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.finalizar');
+
+  select c.id, c.status, c.appointment_id into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status = 'finalizado' then
+    return jsonb_build_object('id', v_at.id, 'appointment_id', v_at.appointment_id, 'mudou', false);
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'atendimento_ja_encerrado' using errcode = '22023';
+  end if;
+
+  v_faltam := public.fn_clinic_requisitos_faltando(v_at.id);
+  if cardinality(v_faltam) > 0 then
+    raise exception 'requisitos_pendentes' using errcode = '23514', detail = array_to_string(v_faltam, ',');
+  end if;
+
+  update public.clinic_formularios_preenchidos set status = 'finalizado', updated_by = auth.uid()
+   where atendimento_id = v_at.id and status = 'rascunho';
+  update public.clinic_evolucoes set status = 'finalizado', updated_by = auth.uid()
+   where atendimento_id = v_at.id and status = 'rascunho';
+
+  update public.clinic_atendimentos
+     set status = 'finalizado', finished_at = now(), finalizado_por = auth.uid(),
+         updated_by = auth.uid(), versao = versao + 1
+   where id = v_at.id;
+
+  insert into public.clinic_atendimento_eventos (organization_id, atendimento_id, tipo, status_antes, status_depois, ator)
+  values (p_org, v_at.id, 'finalizado', 'em_andamento', 'finalizado', auth.uid());
+
+  return jsonb_build_object('id', v_at.id, 'appointment_id', v_at.appointment_id, 'mudou', true);
+end $$;
+revoke execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) to authenticated;
+
+-- Substitui TODAS as regras da empresa pelo conjunto informado (a tela edita a
+-- lista inteira). p_regras = [{secao, event_type_id?, specialty_id?}].
+create or replace function public.fn_clinic_definir_requisitos(p_org uuid, p_regras jsonb)
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_r jsonb;
+  v_n integer := 0;
+  v_tipo uuid;
+  v_esp uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, 'modelos_clinicos.gerenciar');
+  if p_regras is null or jsonb_typeof(p_regras) <> 'array' or jsonb_array_length(p_regras) > 200 then
+    raise exception 'requisitos_invalidos' using errcode = '22023';
+  end if;
+
+  delete from public.clinic_requisitos_finalizacao where organization_id = p_org;
+  for v_r in select * from jsonb_array_elements(p_regras) loop
+    v_tipo := nullif(v_r ->> 'event_type_id', '')::uuid;
+    v_esp := nullif(v_r ->> 'specialty_id', '')::uuid;
+    -- Tipo e especialidade precisam ser da MESMA empresa.
+    if v_tipo is not null and not exists (
+      select 1 from public.calendar_event_types t where t.id = v_tipo and t.organization_id = p_org) then
+      raise exception 'requisitos_invalidos' using errcode = '22023';
+    end if;
+    if v_esp is not null and not exists (
+      select 1 from public.clinic_specialties s where s.id = v_esp and s.organization_id = p_org) then
+      raise exception 'requisitos_invalidos' using errcode = '22023';
+    end if;
+    insert into public.clinic_requisitos_finalizacao (organization_id, event_type_id, specialty_id, secao, created_by)
+    values (p_org, v_tipo, v_esp, v_r ->> 'secao', auth.uid())
+    on conflict do nothing;
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end $$;
+revoke execute on function public.fn_clinic_definir_requisitos(uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_definir_requisitos(uuid, jsonb) to authenticated;
+
+-- ─── editor de modelos ─────────────────────────────────────────────────────
+-- Forma mínima dos campos no banco (a validação fina é do código, em
+-- lib/clinic/formularios/campos.ts): array de 1 a 60 objetos, cada um com
+-- chave e tipo, chaves únicas, até 32 KB.
+create or replace function public.fn_clinic_campos_validos(p_campos jsonb)
+returns boolean
+language sql
+immutable
+set search_path = public, pg_temp
+as $$
+  select jsonb_typeof(p_campos) = 'array'
+     and jsonb_array_length(p_campos) between 1 and 60
+     and octet_length(p_campos::text) <= 32768
+     and not exists (
+       select 1 from jsonb_array_elements(p_campos) c
+        where jsonb_typeof(c) <> 'object'
+           or coalesce(c ->> 'chave', '') !~ '^[a-z][a-z0-9_]{0,39}$'
+           or coalesce(c ->> 'tipo', '') not in
+              ('texto', 'texto_longo', 'numero', 'data', 'sim_nao', 'escolha', 'multipla', 'escala'))
+     and (select count(distinct c ->> 'chave') from jsonb_array_elements(p_campos) c) = jsonb_array_length(p_campos)
+$$;
+revoke execute on function public.fn_clinic_campos_validos(jsonb) from public, anon;
+
+create or replace function public.fn_clinic_especialidades_da_org(p_org uuid, p_especialidades uuid[])
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(cardinality(p_especialidades), 0) <= 50
+     and not exists (
+       select 1 from unnest(coalesce(p_especialidades, '{}')) e
+        where not exists (select 1 from public.clinic_specialties s where s.id = e and s.organization_id = p_org))
+$$;
+revoke execute on function public.fn_clinic_especialidades_da_org(uuid, uuid[]) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_modelo_criar(
+  p_org uuid, p_tipo text, p_nome text, p_descricao text, p_especialidades uuid[], p_campos jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_id uuid;
+  v_versao uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, 'modelos_clinicos.gerenciar');
+  if p_tipo not in ('anamnese', 'avaliacao') or not public.fn_clinic_campos_validos(p_campos)
+     or not public.fn_clinic_especialidades_da_org(p_org, p_especialidades) then
+    raise exception 'modelo_invalido' using errcode = '22023';
+  end if;
+  insert into public.clinic_modelos_formulario (organization_id, tipo, nome, descricao, especialidades, created_by)
+  values (p_org, p_tipo, btrim(p_nome), nullif(btrim(coalesce(p_descricao, '')), ''), coalesce(p_especialidades, '{}'), auth.uid())
+  returning id into v_id;
+  insert into public.clinic_modelos_formulario_versoes (organization_id, modelo_id, numero, campos, created_by)
+  values (p_org, v_id, 1, p_campos, auth.uid())
+  returning id into v_versao;
+  return jsonb_build_object('id', v_id, 'versao_id', v_versao, 'numero', 1);
+exception when unique_violation then
+  raise exception 'modelo_nome_em_uso' using errcode = '23505';
+end $$;
+revoke execute on function public.fn_clinic_modelo_criar(uuid, text, text, text, uuid[], jsonb) from public, anon;
+grant  execute on function public.fn_clinic_modelo_criar(uuid, text, text, text, uuid[], jsonb) to authenticated;
+
+-- Nova versão: a anterior nunca muda. p_versao_esperada = versao_atual que a
+-- tela conhecia; outra pessoa publicou antes → registro_conflito.
+create or replace function public.fn_clinic_modelo_publicar_versao(
+  p_org uuid, p_modelo uuid, p_campos jsonb, p_versao_esperada integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_atual integer;
+  v_versao uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, 'modelos_clinicos.gerenciar');
+  if not public.fn_clinic_campos_validos(p_campos) then
+    raise exception 'modelo_invalido' using errcode = '22023';
+  end if;
+  select m.versao_atual into v_atual
+    from public.clinic_modelos_formulario m
+   where m.id = p_modelo and m.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'modelo_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_atual <> p_versao_esperada then
+    raise exception 'registro_conflito' using errcode = '40001';
+  end if;
+  insert into public.clinic_modelos_formulario_versoes (organization_id, modelo_id, numero, campos, created_by)
+  values (p_org, p_modelo, v_atual + 1, p_campos, auth.uid())
+  returning id into v_versao;
+  update public.clinic_modelos_formulario set versao_atual = v_atual + 1 where id = p_modelo;
+  return jsonb_build_object('id', p_modelo, 'versao_id', v_versao, 'numero', v_atual + 1);
+end $$;
+revoke execute on function public.fn_clinic_modelo_publicar_versao(uuid, uuid, jsonb, integer) from public, anon;
+grant  execute on function public.fn_clinic_modelo_publicar_versao(uuid, uuid, jsonb, integer) to authenticated;
+
+create or replace function public.fn_clinic_modelo_atualizar(
+  p_org uuid, p_modelo uuid, p_nome text, p_descricao text, p_especialidades uuid[], p_ativo boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_acesso_exigir(p_org, 'modelos_clinicos.gerenciar');
+  if not public.fn_clinic_especialidades_da_org(p_org, p_especialidades) then
+    raise exception 'modelo_invalido' using errcode = '22023';
+  end if;
+  update public.clinic_modelos_formulario
+     set nome = btrim(p_nome),
+         descricao = nullif(btrim(coalesce(p_descricao, '')), ''),
+         especialidades = coalesce(p_especialidades, '{}'),
+         ativo = p_ativo
+   where id = p_modelo and organization_id = p_org;
+  if not found then
+    raise exception 'modelo_nao_encontrado' using errcode = 'P0002';
+  end if;
+exception when unique_violation then
+  raise exception 'modelo_nome_em_uso' using errcode = '23505';
+end $$;
+revoke execute on function public.fn_clinic_modelo_atualizar(uuid, uuid, text, text, uuid[], boolean) from public, anon;
+grant  execute on function public.fn_clinic_modelo_atualizar(uuid, uuid, text, text, uuid[], boolean) to authenticated;
+-- ---- fim clinic (migration 9020, fork) ----
+
+-- ---- clinic: conduta e planos de tratamento (migration 9021, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9021 · clinic — conduta, plano de tratamento e sessões (FORK, prontuário F4)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (fase F4).
+--
+--   clinic_condutas             a conduta do atendimento (uma por atendimento):
+--                               o que foi decidido, protocolo, recomendações.
+--                               Rascunho com versão; imutável ao finalizar;
+--                               correção por adendo.
+--   clinic_planos_tratamento    o plano do paciente (objetivo, período, status)
+--   clinic_plano_sessoes        as sessões do plano. PLANEJADA ≠ AGENDADA ≠
+--                               REALIZADA por construção: agendada tem
+--                               agendamento; realizada tem o atendimento que a
+--                               cumpriu. Vira realizada sozinha quando o
+--                               atendimento daquele agendamento é finalizado.
+--
+-- Também: `fn_clinic_congelar_registros` passa a ser o ponto único do que a
+-- finalização trava (as próximas fases só o redefinem), e a conduta entra nos
+-- requisitos configuráveis e nos alvos de adendo.
+--
+-- Paciente, agendamento e atendimento referenciados sem ON DELETE (NO ACTION):
+-- apagar um deles sozinho é recusado (registro clínico se guarda), mas a
+-- exclusão da empresa, que leva tudo na mesma instrução, passa.
+--
+-- Leitura: condutas com `prontuario.ver`; planos com `planos.ver`. Sem atalho
+-- de platform admin. Escrita só por função. Idempotente.
+
+-- ─── conduta ───────────────────────────────────────────────────────────────
+create table if not exists public.clinic_condutas (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  atendimento_id uuid not null,
+  descricao text,
+  protocolo text,
+  recomendacoes text,
+  status text not null default 'rascunho',
+  versao integer not null default 1,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  constraint clinic_condutas_status_check check (status in ('rascunho', 'finalizado')),
+  constraint clinic_condutas_tamanhos check (
+    coalesce(char_length(descricao), 0) <= 5000 and coalesce(char_length(protocolo), 0) <= 5000
+    and coalesce(char_length(recomendacoes), 0) <= 5000),
+  constraint clinic_condutas_atendimento_key unique (atendimento_id),
+  constraint clinic_condutas_org_id_key unique (organization_id, id),
+  constraint clinic_condutas_do_atendimento foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id) on delete cascade
+);
+drop trigger if exists clinic_condutas_updated_at on public.clinic_condutas;
+create trigger clinic_condutas_updated_at before update on public.clinic_condutas
+  for each row execute function public.fn_set_updated_at();
+drop trigger if exists trg_clinic_conduta_imutavel on public.clinic_condutas;
+create trigger trg_clinic_conduta_imutavel before update or delete on public.clinic_condutas
+  for each row execute function public.fn_clinic_registro_imutavel();
+
+alter table public.clinic_condutas enable row level security;
+drop policy if exists tenant_isolation_clinic_condutas_all on public.clinic_condutas;
+drop policy if exists clinic_condutas_select on public.clinic_condutas;
+create policy clinic_condutas_select on public.clinic_condutas for select using (
+  (organization_id in (select public.fn_user_org_ids()))
+  and public.fn_has_permission(organization_id, 'prontuario.ver'));
+revoke all on public.clinic_condutas from anon;
+revoke insert, update, delete, truncate on public.clinic_condutas from authenticated;
+
+create or replace function public.fn_clinic_salvar_conduta(
+  p_org uuid, p_atendimento uuid, p_descricao text, p_protocolo text, p_recomendacoes text, p_versao_esperada integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_atual record;
+  v_id uuid;
+  v_versao integer;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.registrar');
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+  select c.id, c.status into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+
+  select x.id, x.versao, x.status into v_atual
+    from public.clinic_condutas x
+   where x.organization_id = p_org and x.atendimento_id = p_atendimento
+   for update;
+  if not found then
+    if coalesce(p_versao_esperada, 0) <> 0 then
+      raise exception 'registro_conflito' using errcode = '40001';
+    end if;
+    insert into public.clinic_condutas (organization_id, atendimento_id, descricao, protocolo, recomendacoes, created_by, updated_by)
+    values (p_org, p_atendimento, p_descricao, p_protocolo, p_recomendacoes, auth.uid(), auth.uid())
+    returning id, versao into v_id, v_versao;
+    return jsonb_build_object('id', v_id, 'versao', v_versao, 'criado', true);
+  end if;
+  if v_atual.status = 'finalizado' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  if v_atual.versao is distinct from p_versao_esperada then
+    raise exception 'registro_conflito' using errcode = '40001', detail = v_atual.versao::text;
+  end if;
+  update public.clinic_condutas
+     set descricao = p_descricao, protocolo = p_protocolo, recomendacoes = p_recomendacoes,
+         versao = versao + 1, updated_by = auth.uid()
+   where id = v_atual.id
+  returning versao into v_versao;
+  return jsonb_build_object('id', v_atual.id, 'versao', v_versao, 'criado', false);
+end $$;
+revoke execute on function public.fn_clinic_salvar_conduta(uuid, uuid, text, text, text, integer) from public, anon;
+grant  execute on function public.fn_clinic_salvar_conduta(uuid, uuid, text, text, text, integer) to authenticated;
+
+-- ─── plano de tratamento ───────────────────────────────────────────────────
+create table if not exists public.clinic_planos_tratamento (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id),
+  atendimento_origem_id uuid,
+  profissional_user_id uuid references auth.users(id) on delete set null,
+  specialty_id uuid references public.clinic_specialties(id) on delete set null,
+  titulo text not null,
+  objetivo text,
+  observacoes text,
+  inicio date,
+  previsao_fim date,
+  status text not null default 'ativo',
+  versao integer not null default 1,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  constraint clinic_planos_status_check check (status in ('rascunho', 'ativo', 'pausado', 'concluido', 'cancelado')),
+  constraint clinic_planos_titulo_tamanho check (char_length(btrim(titulo)) between 1 and 120),
+  constraint clinic_planos_tamanhos check (coalesce(char_length(objetivo), 0) <= 2000 and coalesce(char_length(observacoes), 0) <= 2000),
+  constraint clinic_planos_periodo check (previsao_fim is null or inicio is null or previsao_fim >= inicio),
+  constraint clinic_planos_org_id_key unique (organization_id, id),
+  constraint clinic_planos_do_atendimento foreign key (organization_id, atendimento_origem_id)
+    references public.clinic_atendimentos (organization_id, id)
+);
+create index if not exists clinic_planos_paciente_idx
+  on public.clinic_planos_tratamento (organization_id, contact_id, created_at desc);
+drop trigger if exists clinic_planos_updated_at on public.clinic_planos_tratamento;
+create trigger clinic_planos_updated_at before update on public.clinic_planos_tratamento
+  for each row execute function public.fn_set_updated_at();
+
+create table if not exists public.clinic_plano_sessoes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  plano_id uuid not null,
+  numero integer not null,
+  descricao text not null,
+  event_type_id uuid references public.calendar_event_types(id) on delete set null,
+  procedure_id uuid references public.clinic_procedures(id) on delete set null,
+  previsao date,
+  status text not null default 'planejada',
+  appointment_id uuid references public.calendar_appointments(id),
+  atendimento_id uuid,
+  realizada_em timestamptz,
+  cancelada_motivo text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  constraint clinic_plano_sessoes_status_check check (status in ('planejada', 'agendada', 'realizada', 'cancelada')),
+  constraint clinic_plano_sessoes_descricao_tamanho check (char_length(btrim(descricao)) between 1 and 200),
+  constraint clinic_plano_sessoes_numero_check check (numero >= 1),
+  -- PLANEJADO ≠ AGENDADO ≠ REALIZADO: cada estado tem o que o prova.
+  constraint clinic_plano_sessoes_coerencia check (
+    (status = 'planejada' and appointment_id is null and atendimento_id is null)
+    or (status = 'agendada' and appointment_id is not null and atendimento_id is null)
+    or (status = 'realizada' and atendimento_id is not null and realizada_em is not null)
+    or (status = 'cancelada' and atendimento_id is null)),
+  constraint clinic_plano_sessoes_plano_numero_key unique (plano_id, numero),
+  constraint clinic_plano_sessoes_do_plano foreign key (organization_id, plano_id)
+    references public.clinic_planos_tratamento (organization_id, id) on delete cascade,
+  constraint clinic_plano_sessoes_do_atendimento foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id)
+);
+create unique index if not exists clinic_plano_sessoes_agendamento_key
+  on public.clinic_plano_sessoes (appointment_id) where appointment_id is not null and status in ('agendada', 'realizada');
+create index if not exists clinic_plano_sessoes_plano_idx on public.clinic_plano_sessoes (organization_id, plano_id, numero);
+drop trigger if exists clinic_plano_sessoes_updated_at on public.clinic_plano_sessoes;
+create trigger clinic_plano_sessoes_updated_at before update on public.clinic_plano_sessoes
+  for each row execute function public.fn_set_updated_at();
+
+do $$
+declare t text;
+begin
+  foreach t in array array['clinic_planos_tratamento','clinic_plano_sessoes'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end $$;
+drop policy if exists clinic_planos_tratamento_select on public.clinic_planos_tratamento;
+create policy clinic_planos_tratamento_select on public.clinic_planos_tratamento for select using (
+  (organization_id in (select public.fn_user_org_ids()))
+  and public.fn_has_permission(organization_id, 'planos.ver'));
+drop policy if exists clinic_plano_sessoes_select on public.clinic_plano_sessoes;
+create policy clinic_plano_sessoes_select on public.clinic_plano_sessoes for select using (
+  (organization_id in (select public.fn_user_org_ids()))
+  and public.fn_has_permission(organization_id, 'planos.ver'));
+
+-- Exigências comuns das funções de plano: permissão, opção ligada.
+create or replace function public.fn_clinic_plano_exigir(p_org uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_acesso_exigir(p_org, 'planos.gerenciar');
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_plano_exigir(uuid) from public, anon, authenticated;
+
+-- Cria (p_plano nulo) ou atualiza. Paciente, especialidade e atendimento de
+-- origem conferidos na MESMA empresa; o atendimento tem de ser do paciente.
+create or replace function public.fn_clinic_plano_salvar(
+  p_org uuid, p_plano uuid, p_contact uuid, p_titulo text, p_objetivo text, p_observacoes text,
+  p_inicio date, p_previsao_fim date, p_specialty uuid, p_atendimento_origem uuid, p_status text, p_versao_esperada integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_atual record;
+  v_id uuid;
+  v_versao integer;
+begin
+  perform public.fn_clinic_plano_exigir(p_org);
+  if p_status not in ('rascunho', 'ativo', 'pausado', 'concluido', 'cancelado') then
+    raise exception 'plano_invalido' using errcode = '22023';
+  end if;
+  if p_specialty is not null and not exists (
+    select 1 from public.clinic_specialties s where s.id = p_specialty and s.organization_id = p_org) then
+    raise exception 'plano_invalido' using errcode = '22023';
+  end if;
+
+  if p_plano is null then
+    if not exists (select 1 from public.contacts c where c.id = p_contact and c.organization_id = p_org) then
+      raise exception 'plano_paciente_invalido' using errcode = '22023';
+    end if;
+    if p_atendimento_origem is not null and not exists (
+      select 1 from public.clinic_atendimentos a
+       where a.id = p_atendimento_origem and a.organization_id = p_org and a.contact_id = p_contact) then
+      raise exception 'plano_invalido' using errcode = '22023';
+    end if;
+    insert into public.clinic_planos_tratamento
+      (organization_id, contact_id, atendimento_origem_id, profissional_user_id, specialty_id, titulo, objetivo,
+       observacoes, inicio, previsao_fim, status, created_by, updated_by)
+    values (p_org, p_contact, p_atendimento_origem, auth.uid(), p_specialty, btrim(p_titulo), nullif(btrim(coalesce(p_objetivo, '')), ''),
+            nullif(btrim(coalesce(p_observacoes, '')), ''), p_inicio, p_previsao_fim, p_status, auth.uid(), auth.uid())
+    returning id, versao into v_id, v_versao;
+    return jsonb_build_object('id', v_id, 'versao', v_versao, 'criado', true);
+  end if;
+
+  select p.id, p.versao, p.status into v_atual
+    from public.clinic_planos_tratamento p
+   where p.id = p_plano and p.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'plano_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_atual.versao is distinct from p_versao_esperada then
+    raise exception 'registro_conflito' using errcode = '40001';
+  end if;
+  if v_atual.status = 'cancelado' and p_status <> 'cancelado' then
+    raise exception 'plano_encerrado' using errcode = '22023';
+  end if;
+  update public.clinic_planos_tratamento
+     set titulo = btrim(p_titulo), objetivo = nullif(btrim(coalesce(p_objetivo, '')), ''),
+         observacoes = nullif(btrim(coalesce(p_observacoes, '')), ''), inicio = p_inicio, previsao_fim = p_previsao_fim,
+         specialty_id = p_specialty, status = p_status, versao = versao + 1, updated_by = auth.uid()
+   where id = p_plano
+  returning versao into v_versao;
+  return jsonb_build_object('id', p_plano, 'versao', v_versao, 'criado', false);
+end $$;
+revoke execute on function public.fn_clinic_plano_salvar(uuid, uuid, uuid, text, text, text, date, date, uuid, uuid, text, integer) from public, anon;
+grant  execute on function public.fn_clinic_plano_salvar(uuid, uuid, uuid, text, text, text, date, date, uuid, uuid, text, integer) to authenticated;
+
+-- Acrescenta N sessões PLANEJADAS, com previsão a cada `p_intervalo_dias`.
+create or replace function public.fn_clinic_plano_adicionar_sessoes(
+  p_org uuid, p_plano uuid, p_descricao text, p_event_type uuid, p_procedure uuid,
+  p_quantidade integer, p_primeira date, p_intervalo_dias integer)
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text;
+  v_ultimo integer;
+  i integer;
+begin
+  perform public.fn_clinic_plano_exigir(p_org);
+  if p_quantidade is null or p_quantidade not between 1 and 50 or coalesce(p_intervalo_dias, 0) not between 0 and 365 then
+    raise exception 'plano_invalido' using errcode = '22023';
+  end if;
+  if p_event_type is not null and not exists (
+    select 1 from public.calendar_event_types t where t.id = p_event_type and t.organization_id = p_org) then
+    raise exception 'plano_invalido' using errcode = '22023';
+  end if;
+  if p_procedure is not null and not exists (
+    select 1 from public.clinic_procedures x where x.id = p_procedure and x.organization_id = p_org) then
+    raise exception 'plano_invalido' using errcode = '22023';
+  end if;
+  select p.status into v_status
+    from public.clinic_planos_tratamento p where p.id = p_plano and p.organization_id = p_org for update;
+  if not found then
+    raise exception 'plano_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_status in ('concluido', 'cancelado') then
+    raise exception 'plano_encerrado' using errcode = '22023';
+  end if;
+  select coalesce(max(s.numero), 0) into v_ultimo from public.clinic_plano_sessoes s where s.plano_id = p_plano;
+  for i in 1..p_quantidade loop
+    insert into public.clinic_plano_sessoes
+      (organization_id, plano_id, numero, descricao, event_type_id, procedure_id, previsao, updated_by)
+    values (p_org, p_plano, v_ultimo + i, btrim(p_descricao), p_event_type, p_procedure,
+            case when p_primeira is null then null else p_primeira + ((i - 1) * coalesce(p_intervalo_dias, 0)) end,
+            auth.uid());
+  end loop;
+  update public.clinic_planos_tratamento set versao = versao + 1, updated_by = auth.uid() where id = p_plano;
+  return p_quantidade;
+end $$;
+revoke execute on function public.fn_clinic_plano_adicionar_sessoes(uuid, uuid, text, uuid, uuid, integer, date, integer) from public, anon;
+grant  execute on function public.fn_clinic_plano_adicionar_sessoes(uuid, uuid, text, uuid, uuid, integer, date, integer) to authenticated;
+
+-- agendar (planejada → agendada, com um agendamento do MESMO paciente),
+-- desagendar (agendada → planejada) ou cancelar (planejada/agendada → cancelada,
+-- com motivo). Realizada não muda mais.
+create or replace function public.fn_clinic_plano_sessao_mudar(
+  p_org uuid, p_sessao uuid, p_acao text, p_appointment uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_s record;
+  v_ag record;
+begin
+  perform public.fn_clinic_plano_exigir(p_org);
+  select s.id, s.status, s.plano_id, p.contact_id, p.status as plano_status into v_s
+    from public.clinic_plano_sessoes s
+    join public.clinic_planos_tratamento p on p.id = s.plano_id
+   where s.id = p_sessao and s.organization_id = p_org
+   for update of s;
+  if not found then
+    raise exception 'plano_sessao_nao_encontrada' using errcode = 'P0002';
+  end if;
+  if v_s.status in ('realizada', 'cancelada') then
+    raise exception 'plano_sessao_encerrada' using errcode = '22023';
+  end if;
+
+  if p_acao = 'agendar' then
+    if v_s.plano_status in ('concluido', 'cancelado') then
+      raise exception 'plano_encerrado' using errcode = '22023';
+    end if;
+    select a.id, a.contact_id, a.status into v_ag
+      from public.calendar_appointments a where a.id = p_appointment and a.organization_id = p_org;
+    if not found or v_ag.contact_id is distinct from v_s.contact_id or v_ag.status in ('cancelled', 'no_show') then
+      raise exception 'plano_agendamento_invalido' using errcode = '22023';
+    end if;
+    if exists (
+      select 1 from public.clinic_plano_sessoes x
+       where x.appointment_id = p_appointment and x.status in ('agendada', 'realizada') and x.id <> p_sessao) then
+      raise exception 'plano_agendamento_em_uso' using errcode = '23505';
+    end if;
+    update public.clinic_plano_sessoes set status = 'agendada', appointment_id = p_appointment, updated_by = auth.uid()
+     where id = p_sessao;
+  elsif p_acao = 'desagendar' then
+    update public.clinic_plano_sessoes set status = 'planejada', appointment_id = null, updated_by = auth.uid()
+     where id = p_sessao;
+  elsif p_acao = 'cancelar' then
+    if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+      raise exception 'plano_sessao_sem_motivo' using errcode = '22023';
+    end if;
+    update public.clinic_plano_sessoes
+       set status = 'cancelada', appointment_id = null, cancelada_motivo = left(btrim(p_motivo), 300), updated_by = auth.uid()
+     where id = p_sessao;
+  else
+    raise exception 'plano_invalido' using errcode = '22023';
+  end if;
+  update public.clinic_planos_tratamento set versao = versao + 1, updated_by = auth.uid() where id = v_s.plano_id;
+  return jsonb_build_object('id', p_sessao, 'acao', p_acao);
+end $$;
+revoke execute on function public.fn_clinic_plano_sessao_mudar(uuid, uuid, text, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_plano_sessao_mudar(uuid, uuid, text, uuid, text) to authenticated;
+
+-- ─── adendo também na conduta ──────────────────────────────────────────────
+-- Bloco ÚNICO desta constraint no baseline (tests/unit/baseline-constraint-
+-- reconstruida.test.ts), já com o vocabulário final: 'procedimento' é da 9022.
+alter table public.clinic_adendos drop constraint if exists clinic_adendos_alvo_tipo_check;
+alter table public.clinic_adendos add constraint clinic_adendos_alvo_tipo_check
+  check (alvo_tipo in ('formulario', 'evolucao', 'conduta', 'procedimento'));
+
+create or replace function public.fn_clinic_adicionar_adendo(
+  p_org uuid, p_atendimento uuid, p_alvo_tipo text, p_alvo_id uuid, p_texto text, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text;
+  v_id uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, 'prontuario.adendo');
+  select c.status into v_status
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_status <> 'finalizado' then
+    raise exception 'adendo_so_em_finalizado' using errcode = '22023';
+  end if;
+  if not (
+    (p_alvo_tipo = 'formulario' and exists (
+       select 1 from public.clinic_formularios_preenchidos f
+        where f.id = p_alvo_id and f.organization_id = p_org and f.atendimento_id = p_atendimento))
+    or (p_alvo_tipo = 'evolucao' and exists (
+       select 1 from public.clinic_evolucoes e
+        where e.id = p_alvo_id and e.organization_id = p_org and e.atendimento_id = p_atendimento))
+    or (p_alvo_tipo = 'conduta' and exists (
+       select 1 from public.clinic_condutas x
+        where x.id = p_alvo_id and x.organization_id = p_org and x.atendimento_id = p_atendimento))
+  ) then
+    raise exception 'adendo_alvo_invalido' using errcode = '22023';
+  end if;
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'adendo_sem_motivo' using errcode = '22023';
+  end if;
+  insert into public.clinic_adendos (organization_id, atendimento_id, alvo_tipo, alvo_id, texto, motivo, autor)
+  values (p_org, p_atendimento, p_alvo_tipo, p_alvo_id, btrim(p_texto), btrim(p_motivo), auth.uid())
+  returning id into v_id;
+  return jsonb_build_object('id', v_id);
+end $$;
+revoke execute on function public.fn_clinic_adicionar_adendo(uuid, uuid, text, uuid, text, text) from public, anon;
+grant  execute on function public.fn_clinic_adicionar_adendo(uuid, uuid, text, uuid, text, text) to authenticated;
+
+-- ─── requisitos: a conduta passa a poder ser exigida ───────────────────────
+create or replace function public.fn_clinic_requisitos_faltando(p_atendimento uuid)
+returns text[]
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_faltam text[] := '{}';
+  v_exigidas text[];
+begin
+  select c.id, c.organization_id, c.event_type_id, c.specialty_id into v_at
+    from public.clinic_atendimentos c where c.id = p_atendimento;
+  if not found then
+    return v_faltam;
+  end if;
+
+  if not exists (
+    select 1 from public.clinic_evolucoes e
+     where e.atendimento_id = v_at.id
+       and coalesce(nullif(btrim(e.resposta), ''), nullif(btrim(e.observacoes), ''), nullif(btrim(e.intercorrencias), ''),
+                    nullif(btrim(e.orientacoes), ''), nullif(btrim(e.proxima_conduta), '')) is not null
+  ) then
+    v_faltam := array_append(v_faltam, 'evolucao');
+  end if;
+
+  select coalesce(array_agg(distinct r.secao), '{}') into v_exigidas
+    from public.clinic_requisitos_finalizacao r
+   where r.organization_id = v_at.organization_id
+     and (r.event_type_id is null or r.event_type_id = v_at.event_type_id)
+     and (r.specialty_id is null or r.specialty_id = v_at.specialty_id);
+
+  if 'anamnese' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_formularios_preenchidos f where f.atendimento_id = v_at.id and f.tipo = 'anamnese') then
+    v_faltam := array_append(v_faltam, 'anamnese');
+  end if;
+  if 'avaliacao' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_formularios_preenchidos f where f.atendimento_id = v_at.id and f.tipo = 'avaliacao') then
+    v_faltam := array_append(v_faltam, 'avaliacao');
+  end if;
+  if 'conduta' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_condutas x
+     where x.atendimento_id = v_at.id
+       and coalesce(nullif(btrim(x.descricao), ''), nullif(btrim(x.protocolo), ''), nullif(btrim(x.recomendacoes), '')) is not null) then
+    v_faltam := array_append(v_faltam, 'conduta');
+  end if;
+
+  v_faltam := v_faltam || coalesce((
+    select array_agg(f.tipo order by f.tipo)
+      from public.clinic_formularios_preenchidos f
+      join public.clinic_modelos_formulario_versoes v on v.id = f.modelo_versao_id
+     where f.atendimento_id = v_at.id
+       and not (f.tipo = any (v_faltam))
+       and exists (
+         select 1 from jsonb_array_elements(v.campos) c
+          where coalesce((c ->> 'obrigatorio')::boolean, false)
+            and (not (f.respostas ? (c ->> 'chave'))
+                 or f.respostas -> (c ->> 'chave') in ('null'::jsonb, '""'::jsonb, '[]'::jsonb)))
+  ), '{}');
+
+  return v_faltam;
+end $$;
+revoke execute on function public.fn_clinic_requisitos_faltando(uuid) from public, anon, authenticated;
+
+-- ─── o que a finalização trava (ponto único) ───────────────────────────────
+create or replace function public.fn_clinic_congelar_registros(p_atendimento uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ag uuid;
+begin
+  update public.clinic_formularios_preenchidos set status = 'finalizado', updated_by = auth.uid()
+   where atendimento_id = p_atendimento and status = 'rascunho';
+  update public.clinic_evolucoes set status = 'finalizado', updated_by = auth.uid()
+   where atendimento_id = p_atendimento and status = 'rascunho';
+  update public.clinic_condutas set status = 'finalizado', updated_by = auth.uid()
+   where atendimento_id = p_atendimento and status = 'rascunho';
+  -- A sessão do plano ligada a este agendamento foi REALIZADA por este atendimento.
+  select a.appointment_id into v_ag from public.clinic_atendimentos a where a.id = p_atendimento;
+  if v_ag is not null then
+    update public.clinic_plano_sessoes
+       set status = 'realizada', atendimento_id = p_atendimento, realizada_em = now(), updated_by = auth.uid()
+     where appointment_id = v_ag and status = 'agendada';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_congelar_registros(uuid) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_finalizar_atendimento(p_org uuid, p_atendimento uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_faltam text[];
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.finalizar');
+  select c.id, c.status, c.appointment_id into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status = 'finalizado' then
+    return jsonb_build_object('id', v_at.id, 'appointment_id', v_at.appointment_id, 'mudou', false);
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'atendimento_ja_encerrado' using errcode = '22023';
+  end if;
+
+  v_faltam := public.fn_clinic_requisitos_faltando(v_at.id);
+  if cardinality(v_faltam) > 0 then
+    raise exception 'requisitos_pendentes' using errcode = '23514', detail = array_to_string(v_faltam, ',');
+  end if;
+
+  perform public.fn_clinic_congelar_registros(v_at.id);
+
+  update public.clinic_atendimentos
+     set status = 'finalizado', finished_at = now(), finalizado_por = auth.uid(),
+         updated_by = auth.uid(), versao = versao + 1
+   where id = v_at.id;
+  insert into public.clinic_atendimento_eventos (organization_id, atendimento_id, tipo, status_antes, status_depois, ator)
+  values (p_org, v_at.id, 'finalizado', 'em_andamento', 'finalizado', auth.uid());
+  return jsonb_build_object('id', v_at.id, 'appointment_id', v_at.appointment_id, 'mudou', true);
+end $$;
+revoke execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) to authenticated;
+-- ---- fim clinic (migration 9021, fork) ----
+
+-- ---- clinic: procedimentos realizados e insumos (migration 9022, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9022 · clinic — procedimentos realizados e insumos (FORK, prontuário F5)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (fase F5).
+--
+--   clinic_procedimentos_realizados  o que foi EXECUTADO no atendimento: qual
+--                                    procedimento (catálogo da 9015), região,
+--                                    parâmetros técnicos, intercorrências.
+--   clinic_procedimento_insumos      o que foi gasto: produto (opcional),
+--                                    quantidade, unidade, LOTE e VALIDADE —
+--                                    rastreabilidade.
+--
+-- Estoque ainda não existe como movimentos (regra do repo: estoque = soma de
+-- movimentos). Esta fase NÃO mexe em `catalog_products.quantidade`: ao
+-- finalizar, cada procedimento vira um evento `clinic.procedimento_confirmado`
+-- em `event_log` com os insumos (ids, quantidades, lote, validade — sem texto
+-- clínico). Um consumidor de estoque futuro grava os movimentos e devolve o
+-- `movimento_estoque_id`. Trigger não faz HTTP: só grava o evento.
+--
+-- Registro errado em atendimento aberto é ANULADO (nunca apagado). Depois de
+-- finalizar, imutável; correção por adendo. Leitura com `prontuario.ver`.
+-- Escrita só por função. Idempotente.
+
+create table if not exists public.clinic_procedimentos_realizados (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  atendimento_id uuid not null,
+  procedure_id uuid references public.clinic_procedures(id) on delete set null,
+  event_type_id uuid references public.calendar_event_types(id) on delete set null,
+  plano_sessao_id uuid references public.clinic_plano_sessoes(id) on delete set null,
+  descricao text not null,
+  regiao text,
+  parametros jsonb not null default '{}'::jsonb,
+  intercorrencias text,
+  observacoes text,
+  executor_user_id uuid references auth.users(id) on delete set null,
+  status text not null default 'rascunho',
+  versao integer not null default 1,
+  anulado_motivo text,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  constraint clinic_proc_real_status_check check (status in ('rascunho', 'finalizado', 'anulado')),
+  constraint clinic_proc_real_descricao_tamanho check (char_length(btrim(descricao)) between 1 and 200),
+  constraint clinic_proc_real_tamanhos check (
+    coalesce(char_length(regiao), 0) <= 200 and coalesce(char_length(intercorrencias), 0) <= 2000
+    and coalesce(char_length(observacoes), 0) <= 2000 and coalesce(char_length(anulado_motivo), 0) <= 300),
+  constraint clinic_proc_real_parametros_check check (jsonb_typeof(parametros) = 'object' and octet_length(parametros::text) <= 16384),
+  constraint clinic_proc_real_org_id_key unique (organization_id, id),
+  constraint clinic_proc_real_do_atendimento foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id) on delete cascade
+);
+create index if not exists clinic_proc_real_atendimento_idx
+  on public.clinic_procedimentos_realizados (organization_id, atendimento_id, created_at);
+drop trigger if exists clinic_proc_real_updated_at on public.clinic_procedimentos_realizados;
+create trigger clinic_proc_real_updated_at before update on public.clinic_procedimentos_realizados
+  for each row execute function public.fn_set_updated_at();
+drop trigger if exists trg_clinic_proc_real_imutavel on public.clinic_procedimentos_realizados;
+create trigger trg_clinic_proc_real_imutavel before update or delete on public.clinic_procedimentos_realizados
+  for each row execute function public.fn_clinic_registro_imutavel();
+
+create table if not exists public.clinic_procedimento_insumos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  procedimento_id uuid not null,
+  product_id uuid references public.catalog_products(id) on delete set null,
+  descricao text not null,
+  quantidade numeric(12, 3) not null,
+  unidade text not null default 'un',
+  lote text,
+  validade date,
+  movimento_estoque_id uuid,
+  created_at timestamptz not null default now(),
+  constraint clinic_insumos_descricao_tamanho check (char_length(btrim(descricao)) between 1 and 200),
+  constraint clinic_insumos_quantidade_check check (quantidade > 0),
+  constraint clinic_insumos_unidade_tamanho check (char_length(btrim(unidade)) between 1 and 20),
+  constraint clinic_insumos_lote_tamanho check (lote is null or char_length(btrim(lote)) between 1 and 60),
+  constraint clinic_insumos_do_procedimento foreign key (organization_id, procedimento_id)
+    references public.clinic_procedimentos_realizados (organization_id, id) on delete cascade
+);
+create index if not exists clinic_insumos_procedimento_idx on public.clinic_procedimento_insumos (organization_id, procedimento_id);
+create index if not exists clinic_insumos_lote_idx on public.clinic_procedimento_insumos (organization_id, lote) where lote is not null;
+
+-- Insumo acompanha o procedimento: só muda enquanto ele é rascunho em
+-- atendimento aberto (o consumidor de estoque futuro só preenche o
+-- movimento_estoque_id, pelo service role e com o procedimento finalizado).
+create or replace function public.fn_clinic_insumo_imutavel()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ok boolean;
+begin
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+    return old;
+  end if;
+  if tg_op = 'UPDATE' and new.movimento_estoque_id is distinct from old.movimento_estoque_id
+     and (to_jsonb(new) - 'movimento_estoque_id') = (to_jsonb(old) - 'movimento_estoque_id') then
+    return new;
+  end if;
+  select p.status = 'rascunho' and a.status = 'em_andamento' into v_ok
+    from public.clinic_procedimentos_realizados p
+    join public.clinic_atendimentos a on a.id = p.atendimento_id
+   where p.id = coalesce(old.procedimento_id, new.procedimento_id);
+  if not coalesce(v_ok, false) then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  return coalesce(new, old);
+end $$;
+revoke execute on function public.fn_clinic_insumo_imutavel() from public, anon, authenticated;
+drop trigger if exists trg_clinic_insumo_imutavel on public.clinic_procedimento_insumos;
+create trigger trg_clinic_insumo_imutavel before update or delete on public.clinic_procedimento_insumos
+  for each row execute function public.fn_clinic_insumo_imutavel();
+
+do $$
+declare t text;
+begin
+  foreach t in array array['clinic_procedimentos_realizados','clinic_procedimento_insumos'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end $$;
+drop policy if exists clinic_procedimentos_realizados_select on public.clinic_procedimentos_realizados;
+create policy clinic_procedimentos_realizados_select on public.clinic_procedimentos_realizados for select using (
+  (organization_id in (select public.fn_user_org_ids()))
+  and public.fn_has_permission(organization_id, 'prontuario.ver'));
+drop policy if exists clinic_procedimento_insumos_select on public.clinic_procedimento_insumos;
+create policy clinic_procedimento_insumos_select on public.clinic_procedimento_insumos for select using (
+  (organization_id in (select public.fn_user_org_ids()))
+  and public.fn_has_permission(organization_id, 'prontuario.ver'));
+
+-- Salva (cria com p_procedimento nulo, ou atualiza com versão) um procedimento
+-- e TROCA a lista de insumos. p_dados = {descricao, procedure_id?,
+-- event_type_id?, plano_sessao_id?, regiao?, parametros?, intercorrencias?,
+-- observacoes?}; p_insumos = [{descricao, quantidade, unidade?, product_id?,
+-- lote?, validade?}]. Tudo que aponta para outra tabela é conferido na MESMA
+-- empresa.
+create or replace function public.fn_clinic_procedimento_salvar(
+  p_org uuid, p_atendimento uuid, p_procedimento uuid, p_dados jsonb, p_insumos jsonb, p_versao_esperada integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_atual record;
+  v_id uuid;
+  v_versao integer;
+  v_proc uuid := nullif(p_dados ->> 'procedure_id', '')::uuid;
+  v_tipo uuid := nullif(p_dados ->> 'event_type_id', '')::uuid;
+  v_sessao uuid := nullif(p_dados ->> 'plano_sessao_id', '')::uuid;
+  v_i jsonb;
+  v_prod uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.registrar');
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+  select c.id, c.status, c.contact_id into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  if p_dados is null or jsonb_typeof(p_dados) <> 'object'
+     or p_insumos is null or jsonb_typeof(p_insumos) <> 'array' or jsonb_array_length(p_insumos) > 50
+     or (v_proc is not null and not exists (select 1 from public.clinic_procedures x where x.id = v_proc and x.organization_id = p_org))
+     or (v_tipo is not null and not exists (select 1 from public.calendar_event_types x where x.id = v_tipo and x.organization_id = p_org))
+     or (v_sessao is not null and not exists (
+           select 1 from public.clinic_plano_sessoes s
+             join public.clinic_planos_tratamento p on p.id = s.plano_id
+            where s.id = v_sessao and s.organization_id = p_org and p.contact_id = v_at.contact_id)) then
+    raise exception 'procedimento_invalido' using errcode = '22023';
+  end if;
+  for v_i in select * from jsonb_array_elements(p_insumos) loop
+    v_prod := nullif(v_i ->> 'product_id', '')::uuid;
+    if v_prod is not null and not exists (select 1 from public.catalog_products x where x.id = v_prod and x.organization_id = p_org) then
+      raise exception 'procedimento_invalido' using errcode = '22023';
+    end if;
+  end loop;
+
+  if p_procedimento is null then
+    insert into public.clinic_procedimentos_realizados
+      (organization_id, atendimento_id, procedure_id, event_type_id, plano_sessao_id, descricao, regiao, parametros,
+       intercorrencias, observacoes, executor_user_id, created_by, updated_by)
+    values (p_org, p_atendimento, v_proc, v_tipo, v_sessao, btrim(p_dados ->> 'descricao'), nullif(btrim(p_dados ->> 'regiao'), ''),
+            coalesce(p_dados -> 'parametros', '{}'::jsonb), nullif(btrim(p_dados ->> 'intercorrencias'), ''),
+            nullif(btrim(p_dados ->> 'observacoes'), ''), auth.uid(), auth.uid(), auth.uid())
+    returning id, versao into v_id, v_versao;
+  else
+    select x.id, x.versao, x.status into v_atual
+      from public.clinic_procedimentos_realizados x
+     where x.id = p_procedimento and x.organization_id = p_org and x.atendimento_id = p_atendimento
+     for update;
+    if not found then
+      raise exception 'procedimento_nao_encontrado' using errcode = 'P0002';
+    end if;
+    if v_atual.status <> 'rascunho' then
+      raise exception 'prontuario_imutavel' using errcode = '55000';
+    end if;
+    if v_atual.versao is distinct from p_versao_esperada then
+      raise exception 'registro_conflito' using errcode = '40001';
+    end if;
+    update public.clinic_procedimentos_realizados
+       set procedure_id = v_proc, event_type_id = v_tipo, plano_sessao_id = v_sessao, descricao = btrim(p_dados ->> 'descricao'),
+           regiao = nullif(btrim(p_dados ->> 'regiao'), ''), parametros = coalesce(p_dados -> 'parametros', '{}'::jsonb),
+           intercorrencias = nullif(btrim(p_dados ->> 'intercorrencias'), ''), observacoes = nullif(btrim(p_dados ->> 'observacoes'), ''),
+           versao = versao + 1, updated_by = auth.uid()
+     where id = p_procedimento
+    returning id, versao into v_id, v_versao;
+    delete from public.clinic_procedimento_insumos where procedimento_id = v_id;
+  end if;
+
+  insert into public.clinic_procedimento_insumos (organization_id, procedimento_id, product_id, descricao, quantidade, unidade, lote, validade)
+  select p_org, v_id, nullif(i ->> 'product_id', '')::uuid, btrim(i ->> 'descricao'), (i ->> 'quantidade')::numeric,
+         coalesce(nullif(btrim(i ->> 'unidade'), ''), 'un'), nullif(btrim(i ->> 'lote'), ''), nullif(i ->> 'validade', '')::date
+    from jsonb_array_elements(p_insumos) i;
+
+  return jsonb_build_object('id', v_id, 'versao', v_versao, 'criado', p_procedimento is null);
+end $$;
+revoke execute on function public.fn_clinic_procedimento_salvar(uuid, uuid, uuid, jsonb, jsonb, integer) from public, anon;
+grant  execute on function public.fn_clinic_procedimento_salvar(uuid, uuid, uuid, jsonb, jsonb, integer) to authenticated;
+
+-- Registro errado, com o atendimento ainda aberto: anula (fica no histórico).
+create or replace function public.fn_clinic_procedimento_anular(p_org uuid, p_procedimento uuid, p_motivo text)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.registrar');
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'procedimento_sem_motivo' using errcode = '22023';
+  end if;
+  update public.clinic_procedimentos_realizados
+     set status = 'anulado', anulado_motivo = left(btrim(p_motivo), 300), updated_by = auth.uid()
+   where id = p_procedimento and organization_id = p_org and status = 'rascunho';
+  if not found then
+    raise exception 'procedimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_procedimento_anular(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_procedimento_anular(uuid, uuid, text) to authenticated;
+
+-- A imutabilidade compartilhada (9019) só deixa atualizar RASCUNHO; o
+-- `anulado` também é final.
+create or replace function public.fn_clinic_registro_imutavel()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if pg_trigger_depth() = 1 then
+      raise exception 'prontuario_imutavel' using errcode = '55000';
+    end if;
+    return old;
+  end if;
+  if old.status <> 'rascunho'
+     or coalesce((select a.status from public.clinic_atendimentos a where a.id = old.atendimento_id), '') <> 'em_andamento' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_registro_imutavel() from public, anon, authenticated;
+
+-- ─── adendo também no procedimento ─────────────────────────────────────────
+-- clinic_adendos_alvo_tipo_check: 'procedimento' já está no bloco único da
+-- constraint (apêndice da 9021). A migration 9022 amplia; o baseline não a recria.
+
+create or replace function public.fn_clinic_adicionar_adendo(
+  p_org uuid, p_atendimento uuid, p_alvo_tipo text, p_alvo_id uuid, p_texto text, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text;
+  v_id uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, 'prontuario.adendo');
+  select c.status into v_status
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_status <> 'finalizado' then
+    raise exception 'adendo_so_em_finalizado' using errcode = '22023';
+  end if;
+  if not (
+    (p_alvo_tipo = 'formulario' and exists (
+       select 1 from public.clinic_formularios_preenchidos f
+        where f.id = p_alvo_id and f.organization_id = p_org and f.atendimento_id = p_atendimento))
+    or (p_alvo_tipo = 'evolucao' and exists (
+       select 1 from public.clinic_evolucoes e
+        where e.id = p_alvo_id and e.organization_id = p_org and e.atendimento_id = p_atendimento))
+    or (p_alvo_tipo = 'conduta' and exists (
+       select 1 from public.clinic_condutas x
+        where x.id = p_alvo_id and x.organization_id = p_org and x.atendimento_id = p_atendimento))
+    or (p_alvo_tipo = 'procedimento' and exists (
+       select 1 from public.clinic_procedimentos_realizados x
+        where x.id = p_alvo_id and x.organization_id = p_org and x.atendimento_id = p_atendimento and x.status = 'finalizado'))
+  ) then
+    raise exception 'adendo_alvo_invalido' using errcode = '22023';
+  end if;
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'adendo_sem_motivo' using errcode = '22023';
+  end if;
+  insert into public.clinic_adendos (organization_id, atendimento_id, alvo_tipo, alvo_id, texto, motivo, autor)
+  values (p_org, p_atendimento, p_alvo_tipo, p_alvo_id, btrim(p_texto), btrim(p_motivo), auth.uid())
+  returning id into v_id;
+  return jsonb_build_object('id', v_id);
+end $$;
+revoke execute on function public.fn_clinic_adicionar_adendo(uuid, uuid, text, uuid, text, text) from public, anon;
+grant  execute on function public.fn_clinic_adicionar_adendo(uuid, uuid, text, uuid, text, text) to authenticated;
+
+-- ─── requisitos: procedimento pode ser exigido ─────────────────────────────
+create or replace function public.fn_clinic_requisitos_faltando(p_atendimento uuid)
+returns text[]
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_faltam text[] := '{}';
+  v_exigidas text[];
+begin
+  select c.id, c.organization_id, c.event_type_id, c.specialty_id into v_at
+    from public.clinic_atendimentos c where c.id = p_atendimento;
+  if not found then
+    return v_faltam;
+  end if;
+
+  if not exists (
+    select 1 from public.clinic_evolucoes e
+     where e.atendimento_id = v_at.id
+       and coalesce(nullif(btrim(e.resposta), ''), nullif(btrim(e.observacoes), ''), nullif(btrim(e.intercorrencias), ''),
+                    nullif(btrim(e.orientacoes), ''), nullif(btrim(e.proxima_conduta), '')) is not null
+  ) then
+    v_faltam := array_append(v_faltam, 'evolucao');
+  end if;
+
+  select coalesce(array_agg(distinct r.secao), '{}') into v_exigidas
+    from public.clinic_requisitos_finalizacao r
+   where r.organization_id = v_at.organization_id
+     and (r.event_type_id is null or r.event_type_id = v_at.event_type_id)
+     and (r.specialty_id is null or r.specialty_id = v_at.specialty_id);
+
+  if 'anamnese' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_formularios_preenchidos f where f.atendimento_id = v_at.id and f.tipo = 'anamnese') then
+    v_faltam := array_append(v_faltam, 'anamnese');
+  end if;
+  if 'avaliacao' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_formularios_preenchidos f where f.atendimento_id = v_at.id and f.tipo = 'avaliacao') then
+    v_faltam := array_append(v_faltam, 'avaliacao');
+  end if;
+  if 'conduta' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_condutas x
+     where x.atendimento_id = v_at.id
+       and coalesce(nullif(btrim(x.descricao), ''), nullif(btrim(x.protocolo), ''), nullif(btrim(x.recomendacoes), '')) is not null) then
+    v_faltam := array_append(v_faltam, 'conduta');
+  end if;
+  if 'procedimento' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_procedimentos_realizados x where x.atendimento_id = v_at.id and x.status <> 'anulado') then
+    v_faltam := array_append(v_faltam, 'procedimento');
+  end if;
+
+  v_faltam := v_faltam || coalesce((
+    select array_agg(f.tipo order by f.tipo)
+      from public.clinic_formularios_preenchidos f
+      join public.clinic_modelos_formulario_versoes v on v.id = f.modelo_versao_id
+     where f.atendimento_id = v_at.id
+       and not (f.tipo = any (v_faltam))
+       and exists (
+         select 1 from jsonb_array_elements(v.campos) c
+          where coalesce((c ->> 'obrigatorio')::boolean, false)
+            and (not (f.respostas ? (c ->> 'chave'))
+                 or f.respostas -> (c ->> 'chave') in ('null'::jsonb, '""'::jsonb, '[]'::jsonb)))
+  ), '{}');
+
+  return v_faltam;
+end $$;
+revoke execute on function public.fn_clinic_requisitos_faltando(uuid) from public, anon, authenticated;
+
+-- ─── congelar: procedimentos confirmados viram evento de estoque ───────────
+create or replace function public.fn_clinic_congelar_registros(p_atendimento uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ag uuid;
+  v_p record;
+begin
+  update public.clinic_formularios_preenchidos set status = 'finalizado', updated_by = auth.uid()
+   where atendimento_id = p_atendimento and status = 'rascunho';
+  update public.clinic_evolucoes set status = 'finalizado', updated_by = auth.uid()
+   where atendimento_id = p_atendimento and status = 'rascunho';
+  update public.clinic_condutas set status = 'finalizado', updated_by = auth.uid()
+   where atendimento_id = p_atendimento and status = 'rascunho';
+
+  for v_p in
+    update public.clinic_procedimentos_realizados set status = 'finalizado', updated_by = auth.uid()
+     where atendimento_id = p_atendimento and status = 'rascunho'
+    returning id, organization_id, procedure_id, event_type_id
+  loop
+    -- Sem texto clínico no evento: ids, quantidades, lote e validade.
+    insert into public.event_log (organization_id, event_type, entity_kind, entity_id, payload)
+    values (
+      v_p.organization_id, 'clinic.procedimento_confirmado', 'clinic_procedimento_realizado', v_p.id,
+      jsonb_build_object(
+        'atendimento_id', p_atendimento,
+        'procedure_id', v_p.procedure_id,
+        'event_type_id', v_p.event_type_id,
+        'insumos', coalesce((
+          select jsonb_agg(jsonb_build_object(
+                   'insumo_id', i.id, 'product_id', i.product_id, 'quantidade', i.quantidade,
+                   'unidade', i.unidade, 'lote', i.lote, 'validade', i.validade) order by i.created_at)
+            from public.clinic_procedimento_insumos i where i.procedimento_id = v_p.id), '[]'::jsonb)));
+  end loop;
+
+  select a.appointment_id into v_ag from public.clinic_atendimentos a where a.id = p_atendimento;
+  if v_ag is not null then
+    update public.clinic_plano_sessoes
+       set status = 'realizada', atendimento_id = p_atendimento, realizada_em = now(), updated_by = auth.uid()
+     where appointment_id = v_ag and status = 'agendada';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_congelar_registros(uuid) from public, anon, authenticated;
+-- ---- fim clinic (migration 9022, fork) ----
+
+-- ---- clinic: documentos, termos e aceite (migration 9023, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9023 · clinic — documentos, termos e aceite eletrônico (FORK, prontuário F6)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (fase F6, seção 15, e "Termo de uso
+-- de imagem").
+--
+--   clinic_modelos_documento          contrato, consentimento, autorização,
+--                                     uso de imagem, ciência de orientações
+--   clinic_modelos_documento_versoes  texto de cada versão (V1, V2...) e as
+--                                     OPÇÕES que o paciente marca uma a uma
+--                                     (uso de imagem). IMUTÁVEL.
+--   clinic_documentos_emitidos        o texto RENDERIZADO para um paciente,
+--                                     congelado, com sha256. Nunca muda depois
+--                                     de emitido; mudar o modelo cria versão
+--                                     nova e nada retroage.
+--   clinic_documento_aceites          aceite e revogação (append-only): nome
+--                                     digitado, canal (presencial | link),
+--                                     opções escolhidas, IP e navegador.
+--   clinic_documento_links            link de aceite: token guardado só como
+--                                     HASH, expira, uso único.
+--
+-- Documento vive FORA do prontuário (termo não é conteúdo clínico): leitura com
+-- `documentos.ver`, que a recepção pode ter. Uso clínico de foto nunca depende
+-- do termo de uso de imagem; divulgação depende — `fn_clinic_uso_de_imagem_
+-- autorizado` é o ponto único que a fase de fotos consulta.
+--
+-- Os textos padrão são MODELOS editáveis, não parecer jurídico: a clínica deve
+-- revisá-los com advogado(a). Escrita só por função. Idempotente.
+
+-- ─── modelos e versões ─────────────────────────────────────────────────────
+create table if not exists public.clinic_modelos_documento (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  tipo text not null,
+  nome text not null,
+  ativo boolean not null default true,
+  padrao boolean not null default false,
+  versao_atual integer not null default 1,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint clinic_modelos_documento_tipo_check
+    check (tipo in ('contrato', 'consentimento', 'autorizacao', 'uso_imagem', 'ciencia')),
+  constraint clinic_modelos_documento_nome_tamanho check (char_length(btrim(nome)) between 1 and 120),
+  constraint clinic_modelos_documento_org_id_key unique (organization_id, id)
+);
+create unique index if not exists clinic_modelos_documento_nome_key
+  on public.clinic_modelos_documento (organization_id, lower(btrim(nome)));
+drop trigger if exists clinic_modelos_documento_updated_at on public.clinic_modelos_documento;
+create trigger clinic_modelos_documento_updated_at before update on public.clinic_modelos_documento
+  for each row execute function public.fn_set_updated_at();
+
+create table if not exists public.clinic_modelos_documento_versoes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  modelo_id uuid not null,
+  numero integer not null,
+  conteudo text not null,
+  -- [{chave, rotulo, obrigatoria?}] — o paciente marca cada uma; nenhuma vem marcada.
+  opcoes jsonb not null default '[]'::jsonb,
+  sha256 text not null,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  constraint clinic_modelos_documento_versoes_conteudo_tamanho check (char_length(conteudo) between 1 and 50000),
+  constraint clinic_modelos_documento_versoes_opcoes_check check (jsonb_typeof(opcoes) = 'array' and jsonb_array_length(opcoes) <= 20),
+  constraint clinic_modelos_documento_versoes_numero_key unique (modelo_id, numero),
+  constraint clinic_modelos_documento_versoes_org_id_key unique (organization_id, id),
+  constraint clinic_modelos_documento_versoes_do_modelo foreign key (organization_id, modelo_id)
+    references public.clinic_modelos_documento (organization_id, id) on delete cascade
+);
+
+-- ─── documentos emitidos ───────────────────────────────────────────────────
+create table if not exists public.clinic_documentos_emitidos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id),
+  modelo_versao_id uuid not null,
+  tipo text not null,
+  titulo text not null,
+  conteudo text not null,
+  opcoes jsonb not null default '[]'::jsonb,
+  sha256 text not null,
+  atendimento_id uuid,
+  plano_id uuid,
+  validade_ate date,
+  status text not null default 'emitido',
+  motivo text,
+  emitido_por uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint clinic_documentos_emitidos_status_check check (status in ('emitido', 'aceito', 'revogado', 'cancelado')),
+  constraint clinic_documentos_emitidos_titulo_tamanho check (char_length(btrim(titulo)) between 1 and 160),
+  constraint clinic_documentos_emitidos_conteudo_tamanho check (char_length(conteudo) between 1 and 60000),
+  constraint clinic_documentos_emitidos_org_id_key unique (organization_id, id),
+  constraint clinic_documentos_emitidos_da_versao foreign key (organization_id, modelo_versao_id)
+    references public.clinic_modelos_documento_versoes (organization_id, id),
+  constraint clinic_documentos_emitidos_do_atendimento foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id),
+  constraint clinic_documentos_emitidos_do_plano foreign key (organization_id, plano_id)
+    references public.clinic_planos_tratamento (organization_id, id)
+);
+create index if not exists clinic_documentos_emitidos_paciente_idx
+  on public.clinic_documentos_emitidos (organization_id, contact_id, created_at desc);
+drop trigger if exists clinic_documentos_emitidos_updated_at on public.clinic_documentos_emitidos;
+create trigger clinic_documentos_emitidos_updated_at before update on public.clinic_documentos_emitidos
+  for each row execute function public.fn_set_updated_at();
+
+-- O que foi emitido NUNCA muda; só o status anda (emitido → aceito | cancelado;
+-- aceito → revogado). DELETE direto recusado.
+create or replace function public.fn_clinic_documento_imutavel()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if pg_trigger_depth() = 1 then
+      raise exception 'documento_imutavel' using errcode = '55000';
+    end if;
+    return old;
+  end if;
+  if new.conteudo is distinct from old.conteudo or new.sha256 is distinct from old.sha256
+     or new.opcoes is distinct from old.opcoes or new.modelo_versao_id is distinct from old.modelo_versao_id
+     or new.contact_id is distinct from old.contact_id or new.titulo is distinct from old.titulo
+     or new.organization_id is distinct from old.organization_id
+     or not ((old.status = new.status)
+             or (old.status = 'emitido' and new.status in ('aceito', 'cancelado'))
+             or (old.status = 'aceito' and new.status = 'revogado')) then
+    raise exception 'documento_imutavel' using errcode = '55000';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_documento_imutavel() from public, anon, authenticated;
+drop trigger if exists trg_clinic_documento_imutavel on public.clinic_documentos_emitidos;
+create trigger trg_clinic_documento_imutavel before update or delete on public.clinic_documentos_emitidos
+  for each row execute function public.fn_clinic_documento_imutavel();
+
+create table if not exists public.clinic_documento_aceites (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  documento_id uuid not null,
+  tipo text not null,
+  canal text not null,
+  nome_digitado text,
+  opcoes_escolhidas jsonb not null default '{}'::jsonb,
+  motivo text,
+  ip text,
+  user_agent text,
+  registrado_por uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint clinic_documento_aceites_tipo_check check (tipo in ('aceite', 'revogacao')),
+  constraint clinic_documento_aceites_canal_check check (canal in ('presencial', 'link')),
+  constraint clinic_documento_aceites_tamanhos check (
+    coalesce(char_length(nome_digitado), 0) <= 160 and coalesce(char_length(motivo), 0) <= 300
+    and coalesce(char_length(ip), 0) <= 64 and coalesce(char_length(user_agent), 0) <= 300),
+  constraint clinic_documento_aceites_opcoes_check check (jsonb_typeof(opcoes_escolhidas) = 'object'),
+  constraint clinic_documento_aceites_do_documento foreign key (organization_id, documento_id)
+    references public.clinic_documentos_emitidos (organization_id, id) on delete cascade
+);
+create index if not exists clinic_documento_aceites_documento_idx
+  on public.clinic_documento_aceites (organization_id, documento_id, created_at);
+
+create table if not exists public.clinic_documento_links (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  documento_id uuid not null,
+  token_hash text not null,
+  expira_em timestamptz not null,
+  usado_em timestamptz,
+  criado_por uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint clinic_documento_links_hash_formato check (token_hash ~ '^[0-9a-f]{64}$'),
+  constraint clinic_documento_links_hash_key unique (token_hash),
+  constraint clinic_documento_links_do_documento foreign key (organization_id, documento_id)
+    references public.clinic_documentos_emitidos (organization_id, id) on delete cascade
+);
+
+-- ─── RLS ───────────────────────────────────────────────────────────────────
+do $$
+declare t text;
+begin
+  foreach t in array array['clinic_modelos_documento','clinic_modelos_documento_versoes','clinic_documentos_emitidos',
+                           'clinic_documento_aceites','clinic_documento_links'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end $$;
+revoke update, delete, truncate on public.clinic_modelos_documento_versoes from service_role;
+revoke update, delete, truncate on public.clinic_documento_aceites from service_role;
+-- Links: ninguém lê pela API (só o hash existe, e só as funções o usam).
+revoke select on public.clinic_documento_links from authenticated;
+
+drop policy if exists clinic_modelos_documento_select on public.clinic_modelos_documento;
+create policy clinic_modelos_documento_select on public.clinic_modelos_documento for select using (
+  organization_id in (select public.fn_user_org_ids()));
+drop policy if exists clinic_modelos_documento_versoes_select on public.clinic_modelos_documento_versoes;
+create policy clinic_modelos_documento_versoes_select on public.clinic_modelos_documento_versoes for select using (
+  organization_id in (select public.fn_user_org_ids()));
+drop policy if exists clinic_documentos_emitidos_select on public.clinic_documentos_emitidos;
+create policy clinic_documentos_emitidos_select on public.clinic_documentos_emitidos for select using (
+  (organization_id in (select public.fn_user_org_ids()))
+  and public.fn_has_permission(organization_id, 'documentos.ver'));
+drop policy if exists clinic_documento_aceites_select on public.clinic_documento_aceites;
+create policy clinic_documento_aceites_select on public.clinic_documento_aceites for select using (
+  (organization_id in (select public.fn_user_org_ids()))
+  and public.fn_has_permission(organization_id, 'documentos.ver'));
+drop policy if exists clinic_documento_links_select on public.clinic_documento_links;
+create policy clinic_documento_links_select on public.clinic_documento_links for select using (false);
+
+-- ─── utilidades ────────────────────────────────────────────────────────────
+create or replace function public.fn_clinic_sha256(p_texto text)
+returns text
+language sql
+immutable
+set search_path = public, extensions, pg_temp
+as $$
+  select encode(digest(convert_to(p_texto, 'UTF8'), 'sha256'), 'hex');
+$$;
+revoke execute on function public.fn_clinic_sha256(text) from public, anon;
+
+-- Opções de um modelo: [{chave, rotulo, obrigatoria?}] com chaves únicas.
+create or replace function public.fn_clinic_documento_opcoes_validas(p_opcoes jsonb)
+returns boolean
+language sql
+immutable
+set search_path = public, pg_temp
+as $$
+  select jsonb_typeof(p_opcoes) = 'array' and jsonb_array_length(p_opcoes) <= 20
+     and not exists (
+       select 1 from jsonb_array_elements(p_opcoes) o
+        where jsonb_typeof(o) <> 'object'
+           or coalesce(o ->> 'chave', '') !~ '^[a-z][a-z0-9_]{0,39}$'
+           or char_length(coalesce(o ->> 'rotulo', '')) not between 1 and 500)
+     and (select count(distinct o ->> 'chave') from jsonb_array_elements(p_opcoes) o) = jsonb_array_length(p_opcoes)
+$$;
+revoke execute on function public.fn_clinic_documento_opcoes_validas(jsonb) from public, anon;
+
+-- Escolhas do paciente: objeto {chave: boolean} com TODAS as chaves das opções
+-- (nada presumido) e as obrigatórias marcadas.
+create or replace function public.fn_clinic_documento_escolhas_validas(p_opcoes jsonb, p_escolhas jsonb)
+returns boolean
+language sql
+immutable
+set search_path = public, pg_temp
+as $$
+  select jsonb_typeof(p_escolhas) = 'object'
+     and (select count(*) from jsonb_object_keys(p_escolhas)) = jsonb_array_length(p_opcoes)
+     and not exists (
+       select 1 from jsonb_array_elements(p_opcoes) o
+        where jsonb_typeof(p_escolhas -> (o ->> 'chave')) is distinct from 'boolean'
+           or (coalesce((o ->> 'obrigatoria')::boolean, false) and (p_escolhas -> (o ->> 'chave')) <> 'true'::jsonb))
+$$;
+revoke execute on function public.fn_clinic_documento_escolhas_validas(jsonb, jsonb) from public, anon;
+
+-- ─── modelos: criar / nova versão / dados ──────────────────────────────────
+create or replace function public.fn_clinic_documento_modelo_salvar(
+  p_org uuid, p_modelo uuid, p_tipo text, p_nome text, p_conteudo text, p_opcoes jsonb, p_ativo boolean, p_versao_esperada integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_atual record;
+  v_id uuid;
+  v_versao uuid;
+  v_numero integer;
+  v_ultima record;
+begin
+  perform public.fn_acesso_exigir(p_org, 'modelos_clinicos.gerenciar');
+  if char_length(coalesce(p_conteudo, '')) not between 1 and 50000 or not public.fn_clinic_documento_opcoes_validas(coalesce(p_opcoes, '[]'::jsonb)) then
+    raise exception 'documento_modelo_invalido' using errcode = '22023';
+  end if;
+  if p_modelo is null then
+    if p_tipo not in ('contrato', 'consentimento', 'autorizacao', 'uso_imagem', 'ciencia') then
+      raise exception 'documento_modelo_invalido' using errcode = '22023';
+    end if;
+    insert into public.clinic_modelos_documento (organization_id, tipo, nome, ativo, created_by)
+    values (p_org, p_tipo, btrim(p_nome), coalesce(p_ativo, true), auth.uid())
+    returning id into v_id;
+    insert into public.clinic_modelos_documento_versoes (organization_id, modelo_id, numero, conteudo, opcoes, sha256, created_by)
+    values (p_org, v_id, 1, p_conteudo, coalesce(p_opcoes, '[]'::jsonb), public.fn_clinic_sha256(p_conteudo), auth.uid())
+    returning id into v_versao;
+    return jsonb_build_object('id', v_id, 'versao_id', v_versao, 'numero', 1);
+  end if;
+
+  select m.id, m.versao_atual into v_atual
+    from public.clinic_modelos_documento m where m.id = p_modelo and m.organization_id = p_org for update;
+  if not found then
+    raise exception 'documento_modelo_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_atual.versao_atual <> p_versao_esperada then
+    raise exception 'registro_conflito' using errcode = '40001';
+  end if;
+  update public.clinic_modelos_documento set nome = btrim(p_nome), ativo = coalesce(p_ativo, true) where id = p_modelo;
+  select v.id, v.conteudo, v.opcoes into v_ultima
+    from public.clinic_modelos_documento_versoes v where v.modelo_id = p_modelo and v.numero = v_atual.versao_atual;
+  v_numero := v_atual.versao_atual;
+  v_versao := v_ultima.id;
+  -- Texto ou opções mudaram: versão NOVA; quem já aceitou a anterior continua nela.
+  if v_ultima.conteudo is distinct from p_conteudo or v_ultima.opcoes is distinct from coalesce(p_opcoes, '[]'::jsonb) then
+    v_numero := v_atual.versao_atual + 1;
+    insert into public.clinic_modelos_documento_versoes (organization_id, modelo_id, numero, conteudo, opcoes, sha256, created_by)
+    values (p_org, p_modelo, v_numero, p_conteudo, coalesce(p_opcoes, '[]'::jsonb), public.fn_clinic_sha256(p_conteudo), auth.uid())
+    returning id into v_versao;
+    update public.clinic_modelos_documento set versao_atual = v_numero where id = p_modelo;
+  end if;
+  return jsonb_build_object('id', p_modelo, 'versao_id', v_versao, 'numero', v_numero);
+exception when unique_violation then
+  raise exception 'documento_modelo_nome_em_uso' using errcode = '23505';
+end $$;
+revoke execute on function public.fn_clinic_documento_modelo_salvar(uuid, uuid, text, text, text, jsonb, boolean, integer) from public, anon;
+grant  execute on function public.fn_clinic_documento_modelo_salvar(uuid, uuid, text, text, text, jsonb, boolean, integer) to authenticated;
+
+-- ─── emitir (texto já renderizado pelo servidor; o banco congela e assina) ──
+create or replace function public.fn_clinic_documento_emitir(
+  p_org uuid, p_contact uuid, p_modelo_versao uuid, p_titulo text, p_conteudo text,
+  p_atendimento uuid, p_plano uuid, p_validade_ate date)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_versao record;
+  v_id uuid;
+  v_hash text;
+begin
+  perform public.fn_acesso_exigir(p_org, 'documentos.emitir');
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+  select v.id, v.opcoes, m.tipo, m.ativo into v_versao
+    from public.clinic_modelos_documento_versoes v
+    join public.clinic_modelos_documento m on m.id = v.modelo_id
+   where v.id = p_modelo_versao and v.organization_id = p_org;
+  if not found or not v_versao.ativo
+     or not exists (select 1 from public.contacts c where c.id = p_contact and c.organization_id = p_org)
+     or (p_atendimento is not null and not exists (
+           select 1 from public.clinic_atendimentos a where a.id = p_atendimento and a.organization_id = p_org and a.contact_id = p_contact))
+     or (p_plano is not null and not exists (
+           select 1 from public.clinic_planos_tratamento p where p.id = p_plano and p.organization_id = p_org and p.contact_id = p_contact))
+     or char_length(coalesce(p_conteudo, '')) not between 1 and 60000 then
+    raise exception 'documento_invalido' using errcode = '22023';
+  end if;
+  v_hash := public.fn_clinic_sha256(p_conteudo);
+  insert into public.clinic_documentos_emitidos
+    (organization_id, contact_id, modelo_versao_id, tipo, titulo, conteudo, opcoes, sha256, atendimento_id, plano_id, validade_ate, emitido_por)
+  values (p_org, p_contact, p_modelo_versao, v_versao.tipo, btrim(p_titulo), p_conteudo, v_versao.opcoes, v_hash,
+          p_atendimento, p_plano, p_validade_ate, auth.uid())
+  returning id into v_id;
+  return jsonb_build_object('id', v_id, 'sha256', v_hash);
+end $$;
+revoke execute on function public.fn_clinic_documento_emitir(uuid, uuid, uuid, text, text, uuid, uuid, date) from public, anon;
+grant  execute on function public.fn_clinic_documento_emitir(uuid, uuid, uuid, text, text, uuid, uuid, date) to authenticated;
+
+-- Núcleo do aceite (presencial ou link). Não é chamável de fora.
+create or replace function public.fn_clinic_documento_registrar_aceite(
+  p_documento uuid, p_canal text, p_nome text, p_escolhas jsonb, p_ip text, p_user_agent text, p_por uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_doc record;
+begin
+  select d.id, d.organization_id, d.status, d.opcoes into v_doc
+    from public.clinic_documentos_emitidos d where d.id = p_documento for update;
+  if not found then
+    raise exception 'documento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_doc.status <> 'emitido' then
+    raise exception 'documento_ja_respondido' using errcode = '22023';
+  end if;
+  if char_length(btrim(coalesce(p_nome, ''))) < 3 then
+    raise exception 'documento_sem_nome' using errcode = '22023';
+  end if;
+  if not public.fn_clinic_documento_escolhas_validas(v_doc.opcoes, coalesce(p_escolhas, '{}'::jsonb)) then
+    raise exception 'documento_escolhas_invalidas' using errcode = '22023';
+  end if;
+  insert into public.clinic_documento_aceites
+    (organization_id, documento_id, tipo, canal, nome_digitado, opcoes_escolhidas, ip, user_agent, registrado_por)
+  values (v_doc.organization_id, v_doc.id, 'aceite', p_canal, left(btrim(p_nome), 160), coalesce(p_escolhas, '{}'::jsonb),
+          left(p_ip, 64), left(p_user_agent, 300), p_por);
+  update public.clinic_documentos_emitidos set status = 'aceito' where id = v_doc.id;
+  return jsonb_build_object('id', v_doc.id, 'organization_id', v_doc.organization_id);
+end $$;
+revoke execute on function public.fn_clinic_documento_registrar_aceite(uuid, text, text, jsonb, text, text, uuid) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_documento_aceitar(
+  p_org uuid, p_documento uuid, p_nome text, p_escolhas jsonb, p_user_agent text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_acesso_exigir(p_org, 'documentos.colher_aceite');
+  if not exists (select 1 from public.clinic_documentos_emitidos d where d.id = p_documento and d.organization_id = p_org) then
+    raise exception 'documento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  return public.fn_clinic_documento_registrar_aceite(p_documento, 'presencial', p_nome, p_escolhas, null, p_user_agent, auth.uid());
+end $$;
+revoke execute on function public.fn_clinic_documento_aceitar(uuid, uuid, text, jsonb, text) from public, anon;
+grant  execute on function public.fn_clinic_documento_aceitar(uuid, uuid, text, jsonb, text) to authenticated;
+
+-- Link de aceite: o servidor gera o token (aleatório, forte) e manda só o HASH.
+create or replace function public.fn_clinic_documento_link_criar(p_org uuid, p_documento uuid, p_token_hash text, p_horas integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_expira timestamptz := now() + make_interval(hours => least(greatest(coalesce(p_horas, 72), 1), 720));
+begin
+  perform public.fn_acesso_exigir(p_org, 'documentos.colher_aceite');
+  if not exists (
+    select 1 from public.clinic_documentos_emitidos d where d.id = p_documento and d.organization_id = p_org and d.status = 'emitido') then
+    raise exception 'documento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  -- Um link vivo por documento: o anterior deixa de valer.
+  update public.clinic_documento_links set expira_em = least(expira_em, now())
+   where documento_id = p_documento and usado_em is null and expira_em > now();
+  insert into public.clinic_documento_links (organization_id, documento_id, token_hash, expira_em, criado_por)
+  values (p_org, p_documento, p_token_hash, v_expira, auth.uid());
+  return jsonb_build_object('expira_em', v_expira);
+end $$;
+revoke execute on function public.fn_clinic_documento_link_criar(uuid, uuid, text, integer) from public, anon;
+grant  execute on function public.fn_clinic_documento_link_criar(uuid, uuid, text, integer) to authenticated;
+
+-- Página pública: só pelo service role, com o HASH do token. Devolve o termo
+-- (não o prontuário) e o nome da clínica.
+create or replace function public.fn_clinic_documento_publico_ler(p_token_hash text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v record;
+begin
+  select d.id, d.titulo, d.conteudo, d.opcoes, d.status, d.sha256, o.display_name as clinica, l.expira_em, l.usado_em
+    into v
+    from public.clinic_documento_links l
+    join public.clinic_documentos_emitidos d on d.id = l.documento_id
+    join public.organizations o on o.id = d.organization_id
+   where l.token_hash = p_token_hash;
+  if not found or v.usado_em is not null or v.expira_em <= now() or v.status <> 'emitido' then
+    return null;
+  end if;
+  return jsonb_build_object('titulo', v.titulo, 'conteudo', v.conteudo, 'opcoes', v.opcoes, 'sha256', v.sha256,
+                            'clinica', v.clinica, 'expira_em', v.expira_em);
+end $$;
+revoke execute on function public.fn_clinic_documento_publico_ler(text) from public, anon, authenticated;
+grant  execute on function public.fn_clinic_documento_publico_ler(text) to service_role;
+
+create or replace function public.fn_clinic_documento_publico_aceitar(
+  p_token_hash text, p_nome text, p_escolhas jsonb, p_ip text, p_user_agent text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_link record;
+  v_r jsonb;
+begin
+  select l.id, l.documento_id, l.expira_em, l.usado_em into v_link
+    from public.clinic_documento_links l where l.token_hash = p_token_hash for update;
+  if not found or v_link.usado_em is not null or v_link.expira_em <= now() then
+    raise exception 'documento_link_invalido' using errcode = 'P0002';
+  end if;
+  v_r := public.fn_clinic_documento_registrar_aceite(v_link.documento_id, 'link', p_nome, p_escolhas, p_ip, p_user_agent, null);
+  update public.clinic_documento_links set usado_em = now() where id = v_link.id;
+  return v_r || jsonb_build_object('documento_id', v_link.documento_id);
+end $$;
+revoke execute on function public.fn_clinic_documento_publico_aceitar(text, text, jsonb, text, text) from public, anon, authenticated;
+grant  execute on function public.fn_clinic_documento_publico_aceitar(text, text, jsonb, text, text) to service_role;
+
+-- Revogar (aceito → revogado; registro novo, o aceite continua lá) ou
+-- cancelar (emitido e ainda não respondido → cancelado).
+create or replace function public.fn_clinic_documento_encerrar(p_org uuid, p_documento uuid, p_acao text, p_motivo text)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text;
+begin
+  perform public.fn_acesso_exigir(p_org, case when p_acao = 'revogar' then 'documentos.revogar' else 'documentos.emitir' end);
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'documento_sem_motivo' using errcode = '22023';
+  end if;
+  select d.status into v_status
+    from public.clinic_documentos_emitidos d where d.id = p_documento and d.organization_id = p_org for update;
+  if not found then
+    raise exception 'documento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if p_acao = 'revogar' and v_status = 'aceito' then
+    insert into public.clinic_documento_aceites (organization_id, documento_id, tipo, canal, motivo, registrado_por)
+    values (p_org, p_documento, 'revogacao', 'presencial', left(btrim(p_motivo), 300), auth.uid());
+    update public.clinic_documentos_emitidos set status = 'revogado', motivo = left(btrim(p_motivo), 300) where id = p_documento;
+  elsif p_acao = 'cancelar' and v_status = 'emitido' then
+    update public.clinic_documentos_emitidos set status = 'cancelado', motivo = left(btrim(p_motivo), 300) where id = p_documento;
+    update public.clinic_documento_links set expira_em = least(expira_em, now()) where documento_id = p_documento and usado_em is null;
+  else
+    raise exception 'documento_ja_respondido' using errcode = '22023';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_documento_encerrar(uuid, uuid, text, text) from public, anon;
+grant  execute on function public.fn_clinic_documento_encerrar(uuid, uuid, text, text) to authenticated;
+
+-- Ponto único que a fase de fotos consulta: o paciente autorizou ESTA
+-- finalidade (opção do termo de uso de imagem), dentro do prazo, sem revogar?
+create or replace function public.fn_clinic_uso_de_imagem_autorizado(p_org uuid, p_contact uuid, p_opcao text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+      from public.clinic_documentos_emitidos d
+      join lateral (
+        select a.opcoes_escolhidas from public.clinic_documento_aceites a
+         where a.documento_id = d.id and a.tipo = 'aceite' order by a.created_at desc limit 1) a on true
+     where d.organization_id = p_org and d.contact_id = p_contact and d.tipo = 'uso_imagem' and d.status = 'aceito'
+       and (d.validade_ate is null or d.validade_ate >= current_date)
+       and (a.opcoes_escolhidas -> p_opcao) = 'true'::jsonb)
+$$;
+revoke execute on function public.fn_clinic_uso_de_imagem_autorizado(uuid, uuid, text) from public, anon, authenticated;
+
+-- ─── requisito "documento": um termo ACEITO ligado ao atendimento ──────────
+create or replace function public.fn_clinic_requisitos_faltando(p_atendimento uuid)
+returns text[]
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_faltam text[] := '{}';
+  v_exigidas text[];
+begin
+  select c.id, c.organization_id, c.event_type_id, c.specialty_id into v_at
+    from public.clinic_atendimentos c where c.id = p_atendimento;
+  if not found then
+    return v_faltam;
+  end if;
+
+  if not exists (
+    select 1 from public.clinic_evolucoes e
+     where e.atendimento_id = v_at.id
+       and coalesce(nullif(btrim(e.resposta), ''), nullif(btrim(e.observacoes), ''), nullif(btrim(e.intercorrencias), ''),
+                    nullif(btrim(e.orientacoes), ''), nullif(btrim(e.proxima_conduta), '')) is not null
+  ) then
+    v_faltam := array_append(v_faltam, 'evolucao');
+  end if;
+
+  select coalesce(array_agg(distinct r.secao), '{}') into v_exigidas
+    from public.clinic_requisitos_finalizacao r
+   where r.organization_id = v_at.organization_id
+     and (r.event_type_id is null or r.event_type_id = v_at.event_type_id)
+     and (r.specialty_id is null or r.specialty_id = v_at.specialty_id);
+
+  if 'anamnese' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_formularios_preenchidos f where f.atendimento_id = v_at.id and f.tipo = 'anamnese') then
+    v_faltam := array_append(v_faltam, 'anamnese');
+  end if;
+  if 'avaliacao' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_formularios_preenchidos f where f.atendimento_id = v_at.id and f.tipo = 'avaliacao') then
+    v_faltam := array_append(v_faltam, 'avaliacao');
+  end if;
+  if 'conduta' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_condutas x
+     where x.atendimento_id = v_at.id
+       and coalesce(nullif(btrim(x.descricao), ''), nullif(btrim(x.protocolo), ''), nullif(btrim(x.recomendacoes), '')) is not null) then
+    v_faltam := array_append(v_faltam, 'conduta');
+  end if;
+  if 'procedimento' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_procedimentos_realizados x where x.atendimento_id = v_at.id and x.status <> 'anulado') then
+    v_faltam := array_append(v_faltam, 'procedimento');
+  end if;
+  if 'documento' = any (v_exigidas) and not exists (
+    select 1 from public.clinic_documentos_emitidos d where d.atendimento_id = v_at.id and d.status = 'aceito') then
+    v_faltam := array_append(v_faltam, 'documento');
+  end if;
+
+  v_faltam := v_faltam || coalesce((
+    select array_agg(f.tipo order by f.tipo)
+      from public.clinic_formularios_preenchidos f
+      join public.clinic_modelos_formulario_versoes v on v.id = f.modelo_versao_id
+     where f.atendimento_id = v_at.id
+       and not (f.tipo = any (v_faltam))
+       and exists (
+         select 1 from jsonb_array_elements(v.campos) c
+          where coalesce((c ->> 'obrigatorio')::boolean, false)
+            and (not (f.respostas ? (c ->> 'chave'))
+                 or f.respostas -> (c ->> 'chave') in ('null'::jsonb, '""'::jsonb, '[]'::jsonb)))
+  ), '{}');
+
+  return v_faltam;
+end $$;
+revoke execute on function public.fn_clinic_requisitos_faltando(uuid) from public, anon, authenticated;
+
+-- ─── modelos padrão de cada empresa (textos editáveis, V1) ──────────────────
+create or replace function public.fn_clinic_semear_documentos(p_org uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_m record;
+  v_id uuid;
+begin
+  for v_m in
+    select * from (values
+      ('consentimento', 'Termo de consentimento para procedimento',
+       E'# Termo de consentimento livre e esclarecido\n\nEu, {{paciente.nome}}, declaro que fui informado(a) por {{profissional.nome}}, da {{clinica.nome}}, sobre o procedimento {{procedimento}}: como é feito, os resultados esperados (que variam de pessoa para pessoa), os cuidados antes e depois, os riscos e as possíveis intercorrências, e as alternativas existentes.\n\nTive a oportunidade de fazer perguntas e todas foram respondidas. Informei com verdade meu histórico de saúde, alergias e medicamentos em uso.\n\nSei que posso desistir a qualquer momento antes da realização do procedimento.\n\nData: {{data}}',
+       '[]'::jsonb),
+      ('ciencia', 'Ciência das orientações pós-procedimento',
+       E'# Ciência das orientações\n\nEu, {{paciente.nome}}, recebi da {{clinica.nome}} as orientações de cuidados após o procedimento {{procedimento}} e me comprometo a segui-las. Sei que devo entrar em contato com a clínica diante de qualquer reação diferente do esperado.\n\nData: {{data}}',
+       '[]'::jsonb),
+      ('contrato', 'Contrato de prestação de serviços',
+       E'# Contrato de prestação de serviços\n\nContratante: {{paciente.nome}}.\nContratada: {{clinica.nome}}.\n\nObjeto: {{procedimento}}.\n\nValores, forma de pagamento, remarcação e cancelamento seguem o combinado com a clínica e registrado na comanda. O resultado de procedimentos estéticos depende de fatores individuais e não pode ser garantido.\n\nData: {{data}}',
+       '[]'::jsonb),
+      ('autorizacao', 'Autorização de atendimento de menor de idade',
+       E'# Autorização\n\nEu, responsável legal por {{paciente.nome}}, autorizo a {{clinica.nome}} a realizar o atendimento {{procedimento}} e declaro ter recebido as informações sobre ele.\n\nData: {{data}}',
+       '[]'::jsonb),
+      ('uso_imagem', 'Autorização de uso de imagem',
+       E'# Autorização de uso de imagem\n\nEu, {{paciente.nome}}, sei que a {{clinica.nome}} registra fotos para ACOMPANHAR MEU TRATAMENTO no prontuário. Esse uso faz parte da assistência à saúde e não depende desta autorização.\n\nOutros usos só acontecem se eu marcar, uma a uma, as opções abaixo. Nenhuma vem marcada. A autorização é gratuita, vale pelo prazo indicado no documento e posso revogá-la a qualquer momento pelos canais da clínica: depois da revogação, a clínica não faz novas publicações e retira as suas em até 30 dias.\n\nAs fotos são guardadas com segurança e acessadas só por quem cuida do meu tratamento. Dúvidas sobre meus dados: fale com o encarregado de dados da clínica.\n\nData: {{data}}',
+       '[{"chave":"ensino_sem_identificacao","rotulo":"Uso em ensino e eventos científicos, SEM me identificar"},
+         {"chave":"divulgacao_sem_rosto","rotulo":"Divulgação da clínica SEM mostrar meu rosto, tatuagens ou sinais que me identifiquem"},
+         {"chave":"divulgacao_com_identificacao","rotulo":"Divulgação da clínica COM identificação (rosto visível)"},
+         {"chave":"redes_sociais","rotulo":"Canal: redes sociais da clínica"},
+         {"chave":"site","rotulo":"Canal: site da clínica"},
+         {"chave":"material_impresso","rotulo":"Canal: material impresso da clínica"}]'::jsonb)
+    ) as t(tipo, nome, conteudo, opcoes)
+  loop
+    if not exists (select 1 from public.clinic_modelos_documento m where m.organization_id = p_org and lower(m.nome) = lower(v_m.nome)) then
+      insert into public.clinic_modelos_documento (organization_id, tipo, nome, padrao)
+      values (p_org, v_m.tipo, v_m.nome, true) returning id into v_id;
+      insert into public.clinic_modelos_documento_versoes (organization_id, modelo_id, numero, conteudo, opcoes, sha256)
+      values (p_org, v_id, 1, v_m.conteudo, v_m.opcoes, public.fn_clinic_sha256(v_m.conteudo));
+    end if;
+  end loop;
+end $$;
+revoke execute on function public.fn_clinic_semear_documentos(uuid) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_semear_documentos_trigger()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_clinic_semear_documentos(new.id);
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_semear_documentos_trigger() from public, anon, authenticated;
+drop trigger if exists trg_clinic_semear_documentos on public.organizations;
+create trigger trg_clinic_semear_documentos after insert on public.organizations
+  for each row execute function public.fn_clinic_semear_documentos_trigger();
+
+do $$
+declare o uuid;
+begin
+  for o in select id from public.organizations loop
+    perform public.fn_clinic_semear_documentos(o);
+  end loop;
+end $$;
+-- ---- fim clinic (migration 9023, fork) ----
+
+-- ---- clinic: anexos e fotos clínicas (migration 9024, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9024 · clinic — anexos e fotos clínicas (FORK, prontuário F7)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (fase F7, "Custo de armazenamento" e
+-- "Termo de uso de imagem").
+--
+-- ARMAZENAMENTO SEM CUSTO NOVO: o bucket `clinical-files` mora no Storage que a
+-- instalação já tem (na VPS, disco local — o backup do kit já o inclui). A foto
+-- chega COMPRIMIDA pelo navegador (WebP, 1600 px, sem EXIF/GPS) + miniatura de
+-- 320 px; a cota por clínica (`settings.clinic.cota_arquivos_mb`, padrão 5 GB)
+-- impede o disco de encher sem aviso. Imagem nunca vai para o banco.
+--
+-- ACESSO: bucket PRIVADO e ZERO policy em `storage.objects` para ele — ninguém
+-- lê nem grava direto. Só as rotas, com o service role, depois de conferir a
+-- permissão na linha de `clinic_anexos` (RLS): download por URL assinada de
+-- 60 s, auditado. Caminho não enumerável: `<org>/<paciente>/<uuid>.<ext>`.
+--
+-- FINALIDADE: toda foto é CLÍNICA (acompanhar o tratamento — base legal da
+-- assistência, não depende de termo). Marcar para DIVULGAÇÃO só é aceito se o
+-- paciente autorizou aquela opção no termo de uso de imagem (9023), no prazo e
+-- sem revogar; revogou → as fotos marcadas voltam sozinhas a "só clínico".
+--
+-- RETENÇÃO: anexo clínico não é apagado — `anulado` com motivo (lançado por
+-- engano). Prontuário tem guarda legal (CFM 1.821/2007: 20 anos), então a
+-- anonimização LGPD do contato NÃO apaga estes arquivos; a decisão fica aqui e
+-- no plano. Idempotente.
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('clinical-files', 'clinical-files', false, 10485760,
+        array['image/webp', 'image/jpeg', 'image/png', 'application/pdf'])
+on conflict (id) do update
+  set public = false,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+create table if not exists public.clinic_anexos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id),
+  atendimento_id uuid,
+  plano_id uuid,
+  tipo text not null,
+  storage_key text not null,
+  miniatura_key text,
+  mime text not null,
+  bytes integer not null,
+  sha256 text not null,
+  nome_original text,
+  descricao text,
+  largura integer,
+  altura integer,
+  regiao text,
+  momento text,
+  capturada_em timestamptz,
+  divulgacao_opcao text,
+  status text not null default 'ativo',
+  anulado_motivo text,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  constraint clinic_anexos_tipo_check check (tipo in ('foto', 'documento')),
+  constraint clinic_anexos_status_check check (status in ('ativo', 'anulado')),
+  constraint clinic_anexos_momento_check check (momento is null or momento in ('antes', 'durante', 'depois', 'acompanhamento')),
+  constraint clinic_anexos_divulgacao_check
+    check (divulgacao_opcao is null or divulgacao_opcao in ('ensino_sem_identificacao', 'divulgacao_sem_rosto', 'divulgacao_com_identificacao')),
+  constraint clinic_anexos_mime_check check (mime in ('image/webp', 'image/jpeg', 'image/png', 'application/pdf')),
+  constraint clinic_anexos_foto_e_imagem check (tipo <> 'foto' or mime like 'image/%'),
+  -- arquivo (até 10 MB) + miniatura (até 512 KB).
+  constraint clinic_anexos_bytes_check check (bytes between 1 and 11010048),
+  constraint clinic_anexos_sha_formato check (sha256 ~ '^[0-9a-f]{64}$'),
+  constraint clinic_anexos_chave_formato check (storage_key ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f-]{36}\.(webp|jpg|png|pdf)$'),
+  constraint clinic_anexos_tamanhos check (
+    coalesce(char_length(nome_original), 0) <= 200 and coalesce(char_length(descricao), 0) <= 500
+    and coalesce(char_length(regiao), 0) <= 120 and coalesce(char_length(anulado_motivo), 0) <= 300),
+  constraint clinic_anexos_chave_key unique (storage_key),
+  constraint clinic_anexos_org_id_key unique (organization_id, id),
+  constraint clinic_anexos_do_atendimento foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id),
+  constraint clinic_anexos_do_plano foreign key (organization_id, plano_id)
+    references public.clinic_planos_tratamento (organization_id, id)
+);
+create index if not exists clinic_anexos_paciente_idx on public.clinic_anexos (organization_id, contact_id, created_at desc);
+create index if not exists clinic_anexos_atendimento_idx on public.clinic_anexos (organization_id, atendimento_id) where atendimento_id is not null;
+drop trigger if exists clinic_anexos_updated_at on public.clinic_anexos;
+create trigger clinic_anexos_updated_at before update on public.clinic_anexos
+  for each row execute function public.fn_set_updated_at();
+
+-- O arquivo e seus metadados de origem nunca mudam; só anular (com motivo) e a
+-- marcação de divulgação andam. DELETE direto recusado.
+create or replace function public.fn_clinic_anexo_imutavel()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if pg_trigger_depth() = 1 then
+      raise exception 'prontuario_imutavel' using errcode = '55000';
+    end if;
+    return old;
+  end if;
+  if (to_jsonb(new) - array['status', 'anulado_motivo', 'divulgacao_opcao', 'updated_at', 'updated_by', 'regiao', 'descricao', 'momento'])
+     is distinct from (to_jsonb(old) - array['status', 'anulado_motivo', 'divulgacao_opcao', 'updated_at', 'updated_by', 'regiao', 'descricao', 'momento'])
+     or old.status = 'anulado' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_anexo_imutavel() from public, anon, authenticated;
+drop trigger if exists trg_clinic_anexo_imutavel on public.clinic_anexos;
+create trigger trg_clinic_anexo_imutavel before update or delete on public.clinic_anexos
+  for each row execute function public.fn_clinic_anexo_imutavel();
+
+alter table public.clinic_anexos enable row level security;
+drop policy if exists tenant_isolation_clinic_anexos_all on public.clinic_anexos;
+drop policy if exists clinic_anexos_select on public.clinic_anexos;
+-- Foto e documento são conteúdo clínico: permissão por tipo, sem atalho de
+-- platform admin.
+create policy clinic_anexos_select on public.clinic_anexos for select using (
+  (organization_id in (select public.fn_user_org_ids()))
+  and public.fn_has_permission(organization_id, case when tipo = 'foto' then 'fotos.ver' else 'anexos.ver' end));
+revoke all on public.clinic_anexos from anon;
+revoke insert, update, delete, truncate on public.clinic_anexos from authenticated;
+
+-- ─── cota ──────────────────────────────────────────────────────────────────
+create or replace function public.fn_clinic_cota_arquivos_bytes(p_org uuid)
+returns bigint
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(
+    (select ((o.settings -> 'clinic' ->> 'cota_arquivos_mb'))::bigint from public.organizations o
+      where o.id = p_org and (o.settings -> 'clinic' ->> 'cota_arquivos_mb') ~ '^[0-9]{1,7}$'),
+    5120) * 1048576
+$$;
+revoke execute on function public.fn_clinic_cota_arquivos_bytes(uuid) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_uso_de_arquivos(p_org uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not (p_org in (select public.fn_user_org_ids())) then
+    raise exception 'acesso_proibido' using errcode = '42501';
+  end if;
+  return jsonb_build_object(
+    'usados', (select coalesce(sum(a.bytes), 0) from public.clinic_anexos a where a.organization_id = p_org),
+    'cota', public.fn_clinic_cota_arquivos_bytes(p_org));
+end $$;
+revoke execute on function public.fn_clinic_uso_de_arquivos(uuid) from public, anon;
+grant  execute on function public.fn_clinic_uso_de_arquivos(uuid) to authenticated;
+
+-- ─── registrar (o arquivo já subiu pela rota, com o service role) ──────────
+create or replace function public.fn_clinic_anexo_registrar(p_org uuid, p_contact uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_tipo text := p_dados ->> 'tipo';
+  v_chave text := p_dados ->> 'storage_key';
+  v_mini text := nullif(p_dados ->> 'miniatura_key', '');
+  v_bytes bigint := coalesce((p_dados ->> 'bytes')::bigint, 0) + coalesce((p_dados ->> 'miniatura_bytes')::bigint, 0);
+  v_at uuid := nullif(p_dados ->> 'atendimento_id', '')::uuid;
+  v_plano uuid := nullif(p_dados ->> 'plano_id', '')::uuid;
+  v_id uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, case when v_tipo = 'foto' then 'fotos.enviar' else 'anexos.enviar' end);
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+  -- O caminho é da empresa e do paciente informados; nada fora disso entra.
+  if v_tipo not in ('foto', 'documento')
+     or not exists (select 1 from public.contacts c where c.id = p_contact and c.organization_id = p_org)
+     or v_chave is null or split_part(v_chave, '/', 1) <> p_org::text or split_part(v_chave, '/', 2) <> p_contact::text
+     or (v_mini is not null and (split_part(v_mini, '/', 1) <> p_org::text or split_part(v_mini, '/', 2) <> p_contact::text))
+     or (v_at is not null and not exists (
+           select 1 from public.clinic_atendimentos a where a.id = v_at and a.organization_id = p_org and a.contact_id = p_contact))
+     or (v_plano is not null and not exists (
+           select 1 from public.clinic_planos_tratamento p where p.id = v_plano and p.organization_id = p_org and p.contact_id = p_contact)) then
+    raise exception 'anexo_invalido' using errcode = '22023';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('clinic_anexos_cota:' || p_org::text, 0));
+  if (select coalesce(sum(a.bytes), 0) from public.clinic_anexos a where a.organization_id = p_org) + v_bytes
+     > public.fn_clinic_cota_arquivos_bytes(p_org) then
+    raise exception 'anexo_cota_excedida' using errcode = '53400';
+  end if;
+  insert into public.clinic_anexos
+    (organization_id, contact_id, atendimento_id, plano_id, tipo, storage_key, miniatura_key, mime, bytes, sha256, nome_original,
+     descricao, largura, altura, regiao, momento, capturada_em, created_by, updated_by)
+  values (p_org, p_contact, v_at, v_plano, v_tipo, v_chave, v_mini, p_dados ->> 'mime', v_bytes, p_dados ->> 'sha256',
+          left(nullif(btrim(p_dados ->> 'nome_original'), ''), 200), left(nullif(btrim(p_dados ->> 'descricao'), ''), 500),
+          nullif(p_dados ->> 'largura', '')::integer, nullif(p_dados ->> 'altura', '')::integer,
+          left(nullif(btrim(p_dados ->> 'regiao'), ''), 120), nullif(p_dados ->> 'momento', ''),
+          nullif(p_dados ->> 'capturada_em', '')::timestamptz, auth.uid(), auth.uid())
+  returning id into v_id;
+  return jsonb_build_object('id', v_id);
+end $$;
+revoke execute on function public.fn_clinic_anexo_registrar(uuid, uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_anexo_registrar(uuid, uuid, jsonb) to authenticated;
+
+-- Anular (lançado por engano) ou marcar/desmarcar para divulgação.
+create or replace function public.fn_clinic_anexo_mudar(p_org uuid, p_anexo uuid, p_acao text, p_valor text)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v record;
+begin
+  select a.id, a.tipo, a.contact_id, a.status into v
+    from public.clinic_anexos a where a.id = p_anexo and a.organization_id = p_org for update;
+  if not found then
+    raise exception 'anexo_nao_encontrado' using errcode = 'P0002';
+  end if;
+  perform public.fn_acesso_exigir(p_org, case when v.tipo = 'foto' then 'fotos.enviar' else 'anexos.enviar' end);
+  if v.status <> 'ativo' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  if p_acao = 'anular' then
+    if char_length(btrim(coalesce(p_valor, ''))) < 3 then
+      raise exception 'anexo_sem_motivo' using errcode = '22023';
+    end if;
+    update public.clinic_anexos
+       set status = 'anulado', anulado_motivo = left(btrim(p_valor), 300), divulgacao_opcao = null, updated_by = auth.uid()
+     where id = p_anexo;
+  elsif p_acao = 'divulgacao' then
+    if p_valor is not null and (v.tipo <> 'foto' or not public.fn_clinic_uso_de_imagem_autorizado(p_org, v.contact_id, p_valor)) then
+      raise exception 'anexo_sem_autorizacao_de_imagem' using errcode = '42501';
+    end if;
+    update public.clinic_anexos set divulgacao_opcao = p_valor, updated_by = auth.uid() where id = p_anexo;
+  else
+    raise exception 'anexo_invalido' using errcode = '22023';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_anexo_mudar(uuid, uuid, text, text) from public, anon;
+grant  execute on function public.fn_clinic_anexo_mudar(uuid, uuid, text, text) to authenticated;
+
+-- Revogou (ou venceu) a autorização de uso de imagem: fotos marcadas para
+-- divulgação voltam a "só clínico" na mesma transação. Sem HTTP.
+create or replace function public.fn_clinic_revogacao_desmarca_fotos()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.tipo = 'uso_imagem' and new.status = 'revogado' and old.status <> 'revogado' then
+    update public.clinic_anexos a
+       set divulgacao_opcao = null, updated_by = auth.uid()
+     where a.organization_id = new.organization_id and a.contact_id = new.contact_id and a.status = 'ativo'
+       and a.divulgacao_opcao is not null
+       and not public.fn_clinic_uso_de_imagem_autorizado(new.organization_id, new.contact_id, a.divulgacao_opcao);
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_revogacao_desmarca_fotos() from public, anon, authenticated;
+drop trigger if exists trg_clinic_revogacao_desmarca_fotos on public.clinic_documentos_emitidos;
+create trigger trg_clinic_revogacao_desmarca_fotos after update of status on public.clinic_documentos_emitidos
+  for each row execute function public.fn_clinic_revogacao_desmarca_fotos();
+-- ---- fim clinic (migration 9024, fork) ----
+
+-- ---- clinic: reabrir atendimento (migration 9025, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9025 · clinic — reabrir atendimento finalizado (FORK, prontuário F8)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (fase F8, seção 14).
+--
+-- Reabrir NÃO desfaz a imutabilidade: o que já foi finalizado continua travado
+-- pelo trigger (fn_clinic_registro_imutavel só deixa mudar rascunho). Reabrir
+-- serve para ACRESCENTAR o que faltou (um procedimento esquecido, a avaliação
+-- que não foi preenchida); corrigir o que existe continua sendo adendo. Exige
+-- `atendimento.reabrir` (chave clínica, gerência), MFA, suporte com escrita e
+-- motivo; o evento `reaberto` guarda estado antes/depois, quem e por quê.
+-- Idempotente.
+
+create or replace function public.fn_clinic_reabrir_atendimento(p_org uuid, p_atendimento uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.reabrir');
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'atendimento_sem_motivo' using errcode = '22023';
+  end if;
+  select c.status into v_status
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_status <> 'finalizado' then
+    raise exception 'atendimento_nao_finalizado' using errcode = '22023';
+  end if;
+  update public.clinic_atendimentos
+     set status = 'em_andamento', finished_at = null, finalizado_por = null, updated_by = auth.uid(), versao = versao + 1
+   where id = p_atendimento;
+  insert into public.clinic_atendimento_eventos (organization_id, atendimento_id, tipo, status_antes, status_depois, motivo, ator)
+  values (p_org, p_atendimento, 'reaberto', 'finalizado', 'em_andamento', left(btrim(p_motivo), 300), auth.uid());
+  return jsonb_build_object('id', p_atendimento);
+end $$;
+revoke execute on function public.fn_clinic_reabrir_atendimento(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_reabrir_atendimento(uuid, uuid, text) to authenticated;
+-- ---- fim clinic (migration 9025, fork) ----
+
+-- ---- clinic: cabeçalho clínico e anular atendimento (migration 9026, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9026 · clinic — cabeçalho clínico do paciente e anular atendimento (FORK, F9)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/prontuario/plano.md (seções 6, 9 e 14; fase de acabamento).
+--
+-- 1. CABEÇALHO CLÍNICO. `clinic_prontuarios`: uma linha por paciente com as
+--    ALERGIAS INFORMADAS e os ALERTAS fixos que todo profissional precisa ver
+--    no topo do atendimento e do prontuário. Toda mudança deixa rastro em
+--    `clinic_prontuario_alteracoes` (append-only: valor anterior, novo, quem,
+--    quando) — alergia é informação de segurança do paciente, não se perde.
+--
+-- 2. ANULAR ATENDIMENTO aberto por engano (paciente errado, clique errado):
+--    só com o atendimento em andamento e SEM nenhum registro clínico; fica
+--    `anulado` com motivo e evento, e a visita volta para "pronto" (correção
+--    com motivo, pelo caminho da recepção). Para o mesmo agendamento poder ser
+--    iniciado de novo, a unicidade do agendamento passa a ignorar os anulados.
+--
+-- Leitura com `prontuario.ver`, sem atalho de platform admin. Escrita só por
+-- função. Idempotente.
+
+-- ─── cabeçalho ─────────────────────────────────────────────────────────────
+create table if not exists public.clinic_prontuarios (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id),
+  alergias text,
+  alertas text,
+  versao integer not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  constraint clinic_prontuarios_tamanhos check (coalesce(char_length(alergias), 0) <= 2000 and coalesce(char_length(alertas), 0) <= 2000),
+  constraint clinic_prontuarios_paciente_key unique (organization_id, contact_id)
+);
+drop trigger if exists clinic_prontuarios_updated_at on public.clinic_prontuarios;
+create trigger clinic_prontuarios_updated_at before update on public.clinic_prontuarios
+  for each row execute function public.fn_set_updated_at();
+
+create table if not exists public.clinic_prontuario_alteracoes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id),
+  campo text not null,
+  valor_anterior text,
+  valor_novo text,
+  autor uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint clinic_prontuario_alteracoes_campo_check check (campo in ('alergias', 'alertas'))
+);
+create index if not exists clinic_prontuario_alteracoes_paciente_idx
+  on public.clinic_prontuario_alteracoes (organization_id, contact_id, created_at desc);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['clinic_prontuarios','clinic_prontuario_alteracoes'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format('drop policy if exists %s_select on public.%I', t, t);
+    execute format($p$create policy %s_select on public.%I for select using (
+        (organization_id in (select public.fn_user_org_ids()))
+        and public.fn_has_permission(organization_id, 'prontuario.ver'))$p$, t, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end $$;
+revoke update, delete, truncate on public.clinic_prontuario_alteracoes from service_role;
+
+create or replace function public.fn_clinic_cabecalho_salvar(
+  p_org uuid, p_contact uuid, p_alergias text, p_alertas text, p_versao_esperada integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_atual record;
+  v_alergias text := nullif(btrim(coalesce(p_alergias, '')), '');
+  v_alertas text := nullif(btrim(coalesce(p_alertas, '')), '');
+  v_versao integer;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.registrar');
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.contacts c where c.id = p_contact and c.organization_id = p_org) then
+    raise exception 'cabecalho_paciente_invalido' using errcode = '22023';
+  end if;
+
+  select p.alergias, p.alertas, p.versao into v_atual
+    from public.clinic_prontuarios p
+   where p.organization_id = p_org and p.contact_id = p_contact
+   for update;
+  if not found then
+    if coalesce(p_versao_esperada, 0) <> 0 then
+      raise exception 'registro_conflito' using errcode = '40001';
+    end if;
+    insert into public.clinic_prontuarios (organization_id, contact_id, alergias, alertas, updated_by)
+    values (p_org, p_contact, v_alergias, v_alertas, auth.uid())
+    returning versao into v_versao;
+    -- Sem linha, `v_atual` fica com os campos nulos: tudo o que veio é "novo".
+  else
+    if v_atual.versao is distinct from p_versao_esperada then
+      raise exception 'registro_conflito' using errcode = '40001';
+    end if;
+    update public.clinic_prontuarios
+       set alergias = v_alergias, alertas = v_alertas, versao = versao + 1, updated_by = auth.uid()
+     where organization_id = p_org and contact_id = p_contact
+    returning versao into v_versao;
+  end if;
+
+  if v_alergias is distinct from v_atual.alergias then
+    insert into public.clinic_prontuario_alteracoes (organization_id, contact_id, campo, valor_anterior, valor_novo, autor)
+    values (p_org, p_contact, 'alergias', v_atual.alergias, v_alergias, auth.uid());
+  end if;
+  if v_alertas is distinct from v_atual.alertas then
+    insert into public.clinic_prontuario_alteracoes (organization_id, contact_id, campo, valor_anterior, valor_novo, autor)
+    values (p_org, p_contact, 'alertas', v_atual.alertas, v_alertas, auth.uid());
+  end if;
+  return jsonb_build_object('versao', v_versao);
+end $$;
+revoke execute on function public.fn_clinic_cabecalho_salvar(uuid, uuid, text, text, integer) from public, anon;
+grant  execute on function public.fn_clinic_cabecalho_salvar(uuid, uuid, text, text, integer) to authenticated;
+
+-- ─── anular atendimento aberto por engano ──────────────────────────────────
+alter table public.clinic_atendimentos drop constraint if exists clinic_atendimentos_agendamento_key;
+create unique index if not exists clinic_atendimentos_agendamento_vivo_key
+  on public.clinic_atendimentos (appointment_id) where appointment_id is not null and status <> 'anulado';
+
+create or replace function public.fn_clinic_iniciar_atendimento(p_org uuid, p_appointment uuid, p_specialty uuid default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ag record;
+  v_existente record;
+  v_especialidade uuid;
+  v_id uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.iniciar');
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+
+  select a.id, a.contact_id, a.status, a.event_type_id into v_ag
+    from public.calendar_appointments a
+   where a.id = p_appointment and a.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_agendamento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_ag.contact_id is null then
+    raise exception 'atendimento_sem_paciente' using errcode = '22023';
+  end if;
+  if v_ag.status in ('cancelled', 'no_show') then
+    raise exception 'atendimento_agendamento_cancelado' using errcode = '22023';
+  end if;
+
+  -- Anulado (aberto por engano) não conta: o agendamento pode ser iniciado de novo.
+  select c.id, c.status into v_existente
+    from public.clinic_atendimentos c
+   where c.organization_id = p_org and c.appointment_id = p_appointment and c.status <> 'anulado';
+  if found then
+    if v_existente.status = 'em_andamento' then
+      return jsonb_build_object('id', v_existente.id, 'criado', false);
+    end if;
+    raise exception 'atendimento_ja_encerrado' using errcode = '22023';
+  end if;
+
+  if p_specialty is not null then
+    if not exists (
+      select 1 from public.clinic_professional_specialties ps
+        join public.clinic_professionals p on p.id = ps.professional_id and p.organization_id = ps.organization_id
+       where ps.organization_id = p_org and p.user_id = auth.uid() and ps.specialty_id = p_specialty
+    ) then
+      raise exception 'atendimento_especialidade_invalida' using errcode = '22023';
+    end if;
+    v_especialidade := p_specialty;
+  else
+    select min(ps.specialty_id::text)::uuid into v_especialidade
+      from public.clinic_professional_specialties ps
+      join public.clinic_professionals p on p.id = ps.professional_id and p.organization_id = ps.organization_id
+     where ps.organization_id = p_org and p.user_id = auth.uid()
+       and (v_ag.event_type_id is null or not exists (
+              select 1 from public.clinic_event_type_specialties e
+               where e.organization_id = p_org and e.event_type_id = v_ag.event_type_id)
+            or ps.specialty_id in (
+              select e.specialty_id from public.clinic_event_type_specialties e
+               where e.organization_id = p_org and e.event_type_id = v_ag.event_type_id))
+    having count(*) = 1;
+  end if;
+
+  insert into public.clinic_atendimentos
+    (organization_id, contact_id, appointment_id, professional_user_id, specialty_id, event_type_id, created_by, updated_by)
+  values
+    (p_org, v_ag.contact_id, p_appointment, auth.uid(), v_especialidade, v_ag.event_type_id, auth.uid(), auth.uid())
+  returning id into v_id;
+
+  insert into public.clinic_atendimento_eventos (organization_id, atendimento_id, tipo, status_antes, status_depois, ator)
+  values (p_org, v_id, 'iniciado', null, 'em_andamento', auth.uid());
+
+  perform public.fn_clinic_mudar_status_visita(p_org, p_appointment, 'em_atendimento', null);
+
+  return jsonb_build_object('id', v_id, 'criado', true);
+end $$;
+revoke execute on function public.fn_clinic_iniciar_atendimento(uuid, uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_iniciar_atendimento(uuid, uuid, uuid) to authenticated;
+
+create or replace function public.fn_clinic_anular_atendimento(p_org uuid, p_atendimento uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.finalizar');
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'atendimento_sem_motivo' using errcode = '22023';
+  end if;
+  select c.id, c.status, c.appointment_id into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'atendimento_ja_encerrado' using errcode = '22023';
+  end if;
+  -- Com qualquer registro clínico, não é "aberto por engano": finalize e use adendo.
+  if exists (select 1 from public.clinic_formularios_preenchidos x where x.atendimento_id = v_at.id)
+     or exists (select 1 from public.clinic_evolucoes x where x.atendimento_id = v_at.id)
+     or exists (select 1 from public.clinic_condutas x where x.atendimento_id = v_at.id)
+     or exists (select 1 from public.clinic_procedimentos_realizados x where x.atendimento_id = v_at.id and x.status <> 'anulado')
+     or exists (select 1 from public.clinic_anexos x where x.atendimento_id = v_at.id and x.status = 'ativo')
+     or exists (select 1 from public.clinic_documentos_emitidos x where x.atendimento_id = v_at.id and x.status in ('emitido', 'aceito')) then
+    raise exception 'atendimento_com_registros' using errcode = '22023';
+  end if;
+
+  update public.clinic_atendimentos set status = 'anulado', updated_by = auth.uid(), versao = versao + 1 where id = v_at.id;
+  insert into public.clinic_atendimento_eventos (organization_id, atendimento_id, tipo, status_antes, status_depois, motivo, ator)
+  values (p_org, v_at.id, 'anulado', 'em_andamento', 'anulado', left(btrim(p_motivo), 300), auth.uid());
+  if v_at.appointment_id is not null then
+    -- Correção de status da visita (volta um passo), com o motivo — trilha da recepção.
+    perform public.fn_clinic_mudar_status_visita(p_org, v_at.appointment_id, 'pronto', left(btrim(p_motivo), 300));
+  end if;
+  return jsonb_build_object('id', v_at.id);
+end $$;
+revoke execute on function public.fn_clinic_anular_atendimento(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_anular_atendimento(uuid, uuid, text) to authenticated;
+-- ---- fim clinic (migration 9026, fork) ----
+
+-- ---- clinic: correções das revisões de segurança e conformidade (migration 9027, fork) ----
+-- ─── 1. suporte sem documentos ─────────────────────────────────────────────
+create or replace function public.fn_member_permissions(p_org uuid)
+returns setof text
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_suporte jsonb;
+  v_papel text;
+  v_ligado boolean;
+  v_profissional boolean;
+begin
+  if auth.uid() is null or p_org is null then
+    return;
+  end if;
+
+  v_suporte := public.fn_support_context();
+  if v_suporte ->> 'status' = 'active' and (v_suporte ->> 'organization_id')::uuid = p_org then
+    -- 9016: suporte nunca lê conteúdo clínico.
+    -- 9027: nem os termos do paciente (nome + procedimento = dado de saúde).
+    return query
+      select c.key from public.clinic_permissions c
+       where not c.clinica
+         and c.modulo <> 'documentos'
+         and (v_suporte ->> 'access_mode' = 'full' or c.nivel_base = 'viewer');
+    return;
+  end if;
+
+  select uo.role into v_papel
+    from public.user_organizations uo
+   where uo.user_id = auth.uid() and uo.organization_id = p_org and uo.revoked_at is null
+   limit 1;
+  if v_papel is null then
+    return;
+  end if;
+
+  select (o.settings -> 'clinic' -> 'acesso_por_permissoes') = 'true'::jsonb into v_ligado
+    from public.organizations o where o.id = p_org;
+
+  if not coalesce(v_ligado, false) then
+    -- Transição: o que o nível legado já dava; chave clínica só para profissional ativo.
+    select exists (
+      select 1 from public.clinic_professionals p
+       where p.organization_id = p_org and p.user_id = auth.uid() and p.is_active
+    ) into v_profissional;
+    return query
+      select c.key from public.clinic_permissions c
+       where public.fn_nivel_rank(c.nivel_base) <= public.fn_nivel_rank(v_papel)
+         and (not c.clinica or v_profissional);
+    return;
+  end if;
+
+  return query
+    select distinct rp.permission_key
+      from public.clinic_member_roles mr
+      join public.clinic_roles r on r.organization_id = mr.organization_id and r.id = mr.role_id and r.ativo
+      join public.clinic_role_permissions rp on rp.organization_id = r.organization_id and rp.role_id = r.id
+      join public.clinic_permissions c on c.key = rp.permission_key
+     where mr.organization_id = p_org and mr.user_id = auth.uid()
+       -- 9016: o papel de sistema Administrador não concede conteúdo clínico.
+       and not (c.clinica and r.system_key is not distinct from 'administrador');
+end $$;
+revoke execute on function public.fn_member_permissions(uuid) from public, anon;
+grant  execute on function public.fn_member_permissions(uuid) to authenticated, service_role;
+
+-- ─── 2. termo de uso de imagem: nenhuma opção obrigatória ──────────────────
+create or replace function public.fn_clinic_modelo_imagem_sem_obrigatoria()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if exists (select 1 from public.clinic_modelos_documento m where m.id = new.modelo_id and m.tipo = 'uso_imagem')
+     and exists (select 1 from jsonb_array_elements(coalesce(new.opcoes, '[]'::jsonb)) o
+                  where coalesce((o ->> 'obrigatoria')::boolean, false)) then
+    raise exception 'documento_opcao_obrigatoria_imagem' using errcode = '22023';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_modelo_imagem_sem_obrigatoria() from public, anon, authenticated;
+drop trigger if exists trg_clinic_modelo_imagem_sem_obrigatoria on public.clinic_modelos_documento_versoes;
+create trigger trg_clinic_modelo_imagem_sem_obrigatoria before insert on public.clinic_modelos_documento_versoes
+  for each row execute function public.fn_clinic_modelo_imagem_sem_obrigatoria();
+
+-- ─── 3. divulgação: finalidade + canais ────────────────────────────────────
+alter table public.clinic_anexos add column if not exists divulgacao_canais text[];
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'clinic_anexos_divulgacao_canais_check') then
+    alter table public.clinic_anexos add constraint clinic_anexos_divulgacao_canais_check
+      check (divulgacao_canais is null
+             or (cardinality(divulgacao_canais) between 1 and 3
+                 and divulgacao_canais <@ array['redes_sociais', 'site', 'material_impresso']::text[]));
+  end if;
+end $$;
+
+-- Finalidade E cada canal autorizados por um termo de uso de imagem aceito,
+-- no prazo e não revogado. Ponto único: marcar, revogar e ler usam esta.
+create or replace function public.fn_clinic_divulgacao_autorizada(p_org uuid, p_contact uuid, p_opcao text, p_canais text[])
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select p_opcao is not null and cardinality(coalesce(p_canais, '{}'::text[])) > 0
+     and public.fn_clinic_uso_de_imagem_autorizado(p_org, p_contact, p_opcao)
+     and not exists (select 1 from unnest(p_canais) c where not public.fn_clinic_uso_de_imagem_autorizado(p_org, p_contact, c))
+$$;
+revoke execute on function public.fn_clinic_divulgacao_autorizada(uuid, uuid, text, text[]) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_anexo_imutavel()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if pg_trigger_depth() = 1 then
+      raise exception 'prontuario_imutavel' using errcode = '55000';
+    end if;
+    return old;
+  end if;
+  if (to_jsonb(new) - array['status', 'anulado_motivo', 'divulgacao_opcao', 'divulgacao_canais', 'updated_at', 'updated_by', 'regiao', 'descricao', 'momento'])
+     is distinct from (to_jsonb(old) - array['status', 'anulado_motivo', 'divulgacao_opcao', 'divulgacao_canais', 'updated_at', 'updated_by', 'regiao', 'descricao', 'momento'])
+     or old.status = 'anulado' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_anexo_imutavel() from public, anon, authenticated;
+
+create or replace function public.fn_clinic_anexo_mudar(p_org uuid, p_anexo uuid, p_acao text, p_valor text)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v record;
+begin
+  select a.id, a.tipo, a.contact_id, a.status into v
+    from public.clinic_anexos a where a.id = p_anexo and a.organization_id = p_org for update;
+  if not found then
+    raise exception 'anexo_nao_encontrado' using errcode = 'P0002';
+  end if;
+  perform public.fn_acesso_exigir(p_org, case when v.tipo = 'foto' then 'fotos.enviar' else 'anexos.enviar' end);
+  if v.status <> 'ativo' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  if p_acao = 'anular' then
+    if char_length(btrim(coalesce(p_valor, ''))) < 3 then
+      raise exception 'anexo_sem_motivo' using errcode = '22023';
+    end if;
+    update public.clinic_anexos
+       set status = 'anulado', anulado_motivo = left(btrim(p_valor), 300), divulgacao_opcao = null, divulgacao_canais = null, updated_by = auth.uid()
+     where id = p_anexo;
+  elsif p_acao = 'divulgacao' then
+    -- 9027: marcar exige os canais (fn_clinic_anexo_divulgar); aqui só desmarca.
+    if p_valor is not null then
+      raise exception 'anexo_canal_obrigatorio' using errcode = '22023';
+    end if;
+    update public.clinic_anexos set divulgacao_opcao = null, divulgacao_canais = null, updated_by = auth.uid() where id = p_anexo;
+  else
+    raise exception 'anexo_invalido' using errcode = '22023';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_anexo_mudar(uuid, uuid, text, text) from public, anon;
+grant  execute on function public.fn_clinic_anexo_mudar(uuid, uuid, text, text) to authenticated;
+
+create or replace function public.fn_clinic_anexo_divulgar(p_org uuid, p_anexo uuid, p_opcao text, p_canais text[])
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v record;
+begin
+  select a.id, a.tipo, a.contact_id, a.status into v
+    from public.clinic_anexos a where a.id = p_anexo and a.organization_id = p_org for update;
+  if not found then
+    raise exception 'anexo_nao_encontrado' using errcode = 'P0002';
+  end if;
+  perform public.fn_acesso_exigir(p_org, 'fotos.enviar');
+  if v.status <> 'ativo' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  if cardinality(coalesce(p_canais, '{}'::text[])) = 0
+     or not (p_canais <@ array['redes_sociais', 'site', 'material_impresso']::text[]) then
+    raise exception 'anexo_canal_obrigatorio' using errcode = '22023';
+  end if;
+  if v.tipo <> 'foto' or not public.fn_clinic_divulgacao_autorizada(p_org, v.contact_id, p_opcao, p_canais) then
+    raise exception 'anexo_sem_autorizacao_de_imagem' using errcode = '42501';
+  end if;
+  update public.clinic_anexos
+     set divulgacao_opcao = p_opcao, divulgacao_canais = (select array_agg(distinct c order by c) from unnest(p_canais) c),
+         updated_by = auth.uid()
+   where id = p_anexo;
+end $$;
+revoke execute on function public.fn_clinic_anexo_divulgar(uuid, uuid, text, text[]) from public, anon;
+grant  execute on function public.fn_clinic_anexo_divulgar(uuid, uuid, text, text[]) to authenticated;
+
+create or replace function public.fn_clinic_revogacao_desmarca_fotos()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.tipo = 'uso_imagem' and new.status = 'revogado' and old.status <> 'revogado' then
+    update public.clinic_anexos a
+       set divulgacao_opcao = null, divulgacao_canais = null, updated_by = auth.uid()
+     where a.organization_id = new.organization_id and a.contact_id = new.contact_id and a.status = 'ativo'
+       and a.divulgacao_opcao is not null
+       and not public.fn_clinic_divulgacao_autorizada(new.organization_id, new.contact_id, a.divulgacao_opcao, a.divulgacao_canais);
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_revogacao_desmarca_fotos() from public, anon, authenticated;
+
+-- Leitura: quais fotos do paciente têm a marcação de divulgação VIGENTE agora
+-- (termo pode ter vencido desde que foi marcado). Sem `fotos.ver`, nada.
+create or replace function public.fn_clinic_divulgacao_vigente(p_org uuid, p_contact uuid)
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select a.id from public.clinic_anexos a
+   where a.organization_id = p_org and a.contact_id = p_contact and a.status = 'ativo'
+     and a.divulgacao_opcao is not null
+     and public.fn_has_permission(p_org, 'fotos.ver')
+     and public.fn_clinic_divulgacao_autorizada(p_org, p_contact, a.divulgacao_opcao, a.divulgacao_canais)
+$$;
+revoke execute on function public.fn_clinic_divulgacao_vigente(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_divulgacao_vigente(uuid, uuid) to authenticated;
+
+-- ─── 4. sem hard-delete direto ─────────────────────────────────────────────
+-- Profundidade 1 = DELETE pedido direto (inclusive service_role/superusuário);
+-- > 1 = cascata (exclusão da empresa), que continua valendo.
+create or replace function public.fn_clinic_sem_delete_direto()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if pg_trigger_depth() = 1 then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  return old;
+end $$;
+revoke execute on function public.fn_clinic_sem_delete_direto() from public, anon, authenticated;
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['clinic_atendimentos', 'clinic_prontuarios', 'clinic_planos_tratamento', 'clinic_plano_sessoes'] loop
+    execute format('drop trigger if exists trg_%1$s_sem_delete on public.%1$I', t);
+    execute format('create trigger trg_%1$s_sem_delete before delete on public.%1$I for each row execute function public.fn_clinic_sem_delete_direto()', t);
+    execute format('revoke delete, truncate on public.%I from service_role, authenticated, anon', t);
+  end loop;
+end $$;
+
+-- ─── 5. anular: motivo fixo na visita ──────────────────────────────────────
+create or replace function public.fn_clinic_anular_atendimento(p_org uuid, p_atendimento uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.finalizar');
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'atendimento_sem_motivo' using errcode = '22023';
+  end if;
+  select c.id, c.status, c.appointment_id into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'atendimento_ja_encerrado' using errcode = '22023';
+  end if;
+  -- Com qualquer registro clínico, não é "aberto por engano": finalize e use adendo.
+  if exists (select 1 from public.clinic_formularios_preenchidos x where x.atendimento_id = v_at.id)
+     or exists (select 1 from public.clinic_evolucoes x where x.atendimento_id = v_at.id)
+     or exists (select 1 from public.clinic_condutas x where x.atendimento_id = v_at.id)
+     or exists (select 1 from public.clinic_procedimentos_realizados x where x.atendimento_id = v_at.id and x.status <> 'anulado')
+     or exists (select 1 from public.clinic_anexos x where x.atendimento_id = v_at.id and x.status = 'ativo')
+     or exists (select 1 from public.clinic_documentos_emitidos x where x.atendimento_id = v_at.id and x.status in ('emitido', 'aceito')) then
+    raise exception 'atendimento_com_registros' using errcode = '22023';
+  end if;
+
+  update public.clinic_atendimentos set status = 'anulado', updated_by = auth.uid(), versao = versao + 1 where id = v_at.id;
+  insert into public.clinic_atendimento_eventos (organization_id, atendimento_id, tipo, status_antes, status_depois, motivo, ator)
+  values (p_org, v_at.id, 'anulado', 'em_andamento', 'anulado', left(btrim(p_motivo), 300), auth.uid());
+  if v_at.appointment_id is not null then
+    -- Correção de status da visita (volta um passo). 9027: motivo FIXO — a
+    -- recepção lê a trilha da visita; o motivo livre fica só no evento clínico.
+    perform public.fn_clinic_mudar_status_visita(p_org, v_at.appointment_id, 'pronto', 'Atendimento anulado');
+  end if;
+  return jsonb_build_object('id', v_at.id);
+end $$;
+revoke execute on function public.fn_clinic_anular_atendimento(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_anular_atendimento(uuid, uuid, text) to authenticated;
+
+-- ─── 6. insumo: registro na ANVISA ─────────────────────────────────────────
+alter table public.clinic_procedimento_insumos add column if not exists registro_anvisa text;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'clinic_insumos_registro_anvisa_tamanho') then
+    alter table public.clinic_procedimento_insumos add constraint clinic_insumos_registro_anvisa_tamanho
+      check (registro_anvisa is null or char_length(btrim(registro_anvisa)) between 1 and 40);
+  end if;
+end $$;
+
+create or replace function public.fn_clinic_procedimento_salvar(
+  p_org uuid, p_atendimento uuid, p_procedimento uuid, p_dados jsonb, p_insumos jsonb, p_versao_esperada integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_atual record;
+  v_id uuid;
+  v_versao integer;
+  v_proc uuid := nullif(p_dados ->> 'procedure_id', '')::uuid;
+  v_tipo uuid := nullif(p_dados ->> 'event_type_id', '')::uuid;
+  v_sessao uuid := nullif(p_dados ->> 'plano_sessao_id', '')::uuid;
+  v_i jsonb;
+  v_prod uuid;
+begin
+  perform public.fn_acesso_exigir(p_org, 'atendimento.registrar');
+  if not coalesce((select (o.settings -> 'clinic' -> 'prontuario') = 'true'::jsonb from public.organizations o where o.id = p_org), false) then
+    raise exception 'prontuario_desligado' using errcode = '42501';
+  end if;
+  select c.id, c.status, c.contact_id into v_at
+    from public.clinic_atendimentos c
+   where c.id = p_atendimento and c.organization_id = p_org
+   for update;
+  if not found then
+    raise exception 'atendimento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if v_at.status <> 'em_andamento' then
+    raise exception 'prontuario_imutavel' using errcode = '55000';
+  end if;
+  if p_dados is null or jsonb_typeof(p_dados) <> 'object'
+     or p_insumos is null or jsonb_typeof(p_insumos) <> 'array' or jsonb_array_length(p_insumos) > 50
+     or (v_proc is not null and not exists (select 1 from public.clinic_procedures x where x.id = v_proc and x.organization_id = p_org))
+     or (v_tipo is not null and not exists (select 1 from public.calendar_event_types x where x.id = v_tipo and x.organization_id = p_org))
+     or (v_sessao is not null and not exists (
+           select 1 from public.clinic_plano_sessoes s
+             join public.clinic_planos_tratamento p on p.id = s.plano_id
+            where s.id = v_sessao and s.organization_id = p_org and p.contact_id = v_at.contact_id)) then
+    raise exception 'procedimento_invalido' using errcode = '22023';
+  end if;
+  for v_i in select * from jsonb_array_elements(p_insumos) loop
+    v_prod := nullif(v_i ->> 'product_id', '')::uuid;
+    if v_prod is not null and not exists (select 1 from public.catalog_products x where x.id = v_prod and x.organization_id = p_org) then
+      raise exception 'procedimento_invalido' using errcode = '22023';
+    end if;
+  end loop;
+
+  if p_procedimento is null then
+    insert into public.clinic_procedimentos_realizados
+      (organization_id, atendimento_id, procedure_id, event_type_id, plano_sessao_id, descricao, regiao, parametros,
+       intercorrencias, observacoes, executor_user_id, created_by, updated_by)
+    values (p_org, p_atendimento, v_proc, v_tipo, v_sessao, btrim(p_dados ->> 'descricao'), nullif(btrim(p_dados ->> 'regiao'), ''),
+            coalesce(p_dados -> 'parametros', '{}'::jsonb), nullif(btrim(p_dados ->> 'intercorrencias'), ''),
+            nullif(btrim(p_dados ->> 'observacoes'), ''), auth.uid(), auth.uid(), auth.uid())
+    returning id, versao into v_id, v_versao;
+  else
+    select x.id, x.versao, x.status into v_atual
+      from public.clinic_procedimentos_realizados x
+     where x.id = p_procedimento and x.organization_id = p_org and x.atendimento_id = p_atendimento
+     for update;
+    if not found then
+      raise exception 'procedimento_nao_encontrado' using errcode = 'P0002';
+    end if;
+    if v_atual.status <> 'rascunho' then
+      raise exception 'prontuario_imutavel' using errcode = '55000';
+    end if;
+    if v_atual.versao is distinct from p_versao_esperada then
+      raise exception 'registro_conflito' using errcode = '40001';
+    end if;
+    update public.clinic_procedimentos_realizados
+       set procedure_id = v_proc, event_type_id = v_tipo, plano_sessao_id = v_sessao, descricao = btrim(p_dados ->> 'descricao'),
+           regiao = nullif(btrim(p_dados ->> 'regiao'), ''), parametros = coalesce(p_dados -> 'parametros', '{}'::jsonb),
+           intercorrencias = nullif(btrim(p_dados ->> 'intercorrencias'), ''), observacoes = nullif(btrim(p_dados ->> 'observacoes'), ''),
+           versao = versao + 1, updated_by = auth.uid()
+     where id = p_procedimento
+    returning id, versao into v_id, v_versao;
+    delete from public.clinic_procedimento_insumos where procedimento_id = v_id;
+  end if;
+
+  insert into public.clinic_procedimento_insumos
+    (organization_id, procedimento_id, product_id, descricao, quantidade, unidade, lote, validade, registro_anvisa)
+  select p_org, v_id, nullif(i ->> 'product_id', '')::uuid, btrim(i ->> 'descricao'), (i ->> 'quantidade')::numeric,
+         coalesce(nullif(btrim(i ->> 'unidade'), ''), 'un'), nullif(btrim(i ->> 'lote'), ''), nullif(i ->> 'validade', '')::date,
+         nullif(btrim(i ->> 'registro_anvisa'), '')
+    from jsonb_array_elements(p_insumos) i;
+
+  return jsonb_build_object('id', v_id, 'versao', v_versao, 'criado', p_procedimento is null);
+end $$;
+revoke execute on function public.fn_clinic_procedimento_salvar(uuid, uuid, uuid, jsonb, jsonb, integer) from public, anon;
+grant  execute on function public.fn_clinic_procedimento_salvar(uuid, uuid, uuid, jsonb, jsonb, integer) to authenticated;
+-- ---- fim clinic (migration 9027, fork) ----
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

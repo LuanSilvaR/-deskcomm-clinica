@@ -13,6 +13,8 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
+import { temAtendimentoAberto } from "@/lib/clinic/atendimento/servidor";
+import { prontuarioLigado } from "@/lib/clinic/flags";
 import { mudarStatusDaVisita } from "@/lib/clinic/visitas/mudar-status";
 import { STATUS_DA_VISITA, ehCorrecao, ehStatusDaVisita } from "@/lib/clinic/visitas/status";
 import { requireSupportWrite } from "@/lib/impersonate/support";
@@ -112,6 +114,31 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   if (!agendamento) return fail("not_found", t("Agendamento não encontrado."), 404, { requestId });
 
   // FORK clinic (ACL-012): voltar um passo é CORREÇÃO e pede a permissão própria.
+  // FORK clinic (prontuário F1): com o módulo de prontuário ligado, o atendimento
+  // COMEÇA pelo profissional ("Iniciar atendimento" na fila dele, que cria o
+  // registro clínico) e, se estiver aberto, TERMINA por ele também.
+  if (lido.data.status === "em_atendimento" || lido.data.status === "finalizado") {
+    const { data: orgRow } = await supabase.from("organizations").select("settings").eq("id", org).maybeSingle();
+    if (prontuarioLigado((orgRow as { settings?: unknown } | null)?.settings)) {
+      if (lido.data.status === "em_atendimento") {
+        return fail(
+          "atendimento_em_andamento",
+          t("Com o prontuário ligado, o profissional inicia o atendimento pela fila dele."),
+          409,
+          { requestId },
+        );
+      }
+      if (await temAtendimentoAberto(org, id)) {
+        return fail(
+          "atendimento_em_andamento",
+          t("Este atendimento está aberto: o profissional finaliza pela fila dele."),
+          409,
+          { requestId },
+        );
+      }
+    }
+  }
+
   const { data: visitaAtual } = await supabase
     .from("clinic_appointment_visits")
     .select("status")

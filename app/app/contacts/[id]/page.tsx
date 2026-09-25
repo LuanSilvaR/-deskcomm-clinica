@@ -7,8 +7,10 @@ export const dynamic = "force-dynamic";
 
 export default async function ContactDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ aba?: string | string[] }>;
 }) {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
@@ -26,5 +28,7 @@ export default async function ContactDetailPage({
     .eq("id", id)
     .maybeSingle();
   if (!contact) notFound();
-  return <ContactDetailClient contactId={id} />;
+  // FORK clinic (prontuário F2): `?aba=prontuario` abre direto na aba.
+  const { aba } = await searchParams;
+  return <ContactDetailClient contactId={id} abaInicial={typeof aba === "string" ? aba : undefined} />;
 }
