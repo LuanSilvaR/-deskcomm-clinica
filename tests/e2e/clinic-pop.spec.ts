@@ -85,6 +85,23 @@ test("POP: modelo, autosave, aprovação, nova versão e histórico — pela tel
     // ── 2. editar salva sozinho e persiste ─────────────────────────────────
     await escreverNoFim(page, "Uso obrigatório de luvas nitrílicas.");
     await foto(page, "03-pop-rascunho");
+
+    // teclado: Alt+F10 leva à barra, seta anda, Esc volta; o estado do botão acompanha o cursor.
+    const barra = page.getByRole("main").getByTestId("pop-barra");
+    await expect(page.getByRole("main").getByTestId("pop-dica-teclado")).toBeVisible();
+    await page.keyboard.press("Alt+F10");
+    await expect(barra.getByRole("button", { name: "Título 1" })).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(barra.getByRole("button", { name: "Título 2" })).toBeFocused();
+    await expect(barra.locator('button[tabindex="0"]')).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("main").getByTestId("pop-texto")).toBeFocused();
+    const negrito = barra.getByRole("button", { name: "Negrito" });
+    await expect(negrito).toHaveAttribute("aria-keyshortcuts", "Control+B");
+    await page.keyboard.press("Control+b");
+    await expect(negrito).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Control+b");
+    await expect(negrito).toHaveAttribute("aria-pressed", "false");
     await page.reload();
     await page.getByRole("main").getByTestId("proc-aba-pop").click();
     await expect(page.getByRole("main").getByTestId("pop-texto")).toContainText("Uso obrigatório de luvas nitrílicas.", { timeout: 20_000 });

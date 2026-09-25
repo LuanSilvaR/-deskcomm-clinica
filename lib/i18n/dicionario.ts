@@ -11786,6 +11786,7 @@ export const DICIONARIO: Traducoes = {
   "Finalizados": { es: "Finalizados" },
   "Sem confirmação": { es: "Sin confirmación" },
   // ── FORK clinic: procedimentos e POP ──
+  "Alt+F10 leva à barra de formatação; setas andam entre os botões e Esc volta ao texto.": { es: "Alt+F10 lleva a la barra de formato; las flechas recorren los botones y Esc vuelve al texto." },
   "Imprimir": { es: "Imprimir" },
   "Adicionar linha": { es: "Añadir fila" },
   "Aprovado": { es: "Aprobado" },
