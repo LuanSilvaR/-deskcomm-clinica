@@ -11980,6 +11980,33 @@ export const DICIONARIO: Traducoes = {
   "Ver mais antigos": { es: "Ver más antiguos" },
   // ── FORK clinic (E1): busca do paciente ao marcar ──
   "Nome, telefone, CPF ou nascimento (DD/MM/AAAA)": { es: "Nombre, teléfono, CPF o nacimiento (DD/MM/AAAA)" },
+  // ── FORK clinic (9015): permissões do módulo clínico ──
+  "Atendimento clínico": { es: "Atención clínica" },
+  "Prontuário": { es: "Historia clínica" },
+  "Planos de tratamento": { es: "Planes de tratamiento" },
+  "Fotos clínicas": { es: "Fotos clínicas" },
+  "Anexos clínicos": { es: "Anexos clínicos" },
+  "Documentos e termos": { es: "Documentos y términos" },
+  "Modelos clínicos": { es: "Modelos clínicos" },
+  "Ver a fila de atendimentos e o status de cada paciente (sem conteúdo clínico)": { es: "Ver la fila de atenciones y el estado de cada paciente (sin contenido clínico)" },
+  "Iniciar o atendimento do paciente": { es: "Iniciar la atención del paciente" },
+  "Registrar anamnese, avaliação, conduta, procedimentos e evolução": { es: "Registrar anamnesis, evaluación, conducta, procedimientos y evolución" },
+  "Finalizar o atendimento (os registros ficam imutáveis)": { es: "Finalizar la atención (los registros quedan inmutables)" },
+  "Reabrir atendimento finalizado, com motivo": { es: "Reabrir atención finalizada, con motivo" },
+  "Ver o prontuário e o histórico clínico do paciente": { es: "Ver la historia clínica y el historial del paciente" },
+  "Acrescentar adendo a registro finalizado": { es: "Agregar adenda a un registro finalizado" },
+  "Exportar o prontuário do paciente": { es: "Exportar la historia clínica del paciente" },
+  "Ver planos de tratamento e sessões": { es: "Ver planes de tratamiento y sesiones" },
+  "Criar e alterar planos de tratamento e sessões": { es: "Crear y modificar planes de tratamiento y sesiones" },
+  "Ver fotos clínicas (antes e depois)": { es: "Ver fotos clínicas (antes y después)" },
+  "Registrar fotos clínicas": { es: "Registrar fotos clínicas" },
+  "Ver e baixar anexos do prontuário": { es: "Ver y descargar anexos de la historia clínica" },
+  "Anexar documentos e exames ao prontuário": { es: "Adjuntar documentos y exámenes a la historia clínica" },
+  "Ver contratos e termos emitidos para o paciente": { es: "Ver contratos y términos emitidos para el paciente" },
+  "Emitir contrato ou termo para o paciente": { es: "Emitir contrato o término para el paciente" },
+  "Registrar o aceite do paciente": { es: "Registrar la aceptación del paciente" },
+  "Revogar ou cancelar documento emitido": { es: "Revocar o cancelar documento emitido" },
+  "Configurar modelos de anamnese, avaliação e documentos (sem ver pacientes)": { es: "Configurar modelos de anamnesis, evaluación y documentos (sin ver pacientes)" },
 };
 
 /**

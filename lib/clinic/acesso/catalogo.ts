@@ -16,8 +16,14 @@
  *
  * `critica`: o papel de sistema Administrador não pode perdê-las (antitravamento).
  *
- * Não existem ainda (e por isso não estão aqui): estoque, procedimentos,
- * unidades. Entram quando os módulos existirem.
+ * `clinica`: acesso a CONTEÚDO CLÍNICO (prontuário, evolução, fotos). Essas
+ * chaves NÃO seguem o nível legado sozinho e NUNCA vêm de brinde para o
+ * Administrador nem para o suporte — administrar o sistema não é atender
+ * pacientes (plano docs/tarefas/prontuario, migration 9015). No modo legado só
+ * quem é profissional ativo as tem; no modo por papéis, só por papel explícito.
+ *
+ * Não existem ainda (e por isso não estão aqui): estoque, unidades. Entram
+ * quando os módulos existirem.
  */
 import type { Role } from "@/lib/auth/types";
 
@@ -29,6 +35,8 @@ export interface DefinicaoDePermissao {
   nivelBase: NivelBase;
   dependeDe?: readonly string[];
   critica?: boolean;
+  /** Conteúdo clínico: não vem do nível legado nem do Administrador (ver cabeçalho). */
+  clinica?: boolean;
   descricao: string;
 }
 
@@ -53,6 +61,13 @@ export const MODULOS_DE_PERMISSAO = {
   lgpd: "LGPD",
   auditoria: "Auditoria",
   extensoes: "Extensões",
+  atendimento: "Atendimento clínico",
+  prontuario: "Prontuário",
+  planos: "Planos de tratamento",
+  fotos: "Fotos clínicas",
+  anexos: "Anexos clínicos",
+  documentos: "Documentos e termos",
+  modelos_clinicos: "Modelos clínicos",
 } as const;
 
 export type ModuloDePermissao = keyof typeof MODULOS_DE_PERMISSAO;
@@ -62,7 +77,7 @@ const p = (
   acao: string,
   nivelBase: NivelBase,
   descricao: string,
-  extra: { dependeDe?: string[]; critica?: boolean } = {},
+  extra: { dependeDe?: string[]; critica?: boolean; clinica?: boolean } = {},
 ): [string, DefinicaoDePermissao] => [`${modulo}.${acao}`, { modulo, acao, nivelBase, descricao, ...extra }];
 
 const ver = (m: ModuloDePermissao) => [`${m}.ver`];
@@ -158,6 +173,45 @@ export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
 
   p("extensoes", "ver", "viewer", "Ver extensões disponíveis"),
   p("extensoes", "ativar", "admin", "Ativar, configurar e desativar extensões", { dependeDe: ver("extensoes") }),
+
+  // ── FORK clinic (9015): módulo clínico. `clinica: true` = conteúdo de saúde. ──
+  p("atendimento", "ver_fila", "agent", "Ver a fila de atendimentos e o status de cada paciente (sem conteúdo clínico)"),
+  p("atendimento", "iniciar", "agent", "Iniciar o atendimento do paciente", {
+    dependeDe: ["atendimento.ver_fila", "prontuario.ver"],
+    clinica: true,
+  }),
+  p("atendimento", "registrar", "agent", "Registrar anamnese, avaliação, conduta, procedimentos e evolução", {
+    dependeDe: ["prontuario.ver"],
+    clinica: true,
+  }),
+  p("atendimento", "finalizar", "agent", "Finalizar o atendimento (os registros ficam imutáveis)", {
+    dependeDe: ["atendimento.registrar"],
+    clinica: true,
+  }),
+  p("atendimento", "reabrir", "manager", "Reabrir atendimento finalizado, com motivo", {
+    dependeDe: ["atendimento.finalizar"],
+    clinica: true,
+  }),
+
+  p("prontuario", "ver", "agent", "Ver o prontuário e o histórico clínico do paciente", { clinica: true }),
+  p("prontuario", "adendo", "agent", "Acrescentar adendo a registro finalizado", { dependeDe: ["prontuario.ver"], clinica: true }),
+  p("prontuario", "exportar", "manager", "Exportar o prontuário do paciente", { dependeDe: ["prontuario.ver"], clinica: true }),
+
+  p("planos", "ver", "agent", "Ver planos de tratamento e sessões", { dependeDe: ["prontuario.ver"], clinica: true }),
+  p("planos", "gerenciar", "agent", "Criar e alterar planos de tratamento e sessões", { dependeDe: ["planos.ver"], clinica: true }),
+
+  p("fotos", "ver", "agent", "Ver fotos clínicas (antes e depois)", { dependeDe: ["prontuario.ver"], clinica: true }),
+  p("fotos", "enviar", "agent", "Registrar fotos clínicas", { dependeDe: ["fotos.ver"], clinica: true }),
+
+  p("anexos", "ver", "agent", "Ver e baixar anexos do prontuário", { dependeDe: ["prontuario.ver"], clinica: true }),
+  p("anexos", "enviar", "agent", "Anexar documentos e exames ao prontuário", { dependeDe: ["anexos.ver"], clinica: true }),
+
+  p("documentos", "ver", "agent", "Ver contratos e termos emitidos para o paciente"),
+  p("documentos", "emitir", "agent", "Emitir contrato ou termo para o paciente", { dependeDe: ver("documentos") }),
+  p("documentos", "colher_aceite", "agent", "Registrar o aceite do paciente", { dependeDe: ver("documentos") }),
+  p("documentos", "revogar", "manager", "Revogar ou cancelar documento emitido", { dependeDe: ver("documentos") }),
+
+  p("modelos_clinicos", "gerenciar", "admin", "Configurar modelos de anamnese, avaliação e documentos (sem ver pacientes)"),
 ]) as Readonly<Record<string, DefinicaoDePermissao>>;
 
 export type ChaveDePermissao = keyof typeof CATALOGO_DE_PERMISSOES & string;
@@ -170,9 +224,26 @@ export function ehPermissao(chave: unknown): chave is ChaveDePermissao {
 
 const RANK: Record<NivelBase, number> = { viewer: 1, agent: 2, manager: 3, admin: 4 };
 
-/** As chaves que o nível legado já dava (o conteúdo dos papéis-modelo). */
+/**
+ * As chaves que o nível legado já dava (o conteúdo dos papéis-modelo).
+ * Chaves clínicas ficam de fora: vêm de ser profissional (modo legado) ou de
+ * papel explícito — nunca só do nível.
+ */
 export function permissoesDoNivel(nivel: NivelBase): string[] {
-  return CHAVES_DE_PERMISSAO.filter((k) => RANK[CATALOGO_DE_PERMISSOES[k]!.nivelBase] <= RANK[nivel]);
+  return CHAVES_DE_PERMISSAO.filter(
+    (k) => !CATALOGO_DE_PERMISSOES[k]!.clinica && RANK[CATALOGO_DE_PERMISSOES[k]!.nivelBase] <= RANK[nivel],
+  );
+}
+
+/** As chaves de conteúdo clínico (ver `clinica` no cabeçalho). */
+export const PERMISSOES_CLINICAS: readonly string[] = CHAVES_DE_PERMISSAO.filter((k) => CATALOGO_DE_PERMISSOES[k]!.clinica);
+
+/**
+ * No modo legado, as chaves clínicas de um PROFISSIONAL ativo: as do nível dele
+ * (a migration 9015 usa a mesma regra em `fn_member_permissions`).
+ */
+export function permissoesClinicasDoNivel(nivel: NivelBase): string[] {
+  return PERMISSOES_CLINICAS.filter((k) => RANK[CATALOGO_DE_PERMISSOES[k]!.nivelBase] <= RANK[nivel]);
 }
 
 /** O nível legado derivado: o maior `nivelBase` entre as permissões (viewer se nenhuma). */
