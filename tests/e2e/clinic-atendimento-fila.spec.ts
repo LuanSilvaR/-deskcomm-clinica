@@ -1,5 +1,5 @@
 /**
- * FORK clinic (prontuário F1, migration 9016) — a fila "Meus atendimentos", PELA TELA:
+ * FORK clinic (prontuário F1, migration 9017) — a fila "Meus atendimentos", PELA TELA:
  *
  *   1. o admin liga a opção "prontuario" (config da clínica) e o atendente vira
  *      profissional ativo (service role, só no Supabase local);

@@ -4,7 +4,7 @@
  * Cria (ou devolve, se já aberto) o atendimento clínico do agendamento e leva a
  * visita para `em_atendimento`. Corpo opcional: `{ especialidade_id }` quando o
  * profissional atende mais de uma especialidade exigida pelo tipo. Regras no
- * banco (`fn_clinic_iniciar_atendimento`, migration 9016).
+ * banco (`fn_clinic_iniciar_atendimento`, migration 9017).
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";

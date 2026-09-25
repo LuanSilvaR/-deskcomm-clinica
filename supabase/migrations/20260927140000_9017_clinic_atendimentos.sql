@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- 9016 · clinic — o ATENDIMENTO clínico (FORK, prontuário F1)
+-- 9017 · clinic — o ATENDIMENTO clínico (FORK, prontuário F1)
 -- ════════════════════════════════════════════════════════════════════════════
 --
 -- Plano: docs/tarefas/prontuario/plano.md (seções 4–7, fase F1).
@@ -13,7 +13,7 @@
 --   clinic_atendimentos          um por agendamento (appointment_id unique)
 --   clinic_atendimento_eventos   append-only: iniciado/finalizado/reaberto/anulado
 --
--- Leitura: membro da empresa COM `prontuario.ver` (chave clínica, 9015) — sem
+-- Leitura: membro da empresa COM `prontuario.ver` (chave clínica, 9016) — sem
 -- atalho de platform admin. Escrita: só pelas funções abaixo, que exigem a
 -- permissão, MFA e suporte com escrita (`fn_acesso_exigir`) e a opção
 -- `settings.clinic.prontuario` ligada. Idempotente.

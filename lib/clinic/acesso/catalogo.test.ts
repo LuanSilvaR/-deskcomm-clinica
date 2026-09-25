@@ -60,7 +60,7 @@ describe("catálogo de permissões", () => {
   });
 });
 
-describe("conteúdo clínico (9015)", () => {
+describe("conteúdo clínico (9016)", () => {
   it("existe e cobre prontuário, atendimento, planos, fotos e anexos", () => {
     expect(PERMISSOES_CLINICAS).toEqual(
       expect.arrayContaining([

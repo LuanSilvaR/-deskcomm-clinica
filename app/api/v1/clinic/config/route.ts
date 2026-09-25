@@ -13,7 +13,7 @@
  * não desmarca nem remarca (migration 9008). 0 = sem prazo.
  * `acesso_por_permissoes`: o acesso passa a vir dos papéis de acesso (ACL,
  * migration 9012); só o Administrador liga.
- * `prontuario`: o módulo de atendimento clínico e prontuário (migration 9015).
+ * `prontuario`: o módulo de atendimento clínico e prontuário (migration 9016).
  *
  * GET: qualquer membro lê (as telas precisam saber). PATCH: só admin, pelas
  * funções `fn_clinic_definir_*`, que também exigem MFA provado quando a sessão

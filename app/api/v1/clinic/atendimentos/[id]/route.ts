@@ -2,7 +2,7 @@
  * GET /api/v1/clinic/atendimentos/:id — o cabeçalho do atendimento.
  *
  * Paciente (nome e idade), serviço, profissional, especialidade, horários e
- * status. Exige `prontuario.ver` (chave clínica) e a RLS da 9016 confere de
+ * status. Exige `prontuario.ver` (chave clínica) e a RLS da 9017 confere de
  * novo. Toda leitura fica no registro de auditoria — só metadados.
  */
 import { randomUUID } from "node:crypto";
@@ -75,7 +75,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const { data: prof } = linha.professional_user_id
     ? await supabase
         .from("clinic_professionals")
-        .select("display_name")
+        .select("nome:display_name")
         .eq("organization_id", org)
         .eq("user_id", linha.professional_user_id)
         .maybeSingle()
@@ -105,7 +105,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
       },
       servico: primeiro(linha.calendar_event_types)?.name ?? null,
       especialidade: primeiro(linha.clinic_specialties)?.name ?? null,
-      profissional: (prof as { display_name?: string | null } | null)?.display_name ?? null,
+      profissional: (prof as { nome?: string | null } | null)?.nome ?? null,
       pode_finalizar: linha.status === "em_andamento" && authz.permissoes.has("atendimento.finalizar"),
     },
     { requestId },

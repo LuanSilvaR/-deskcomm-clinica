@@ -19,7 +19,7 @@
  * `clinica`: acesso a CONTEÚDO CLÍNICO (prontuário, evolução, fotos). Essas
  * chaves NÃO seguem o nível legado sozinho e NUNCA vêm de brinde para o
  * Administrador nem para o suporte — administrar o sistema não é atender
- * pacientes (plano docs/tarefas/prontuario, migration 9015). No modo legado só
+ * pacientes (plano docs/tarefas/prontuario, migration 9016). No modo legado só
  * quem é profissional ativo as tem; no modo por papéis, só por papel explícito.
  *
  * Não existem ainda (e por isso não estão aqui): estoque, unidades. Entram
@@ -174,7 +174,7 @@ export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
   p("extensoes", "ver", "viewer", "Ver extensões disponíveis"),
   p("extensoes", "ativar", "admin", "Ativar, configurar e desativar extensões", { dependeDe: ver("extensoes") }),
 
-  // ── FORK clinic (9015): módulo clínico. `clinica: true` = conteúdo de saúde. ──
+  // ── FORK clinic (9016): módulo clínico. `clinica: true` = conteúdo de saúde. ──
   p("atendimento", "ver_fila", "agent", "Ver a fila de atendimentos e o status de cada paciente (sem conteúdo clínico)"),
   p("atendimento", "iniciar", "agent", "Iniciar o atendimento do paciente", {
     dependeDe: ["atendimento.ver_fila", "prontuario.ver"],
@@ -240,7 +240,7 @@ export const PERMISSOES_CLINICAS: readonly string[] = CHAVES_DE_PERMISSAO.filter
 
 /**
  * No modo legado, as chaves clínicas de um PROFISSIONAL ativo: as do nível dele
- * (a migration 9015 usa a mesma regra em `fn_member_permissions`).
+ * (a migration 9016 usa a mesma regra em `fn_member_permissions`).
  */
 export function permissoesClinicasDoNivel(nivel: NivelBase): string[] {
   return PERMISSOES_CLINICAS.filter((k) => RANK[CATALOGO_DE_PERMISSOES[k]!.nivelBase] <= RANK[nivel]);

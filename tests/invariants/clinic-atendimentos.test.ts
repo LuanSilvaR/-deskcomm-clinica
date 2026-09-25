@@ -1,5 +1,5 @@
 /**
- * clinic (fork, prontuário F1) — migration 9016: o atendimento clínico.
+ * clinic (fork, prontuário F1) — migration 9017: o atendimento clínico.
  *
  * Prova no Postgres real, com o baseline aplicado:
  *   1. opção `prontuario` desligada: ninguém inicia;

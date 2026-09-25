@@ -1,5 +1,5 @@
 /**
- * clinic (fork, prontuário F0) — migration 9015: acesso clínico separado da administração.
+ * clinic (fork, prontuário F0) — migration 9016: acesso clínico separado da administração.
  *
  * Prova no Postgres real, com o baseline aplicado:
  *   1. o catálogo do banco marca as MESMAS chaves clínicas que o código;
