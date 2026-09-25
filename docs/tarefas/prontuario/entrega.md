@@ -1,6 +1,6 @@
-# Prontuário — entrega (F0 a F9)
+# Prontuário — entrega (F0 a F10)
 
-Módulo de atendimento clínico, prontuário e jornada do paciente, em 10 PRs empilhados.
+Módulo de atendimento clínico, prontuário e jornada do paciente, em 11 PRs empilhados.
 Tudo nasce **desligado** (opção "Prontuário" por clínica); com ela desligada nada muda.
 
 ## Ordem de merge (cada PR contém os anteriores)
@@ -16,7 +16,8 @@ Tudo nasce **desligado** (opção "Prontuário" por clínica); com ela desligada
 | F6 | #32 | 9023 | Termos e contratos, aceite presencial e por link, uso de imagem |
 | F7 | #33 | 9024 | Fotos clínicas e anexos (Storage existente, WebP no navegador, cota) |
 | F8 | #34 | 9025 | Reabrir atendimento, exportação imprimível, limites de leitura, cerca do audit |
-| F9 | (este) | 9026 | Cabeçalho clínico (alergias/alertas com histórico, plano ativo, último/próximo), anular atendimento aberto por engano, filtros da linha do tempo, PDF gerado no servidor, link do termo pelo WhatsApp |
+| F9 | #35 | 9026 | Cabeçalho clínico (alergias/alertas com histórico, plano ativo, último/próximo), anular atendimento aberto por engano, filtros da linha do tempo, PDF gerado no servidor, link do termo pelo WhatsApp |
+| F10 | (este) | 9027 | Correções das revisões de segurança/LGPD e de conformidade de saúde (abaixo) |
 
 Mesclar na ordem da tabela (merge, sem rebase). Cada PR, depois do anterior mesclado, mostra só o próprio diff.
 
@@ -35,7 +36,7 @@ Mesclar na ordem da tabela (merge, sem rebase). Cada PR, depois do anterior mesc
 
 ```bash
 git fetch origin
-git checkout feature/prontuario-f9   # contém F0–F9
+git checkout feature/prontuario-f10  # contém F0–F10
 pnpm install
 pnpm typecheck && pnpm lint && pnpm cercas
 pnpm test:unit
@@ -76,3 +77,28 @@ Roteiro manual (com a opção ligada):
   `Cache-Control: private, no-store`, mesmo limite e auditoria da exportação imprimível.
 - WhatsApp: `wa.me` no aparelho de quem atende (sem integração nova); a mensagem não leva nome do termo nem
   conteúdo clínico.
+
+## Revisões (security-lgpd e health-compliance) — o que foi corrigido na F10
+
+Nenhum bloqueante de segurança. Um bloqueante de conformidade. Tudo abaixo foi corrigido e provado em
+`tests/invariants/clinic-revisao-conformidade.test.ts` (e nos testes das fases que o achado tocava).
+
+| Achado | Correção |
+|---|---|
+| Prontuário, impressão e PDF sem o registro do profissional no conselho (CFM 1.638/2002) | Cada atendimento e cada adendo mostram "Nome — CRM 12345/SP" (`lib/clinic/profissionais/conselho.ts`). **Complete o conselho de cada profissional em Profissionais.** |
+| Suporte (impersonação) via termos com dado de saúde | Suporte não recebe mais `documentos.*` |
+| Termo de imagem vencido continuava marcando a foto | A leitura revalida (`fn_clinic_divulgacao_vigente`); vencida aparece como "só uso clínico" |
+| Canal de divulgação não conferido | A foto guarda os canais; o banco confere finalidade E canal no termo aceito |
+| Termo de imagem com opção obrigatória | Recusado (consentimento livre, LGPD art. 8º) |
+| DELETE direto apagava atendimento em cascata | Recusado até para o superusuário; service_role sem DELETE; exclusão da empresa continua |
+| Leituras de cabeçalho, termos, planos e fotos sem limite nem auditoria | Mesmo limite por pessoa e `clinic.prontuario_visto` com a área |
+| Upload antes de conferir paciente e cota | Confere antes de subir |
+| IP e origem do link lidos da requisição | IP pela régua do repo (`lib/http/ip-do-cliente.ts`); link com `NEXT_PUBLIC_APP_URL` |
+| Motivo da anulação visível à recepção | Visita recebe motivo fixo; o texto fica só no evento clínico |
+| Insumo sem registro ANVISA | Campo opcional "Reg. ANVISA" no insumo, na impressão e no PDF |
+| Anonimização × guarda de 20 anos | Provado: anonimizar preserva prontuário, fotos e termos; apagar o contato é recusado |
+
+**Decisões da clínica (não são código):** revisar com advogado(a) o texto dos termos e contratos;
+definir qual conselho pode executar qual procedimento (o sistema mostra o conselho, não trava);
+avaliar assinatura mais forte (Lei 14.063, nível avançado) para contratos de valor alto. Administrador e
+recepção continuam vendo os termos (recepção emite e colhe aceite).

@@ -16,6 +16,7 @@ import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { erroDoBanco } from "@/lib/clinic/atendimento/servidor";
 import { progressoDoPlano, type StatusDaSessao } from "@/lib/clinic/planos/leitura";
+import { leituraClinicaPermitida } from "@/lib/clinic/prontuario/limite";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -45,6 +46,9 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const { contactId } = await ctx.params;
   if (!z.string().uuid().safeParse(contactId).success)
     return fail("validation_failed", t("id inválido"), 422, { requestId });
+  if (!(await leituraClinicaPermitida(authz.user.id, "cabecalho"))) {
+    return fail("rate_limited", t("Muitas leituras seguidas. Aguarde alguns minutos."), 429, { requestId });
+  }
   const org = authz.org.orgId;
   const supabase = await createClient();
   const agora = new Date().toISOString();
@@ -130,6 +134,15 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   }>;
   const ativo = listaDePlanos.find((p) => p.status === "ativo");
 
+  void audit({
+    action: "clinic.prontuario_visto",
+    actorUserId: authz.user.id,
+    organizationId: org,
+    resourceType: "contact",
+    resourceId: contactId,
+    requestId,
+    metadata: { area: "cabecalho" },
+  });
   return ok(
     {
       alergias: (cab.data?.alergias as string | null) ?? null,

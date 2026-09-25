@@ -38,6 +38,9 @@ const PASTAS = [
 
 /** Metadados permitidos: identificadores, contagens e rótulos de sistema — nunca texto de pessoa. */
 const PERMITIDAS = new Set([
+  // F10: contagem de arquivos e canais de divulgação (vocabulário fechado).
+  "arquivos",
+  "canais",
   "secao",
   "atendimento_id",
   "contact_id",

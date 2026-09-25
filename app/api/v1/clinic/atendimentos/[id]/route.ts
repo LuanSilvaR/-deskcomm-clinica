@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { comConselho, registroNoConselho, type ConselhoDoProfissional } from "@/lib/clinic/profissionais/conselho";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -75,7 +76,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const { data: prof } = linha.professional_user_id
     ? await supabase
         .from("clinic_professionals")
-        .select("nome:display_name")
+        .select("nome:display_name, council, council_number, council_uf")
         .eq("organization_id", org)
         .eq("user_id", linha.professional_user_id)
         .maybeSingle()
@@ -105,7 +106,10 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
       },
       servico: primeiro(linha.calendar_event_types)?.name ?? null,
       especialidade: primeiro(linha.clinic_specialties)?.name ?? null,
-      profissional: (prof as { nome?: string | null } | null)?.nome ?? null,
+      profissional: comConselho(
+        (prof as { nome?: string | null } | null)?.nome ?? null,
+        registroNoConselho(prof as ConselhoDoProfissional | null),
+      ),
       pode_finalizar: linha.status === "em_andamento" && authz.permissoes.has("atendimento.finalizar"),
       pode_reabrir: linha.status === "finalizado" && authz.permissoes.has("atendimento.reabrir"),
     },

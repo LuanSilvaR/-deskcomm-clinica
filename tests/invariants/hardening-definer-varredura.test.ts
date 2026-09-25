@@ -496,6 +496,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/atendimentos/[id]/anular/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige atendimento.finalizar; atendimento em andamento da organização informada, sem registro clínico; motivo obrigatório. tests/invariants/clinic-cabecalho-e-anulacao.test.ts prova recusa com registro e o reinício do mesmo agendamento.",
   },
   {
+    // FORK clinic (migration 9027).
+    fn: "fn_clinic_anexo_divulgar(uuid,uuid,text,text[])",
+    razao:
+      "app/api/v1/clinic/anexos/[id]/route.ts (PATCH, acao divulgacao) chama com createClient da sessão; fn_acesso_exigir exige fotos.enviar (chave clínica), suporte de escrita e MFA; foto ativa da organização informada; finalidade E cada canal autorizados por termo de uso de imagem aceito, no prazo e não revogado (fn_clinic_divulgacao_autorizada). tests/invariants/clinic-revisao-conformidade.test.ts prova recusa sem canal, canal não autorizado, termo vencido e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

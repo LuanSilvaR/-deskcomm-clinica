@@ -21,6 +21,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { comprimirFoto } from "@/lib/clinic/anexos/compressao";
+import { CANAIS_DE_DIVULGACAO, ROTULO_DO_CANAL, type CanalDeDivulgacao } from "@/lib/clinic/anexos/divulgacao";
 
 interface Anexo {
   id: string;
@@ -33,6 +34,8 @@ interface Anexo {
   momento: "antes" | "durante" | "depois" | "acompanhamento" | null;
   capturada_em: string | null;
   divulgacao_opcao: string | null;
+  divulgacao_canais: string[] | null;
+  divulgacao_vencida?: boolean;
   status: "ativo" | "anulado";
   anulado_motivo: string | null;
   atendimento_id: string | null;
@@ -58,6 +61,7 @@ const ROTULO_DA_DIVULGACAO: Record<string, string> = {
   divulgacao_sem_rosto: "Divulgação sem mostrar o rosto",
   divulgacao_com_identificacao: "Divulgação com identificação",
 };
+const ehCanal = (x: string): x is CanalDeDivulgacao => (CANAIS_DE_DIVULGACAO as readonly string[]).includes(x);
 const SELECT = "h-11 w-full rounded-md border bg-surface px-2 text-sm md:h-9";
 const mb = (b: number) => (b / 1048576).toLocaleString(undefined, { maximumFractionDigits: 1 });
 
@@ -90,6 +94,8 @@ export function AnexosDoPaciente({ contactId, atendimentoId }: { contactId: stri
   if (q.isLoading) return <p className="text-sm text-text-muted">{t("Carregando…")}</p>;
   if (q.isError || !q.data) return <p className="text-sm text-destructive">{t("Não foi possível carregar os arquivos.")}</p>;
   const d = q.data;
+  const canais = d.divulgacao_autorizada.filter(ehCanal);
+  const finalidades = d.divulgacao_autorizada.filter((o) => o in ROTULO_DA_DIVULGACAO);
   const lista = d.anexos.filter((a) => (filtro === "todos" || a.tipo === filtro) && (!atendimentoId || a.atendimento_id === atendimentoId));
   const fotosComparadas = comparar.map((id) => d.anexos.find((a) => a.id === id)).filter((a): a is Anexo => !!a);
 
@@ -179,7 +185,17 @@ export function AnexosDoPaciente({ contactId, atendimentoId }: { contactId: stri
                 {t("Anulado")}: {a.anulado_motivo}
               </Badge>
             ) : null}
-            {a.divulgacao_opcao ? <Badge>{t(ROTULO_DA_DIVULGACAO[a.divulgacao_opcao] ?? a.divulgacao_opcao)}</Badge> : null}
+            {a.divulgacao_opcao ? (
+              <Badge>
+                {t(ROTULO_DA_DIVULGACAO[a.divulgacao_opcao] ?? a.divulgacao_opcao)}
+                {a.divulgacao_canais?.length
+                  ? ` · ${a.divulgacao_canais.map((c) => t(ROTULO_DO_CANAL[c as CanalDeDivulgacao] ?? c)).join(", ")}`
+                  : ""}
+              </Badge>
+            ) : null}
+            {a.divulgacao_vencida ? (
+              <Badge variant="secondary">{t("Autorização de imagem vencida ou revogada: só uso clínico")}</Badge>
+            ) : null}
             {a.status === "ativo" ? (
               <div className="flex flex-wrap gap-1">
                 {a.tipo === "foto" ? (
@@ -204,15 +220,23 @@ export function AnexosDoPaciente({ contactId, atendimentoId }: { contactId: stri
                     {t("Anular")}
                   </Button>
                 ) : null}
-                {a.tipo === "foto" && d.pode_enviar_foto && (d.divulgacao_autorizada.length > 0 || a.divulgacao_opcao) ? (
+                {a.tipo === "foto" && d.pode_enviar_foto && ((finalidades.length > 0 && canais.length > 0) || a.divulgacao_opcao) ? (
                   <select
                     aria-label={t("Uso da imagem")}
                     className="h-9 w-full rounded-md border bg-surface px-1 text-xs"
                     value={a.divulgacao_opcao ?? ""}
-                    onChange={(e) => mudar.mutate({ id: a.id, corpo: { acao: "divulgacao", opcao: e.target.value || null } })}
+                    onChange={(e) =>
+                      mudar.mutate({
+                        id: a.id,
+                        // Marca nos canais que o paciente autorizou (o banco confere cada um).
+                        corpo: e.target.value
+                          ? { acao: "divulgacao", opcao: e.target.value, canais }
+                          : { acao: "divulgacao", opcao: null },
+                      })
+                    }
                   >
                     <option value="">{t("Só uso clínico")}</option>
-                    {d.divulgacao_autorizada.map((o) => (
+                    {finalidades.map((o) => (
                       <option key={o} value={o}>
                         {t(ROTULO_DA_DIVULGACAO[o] ?? o)}
                       </option>
@@ -224,7 +248,7 @@ export function AnexosDoPaciente({ contactId, atendimentoId }: { contactId: stri
           </li>
         ))}
       </ul>
-      {d.divulgacao_autorizada.length === 0 ? (
+      {finalidades.length === 0 || canais.length === 0 ? (
         <p className="text-xs text-text-muted">
           {t("Fotos são de uso clínico. Para usar em divulgação ou ensino, o paciente precisa aceitar a autorização de uso de imagem (aba Documentos).")}
         </p>

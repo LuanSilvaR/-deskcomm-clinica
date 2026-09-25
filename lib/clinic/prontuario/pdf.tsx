@@ -157,6 +157,8 @@ export function DocumentoDoProntuario({ d }: { d: DadosDoPdf }) {
                         key={i.id}
                         rotulo={t("Insumo")}
                         valor={`${i.descricao} · ${i.quantidade} ${i.unidade}${i.lote ? ` · ${t("Lote")} ${i.lote}` : ""}${
+                          i.registro_anvisa ? ` · ${t("Reg. ANVISA")} ${i.registro_anvisa}` : ""
+                        }${
                           i.validade
                             ? ` · ${t("Validade")} ${i.validade.split("-").reverse().join("/")}`
                             : ""

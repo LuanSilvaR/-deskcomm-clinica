@@ -26,6 +26,7 @@ const insumo = z
     unidade: z.string().trim().min(1).max(20).default("un"),
     product_id: z.string().uuid().nullish(),
     lote: z.string().trim().max(60).nullish(),
+    registro_anvisa: z.string().trim().max(40).nullish(),
     validade: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   })
   .strict();

@@ -16,6 +16,7 @@ import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { erroDoBanco } from "@/lib/clinic/atendimento/servidor";
 import { renderizarTermo } from "@/lib/clinic/documentos/render";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { leituraClinicaPermitida } from "@/lib/clinic/prontuario/limite";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -41,6 +42,9 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const t = (s: string) => traduzir(s, authz.user.idioma);
   const { contactId } = await ctx.params;
   if (!z.string().uuid().safeParse(contactId).success) return fail("validation_failed", t("id inválido"), 422, { requestId });
+  if (!(await leituraClinicaPermitida(authz.user.id, "documentos"))) {
+    return fail("rate_limited", t("Muitas leituras seguidas. Aguarde alguns minutos."), 429, { requestId });
+  }
   const org = authz.org.orgId;
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -54,6 +58,15 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) return fail("internal_error", error.message, 500, { requestId });
+  void audit({
+    action: "clinic.prontuario_visto",
+    actorUserId: authz.user.id,
+    organizationId: org,
+    resourceType: "contact",
+    resourceId: contactId,
+    requestId,
+    metadata: { area: "documentos" },
+  });
   return ok(
     {
       documentos: data ?? [],

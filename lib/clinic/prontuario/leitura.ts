@@ -8,6 +8,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { comConselho, registroNoConselho, type ConselhoDoProfissional } from "@/lib/clinic/profissionais/conselho";
+
 import { camposSchema, type Campo, type Respostas } from "@/lib/clinic/formularios/campos";
 
 export type TipoDeFormulario = "anamnese" | "avaliacao";
@@ -52,6 +54,8 @@ export interface InsumoLido {
   unidade: string;
   lote: string | null;
   validade: string | null;
+  /** F10: registro do produto na ANVISA (rastreabilidade). */
+  registro_anvisa: string | null;
 }
 
 export interface ProcedimentoLido {
@@ -140,7 +144,7 @@ export async function registrosDosAtendimentos(
       .select(
         "id, atendimento_id, versao, status, procedure_id, event_type_id, plano_sessao_id, descricao, regiao, parametros, " +
           "intercorrencias, observacoes, anulado_motivo, created_at, " +
-          "clinic_procedimento_insumos(id, product_id, descricao, quantidade, unidade, lote, validade, created_at)",
+          "clinic_procedimento_insumos(id, product_id, descricao, quantidade, unidade, lote, validade, registro_anvisa, created_at)",
       )
       .eq("organization_id", organizationId)
       .in("atendimento_id", ids)
@@ -155,12 +159,21 @@ export async function registrosDosAtendimentos(
   const erro = forms.error ?? evos.error ?? condutas.error ?? procs.error ?? adendos.error;
   if (erro) throw new Error(erro.message);
 
-  // Nome de quem escreveu o adendo: o cadastro de profissional, quando houver.
+  // Quem escreveu o adendo: nome + registro no conselho (CFM 1.638/2002).
   const autores = [...new Set((adendos.data ?? []).map((a) => a.autor as string | null).filter((x): x is string => !!x))];
   const { data: profs } = autores.length
-    ? await supabase.from("clinic_professionals").select("user_id, display_name").eq("organization_id", organizationId).in("user_id", autores)
+    ? await supabase
+        .from("clinic_professionals")
+        .select("user_id, display_name, council, council_number, council_uf")
+        .eq("organization_id", organizationId)
+        .in("user_id", autores)
     : { data: [] };
-  const nomeDe = new Map((profs ?? []).map((p) => [p.user_id as string, (p.display_name as string | null) ?? null]));
+  const nomeDe = new Map(
+    ((profs ?? []) as Array<ConselhoDoProfissional & { user_id: string; display_name: string | null }>).map((p) => [
+      p.user_id,
+      comConselho(p.display_name, registroNoConselho(p)),
+    ]),
+  );
 
   for (const f of (forms.data ?? []) as unknown as Array<{
     id: string;

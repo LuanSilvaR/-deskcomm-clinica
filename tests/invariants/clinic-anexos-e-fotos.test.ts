@@ -63,6 +63,9 @@ const registrar = (ator: string, d: string, pac = PAC) =>
   como(ator, `select public.fn_clinic_anexo_registrar('${ORG}', '${pac}', '${d}'::jsonb);`);
 const mudar = (ator: string, anexo: string, acao: string, valor: string | null) =>
   como(ator, `select public.fn_clinic_anexo_mudar('${ORG}', '${anexo}', '${acao}', ${valor ? `'${valor}'` : "null"});`);
+// 9027: marcar para divulgação exige os canais (fn_clinic_anexo_divulgar).
+const divulgar = (ator: string, anexo: string, opcao: string) =>
+  como(ator, `select public.fn_clinic_anexo_divulgar('${ORG}', '${anexo}', '${opcao}', array['redes_sociais']::text[]);`);
 const contar = (ator: string, org = ORG) =>
   ultima(sql(como(ator, `select count(*) from public.clinic_anexos where organization_id = '${org}';`)));
 
@@ -141,7 +144,7 @@ describe("leitura", () => {
 
 describe("divulgação e revogação", () => {
   it("sem termo, recusada; com a opção autorizada, aceita; revogar desmarca", () => {
-    expect(erro(mudar(PROF, foto, "divulgacao", "divulgacao_sem_rosto"))).toMatch(/anexo_sem_autorizacao_de_imagem/);
+    expect(erro(divulgar(PROF, foto, "divulgacao_sem_rosto"))).toMatch(/anexo_sem_autorizacao_de_imagem/);
     const versao = ultima(
       sql(`select v.id from public.clinic_modelos_documento m join public.clinic_modelos_documento_versoes v on v.modelo_id = m.id
             where m.organization_id = '${ORG}' and m.tipo = 'uso_imagem';`),
@@ -165,8 +168,8 @@ describe("divulgação e revogação", () => {
     sql(
       como(RECEP, `select public.fn_clinic_documento_aceitar('${ORG}', '${doc}', 'Paciente Anexo A', '${JSON.stringify(escolhas)}'::jsonb, 'teste');`),
     );
-    expect(erro(mudar(PROF, foto, "divulgacao", "divulgacao_com_identificacao"))).toMatch(/anexo_sem_autorizacao_de_imagem/);
-    sql(mudar(PROF, foto, "divulgacao", "divulgacao_sem_rosto"));
+    expect(erro(divulgar(PROF, foto, "divulgacao_com_identificacao"))).toMatch(/anexo_sem_autorizacao_de_imagem/);
+    sql(divulgar(PROF, foto, "divulgacao_sem_rosto"));
     expect(ultima(sql(`select divulgacao_opcao from public.clinic_anexos where id = '${foto}';`))).toBe("divulgacao_sem_rosto");
 
     sql(como(ADM, `select public.fn_clinic_documento_encerrar('${ORG}', '${doc}', 'revogar', 'Paciente pediu');`));

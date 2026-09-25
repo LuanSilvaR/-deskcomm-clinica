@@ -18,6 +18,7 @@ import { erroDoBanco } from "@/lib/clinic/atendimento/servidor";
 import { FORMATO_DO_TOKEN, hashDoToken } from "@/lib/clinic/documentos/token";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { escolhasSchema } from "@/lib/clinic/documentos/tipos";
+import { ipDoCliente } from "@/lib/http/ip-do-cliente";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -26,20 +27,20 @@ type Ctx = { params: Promise<{ token: string }> };
 
 const corpo = z.object({ nome: z.string().trim().min(3).max(160), escolhas: escolhasSchema }).strict();
 
-function ipDe(req: NextRequest): string {
-  return (req.headers.get("x-forwarded-for") ?? "").split(",")[0]?.trim() || req.headers.get("x-real-ip") || "desconhecido";
-}
-
-async function barrado(req: NextRequest, requestId: string): Promise<Response | null> {
-  const r = await checkRateLimit(`clinic-termo:${ipDe(req)}`, 30, 600);
+// IP pela régua única do repo (lib/http/ip-do-cliente.ts): serve de balde de
+// rate limit e de evidência do aceite, nunca de autorização. Sem proxy à frente
+// (null), o balde é o próprio link.
+async function barrado(req: NextRequest, requestId: string, token: string): Promise<Response | null> {
+  const balde = ipDoCliente(req.headers) ?? `link:${hashDoToken(token).slice(0, 16)}`;
+  const r = await checkRateLimit(`clinic-termo:${balde}`, 30, 600);
   return r.allowed ? null : fail("rate_limited", "Muitas tentativas. Tente de novo em alguns minutos.", 429, { requestId });
 }
 
 export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = crypto.randomUUID();
-  const limite = await barrado(req, requestId);
-  if (limite) return limite;
   const { token } = await ctx.params;
+  const limite = await barrado(req, requestId, token);
+  if (limite) return limite;
   if (!FORMATO_DO_TOKEN.test(token)) return fail("not_found", "Link inválido.", 404, { requestId });
   const { data, error } = await createAdminClient().rpc("fn_clinic_documento_publico_ler", { p_token_hash: hashDoToken(token) });
   if (error) return fail("internal_error", "Não foi possível abrir o termo.", 500, { requestId });
@@ -53,9 +54,9 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
   const requestId = crypto.randomUUID();
-  const limite = await barrado(req, requestId);
-  if (limite) return limite;
   const { token } = await ctx.params;
+  const limite = await barrado(req, requestId, token);
+  if (limite) return limite;
   if (!FORMATO_DO_TOKEN.test(token)) return fail("not_found", "Link inválido.", 404, { requestId });
   const lido = corpo.safeParse(await req.json().catch(() => ({})));
   if (!lido.success) return fail("validation_failed", "Digite seu nome completo e responda cada opção.", 422, { requestId });
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     p_token_hash: hashDoToken(token),
     p_nome: lido.data.nome,
     p_escolhas: lido.data.escolhas,
-    p_ip: ipDe(req).slice(0, 64),
+    p_ip: ipDoCliente(req.headers)?.slice(0, 64) ?? null,
     p_user_agent: (req.headers.get("user-agent") ?? "").slice(0, 300),
   });
   if (error) {

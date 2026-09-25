@@ -8,6 +8,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { comConselho, registroNoConselho, type ConselhoDoProfissional } from "@/lib/clinic/profissionais/conselho";
 import {
   registrosDosAtendimentos,
   type RegistrosDoAtendimento,
@@ -105,18 +106,22 @@ export async function lerLinhaDoTempo(
     profIds.length
       ? supabase
           .from("clinic_professionals")
-          .select("user_id, display_name")
+          .select("user_id, display_name, council, council_number, council_uf")
           .eq("organization_id", org)
           .in("user_id", profIds)
-      : Promise.resolve({ data: [] as Array<{ user_id: string; display_name: string | null }> }),
+      : Promise.resolve({ data: [] }),
     registrosDosAtendimentos(
       supabase,
       org,
       linhas.map((l) => l.id),
     ),
   ]);
+  // Nome + registro no conselho em cada atendimento (CFM 1.638/2002).
   const nomeDe = new Map(
-    (profs ?? []).map((p) => [p.user_id as string, (p.display_name as string | null) ?? null]),
+    ((profs ?? []) as Array<ConselhoDoProfissional & { user_id: string; display_name: string | null }>).map((p) => [
+      p.user_id,
+      comConselho(p.display_name, registroNoConselho(p)),
+    ]),
   );
   return {
     atendimentos: linhas.map((l) => ({

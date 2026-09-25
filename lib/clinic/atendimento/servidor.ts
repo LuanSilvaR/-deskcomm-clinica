@@ -256,6 +256,17 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
     mensagem:
       "Este atendimento já tem registros clínicos: finalize e corrija por adendo em vez de anular.",
   },
+  // F10 (9027)
+  anexo_canal_obrigatorio: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Escolha em quais canais a foto pode ser divulgada.",
+  },
+  documento_opcao_obrigatoria_imagem: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "No termo de uso de imagem nenhuma opção pode ser obrigatória: o paciente escolhe cada uma livremente.",
+  },
   acesso_mfa_exigido: {
     status: 403,
     code: "mfa_required",

@@ -15,6 +15,7 @@ import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { erroDoBanco } from "@/lib/clinic/atendimento/servidor";
 import { gerarToken } from "@/lib/clinic/documentos/token";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { env } from "@/lib/env";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 
@@ -70,7 +71,8 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const contato = doc?.contacts as
     { phone_number: string | null } | Array<{ phone_number: string | null }> | null | undefined;
   const telefone = (Array.isArray(contato) ? contato[0] : contato)?.phone_number ?? null;
-  const origem = new URL(req.url).origin;
+  // Endereço público configurado da instalação (atrás de proxy, req.url pode ser interno).
+  const origem = (env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin).replace(/\/+$/, "");
   return ok(
     {
       url: `${origem}/termo/${token}`,

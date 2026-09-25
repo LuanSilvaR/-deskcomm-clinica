@@ -2,11 +2,13 @@
  * FORK clinic (prontuário F7) — anexos e fotos do paciente.
  *
  * GET  — os arquivos que a pessoa pode ver (a RLS filtra por tipo: fotos.ver /
- *        anexos.ver), o uso da cota e as finalidades de divulgação que o
- *        paciente autorizou no termo de uso de imagem.
+ *        anexos.ver), o uso da cota e as finalidades e canais de divulgação
+ *        que o paciente autorizou no termo de uso de imagem. F10: a marcação
+ *        de cada foto é revalidada na leitura (termo vencido deixa de valer);
+ *        limite de leituras e auditoria.
  * POST — multipart: `arquivo`, `miniatura` (fotos) e `dados` (JSON). O tipo real
- *        vem dos BYTES; o arquivo sobe ao bucket privado pelo service role e só
- *        então é registrado (o banco confere permissão, paciente, prefixo do
+ *        vem dos BYTES; F10: paciente e cota conferidos ANTES de subir; o arquivo
+ *        sobe ao bucket privado pelo service role e só então é registrado (o banco confere permissão, paciente, prefixo do
  *        caminho e cota). Registro falhou → o upload é desfeito.
  */
 import { randomUUID } from "node:crypto";
@@ -17,6 +19,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { armazenamentoClinico } from "@/lib/clinic/anexos/armazenamento";
+import { CANAIS_DE_DIVULGACAO } from "@/lib/clinic/anexos/divulgacao";
 import {
   caminhoDoArquivo,
   farejarArquivoClinico,
@@ -25,6 +28,7 @@ import {
   TAMANHO_MAXIMO_MINIATURA,
 } from "@/lib/clinic/anexos/arquivo";
 import { erroDoBanco } from "@/lib/clinic/atendimento/servidor";
+import { leituraClinicaPermitida } from "@/lib/clinic/prontuario/limite";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -35,6 +39,7 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ contactId: string }> };
 
 const OPCOES_DE_DIVULGACAO = ["ensino_sem_identificacao", "divulgacao_sem_rosto", "divulgacao_com_identificacao"] as const;
+const AUTORIZAVEIS = [...OPCOES_DE_DIVULGACAO, ...CANAIS_DE_DIVULGACAO];
 
 const dadosSchema = z
   .object({
@@ -66,13 +71,16 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const t = (s: string) => traduzir(s, authz.user.idioma);
   const { contactId } = await ctx.params;
   if (!z.string().uuid().safeParse(contactId).success) return fail("validation_failed", t("id inválido"), 422, { requestId });
+  if (!(await leituraClinicaPermitida(authz.user.id, "anexos"))) {
+    return fail("rate_limited", t("Muitas leituras seguidas. Aguarde alguns minutos."), 429, { requestId });
+  }
   const org = authz.org.orgId;
   const supabase = await createClient();
-  const [anexos, uso] = await Promise.all([
+  const [anexos, uso, vigentes] = await Promise.all([
     supabase
       .from("clinic_anexos")
       .select(
-        "id, tipo, mime, bytes, nome_original, descricao, largura, altura, regiao, momento, capturada_em, divulgacao_opcao, " +
+        "id, tipo, mime, bytes, nome_original, descricao, largura, altura, regiao, momento, capturada_em, divulgacao_opcao, divulgacao_canais, " +
           "status, anulado_motivo, atendimento_id, plano_id, miniatura_key, created_at",
       )
       .eq("organization_id", org)
@@ -80,21 +88,39 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
       .order("created_at", { ascending: false })
       .limit(200),
     supabase.rpc("fn_clinic_uso_de_arquivos", { p_org: org }),
+    supabase.rpc("fn_clinic_divulgacao_vigente", { p_org: org, p_contact: contactId }),
   ]);
   if (anexos.error) return fail("internal_error", anexos.error.message, 500, { requestId });
+  const vigentesSet = new Set(((vigentes.data as string[] | null) ?? []).map(String));
   // Finalidades autorizadas no termo (9023). A função não é de `authenticated`:
   // o service role pergunta, com a organização da SESSÃO.
   const admin = createAdminClient();
   const autorizadas: string[] = [];
-  for (const opcao of OPCOES_DE_DIVULGACAO) {
+  for (const opcao of AUTORIZAVEIS) {
     const { data } = await admin.rpc("fn_clinic_uso_de_imagem_autorizado", { p_org: org, p_contact: contactId, p_opcao: opcao });
     if (data === true) autorizadas.push(opcao);
   }
+  void audit({
+    action: "clinic.prontuario_visto",
+    actorUserId: authz.user.id,
+    organizationId: org,
+    resourceType: "contact",
+    resourceId: contactId,
+    requestId,
+    metadata: { area: "anexos", arquivos: (anexos.data ?? []).length },
+  });
   return ok(
     {
       anexos: (anexos.data ?? []).map((a) => {
         const { miniatura_key, ...resto } = a as unknown as Record<string, unknown>;
-        return { ...resto, tem_miniatura: !!miniatura_key };
+        // Marcada, mas o termo venceu ou foi revogado: vale "só clínico".
+        const vencida = !!resto.divulgacao_opcao && !vigentesSet.has(resto.id as string);
+        return {
+          ...resto,
+          ...(vencida ? { divulgacao_opcao: null, divulgacao_canais: null } : {}),
+          divulgacao_vencida: vencida,
+          tem_miniatura: !!miniatura_key,
+        };
       }),
       uso: (uso.data as { usados: number; cota: number } | null) ?? null,
       divulgacao_autorizada: autorizadas,
@@ -144,6 +170,18 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   }
 
   const org = authz.org.orgId;
+  const supabase = await createClient();
+  // Antes de subir: o paciente é desta empresa e cabe na cota (o banco confere
+  // de novo no registro; isto só evita arquivo órfão no Storage).
+  const [{ data: paciente }, { data: usoAtual }] = await Promise.all([
+    supabase.from("contacts").select("id").eq("organization_id", org).eq("id", contactId).maybeSingle(),
+    supabase.rpc("fn_clinic_uso_de_arquivos", { p_org: org }),
+  ]);
+  if (!paciente) return fail("not_found", t("Paciente não encontrado."), 404, { requestId });
+  const cota = usoAtual as { usados: number; cota: number } | null;
+  if (cota && cota.usados + bytes.byteLength + (mini?.bytes.byteLength ?? 0) > cota.cota) {
+    return fail("payload_too_large", t("A clínica atingiu o limite de espaço para arquivos. Fale com quem administra o sistema."), 413, { requestId });
+  }
   const loja = armazenamentoClinico();
   const chave = caminhoDoArquivo(org, contactId, randomUUID(), tipo);
   const chaveMini = mini ? caminhoDoArquivo(org, contactId, randomUUID(), mini.tipo as typeof tipo) : null;
@@ -155,7 +193,6 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     return fail("internal_error", t("Não foi possível guardar o arquivo."), 500, { requestId });
   }
 
-  const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_clinic_anexo_registrar", {
     p_org: org,
     p_contact: contactId,

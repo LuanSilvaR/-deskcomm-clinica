@@ -170,6 +170,14 @@ describe("anular atendimento", () => {
         sql(`select status from public.clinic_appointment_visits where appointment_id = '${AG}';`),
       ),
     ).toBe("pronto");
+    // 9027: a trilha da visita (que a recepção lê) leva motivo fixo, não o texto livre.
+    expect(
+      ultima(
+        sql(
+          `select reason from public.clinic_appointment_visit_events where appointment_id = '${AG}' order by created_at desc limit 1;`,
+        ),
+      ),
+    ).toBe("Atendimento anulado");
     expect(
       ultima(
         sql(

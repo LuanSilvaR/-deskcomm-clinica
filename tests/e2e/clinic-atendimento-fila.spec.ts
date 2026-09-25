@@ -78,7 +78,15 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
   await opcaoProntuario(pAdmin, true);
   const { error: eProf } = await admin
     .from("clinic_professionals")
-    .upsert({ organization_id: orgId, user_id: agente, display_name: "Profissional E2E", is_active: true } as never, {
+    .upsert({
+      organization_id: orgId,
+      user_id: agente,
+      display_name: "Profissional E2E",
+      is_active: true,
+      council: "CRBM",
+      council_number: "00000",
+      council_uf: "SP",
+    } as never, {
       onConflict: "organization_id,user_id",
     });
   expect(eProf?.message ?? null).toBeNull();
@@ -209,6 +217,8 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     await expect(prontuario.getByText("Evolução fictícia de teste E2E.")).toBeVisible({ timeout: 20_000 });
     await expect(prontuario.getByText("Queixa fictícia de teste E2E.")).toBeVisible();
     await expect(prontuario.getByTestId("adendo")).toHaveCount(1);
+    // F10: cada atendimento identifica o profissional com o registro no conselho.
+    await expect(prontuario.getByText("Profissional E2E — CRBM 00000/SP").first()).toBeVisible();
     // F9: cabeçalho clínico (alergias com versão) e filtro por período.
     await prontuario.getByTestId("cabecalho-editar").click();
     await prontuario.getByTestId("cabecalho-alergias").fill("Alergia fictícia E2E");

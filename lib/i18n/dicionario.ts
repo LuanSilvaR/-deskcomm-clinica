@@ -12408,6 +12408,14 @@ export const DICIONARIO: Traducoes = {
   "Este atendimento já tem registros clínicos: finalize e corrija por adendo em vez de anular.": { es: "Esta atención ya tiene registros clínicos: finalícela y corrija con una adenda en lugar de anularla." },
   // ── FORK clinic (prontuário F9) ──
   "Insumo": { es: "Insumo" },
+  // ── FORK clinic (prontuário F10) ──
+  "Autorização de imagem vencida ou revogada: só uso clínico": { es: "Autorización de imagen vencida o revocada: solo uso clínico" },
+  "Reg. ANVISA": { es: "Reg. ANVISA" },
+  "Registro na ANVISA": { es: "Registro en ANVISA" },
+  "Reg. ANVISA (opcional)": { es: "Reg. ANVISA (opcional)" },
+  "Escolha em quais canais a foto pode ser divulgada.": { es: "Elija en qué canales se puede divulgar la foto." },
+  "No termo de uso de imagem nenhuma opção pode ser obrigatória: o paciente escolhe cada uma livremente.": { es: "En el término de uso de imagen ninguna opción puede ser obligatoria: el paciente elige cada una libremente." },
+  "Material impresso": { es: "Material impreso" },
 };
 
 /**

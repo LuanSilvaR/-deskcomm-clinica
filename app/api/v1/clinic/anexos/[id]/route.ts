@@ -6,7 +6,8 @@
  *         assina uma URL de 60 s e responde 307. Abrir o arquivo inteiro é
  *         auditado; há limite por pessoa.
  * PATCH — `anular` (motivo) ou marcar/desmarcar `divulgacao` (só na finalidade
- *         que o paciente autorizou no termo de uso de imagem).
+ *         E nos canais que o paciente autorizou no termo de uso de imagem —
+ *         F10: canais obrigatórios ao marcar).
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -17,6 +18,7 @@ import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { armazenamentoClinico } from "@/lib/clinic/anexos/armazenamento";
+import { CANAIS_DE_DIVULGACAO } from "@/lib/clinic/anexos/divulgacao";
 import { erroDoBanco } from "@/lib/clinic/atendimento/servidor";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -32,6 +34,7 @@ const corpo = z.discriminatedUnion("acao", [
     .object({
       acao: z.literal("divulgacao"),
       opcao: z.enum(["ensino_sem_identificacao", "divulgacao_sem_rosto", "divulgacao_com_identificacao"]).nullable(),
+      canais: z.array(z.enum(CANAIS_DE_DIVULGACAO)).min(1).max(3).optional(),
     })
     .strict(),
 ]);
@@ -88,12 +91,20 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
   const org = authz.org.orgId;
   const d = lido.data;
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_clinic_anexo_mudar", {
-    p_org: org,
-    p_anexo: id,
-    p_acao: d.acao,
-    p_valor: d.acao === "anular" ? d.motivo : d.opcao,
-  });
+  const { error } =
+    d.acao === "divulgacao" && d.opcao
+      ? await supabase.rpc("fn_clinic_anexo_divulgar", {
+          p_org: org,
+          p_anexo: id,
+          p_opcao: d.opcao,
+          p_canais: d.canais ?? [],
+        })
+      : await supabase.rpc("fn_clinic_anexo_mudar", {
+          p_org: org,
+          p_anexo: id,
+          p_acao: d.acao,
+          p_valor: d.acao === "anular" ? d.motivo : null,
+        });
   if (error) {
     const e = erroDoBanco(error, requestId);
     return fail(e.code, t(e.message), e.status, { requestId });
@@ -105,7 +116,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
     resourceType: "clinic_anexo",
     resourceId: id,
     requestId,
-    metadata: d.acao === "divulgacao" ? { opcao: d.opcao } : {},
+    metadata: d.acao === "divulgacao" ? { opcao: d.opcao, canais: d.canais ?? [] } : {},
   });
   return ok({ id }, { requestId });
 }

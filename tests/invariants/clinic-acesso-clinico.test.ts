@@ -156,6 +156,8 @@ describe("suporte (impersonação)", () => {
     const p = perms(SUPORTE, ORG, { session_id: SESSAO });
     expect(p).toContain("papeis.gerenciar");
     expect(clinicas(p)).toEqual([]);
+    // 9027: nem os termos do paciente (nome + procedimento = dado de saúde).
+    expect(p.filter((k) => k.startsWith("documentos."))).toEqual([]);
   });
 });
 

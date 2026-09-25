@@ -34,6 +34,7 @@ interface InsumoEditavel {
   product_id: string;
   lote: string;
   validade: string;
+  registro_anvisa: string;
 }
 interface Parametro {
   chave: string;
@@ -41,7 +42,7 @@ interface Parametro {
 }
 
 const SELECT = "h-11 w-full rounded-md border bg-surface px-2 text-sm md:h-9";
-const vazioInsumo = (): InsumoEditavel => ({ descricao: "", quantidade: "1", unidade: "un", product_id: "", lote: "", validade: "" });
+const vazioInsumo = (): InsumoEditavel => ({ descricao: "", quantidade: "1", unidade: "un", product_id: "", lote: "", validade: "", registro_anvisa: "" });
 
 export function ProcedimentoLidoView({ p }: { p: ProcedimentoLido }) {
   const t = useT();
@@ -79,7 +80,10 @@ export function ProcedimentoLidoView({ p }: { p: ProcedimentoLido }) {
                 <td className="py-1 text-right">
                   {i.quantidade.toLocaleString(tag)} {i.unidade}
                 </td>
-                <td className="py-1 pl-2">{i.lote ? `${t("Lote")} ${i.lote}` : ""}</td>
+                <td className="py-1 pl-2">
+                  {i.lote ? `${t("Lote")} ${i.lote}` : ""}
+                  {i.registro_anvisa ? ` · ${t("Reg. ANVISA")} ${i.registro_anvisa}` : ""}
+                </td>
                 <td className="py-1 pl-2">
                   {i.validade ? `${t("Validade")} ${new Date(`${i.validade}T12:00:00`).toLocaleDateString(tag)}` : ""}
                 </td>
@@ -123,6 +127,7 @@ function Editor({
       product_id: i.product_id ?? "",
       lote: i.lote ?? "",
       validade: i.validade ?? "",
+      registro_anvisa: i.registro_anvisa ?? "",
     })),
   );
 
@@ -148,6 +153,7 @@ function Editor({
             product_id: i.product_id || null,
             lote: i.lote.trim() || null,
             validade: i.validade || null,
+            registro_anvisa: i.registro_anvisa.trim() || null,
           })),
       }),
     onSuccess: () => {
@@ -253,6 +259,7 @@ function Editor({
               <Input aria-label={t("Quantidade")} inputMode="decimal" className="h-11 md:h-9" value={ins.quantidade} onChange={(e) => mudar({ quantidade: e.target.value })} />
               <Input aria-label={t("Unidade")} className="h-11 md:h-9" maxLength={20} value={ins.unidade} onChange={(e) => mudar({ unidade: e.target.value })} />
               <Input aria-label={t("Lote")} placeholder={t("Lote")} className="h-11 sm:col-span-2 md:h-9" maxLength={60} value={ins.lote} onChange={(e) => mudar({ lote: e.target.value })} data-testid="insumo-lote" />
+              <Input aria-label={t("Registro na ANVISA")} placeholder={t("Reg. ANVISA (opcional)")} className="h-11 sm:col-span-2 md:h-9" maxLength={40} value={ins.registro_anvisa} onChange={(e) => mudar({ registro_anvisa: e.target.value })} />
               <label className="flex items-center gap-2 text-xs sm:col-span-3">
                 {t("Validade")}
                 <Input type="date" className="h-11 md:h-9" value={ins.validade} onChange={(e) => mudar({ validade: e.target.value })} />
