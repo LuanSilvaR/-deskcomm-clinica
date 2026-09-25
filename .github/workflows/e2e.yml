@@ -733,6 +733,8 @@ jobs:
         clinic-faltas-e-prazo.spec.ts
         clinic-indicadores.spec.ts
         clinic-papeis-de-acesso.spec.ts
+        clinic-menu-da-clinica.spec.ts
+        clinic-inicio-da-recepcao.spec.ts
         clinic-agenda-melhorias.spec.ts
         clinic-procedimentos.spec.ts
         agenda-remarcar-e-cancelar.spec.ts

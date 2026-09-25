@@ -14,6 +14,8 @@
  * não desmarca nem remarca (migration 9008). 0 = sem prazo.
  * `acesso_por_permissoes`: o acesso passa a vir dos papéis de acesso (ACL,
  * migration 9012); só o Administrador liga.
+ * `menu_clinica`: o menu passa a ser organizado por módulos da clínica
+ * (migration 9014). Só apresentação — não muda quem vê o quê.
  *
  * GET: qualquer membro lê (as telas precisam saber). PATCH: só admin, pelas
  * funções `fn_clinic_definir_*`, que também exigem MFA provado quando a sessão
@@ -32,7 +34,7 @@ import { acessoPorPermissoesLigado } from "@/lib/clinic/acesso/modo";
 import { falhaDeAcesso } from "@/lib/clinic/acesso/erros-do-banco";
 import { prazoDoPacienteHoras } from "@/lib/clinic/agenda/prazo-do-paciente";
 import { recursosLigados } from "@/lib/clinic/agenda/recursos";
-import { clinicProfissionaisLigado, procedimentosLigados, travaSobreposicaoLigada } from "@/lib/clinic/flags";
+import { clinicProfissionaisLigado, menuClinicaLigado, procedimentosLigados, travaSobreposicaoLigada } from "@/lib/clinic/flags";
 import { fichaObrigatoriaLigada } from "@/lib/clinic/pacientes/servidor";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -53,6 +55,7 @@ async function lerOpcoes(orgId: string) {
     procedimentos: procedimentosLigados(settings),
     prazo_paciente_horas: prazoDoPacienteHoras(settings),
     acesso_por_permissoes: acessoPorPermissoesLigado(settings),
+    menu_clinica: menuClinicaLigado(settings),
   };
 }
 
@@ -73,6 +76,7 @@ const patchSchema = z
     procedimentos: z.boolean().optional(),
     prazo_paciente_horas: z.number().int().min(0).max(168).optional(),
     acesso_por_permissoes: z.boolean().optional(),
+    menu_clinica: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "Informe se o módulo fica ligado.",
@@ -84,6 +88,7 @@ const FUNCAO_DA_OPCAO = {
   confirmacao_automatica: "fn_clinic_definir_confirmacao_automatica",
   trava_sobreposicao: "fn_clinic_definir_trava_sobreposicao",
   recursos: "fn_clinic_definir_recursos",
+  menu_clinica: "fn_clinic_definir_menu_clinica",
   procedimentos: "fn_clinic_definir_procedimentos",
 } as const;
 
@@ -149,7 +154,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "procedimentos"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });
