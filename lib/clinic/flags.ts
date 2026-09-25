@@ -52,6 +52,17 @@ export function travaSobreposicaoLigada(settings: unknown): boolean {
 }
 
 /**
+ * `organizations.settings.clinic.procedimentos` (migration 9015): o módulo de
+ * procedimentos e POP. Mesma régua: só o booleano `true` liga.
+ */
+export function procedimentosLigados(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).procedimentos === true;
+}
+
+/**
  * `organizations.settings.clinic.prontuario` (migration 9016): o módulo de
  * atendimento clínico e prontuário. Nasce desligado; só o booleano `true` liga.
  */

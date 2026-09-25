@@ -352,6 +352,31 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
   },
   {
+    tabela: "clinic_procedures",
+    razao:
+      "tests/invariants/clinic-procedimentos-e-pop.test.ts (FORK clinic, migration 9015): 2 orgs, quem é da A lê 0 linhas da B; escrita só com a permissão (procedimentos.gerenciar / pops.editar); vínculo entre empresas recusado pela FK composta.",
+  },
+  {
+    tabela: "clinic_procedure_specialties",
+    razao:
+      "tests/invariants/clinic-procedimentos-e-pop.test.ts (FORK clinic, migration 9015): 2 orgs, quem é da A lê 0 linhas da B; escrita só com a permissão (procedimentos.gerenciar / pops.editar); vínculo entre empresas recusado pela FK composta.",
+  },
+  {
+    tabela: "clinic_procedure_professionals",
+    razao:
+      "tests/invariants/clinic-procedimentos-e-pop.test.ts (FORK clinic, migration 9015): 2 orgs, quem é da A lê 0 linhas da B; escrita só com a permissão (procedimentos.gerenciar / pops.editar); vínculo entre empresas recusado pela FK composta.",
+  },
+  {
+    tabela: "clinic_pops",
+    razao:
+      "tests/invariants/clinic-procedimentos-e-pop.test.ts (FORK clinic, migration 9015): 2 orgs, quem é da A lê 0 linhas da B; escrita só com a permissão (procedimentos.gerenciar / pops.editar); vínculo entre empresas recusado pela FK composta.",
+  },
+  {
+    tabela: "clinic_pop_versions",
+    razao:
+      "tests/invariants/clinic-procedimentos-e-pop.test.ts (FORK clinic, migration 9015): 2 orgs, quem é da A lê 0 linhas da B; escrita só com a permissão (procedimentos.gerenciar / pops.editar); vínculo entre empresas recusado pela FK composta.",
+  },
+  {
     tabela: "clinic_agenda_blocks",
     razao:
       "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
