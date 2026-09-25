@@ -20,6 +20,7 @@ interface Props {
   confirmacaoInicial: boolean;
   travaInicial: boolean;
   recursosInicial: boolean;
+  procedimentosInicial: boolean;
   prazoInicial: number;
   podeLigar: boolean;
   ehGerencia: boolean;
@@ -32,6 +33,7 @@ export function ProfissionaisClient({
   confirmacaoInicial,
   travaInicial,
   recursosInicial,
+  procedimentosInicial,
   prazoInicial,
   podeLigar,
   ehGerencia,
@@ -43,6 +45,7 @@ export function ProfissionaisClient({
   const [confirmacao, setConfirmacao] = useState(confirmacaoInicial);
   const [trava, setTrava] = useState(travaInicial);
   const [recursos, setRecursos] = useState(recursosInicial);
+  const [procedimentos, setProcedimentos] = useState(procedimentosInicial);
   const [prazo, setPrazo] = useState(prazoInicial);
   const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
 
@@ -53,6 +56,13 @@ export function ProfissionaisClient({
       setPrazo(r.data.prazo_paciente_horas);
       setPrazoDigitado(String(r.data.prazo_paciente_horas));
     },
+    onError: showApiError,
+  });
+
+  const alternarProcedimentos = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { procedimentos: boolean } }>("/api/v1/clinic/config", { procedimentos: valor }),
+    onSuccess: (r) => setProcedimentos(r.data.procedimentos),
     onError: showApiError,
   });
 
@@ -223,6 +233,30 @@ export function ProfissionaisClient({
             onClick={() => alternarRecursos.mutate(!recursos)}
           >
             {recursos ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${procedimentos ? "" : "bg-muted"}`}
+        data-testid="clinic-procedimentos"
+      >
+        <div>
+          <p className="font-medium">{procedimentos ? t("Procedimentos e POP ligados") : t("Procedimentos e POP desligados")}</p>
+          <p className="text-sm text-text-muted">
+            {procedimentos
+              ? t("A clínica cadastra os procedimentos, liga cada um às especialidades e profissionais, e mantém o POP versionado e imprimível.")
+              : t("Ligue para cadastrar os procedimentos da clínica com o POP de cada um (versões, aprovação e impressão).")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-procedimentos-alternar"
+            variant={procedimentos ? "outline" : "default"}
+            disabled={alternarProcedimentos.isPending}
+            onClick={() => alternarProcedimentos.mutate(!procedimentos)}
+          >
+            {procedimentos ? t("Desligar") : t("Ligar")}
           </Button>
         ) : null}
       </section>

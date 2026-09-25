@@ -185,6 +185,12 @@ export interface ActiveOrg {
    */
   permissoes?: readonly string[];
   /**
+   * FORK clinic (migration 9014): o menu é desenhado por módulos da clínica.
+   * Preenchido só pelo layout de `/app`; ausente = menu de sempre. Apresentação
+   * apenas — o que cada um vê continua vindo de `minRole`/`permissoes`.
+   */
+  menu_clinica?: boolean;
+  /**
    * O que ESTA organização definiu para si — CAMPO A CAMPO, e só o que ela
    * mesma definiu.
    *

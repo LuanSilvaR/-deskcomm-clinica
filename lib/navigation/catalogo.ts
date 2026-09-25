@@ -199,6 +199,17 @@ export const NAV_CATALOG = [
     group: "atendimento",
   },
   {
+    // FORK clinic (migration 9015): o catálogo de procedimentos e o POP de cada um.
+    // Sem `sidebar` (o menu lateral está no teto); entra pelo hub de Atendimento
+    // e pelo ⌘K. A tela diz como ligar quando a opção está desligada.
+    href: "/app/procedimentos",
+    label: "Procedimentos",
+    permissao: "procedimentos.ver",
+    description: "Os procedimentos da clínica, quem pode realizar cada um e o POP de cada procedimento.",
+    icon: "ClipboardText",
+    group: "atendimento",
+  },
+  {
     // FORK clinic (migration 9003): o dia da clínica por status da visita —
     // na recepção, pronto para atendimento, em atendimento, finalizado.
     //
@@ -1038,6 +1049,18 @@ export const NAV_CATALOG = [
     // Módulo opcional da instalação, desligado por padrão (doc 37): a porta só
     // existe onde quem administra o servidor o ligou, em `/admin/sistema`.
     modulo: "banco_externo",
+  },
+  {
+    // FORK clinic (migration 9014): a tela inicial do menu da clínica — o
+    // painel com todos os módulos e o resumo do dia. SEM `sidebar`, `minRole` e
+    // `permissao` de propósito: com o menu antigo ela só aparece no ⌘K (o
+    // sidebar de sempre não muda), e cada card dela já passa pelo mesmo filtro
+    // de acesso do menu. No fim do array para não reordenar nenhum grupo.
+    href: "/app/inicio",
+    label: "Início",
+    description: "Todos os módulos da clínica num lugar só, com o resumo do dia.",
+    icon: "House",
+    group: "atendimento",
   },
 ] as const satisfies readonly NavMetadata[];
 

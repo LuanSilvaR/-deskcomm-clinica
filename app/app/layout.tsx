@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { modulosLigados } from "@/lib/instalacao/modulos";
 import { permissoesParaOMenu } from "@/lib/clinic/acesso/menu";
 import { acessoPorPermissoesLigado } from "@/lib/clinic/acesso/modo";
+import { menuClinicaLigado } from "@/lib/clinic/flags";
 import {
   ImpersonateBanner,
 } from "@/components/app/ImpersonateBanner";
@@ -127,6 +128,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       modulos_ligados: modulos,
       // FORK clinic (ACL-008): só com o modo por permissões ligado.
       ...(acessoPorPermissoesLigado(orgRow?.settings) ? { permissoes: await permissoesParaOMenu(activeOrg.orgId) } : {}),
+      // FORK clinic (9014): mesma linha de `settings`, nenhuma consulta a mais.
+      ...(menuClinicaLigado(orgRow?.settings) ? { menu_clinica: true } : {}),
     };
 
     // `marcaDaInstalacao()` é memoizada por TTL no PROCESSO (`lib/branding/

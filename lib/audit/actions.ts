@@ -862,6 +862,18 @@ export const AUDIT_ACTIONS = [
   // Quem liga o módulo, quem habilita quem para cada atendimento e quem fechou
   // a agenda de alguém (ou da clínica toda) são as perguntas de depois.
   "clinic.flag_alterada",
+  // FORK clinic (9015): procedimentos e POP.
+  "clinic.procedimento_criado",
+  "clinic.procedimento_alterado",
+  "clinic.procedimento_ativado",
+  "clinic.procedimento_desativado",
+  "clinic.procedimento_vinculos_alterados",
+  "clinic.pop_criado",
+  "clinic.pop_rascunho_alterado",
+  "clinic.pop_aprovado",
+  "clinic.pop_nova_versao",
+  "clinic.pop_rascunho_descartado",
+  "clinic.pop_impresso",
   "clinic.especialidade_criada",
   "clinic.especialidade_alterada",
   "clinic.profissional_salvo",

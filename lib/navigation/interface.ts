@@ -126,9 +126,17 @@ export function interfaceTemDestino(
 ): boolean {
   return destinosDaInterface(settings, platform, role).some((d) => !essencial(d, role, platform));
 }
-export function homeDaInterface(raw: unknown, platform: boolean, role: Role | null): string {
+export function homeDaInterface(
+  raw: unknown,
+  platform: boolean,
+  role: Role | null,
+  // FORK clinic (9014): com o menu da clínica ligado a casa é o Início. Ausente
+  // = a regra de sempre (Inbox primeiro).
+  preferida?: NavDestinationId,
+): string {
   const visible = destinosDaInterface(raw, platform, role);
   return (
+    (preferida ? visible.find((d) => d.href === preferida)?.href : undefined) ??
     visible.find((d) => d.href === "/app/inbox")?.href ??
     visible.find((d) => !essencial(d, role, platform))?.href ??
     "/app/settings/profile"

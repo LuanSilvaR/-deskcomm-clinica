@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import { MagnifyingGlass } from "@/lib/ui/icons";
 import { NAV_GROUPS, searchable, type NavDestination } from "@/lib/navigation/registry";
+import { moduloDaPorta } from "@/lib/clinic/navegacao/modulos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -53,6 +54,10 @@ function Resultados({ aoEscolher }: { aoEscolher: () => void }) {
   const { user, activeOrg } = useAuth();
   const [busca, setBusca] = useState("");
   const [destacado, setDestacado] = useState(0);
+  // FORK clinic (9014): com o menu da clínica, o rótulo ao lado de cada tela é
+  // o módulo dela — o mesmo nome que a pessoa vê no menu lateral.
+  const rotuloDe = (d: NavDestination) =>
+    (activeOrg?.menu_clinica ? moduloDaPorta(d.href)?.label : undefined) ?? ROTULO_GRUPO.get(d.group) ?? "";
 
   const visiveis = useMemo(
     () =>
@@ -164,7 +169,7 @@ function Resultados({ aoEscolher }: { aoEscolher: () => void }) {
                   <div className="flex items-baseline gap-2">
                     <span className="text-sm font-medium">{t(d.label)}</span>
                     <span className="truncate text-[11px] tracking-wider text-muted-foreground uppercase">
-                      {t(ROTULO_GRUPO.get(d.group) ?? "")}
+                      {t(rotuloDe(d))}
                     </span>
                   </div>
                   <p className="truncate text-xs text-muted-foreground">{t(d.description)}</p>

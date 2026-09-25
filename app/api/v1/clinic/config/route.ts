@@ -9,10 +9,13 @@
  * `trava_sobreposicao`: o banco recusa compromisso que cruza outro na agenda
  * do mesmo profissional (migration 9005).
  * `recursos`: salas e equipamentos exigidos pelo tipo de atendimento (migration 9007).
+ * `procedimentos`: o módulo de procedimentos e POP (migration 9015).
  * `prazo_paciente_horas`: dentro deste prazo antes da consulta, o agente de IA
  * não desmarca nem remarca (migration 9008). 0 = sem prazo.
  * `acesso_por_permissoes`: o acesso passa a vir dos papéis de acesso (ACL,
  * migration 9012); só o Administrador liga.
+ * `menu_clinica`: o menu passa a ser organizado por módulos da clínica
+ * (migration 9014). Só apresentação — não muda quem vê o quê.
  * `prontuario`: o módulo de atendimento clínico e prontuário (migration 9016).
  *
  * GET: qualquer membro lê (as telas precisam saber). PATCH: só admin, pelas
@@ -32,7 +35,7 @@ import { acessoPorPermissoesLigado } from "@/lib/clinic/acesso/modo";
 import { falhaDeAcesso } from "@/lib/clinic/acesso/erros-do-banco";
 import { prazoDoPacienteHoras } from "@/lib/clinic/agenda/prazo-do-paciente";
 import { recursosLigados } from "@/lib/clinic/agenda/recursos";
-import { clinicProfissionaisLigado, prontuarioLigado, travaSobreposicaoLigada } from "@/lib/clinic/flags";
+import { clinicProfissionaisLigado, menuClinicaLigado, procedimentosLigados, prontuarioLigado, travaSobreposicaoLigada } from "@/lib/clinic/flags";
 import { fichaObrigatoriaLigada } from "@/lib/clinic/pacientes/servidor";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -50,8 +53,10 @@ async function lerOpcoes(orgId: string) {
     confirmacao_automatica: confirmacaoAutomaticaLigada(settings),
     trava_sobreposicao: travaSobreposicaoLigada(settings),
     recursos: recursosLigados(settings),
+    procedimentos: procedimentosLigados(settings),
     prazo_paciente_horas: prazoDoPacienteHoras(settings),
     acesso_por_permissoes: acessoPorPermissoesLigado(settings),
+    menu_clinica: menuClinicaLigado(settings),
     prontuario: prontuarioLigado(settings),
   };
 }
@@ -70,8 +75,10 @@ const patchSchema = z
     confirmacao_automatica: z.boolean().optional(),
     trava_sobreposicao: z.boolean().optional(),
     recursos: z.boolean().optional(),
+    procedimentos: z.boolean().optional(),
     prazo_paciente_horas: z.number().int().min(0).max(168).optional(),
     acesso_por_permissoes: z.boolean().optional(),
+    menu_clinica: z.boolean().optional(),
     prontuario: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
@@ -84,6 +91,8 @@ const FUNCAO_DA_OPCAO = {
   confirmacao_automatica: "fn_clinic_definir_confirmacao_automatica",
   trava_sobreposicao: "fn_clinic_definir_trava_sobreposicao",
   recursos: "fn_clinic_definir_recursos",
+  menu_clinica: "fn_clinic_definir_menu_clinica",
+  procedimentos: "fn_clinic_definir_procedimentos",
   prontuario: "fn_clinic_definir_prontuario",
 } as const;
 
@@ -149,7 +158,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "prontuario"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });
