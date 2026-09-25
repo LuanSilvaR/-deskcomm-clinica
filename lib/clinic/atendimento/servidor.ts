@@ -121,6 +121,22 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
   },
   procedimento_nao_encontrado: { status: 404, code: "not_found", mensagem: "Procedimento não encontrado." },
   procedimento_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo para anular." },
+  // FORK clinic (prontuário F6, 9023). `documento_modelo_*` antes de `documento_*`.
+  documento_modelo_invalido: { status: 422, code: "validation_failed", mensagem: "Modelo de documento inválido." },
+  documento_modelo_nome_em_uso: { status: 409, code: "conflict", mensagem: "Já existe um modelo com este nome." },
+  documento_modelo_nao_encontrado: { status: 404, code: "not_found", mensagem: "Modelo não encontrado." },
+  documento_imutavel: { status: 409, code: "conflict", mensagem: "Documento emitido não pode ser alterado." },
+  documento_invalido: { status: 422, code: "validation_failed", mensagem: "Não foi possível emitir: confira o paciente e o modelo." },
+  documento_nao_encontrado: { status: 404, code: "not_found", mensagem: "Documento não encontrado." },
+  documento_ja_respondido: { status: 409, code: "conflict", mensagem: "Este documento já foi respondido, revogado ou cancelado." },
+  documento_sem_nome: { status: 422, code: "validation_failed", mensagem: "Digite o nome completo de quem aceita." },
+  documento_escolhas_invalidas: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Responda sim ou não em cada opção. As obrigatórias precisam estar marcadas.",
+  },
+  documento_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo." },
+  documento_link_invalido: { status: 410, code: "token_expired", mensagem: "Este link expirou ou já foi usado." },
   acesso_mfa_exigido: {
     status: 403,
     code: "mfa_required",

@@ -18,6 +18,7 @@ import { useState } from "react";
 import { SecaoConduta } from "@/components/clinic/atendimento/SecaoConduta";
 import { SecaoEvolucao } from "@/components/clinic/atendimento/SecaoEvolucao";
 import { SecaoProcedimentos } from "@/components/clinic/atendimento/SecaoProcedimentos";
+import { DocumentosDoPaciente } from "@/components/clinic/documentos/DocumentosDoPaciente";
 import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
 import { SecaoFormulario } from "@/components/clinic/atendimento/SecaoFormulario";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -57,24 +58,26 @@ const ROTULO_DO_STATUS: Record<Atendimento["status"], string> = {
   anulado: "Anulado",
 };
 
-type SecaoAtiva = "anamnese" | "avaliacao" | "conduta" | "plano" | "procedimentos" | "evolucao";
+type SecaoAtiva = "anamnese" | "avaliacao" | "conduta" | "plano" | "procedimentos" | "documentos" | "evolucao";
 const SECOES: Array<{ id: SecaoAtiva; rotulo: string }> = [
   { id: "anamnese", rotulo: "Anamnese" },
   { id: "avaliacao", rotulo: "Avaliação" },
   { id: "conduta", rotulo: "Conduta" },
   { id: "plano", rotulo: "Plano de tratamento" },
   { id: "procedimentos", rotulo: "Procedimentos" },
+  { id: "documentos", rotulo: "Documentos" },
   { id: "evolucao", rotulo: "Evolução" },
 ];
-const EM_BREVE = ["Documentos", "Anexos"];
+const EM_BREVE = ["Anexos"];
 const ROTULO_DA_PENDENCIA: Record<string, string> = {
   evolucao: "Evolução",
   anamnese: "Anamnese",
   avaliacao: "Avaliação",
   conduta: "Conduta",
   procedimento: "Procedimentos",
+  documento: "Documentos",
 };
-const SECOES_COM_PENDENCIA = new Set<string>(["anamnese", "avaliacao", "conduta", "evolucao", "procedimentos"]);
+const SECOES_COM_PENDENCIA = new Set<string>(["anamnese", "avaliacao", "conduta", "evolucao", "procedimentos", "documentos"]);
 
 export function AtendimentoDoDia({ id }: { id: string }) {
   const t = useT();
@@ -105,7 +108,7 @@ export function AtendimentoDoDia({ id }: { id: string }) {
       if (err instanceof ApiError && err.code === "requisitos_pendentes") {
         const lista = ((err.details as { faltando?: string[] } | undefined)?.faltando ?? []).filter(Boolean);
         setFaltando(lista);
-        const primeira = lista[0] === "procedimento" ? "procedimentos" : lista[0];
+        const primeira = lista[0] === "procedimento" ? "procedimentos" : lista[0] === "documento" ? "documentos" : lista[0];
         if (primeira && SECOES_COM_PENDENCIA.has(primeira)) setAtiva(primeira as SecaoAtiva);
         return;
       }
@@ -132,10 +135,15 @@ export function AtendimentoDoDia({ id }: { id: string }) {
           ? false
           : s === "procedimentos"
             ? (r?.procedimentos ?? []).some((p) => p.status !== "anulado")
-            : !!r?.formularios[s];
+            : s === "documentos"
+              ? false
+              : !!r?.formularios[s];
   // A pendência "procedimento" (banco) marca a seção "procedimentos" (tela).
-  const pendente = (id: SecaoAtiva) => faltando.includes(id) || (id === "procedimentos" && faltando.includes("procedimento"));
-  const secoesVisiveis = SECOES.filter((s) => s.id !== "plano" || can("planos.ver"));
+  const pendente = (id: SecaoAtiva) =>
+    faltando.includes(id) ||
+    (id === "procedimentos" && faltando.includes("procedimento")) ||
+    (id === "documentos" && faltando.includes("documento"));
+  const secoesVisiveis = SECOES.filter((s) => (s.id !== "plano" || can("planos.ver")) && (s.id !== "documentos" || can("documentos.ver")));
 
   return (
     <div className="flex h-full flex-col gap-4 p-4 md:p-6" data-testid="atendimento-do-dia">
@@ -285,6 +293,17 @@ export function AtendimentoDoDia({ id }: { id: string }) {
                   chaveParaRecarregar={chaveRegistros}
                 />
               </div>
+              {can("documentos.ver") ? (
+                <div hidden={ativa !== "documentos"}>
+                  <section className="space-y-3" data-testid="secao-documentos">
+                    <h2 className="text-lg font-semibold">{t("Documentos")}</h2>
+                    {r.exigidas.includes("documento") ? (
+                      <p className="text-xs text-text-muted">{t("Um termo aceito, ligado a este atendimento, é obrigatório para finalizar.")}</p>
+                    ) : null}
+                    <DocumentosDoPaciente contactId={a.paciente.id} atendimentoId={id} />
+                  </section>
+                </div>
+              ) : null}
               <div hidden={ativa !== "evolucao"}>
                 <SecaoEvolucao
                   atendimentoId={id}

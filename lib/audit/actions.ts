@@ -898,6 +898,13 @@ export const AUDIT_ACTIONS = [
   "clinic.plano_sessao_alterada",
   // FORK clinic (9022): procedimento lançado por engano — metadados só
   "clinic.procedimento_anulado",
+  // FORK clinic (9023): documentos e termos — metadados só
+  "clinic.documento_modelo_salvo",
+  "clinic.documento_emitido",
+  "clinic.documento_aceito",
+  "clinic.documento_link_criado",
+  "clinic.documento_revogado",
+  "clinic.documento_cancelado",
   // FORK clinic (ACL): papéis de acesso e permissões
   "acesso.papel_criado",
   "acesso.papel_alterado",

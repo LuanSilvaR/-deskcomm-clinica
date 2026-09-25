@@ -27,6 +27,7 @@ import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { origemDoContato } from "@/lib/leads/origem-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { FichaDoPaciente } from "@/components/clinic/FichaDoPaciente";
+import { DocumentosDoPaciente } from "@/components/clinic/documentos/DocumentosDoPaciente";
 import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
 import { ProntuarioDoPaciente } from "@/components/clinic/prontuario/ProntuarioDoPaciente";
 import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
@@ -65,6 +66,7 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
   const { can } = usePermissoes();
   const verProntuario = can("prontuario.ver");
   const verPlanos = can("planos.ver");
+  const verDocumentos = can("documentos.ver");
   const abaPedida = abaInicial ?? null;
   const q = useContact(contactId);
   const { user, activeOrg } = useAuth();
@@ -193,13 +195,18 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
         />
       )}
 
-      <Tabs defaultValue={abaPedida === "prontuario" || abaPedida === "planos" ? abaPedida : "overview"}>
+      <Tabs defaultValue={abaPedida === "prontuario" || abaPedida === "planos" || abaPedida === "documentos" ? abaPedida : "overview"}>
         <TabsList>
           <TabsTrigger value="overview">{t("Visão geral")}</TabsTrigger>
           <TabsTrigger value="ficha">{t("Ficha do paciente")}</TabsTrigger>
           {verProntuario && (
             <TabsTrigger value="prontuario" data-testid="aba-prontuario">
               {t("Prontuário")}
+            </TabsTrigger>
+          )}
+          {verDocumentos && (
+            <TabsTrigger value="documentos" data-testid="aba-documentos">
+              {t("Documentos")}
             </TabsTrigger>
           )}
           {verPlanos && (
@@ -315,6 +322,13 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
           </Card>
         </TabsContent>
 
+        {verDocumentos && (
+          <TabsContent value="documentos" className="mt-4">
+            <Card className="p-4">
+              <DocumentosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
         {verPlanos && (
           <TabsContent value="planos" className="mt-4">
             <Card className="p-4">

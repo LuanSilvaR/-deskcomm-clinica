@@ -5,7 +5,7 @@
  * a tela e a rota oferecem HOJE. Cada fase que liga uma seção nova na checagem
  * (`fn_clinic_requisitos_faltando`) acrescenta o valor aqui.
  */
-export const SECOES_EXIGIVEIS = ["anamnese", "avaliacao", "conduta", "procedimento"] as const;
+export const SECOES_EXIGIVEIS = ["anamnese", "avaliacao", "conduta", "procedimento", "documento"] as const;
 export type SecaoExigivel = (typeof SECOES_EXIGIVEIS)[number];
 
 export const ROTULO_DA_SECAO: Record<string, string> = {

@@ -332,6 +332,31 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-procedimentos-realizados.test.ts (FORK clinic, migration 9022): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; imutável após finalizar.",
   },
   {
+    tabela: "clinic_modelos_documento",
+    razao:
+      "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): 2 orgs, quem é da A lê 0 linhas da B; ninguém escreve direto.",
+  },
+  {
+    tabela: "clinic_modelos_documento_versoes",
+    razao:
+      "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): 2 orgs, quem é da A lê 0 linhas da B; imutável até para service role.",
+  },
+  {
+    tabela: "clinic_documentos_emitidos",
+    razao:
+      "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): 2 orgs, quem é da A lê 0 linhas da B; sem documentos.ver lê 0; conteúdo imutável.",
+  },
+  {
+    tabela: "clinic_documento_aceites",
+    razao:
+      "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): 2 orgs, quem é da A lê 0 linhas da B; append-only.",
+  },
+  {
+    tabela: "clinic_documento_links",
+    razao:
+      "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): ninguém lê pela API (policy false); só funções com o hash do token.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

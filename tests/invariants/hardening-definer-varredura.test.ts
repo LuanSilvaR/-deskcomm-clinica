@@ -428,6 +428,36 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/atendimentos/[id]/procedimentos/[pid]/anular/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige atendimento.registrar; só rascunho da organização informada, com motivo. tests/invariants/clinic-procedimentos-realizados.test.ts prova anulado em vez de apagado.",
   },
   {
+    // FORK clinic (migration 9023).
+    fn: "fn_clinic_documento_modelo_salvar(uuid,uuid,text,text,text,jsonb,boolean,integer)",
+    razao:
+      "app/api/v1/clinic/documentos/modelos/route.ts (POST/PATCH) chama com createClient da sessão; fn_acesso_exigir exige modelos_clinicos.gerenciar, suporte de escrita e MFA; modelo da organização informada; conflito de versão. tests/invariants/clinic-documentos-e-aceites.test.ts prova versão nova sem mexer na anterior e recusa sem a permissão.",
+  },
+  {
+    // FORK clinic (migration 9023).
+    fn: "fn_clinic_documento_emitir(uuid,uuid,uuid,text,text,uuid,uuid,date)",
+    razao:
+      "app/api/v1/clinic/pacientes/[contactId]/documentos/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige documentos.emitir; paciente, versão, atendimento e plano conferidos na organização informada. tests/invariants/clinic-documentos-e-aceites.test.ts prova paciente de outra empresa recusado.",
+  },
+  {
+    // FORK clinic (migration 9023).
+    fn: "fn_clinic_documento_aceitar(uuid,uuid,text,jsonb,text)",
+    razao:
+      "app/api/v1/clinic/documentos/[id]/aceite/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige documentos.colher_aceite; documento da organização informada; opções completas e obrigatórias marcadas. tests/invariants/clinic-documentos-e-aceites.test.ts prova escolhas incompletas recusadas e aceite duplicado recusado.",
+  },
+  {
+    // FORK clinic (migration 9023).
+    fn: "fn_clinic_documento_link_criar(uuid,uuid,text,integer)",
+    razao:
+      "app/api/v1/clinic/documentos/[id]/link/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige documentos.colher_aceite; só o hash do token é gravado; documento emitido da organização informada. tests/invariants/clinic-documentos-e-aceites.test.ts prova uso único e expiração.",
+  },
+  {
+    // FORK clinic (migration 9023).
+    fn: "fn_clinic_documento_encerrar(uuid,uuid,text,text)",
+    razao:
+      "app/api/v1/clinic/documentos/[id]/encerrar/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige documentos.revogar (revogar) ou documentos.emitir (cancelar); documento da organização informada; motivo obrigatório. tests/invariants/clinic-documentos-e-aceites.test.ts prova revogação append-only.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:
