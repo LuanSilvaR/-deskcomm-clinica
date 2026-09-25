@@ -54,6 +54,8 @@ export const MODULOS_DE_PERMISSAO = {
   financeiro: "Financeiro",
   produtos: "Produtos",
   profissionais: "Profissionais, especialidades e salas",
+  procedimentos: "Procedimentos",
+  pops: "POP (procedimento operacional padrão)",
   relatorios: "Relatórios e indicadores",
   equipe: "Equipe",
   papeis: "Papéis de acesso",
@@ -144,6 +146,16 @@ export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
   p("profissionais", "gerenciar", "manager", "Cadastrar profissionais, especialidades, salas e exigências", {
     dependeDe: ver("profissionais"),
   }),
+
+  // FORK clinic (9015): catálogo de procedimentos e o POP de cada um.
+  p("procedimentos", "ver", "viewer", "Ver procedimentos, especialidades e profissionais vinculados"),
+  p("procedimentos", "gerenciar", "manager", "Cadastrar, alterar, ativar e desativar procedimentos e vínculos", {
+    dependeDe: ver("procedimentos"),
+  }),
+  p("pops", "ver", "viewer", "Ver o POP vigente e o histórico de versões", { dependeDe: ["procedimentos.ver"] }),
+  p("pops", "editar", "manager", "Criar POP, editar rascunho e criar nova versão", { dependeDe: ver("pops") }),
+  p("pops", "aprovar", "manager", "Aprovar uma versão do POP", { dependeDe: ver("pops"), critica: true }),
+  p("pops", "imprimir", "viewer", "Imprimir o POP (PDF)", { dependeDe: ver("pops") }),
 
   p("relatorios", "ver", "agent", "Ver desempenho e faltas"),
   p("relatorios", "gerencial", "manager", "Ver indicadores gerenciais da agenda", { dependeDe: ver("relatorios") }),

@@ -11757,6 +11757,15 @@ export const DICIONARIO: Traducoes = {
   "Abrir compromisso (remarcar ou cancelar)": { es: "Abrir cita (reprogramar o cancelar)" },
   "Grade": { es: "Cuadrícula" },
   "Lista por profissional": { es: "Lista por profesional" },
+  // ── FORK clinic: procedimentos e POP ──
+  "Procedimentos": { es: "Procedimientos" },
+  "POP (procedimento operacional padrão)": { es: "POP (procedimiento operativo estándar)" },
+  "Ver procedimentos, especialidades e profissionais vinculados": { es: "Ver procedimientos, especialidades y profesionales vinculados" },
+  "Cadastrar, alterar, ativar e desativar procedimentos e vínculos": { es: "Registrar, modificar, activar y desactivar procedimientos y vínculos" },
+  "Ver o POP vigente e o histórico de versões": { es: "Ver el POP vigente y el historial de versiones" },
+  "Criar POP, editar rascunho e criar nova versão": { es: "Crear POP, editar borrador y crear nueva versión" },
+  "Aprovar uma versão do POP": { es: "Aprobar una versión del POP" },
+  "Imprimir o POP (PDF)": { es: "Imprimir el POP (PDF)" },
   // ── FORK clinic (ACL): papéis de acesso ──
   "Buscar colaborador": { es: "Buscar colaborador" },
   "Nome ou e-mail": { es: "Nombre o correo" },
@@ -12033,7 +12042,6 @@ export const DICIONARIO: Traducoes = {
   "Avaliação": { es: "Evaluación" },
   "Conduta": { es: "Conducta" },
   "Plano de tratamento": { es: "Plan de tratamiento" },
-  "Procedimentos": { es: "Procedimientos" },
   "Evolução": { es: "Evolución" },
   "Anexos": { es: "Anexos" },
   "Em breve": { es: "Próximamente" },

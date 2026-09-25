@@ -75,7 +75,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const { data: prof } = linha.professional_user_id
     ? await supabase
         .from("clinic_professionals")
-        .select("display_name")
+        .select("nome:display_name")
         .eq("organization_id", org)
         .eq("user_id", linha.professional_user_id)
         .maybeSingle()
@@ -105,7 +105,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
       },
       servico: primeiro(linha.calendar_event_types)?.name ?? null,
       especialidade: primeiro(linha.clinic_specialties)?.name ?? null,
-      profissional: (prof as { display_name?: string | null } | null)?.display_name ?? null,
+      profissional: (prof as { nome?: string | null } | null)?.nome ?? null,
       pode_finalizar: linha.status === "em_andamento" && authz.permissoes.has("atendimento.finalizar"),
     },
     { requestId },
