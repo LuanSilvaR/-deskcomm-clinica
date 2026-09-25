@@ -2,7 +2,7 @@
  * FORK clinic (prontuário F1) — iniciar e finalizar o atendimento.
  *
  * As regras que importam moram no banco (`fn_clinic_iniciar_atendimento`,
- * `fn_clinic_finalizar_atendimento`, migration 9016): permissão clínica, MFA,
+ * `fn_clinic_finalizar_atendimento`, migration 9017): permissão clínica, MFA,
  * suporte com escrita, opção `prontuario` ligada, agendamento da empresa.
  * Aqui só se traduz o erro do banco e se encadeia a visita/"Compareceu".
  */

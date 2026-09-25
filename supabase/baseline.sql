@@ -38641,9 +38641,9 @@ begin
 end $$;
 -- ---- fim clinic (migration 9013, fork) ----
 
--- ---- clinic: acesso clínico (migration 9015, fork) ----
+-- ---- clinic: acesso clínico (migration 9016, fork) ----
 -- ════════════════════════════════════════════════════════════════════════════
--- 9015 · clinic — acesso CLÍNICO separado da administração (FORK, prontuário F0)
+-- 9016 · clinic — acesso CLÍNICO separado da administração (FORK, prontuário F0)
 -- ════════════════════════════════════════════════════════════════════════════
 --
 -- Plano: docs/tarefas/prontuario/plano.md (seções 10 e 11).
@@ -38712,7 +38712,7 @@ begin
 
   v_suporte := public.fn_support_context();
   if v_suporte ->> 'status' = 'active' and (v_suporte ->> 'organization_id')::uuid = p_org then
-    -- 9015: suporte nunca lê conteúdo clínico.
+    -- 9016: suporte nunca lê conteúdo clínico.
     return query
       select c.key from public.clinic_permissions c
        where not c.clinica
@@ -38751,7 +38751,7 @@ begin
       join public.clinic_role_permissions rp on rp.organization_id = r.organization_id and rp.role_id = r.id
       join public.clinic_permissions c on c.key = rp.permission_key
      where mr.organization_id = p_org and mr.user_id = auth.uid()
-       -- 9015: o papel de sistema Administrador não concede conteúdo clínico.
+       -- 9016: o papel de sistema Administrador não concede conteúdo clínico.
        and not (c.clinica and r.system_key is not distinct from 'administrador');
 end $$;
 revoke execute on function public.fn_member_permissions(uuid) from public, anon;
@@ -38872,11 +38872,11 @@ end $$;
 
 revoke execute on function public.fn_clinic_definir_prontuario(uuid, boolean) from public, anon;
 grant  execute on function public.fn_clinic_definir_prontuario(uuid, boolean) to authenticated;
--- ---- fim clinic (migration 9015, fork) ----
+-- ---- fim clinic (migration 9016, fork) ----
 
--- ---- clinic: atendimentos (migration 9016, fork) ----
+-- ---- clinic: atendimentos (migration 9017, fork) ----
 -- ════════════════════════════════════════════════════════════════════════════
--- 9016 · clinic — o ATENDIMENTO clínico (FORK, prontuário F1)
+-- 9017 · clinic — o ATENDIMENTO clínico (FORK, prontuário F1)
 -- ════════════════════════════════════════════════════════════════════════════
 --
 -- Plano: docs/tarefas/prontuario/plano.md (seções 4–7, fase F1).
@@ -38890,7 +38890,7 @@ grant  execute on function public.fn_clinic_definir_prontuario(uuid, boolean) to
 --   clinic_atendimentos          um por agendamento (appointment_id unique)
 --   clinic_atendimento_eventos   append-only: iniciado/finalizado/reaberto/anulado
 --
--- Leitura: membro da empresa COM `prontuario.ver` (chave clínica, 9015) — sem
+-- Leitura: membro da empresa COM `prontuario.ver` (chave clínica, 9016) — sem
 -- atalho de platform admin. Escrita: só pelas funções abaixo, que exigem a
 -- permissão, MFA e suporte com escrita (`fn_acesso_exigir`) e a opção
 -- `settings.clinic.prontuario` ligada. Idempotente.
@@ -39087,11 +39087,11 @@ begin
 end $$;
 revoke execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) from public, anon;
 grant  execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) to authenticated;
--- ---- fim clinic (migration 9016, fork) ----
+-- ---- fim clinic (migration 9017, fork) ----
 
--- ---- clinic: formulários (migration 9017, fork) ----
+-- ---- clinic: formulários (migration 9018, fork) ----
 -- ════════════════════════════════════════════════════════════════════════════
--- 9017 · clinic — formulários clínicos por MODELO versionado (FORK, prontuário F2)
+-- 9018 · clinic — formulários clínicos por MODELO versionado (FORK, prontuário F2)
 -- ════════════════════════════════════════════════════════════════════════════
 --
 -- Plano: docs/tarefas/prontuario/plano.md (fase F2).
@@ -39407,11 +39407,11 @@ begin
 end $$;
 revoke execute on function public.fn_clinic_salvar_formulario(uuid, uuid, text, uuid, jsonb, integer) from public, anon;
 grant  execute on function public.fn_clinic_salvar_formulario(uuid, uuid, text, uuid, jsonb, integer) to authenticated;
--- ---- fim clinic (migration 9017, fork) ----
+-- ---- fim clinic (migration 9018, fork) ----
 
--- ---- clinic: evoluções e adendos (migration 9018, fork) ----
+-- ---- clinic: evoluções e adendos (migration 9019, fork) ----
 -- ════════════════════════════════════════════════════════════════════════════
--- 9018 · clinic — evolução, adendos e o prontuário IMUTÁVEL (FORK, prontuário F2)
+-- 9019 · clinic — evolução, adendos e o prontuário IMUTÁVEL (FORK, prontuário F2)
 -- ════════════════════════════════════════════════════════════════════════════
 --
 -- Plano: docs/tarefas/prontuario/plano.md (fase F2, seção 14).
@@ -39648,7 +39648,7 @@ end $$;
 revoke execute on function public.fn_clinic_adicionar_adendo(uuid, uuid, text, uuid, text, text) from public, anon;
 grant  execute on function public.fn_clinic_adicionar_adendo(uuid, uuid, text, uuid, text, text) to authenticated;
 
--- ─── finalizar (substitui a da 9016): requisitos + congelar ────────────────
+-- ─── finalizar (substitui a da 9017): requisitos + congelar ────────────────
 create or replace function public.fn_clinic_finalizar_atendimento(p_org uuid, p_atendimento uuid)
 returns jsonb
 language plpgsql
@@ -39717,7 +39717,7 @@ begin
 end $$;
 revoke execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) from public, anon;
 grant  execute on function public.fn_clinic_finalizar_atendimento(uuid, uuid) to authenticated;
--- ---- fim clinic (migration 9018, fork) ----
+-- ---- fim clinic (migration 9019, fork) ----
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --

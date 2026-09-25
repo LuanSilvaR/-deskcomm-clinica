@@ -2,14 +2,14 @@
  * FORK clinic (prontuário F2) — os CAMPOS de um modelo de formulário clínico e a
  * validação das respostas.
  *
- * Um modelo é uma lista de campos em JSON (migration 9017). Nada aqui conhece
+ * Um modelo é uma lista de campos em JSON (migration 9018). Nada aqui conhece
  * especialidade: estética, fisioterapia ou dermatologia são só modelos
  * diferentes com os mesmos tipos de campo. Tipo novo = um caso a mais em
  * `TIPOS_DE_CAMPO`, `validarValor` e no renderizador.
  *
  * `validarRespostas` roda no AUTOSAVE: recusa chave que não existe no modelo e
  * valor do tipo errado, mas NÃO exige obrigatórios — rascunho pode estar pela
- * metade. Obrigatórios são cobrados na finalização (banco, 9018) e mostrados
+ * metade. Obrigatórios são cobrados na finalização (banco, 9019) e mostrados
  * como pendência na tela (`pendencias`).
  */
 import { z } from "zod";

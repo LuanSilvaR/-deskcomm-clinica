@@ -2,7 +2,7 @@
  * GET /api/v1/clinic/atendimentos/:id — o cabeçalho do atendimento.
  *
  * Paciente (nome e idade), serviço, profissional, especialidade, horários e
- * status. Exige `prontuario.ver` (chave clínica) e a RLS da 9016 confere de
+ * status. Exige `prontuario.ver` (chave clínica) e a RLS da 9017 confere de
  * novo. Toda leitura fica no registro de auditoria — só metadados.
  */
 import { randomUUID } from "node:crypto";

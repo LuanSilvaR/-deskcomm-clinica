@@ -3,7 +3,7 @@
  *
  * O registro original nunca muda: o adendo fica ao lado dele, com texto, motivo,
  * autor e data. Só em atendimento finalizado e com `prontuario.adendo`
- * (`fn_clinic_adicionar_adendo`, migration 9018).
+ * (`fn_clinic_adicionar_adendo`, migration 9019).
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";

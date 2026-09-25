@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- 9018 · clinic — evolução, adendos e o prontuário IMUTÁVEL (FORK, prontuário F2)
+-- 9019 · clinic — evolução, adendos e o prontuário IMUTÁVEL (FORK, prontuário F2)
 -- ════════════════════════════════════════════════════════════════════════════
 --
 -- Plano: docs/tarefas/prontuario/plano.md (fase F2, seção 14).
@@ -236,7 +236,7 @@ end $$;
 revoke execute on function public.fn_clinic_adicionar_adendo(uuid, uuid, text, uuid, text, text) from public, anon;
 grant  execute on function public.fn_clinic_adicionar_adendo(uuid, uuid, text, uuid, text, text) to authenticated;
 
--- ─── finalizar (substitui a da 9016): requisitos + congelar ────────────────
+-- ─── finalizar (substitui a da 9017): requisitos + congelar ────────────────
 create or replace function public.fn_clinic_finalizar_atendimento(p_org uuid, p_atendimento uuid)
 returns jsonb
 language plpgsql

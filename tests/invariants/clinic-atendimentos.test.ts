@@ -1,5 +1,5 @@
 /**
- * clinic (fork, prontuário F1) — migration 9016: o atendimento clínico.
+ * clinic (fork, prontuário F1) — migration 9017: o atendimento clínico.
  *
  * Prova no Postgres real, com o baseline aplicado:
  *   1. opção `prontuario` desligada: ninguém inicia;
@@ -185,7 +185,7 @@ describe("finalizar", () => {
   });
 
   it("profissional finaliza: status, horário, quem e evento; repetir não duplica", () => {
-    // 9018: o mínimo para finalizar é a evolução com conteúdo.
+    // 9019: o mínimo para finalizar é a evolução com conteúdo.
     expect(erro(como(PROF, `select public.fn_clinic_finalizar_atendimento('${ORG}', '${atendimentoId}');`))).toMatch(
       /requisitos_pendentes/,
     );

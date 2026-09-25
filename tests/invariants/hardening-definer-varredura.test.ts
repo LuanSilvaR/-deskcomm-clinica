@@ -320,7 +320,7 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-prazo-do-paciente.test.ts prova gerente recusado (42501), faixa e anon sem EXECUTE.",
   },
   {
-    // FORK clinic (migration 9017).
+    // FORK clinic (migration 9018).
     fn: "fn_clinic_salvar_formulario(uuid,uuid,text,uuid,jsonb,integer)",
     razao:
       "app/api/v1/clinic/atendimentos/[id]/formularios/[tipo]/route.ts (PUT) chama com createClient da sessão; " +
@@ -328,7 +328,7 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
   },
   {
-    // FORK clinic (migration 9018).
+    // FORK clinic (migration 9019).
     fn: "fn_clinic_salvar_evolucao(uuid,uuid,text,text,text,text,text,integer)",
     razao:
       "app/api/v1/clinic/atendimentos/[id]/evolucao/route.ts (PUT) chama com createClient da sessão; " +
@@ -336,7 +336,7 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
   },
   {
-    // FORK clinic (migration 9018).
+    // FORK clinic (migration 9019).
     fn: "fn_clinic_adicionar_adendo(uuid,uuid,text,uuid,text,text)",
     razao:
       "app/api/v1/clinic/atendimentos/[id]/adendos/route.ts (POST) chama com createClient da sessão; " +
@@ -344,7 +344,7 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
   },
   {
-    // FORK clinic (migration 9016).
+    // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:
       "app/api/v1/clinic/agendamentos/[id]/atendimento/route.ts (POST) chama com createClient da sessão; " +
@@ -352,7 +352,7 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "o agendamento é conferido na organização informada. tests/invariants/clinic-atendimentos.test.ts prova recusas e anon sem EXECUTE.",
   },
   {
-    // FORK clinic (migration 9016).
+    // FORK clinic (migration 9017).
     fn: "fn_clinic_finalizar_atendimento(uuid,uuid)",
     razao:
       "app/api/v1/clinic/atendimentos/[id]/finalizar/route.ts (POST) chama com createClient da sessão; " +
@@ -360,7 +360,7 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-atendimentos.test.ts prova recusas e anon sem EXECUTE.",
   },
   {
-    // FORK clinic (migration 9015).
+    // FORK clinic (migration 9016).
     fn: "fn_clinic_definir_prontuario(uuid,boolean)",
     razao:
       "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +

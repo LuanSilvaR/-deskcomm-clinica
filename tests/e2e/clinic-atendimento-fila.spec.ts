@@ -1,5 +1,5 @@
 /**
- * FORK clinic (prontuário F1/F2, migrations 9016–9018) — a fila "Meus atendimentos" e
+ * FORK clinic (prontuário F1/F2, migrations 9017–9019) — a fila "Meus atendimentos" e
  * os registros do atendimento, PELA TELA:
  *
  *   1. o admin liga a opção "prontuario" (config da clínica) e o atendente vira

@@ -57,14 +57,14 @@ export const ApiErrorCodes = {
   // FORK clinic (migration 9002): a ficha cadastral do paciente está incompleta
   // e a organização exige a ficha na chegada / no "Compareceu".
   ficha_incompleta: "ficha_incompleta",
-  // FORK clinic (migration 9016): atendimento clínico.
+  // FORK clinic (migration 9017): atendimento clínico.
   // O módulo de prontuário está desligado nesta empresa.
   prontuario_desligado: "prontuario_desligado",
   // A visita tem atendimento aberto: quem conclui é o profissional, pela fila.
   atendimento_em_andamento: "atendimento_em_andamento",
   // Atendimento já finalizado (ou anulado) não é reiniciado.
   atendimento_ja_encerrado: "atendimento_ja_encerrado",
-  // FORK clinic (9018): registro finalizado só aceita adendo; finalizar exige o mínimo.
+  // FORK clinic (9019): registro finalizado só aceita adendo; finalizar exige o mínimo.
   prontuario_imutavel: "prontuario_imutavel",
   requisitos_pendentes: "requisitos_pendentes",
   agenda_disponibilidade_invalida: "agenda_disponibilidade_invalida",

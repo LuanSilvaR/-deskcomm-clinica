@@ -2,7 +2,7 @@
  * FORK clinic (prontuário F2) — leitura dos registros clínicos de atendimentos.
  *
  * Uma consulta por tabela para um LOTE de atendimentos (a linha do tempo pede 20
- * de uma vez), sempre com o client da SESSÃO: a RLS (9017/9018) só devolve linha
+ * de uma vez), sempre com o client da SESSÃO: a RLS (9018/9019) só devolve linha
  * a quem tem `prontuario.ver` na empresa. Nada aqui decide acesso — a rota exige
  * a permissão e o banco confere de novo.
  */

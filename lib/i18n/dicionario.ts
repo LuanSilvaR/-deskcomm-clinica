@@ -11980,7 +11980,7 @@ export const DICIONARIO: Traducoes = {
   "Ver mais antigos": { es: "Ver más antiguos" },
   // ── FORK clinic (E1): busca do paciente ao marcar ──
   "Nome, telefone, CPF ou nascimento (DD/MM/AAAA)": { es: "Nombre, teléfono, CPF o nacimiento (DD/MM/AAAA)" },
-  // ── FORK clinic (9015): permissões do módulo clínico ──
+  // ── FORK clinic (9016): permissões do módulo clínico ──
   "Atendimento clínico": { es: "Atención clínica" },
   "Prontuário": { es: "Historia clínica" },
   "Planos de tratamento": { es: "Planes de tratamiento" },
@@ -12007,7 +12007,7 @@ export const DICIONARIO: Traducoes = {
   "Registrar o aceite do paciente": { es: "Registrar la aceptación del paciente" },
   "Revogar ou cancelar documento emitido": { es: "Revocar o cancelar documento emitido" },
   "Configurar modelos de anamnese, avaliação e documentos (sem ver pacientes)": { es: "Configurar modelos de anamnesis, evaluación y documentos (sin ver pacientes)" },
-  // ── FORK clinic (9016): atendimento clínico ──
+  // ── FORK clinic (9017): atendimento clínico ──
   "Meus atendimentos": { es: "Mis atenciones" },
   "A fila do profissional: quem está aguardando, em atendimento e os próximos do dia.": { es: "La fila del profesional: quién espera, quién está en atención y los próximos del día." },
   "Quem chegou aparece em Aguardando na hora. Atualiza sozinho.": { es: "Quien llegó aparece en Esperando al instante. Se actualiza solo." },
@@ -12049,7 +12049,7 @@ export const DICIONARIO: Traducoes = {
   "Confirme a verificação em duas etapas para continuar.": { es: "Confirme la verificación en dos pasos para continuar." },
   "Dia inválido.": { es: "Día inválido." },
   "id inválido": { es: "id inválido" },
-  // ── FORK clinic (9017/9018): registros do prontuário e modelos padrão ──
+  // ── FORK clinic (9018/9019): registros do prontuário e modelos padrão ──
   "Salvo às": { es: "Guardado a las" },
   "Outra pessoa alterou este registro. Nada foi sobrescrito.": { es: "Otra persona modificó este registro. No se sobrescribió nada." },
   "Recarregar": { es: "Recargar" },
