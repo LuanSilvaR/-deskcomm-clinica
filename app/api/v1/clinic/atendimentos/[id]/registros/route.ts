@@ -10,6 +10,7 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { registrosDosAtendimentos } from "@/lib/clinic/prontuario/leitura";
+import { leituraClinicaPermitida } from "@/lib/clinic/prontuario/limite";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,6 +25,9 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const t = (s: string) => traduzir(s, authz.user.idioma);
   const { id } = await ctx.params;
   if (!z.string().uuid().safeParse(id).success) return fail("validation_failed", t("id inválido"), 422, { requestId });
+  if (!(await leituraClinicaPermitida(authz.user.id, "registros"))) {
+    return fail("rate_limited", t("Muitas leituras seguidas. Aguarde alguns minutos."), 429, { requestId });
+  }
   const org = authz.org.orgId;
 
   const supabase = await createClient();

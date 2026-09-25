@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
 import type { RegistrosDoAtendimento } from "@/lib/clinic/prontuario/leitura";
 
 interface AtendimentoNaLinhaDoTempo extends RegistrosDoAtendimento {
@@ -40,6 +41,7 @@ interface Pagina {
 
 export function ProntuarioDoPaciente({ contactId }: { contactId: string }) {
   const t = useT();
+  const { can } = usePermissoes();
   const tag = useTagDeIdioma();
   const q = useInfiniteQuery({
     queryKey: ["clinic", "prontuario", contactId],
@@ -62,6 +64,18 @@ export function ProntuarioDoPaciente({ contactId }: { contactId: string }) {
 
   return (
     <div className="space-y-4" data-testid="prontuario-do-paciente">
+      {can("prontuario.exportar") ? (
+        <div className="flex justify-end">
+          <Link
+            href={`/imprimir/prontuario/${contactId}`}
+            target="_blank"
+            className="text-sm underline-offset-4 hover:underline"
+            data-testid="prontuario-exportar"
+          >
+            {t("Exportar / imprimir prontuário")}
+          </Link>
+        </div>
+      ) : null}
       <ol className="space-y-4 border-l pl-4">
         {atendimentos.map((a) => {
           const adendosDe = (alvoId: string) => a.adendos.filter((x) => x.alvo_id === alvoId);

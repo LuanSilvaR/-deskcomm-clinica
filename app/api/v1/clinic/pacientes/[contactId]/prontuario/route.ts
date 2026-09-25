@@ -14,15 +14,14 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
-import { registrosDosAtendimentos } from "@/lib/clinic/prontuario/leitura";
+import { leituraClinicaPermitida } from "@/lib/clinic/prontuario/limite";
+import { lerLinhaDoTempo } from "@/lib/clinic/prontuario/linha-do-tempo";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ contactId: string }> };
-type Um<T> = T | T[] | null;
-const primeiro = <T,>(v: Um<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
 
 const query = z
   .object({
@@ -41,46 +40,16 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
   if (!z.string().uuid().safeParse(contactId).success) return fail("validation_failed", t("id inválido"), 422, { requestId });
   const lido = query.safeParse(Object.fromEntries(new URL(req.url).searchParams));
   if (!lido.success) return fail("validation_failed", t("Parâmetros inválidos."), 422, { requestId });
+  if (!(await leituraClinicaPermitida(authz.user.id, "prontuario"))) {
+    return fail("rate_limited", t("Muitas leituras seguidas. Aguarde alguns minutos."), 429, { requestId });
+  }
   const org = authz.org.orgId;
-  const limite = lido.data.limite ?? 20;
 
   const supabase = await createClient();
-  let consulta = supabase
-    .from("clinic_atendimentos")
-    .select("id, status, started_at, finished_at, professional_user_id, calendar_event_types(name), clinic_specialties(name)")
-    .eq("organization_id", org)
-    .eq("contact_id", contactId)
-    .neq("status", "anulado")
-    .order("started_at", { ascending: false })
-    .limit(limite + 1);
-  if (lido.data.antes) consulta = consulta.lt("started_at", lido.data.antes);
-  const { data, error } = await consulta;
-  if (error) return fail("internal_error", error.message, 500, { requestId });
-
-  const linhas = (data ?? []).slice(0, limite) as unknown as Array<{
-    id: string;
-    status: string;
-    started_at: string;
-    finished_at: string | null;
-    professional_user_id: string | null;
-    calendar_event_types: Um<{ name: string | null }>;
-    clinic_specialties: Um<{ name: string | null }>;
-  }>;
-  const temMais = (data ?? []).length > limite;
-
-  const profIds = [...new Set(linhas.map((l) => l.professional_user_id).filter((x): x is string => !!x))];
-  const [{ data: profs }, registros] = await Promise.all([
-    profIds.length
-      ? supabase.from("clinic_professionals").select("user_id, display_name").eq("organization_id", org).in("user_id", profIds)
-      : Promise.resolve({ data: [] as Array<{ user_id: string; display_name: string | null }> }),
-    registrosDosAtendimentos(
-      supabase,
-      org,
-      linhas.map((l) => l.id),
-    ).catch(() => null),
-  ]);
-  if (!registros) return fail("internal_error", t("Não foi possível ler o prontuário."), 500, { requestId });
-  const nomeDe = new Map((profs ?? []).map((p) => [p.user_id as string, (p.display_name as string | null) ?? null]));
+  const linha = await lerLinhaDoTempo(supabase, org, contactId, { antes: lido.data.antes, limite: lido.data.limite ?? 20 }).catch(
+    () => null,
+  );
+  if (!linha) return fail("internal_error", t("Não foi possível ler o prontuário."), 500, { requestId });
 
   void audit({
     action: "clinic.prontuario_visto",
@@ -89,23 +58,7 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
     resourceType: "contact",
     resourceId: contactId,
     requestId,
-    metadata: { atendimentos: linhas.length, pagina: lido.data.antes ? "seguinte" : "primeira" },
+    metadata: { atendimentos: linha.atendimentos.length, pagina: lido.data.antes ? "seguinte" : "primeira" },
   });
-
-  return ok(
-    {
-      atendimentos: linhas.map((l) => ({
-        id: l.id,
-        status: l.status,
-        inicio: l.started_at,
-        fim: l.finished_at,
-        profissional: l.professional_user_id ? (nomeDe.get(l.professional_user_id) ?? null) : null,
-        servico: primeiro(l.calendar_event_types)?.name ?? null,
-        especialidade: primeiro(l.clinic_specialties)?.name ?? null,
-        ...registros.get(l.id)!,
-      })),
-      proximo: temMais ? linhas.at(-1)!.started_at : null,
-    },
-    { requestId },
-  );
+  return ok(linha, { requestId });
 }

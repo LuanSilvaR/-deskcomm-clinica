@@ -12373,6 +12373,20 @@ export const DICIONARIO: Traducoes = {
   "Miniatura inválida.": { es: "Miniatura inválida." },
   "Não foi possível guardar o arquivo.": { es: "No fue posible guardar el archivo." },
   "Muitas aberturas seguidas. Aguarde alguns minutos.": { es: "Demasiadas aperturas seguidas. Espere unos minutos." },
+  // ── FORK clinic (F8): reabrir, exportar e limites ──
+  "Exportar / imprimir prontuário": { es: "Exportar / imprimir historia clínica" },
+  "Imprimir / salvar PDF": { es: "Imprimir / guardar PDF" },
+  "nascimento": { es: "nacimiento" },
+  "Emitido em": { es: "Emitido el" },
+  "atendimentos": { es: "atenciones" },
+  "Documento com dados de saúde. Guarde e compartilhe só com quem tem direito de acesso.": { es: "Documento con datos de salud. Guárdelo y compártalo solo con quien tiene derecho de acceso." },
+  "finalizado em": { es: "finalizado el" },
+  "em andamento": { es: "en curso" },
+  "Muitas exportações seguidas. Tente de novo mais tarde.": { es: "Demasiadas exportaciones seguidas. Intente de nuevo más tarde." },
+  "Motivo para reabrir (o que já foi registrado continua como está)": { es: "Motivo para reabrir (lo ya registrado queda como está)" },
+  "Reabrir atendimento": { es: "Reabrir atención" },
+  "Só um atendimento finalizado pode ser reaberto.": { es: "Solo una atención finalizada puede reabrirse." },
+  "Muitas leituras seguidas. Aguarde alguns minutos.": { es: "Demasiadas lecturas seguidas. Espere unos minutos." },
 };
 
 /**

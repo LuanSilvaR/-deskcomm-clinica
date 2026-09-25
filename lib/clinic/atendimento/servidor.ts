@@ -151,6 +151,9 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
     code: "forbidden_permission",
     mensagem: "O paciente não autorizou este uso da imagem (ou a autorização venceu ou foi revogada).",
   },
+  // FORK clinic (prontuário F8, 9025).
+  atendimento_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo." },
+  atendimento_nao_finalizado: { status: 409, code: "conflict", mensagem: "Só um atendimento finalizado pode ser reaberto." },
   acesso_mfa_exigido: {
     status: 403,
     code: "mfa_required",

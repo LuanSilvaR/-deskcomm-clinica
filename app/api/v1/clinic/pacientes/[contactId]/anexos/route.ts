@@ -109,15 +109,16 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
   const requestId = randomUUID();
-  const form = await req.formData().catch(() => null);
-  const dadosBrutos = form?.get("dados");
-  const lido = dadosSchema.safeParse(lerJson(dadosBrutos));
-  const authz = await requirePermission(lido.success && lido.data.tipo === "foto" ? "fotos.enviar" : "anexos.enviar", {
-    requestId,
-    resource: "clinic_anexos",
-  });
+  // Sessão e permissão clínica ANTES de ler o corpo (até 10 MB).
+  const authz = await requirePermission("prontuario.ver", { requestId, resource: "clinic_anexos" });
   if (!authz.ok) return authz.response;
   const t = (s: string) => traduzir(s, authz.user.idioma);
+  const form = await req.formData().catch(() => null);
+  const lido = dadosSchema.safeParse(lerJson(form?.get("dados")));
+  const exigida = lido.success && lido.data.tipo === "foto" ? "fotos.enviar" : "anexos.enviar";
+  if (!authz.permissoes.has(exigida)) {
+    return fail("forbidden_permission", t("Você não tem permissão para esta ação."), 403, { requestId });
+  }
   const { contactId } = await ctx.params;
   if (!z.string().uuid().safeParse(contactId).success) return fail("validation_failed", t("id inválido"), 422, { requestId });
   if (!lido.success) return fail("validation_failed", t("Dados inválidos."), 422, { requestId });

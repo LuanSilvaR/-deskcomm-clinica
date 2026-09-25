@@ -476,6 +476,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/pacientes/[contactId]/anexos/route.ts (GET) chama com createClient da sessão; só devolve totais (bytes usados e cota) e exige que a organização esteja em fn_user_org_ids(). tests/invariants/clinic-anexos-e-fotos.test.ts prova outra empresa recusada.",
   },
   {
+    // FORK clinic (migration 9025).
+    fn: "fn_clinic_reabrir_atendimento(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/reabrir/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige atendimento.reabrir (chave clínica, gerência), suporte de escrita e MFA; atendimento finalizado da organização informada; motivo obrigatório. tests/invariants/clinic-reabrir-atendimento.test.ts prova recusa sem a permissão, registros finalizados continuam imutáveis e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

@@ -107,6 +107,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
       especialidade: primeiro(linha.clinic_specialties)?.name ?? null,
       profissional: (prof as { nome?: string | null } | null)?.nome ?? null,
       pode_finalizar: linha.status === "em_andamento" && authz.permissoes.has("atendimento.finalizar"),
+      pode_reabrir: linha.status === "finalizado" && authz.permissoes.has("atendimento.reabrir"),
     },
     { requestId },
   );

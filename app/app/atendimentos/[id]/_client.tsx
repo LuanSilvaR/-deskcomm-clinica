@@ -44,6 +44,7 @@ interface Atendimento {
   especialidade: string | null;
   profissional: string | null;
   pode_finalizar: boolean;
+  pode_reabrir: boolean;
 }
 
 interface Registros extends RegistrosDoAtendimento {
@@ -118,6 +119,12 @@ export function AtendimentoDoDia({ id }: { id: string }) {
     },
   });
 
+  const reabrir = useMutation({
+    mutationFn: (motivo: string) => apiClient.post(`/api/v1/clinic/atendimentos/${id}/reabrir`, { motivo }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: chave }),
+    onError: showApiError,
+  });
+
   const quando = (iso: string) => new Date(iso).toLocaleString(tag, { dateStyle: "short", timeStyle: "short" });
 
   if (at.isLoading) return <p className="p-6 text-sm text-text-muted">{t("Carregando…")}</p>;
@@ -177,6 +184,20 @@ export function AtendimentoDoDia({ id }: { id: string }) {
           {a.pode_finalizar ? (
             <Button className="h-11 md:h-9" disabled={finalizar.isPending} data-testid="atendimento-finalizar" onClick={() => finalizar.mutate()}>
               {finalizar.isPending ? t("Finalizando…") : t("Finalizar atendimento")}
+            </Button>
+          ) : null}
+          {a.pode_reabrir ? (
+            <Button
+              variant="outline"
+              className="h-11 md:h-9"
+              disabled={reabrir.isPending}
+              data-testid="atendimento-reabrir"
+              onClick={() => {
+                const motivo = window.prompt(t("Motivo para reabrir (o que já foi registrado continua como está)"));
+                if (motivo && motivo.trim().length >= 3) reabrir.mutate(motivo.trim());
+              }}
+            >
+              {t("Reabrir atendimento")}
             </Button>
           ) : null}
         </div>

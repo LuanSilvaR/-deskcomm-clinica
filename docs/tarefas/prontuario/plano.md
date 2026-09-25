@@ -13,6 +13,8 @@ Decisões do dono (respondidas):
 - **Aceite**: eletrônico simples (tela/tablet ou link) com versão, hash, data, IP/dispositivo.
 
 Aprovado em 2026-09-25. Uma fase por PR; F0 na branch `feature/prontuario-f0`.
+**Executado (F0–F8)** — ordem de merge, como ligar e como testar: `docs/tarefas/prontuario/entrega.md`.
+Numeração final das migrations: 9016–9025 (a 9015 foi para Procedimentos/POP, PR #25).
 
 ---
 

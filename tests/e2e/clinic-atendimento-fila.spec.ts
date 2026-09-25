@@ -191,6 +191,8 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     await pAt.getByTestId("atendimento-finalizar").click();
     await expect(pAt.getByTestId("atendimento-status")).toHaveText("Finalizado", { timeout: 20_000 });
     await foto(pAt, "4-finalizado");
+    // reabrir é da gerência clínica (F8): o profissional agente não vê o botão.
+    await expect(pAt.getByTestId("atendimento-reabrir")).toHaveCount(0);
 
     // finalizado: só leitura; correção é adendo, ao lado do original.
     await expect(pAt.getByTestId("evolucao-resposta")).toHaveCount(0);
