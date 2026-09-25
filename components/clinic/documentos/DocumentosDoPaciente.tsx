@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { copyToClipboard } from "@/lib/clipboard";
 import {
   opcoesDoTermoSchema,
   ROTULO_DO_STATUS_DO_DOCUMENTO,
@@ -371,11 +372,7 @@ function CartaoDoDocumento({
               className="h-9 font-mono text-xs"
               aria-label={t("Link de aceite")}
             />
-            <Button
-              size="sm"
-              type="button"
-              onClick={() => void navigator.clipboard?.writeText(link.url)}
-            >
+            <Button size="sm" type="button" onClick={() => void copyToClipboard(link.url)}>
               {t("Copiar")}
             </Button>
           </div>
