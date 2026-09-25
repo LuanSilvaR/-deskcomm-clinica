@@ -11786,6 +11786,7 @@ export const DICIONARIO: Traducoes = {
   "Finalizados": { es: "Finalizados" },
   "Sem confirmação": { es: "Sin confirmación" },
   // ── FORK clinic: procedimentos e POP ──
+  "Imprimir": { es: "Imprimir" },
   "Adicionar linha": { es: "Añadir fila" },
   "Aprovado": { es: "Aprobado" },
   "Aprovado por": { es: "Aprobado por" },

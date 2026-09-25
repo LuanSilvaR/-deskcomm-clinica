@@ -8,7 +8,9 @@
  *   4. nova versão com motivo → 1.1 em rascunho (conteúdo copiado); editar; aprovar;
  *   5. histórico: 1.1 Aprovado e 1.0 Substituído; abrir a 1.0 avisa que não é vigente;
  *   6. API: editar versão aprovada = 409; lock velho = 409 (outra pessoa salvou);
- *      visualizador lê o POP mas não aprova (403).
+ *      visualizador lê o POP mas não aprova (403);
+ *   7. imprimir: o botão leva ao PDF A4 da versão; a 1.0 (substituída) e a 1.1
+ *      (vigente) saem como application/pdf; o visualizador também imprime.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -141,6 +143,26 @@ test("POP: modelo, autosave, aprovação, nova versão e histórico — pela tel
     await expect(hist.getByTestId("pop-barra")).toHaveCount(0);
     await foto(page, "05-pop-historico");
 
+    // ── 7. imprimir ────────────────────────────────────────────────────────
+    const doHistorico = ((await (await page.request.get(`/api/v1/clinic/pops/${popId}`)).json()) as {
+      data: { versoes: { id: string; major: number; minor: number; status: string }[] };
+    }).data.versoes;
+    const antigaId = doHistorico.find((x) => x.major === 1 && x.minor === 0)!.id;
+    const vigenteId = doHistorico.find((x) => x.status === "approved")!.id;
+    await expect(hist.getByTestId("pop-imprimir")).toHaveAttribute("href", `/api/v1/clinic/pops/versoes/${antigaId}/pdf`);
+    for (const [vid, arquivo] of [
+      [antigaId, "06-pop-1.0-substituida.pdf"],
+      [vigenteId, "07-pop-1.1-vigente.pdf"],
+    ] as const) {
+      const pdf = await page.request.get(`/api/v1/clinic/pops/versoes/${vid}/pdf`);
+      expect(pdf.status()).toBe(200);
+      expect(pdf.headers()["content-type"]).toContain("application/pdf");
+      const corpo = await pdf.body();
+      expect(corpo.subarray(0, 4).toString()).toBe("%PDF");
+      fs.mkdirSync(EVIDENCIA, { recursive: true });
+      fs.writeFileSync(path.join(EVIDENCIA, arquivo), corpo);
+    }
+
     // ── 6. visualizador lê e não aprova ────────────────────────────────────
     const visualizador = creds.users.viewer;
     if (visualizador) {
@@ -156,6 +178,7 @@ test("POP: modelo, autosave, aprovação, nova versão e histórico — pela tel
       await vp.waitForURL(/\/app(?:\/|$)/, { timeout: 60_000 });
       expect((await vp.request.get(`/api/v1/clinic/pops/${popId}`)).status()).toBe(200);
       expect((await vp.request.post(`/api/v1/clinic/pops/versoes/${rascunhoId}/aprovar`, { data: {} })).status()).toBe(403);
+      expect((await vp.request.get(`/api/v1/clinic/pops/versoes/${rascunhoId}/pdf`)).status()).toBe(200);
       await ctx.close();
       expect((await page.request.delete(`/api/v1/clinic/pops/versoes/${rascunhoId}`)).status()).toBe(200);
     }
