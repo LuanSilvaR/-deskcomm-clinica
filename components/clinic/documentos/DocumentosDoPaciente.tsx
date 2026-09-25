@@ -24,6 +24,7 @@ import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { copyToClipboard } from "@/lib/clipboard";
+import { linkDoWhatsApp } from "@/lib/clinic/documentos/whatsapp";
 import {
   opcoesDoTermoSchema,
   ROTULO_DO_STATUS_DO_DOCUMENTO,
@@ -229,8 +230,18 @@ function CartaoDoDocumento({
   const qc = useQueryClient();
   const [aberto, setAberto] = useState(false);
   const [colhendo, setColhendo] = useState(false);
-  const [link, setLink] = useState<{ url: string; expira_em: string } | null>(null);
+  const [link, setLink] = useState<{
+    url: string;
+    expira_em: string;
+    telefone: string | null;
+  } | null>(null);
   const recarregar = () => void qc.invalidateQueries({ queryKey: chave });
+  const whatsapp = link
+    ? linkDoWhatsApp(
+        link.telefone,
+        `${t("Olá! Segue o link para você ler e aceitar um documento da clínica:")} ${link.url}`,
+      )
+    : null;
   const opcoes = opcoesDe(doc);
   const aceites = [...(doc.clinic_documento_aceites ?? [])].sort((a, b) =>
     a.created_at.localeCompare(b.created_at),
@@ -250,7 +261,7 @@ function CartaoDoDocumento({
   const gerarLink = useMutation({
     mutationFn: async () =>
       (
-        await apiClient.post<{ data: { url: string; expira_em: string } }>(
+        await apiClient.post<{ data: { url: string; expira_em: string; telefone: string | null } }>(
           `/api/v1/clinic/documentos/${doc.id}/link`,
           { horas: 72 },
         )
@@ -376,6 +387,21 @@ function CartaoDoDocumento({
               {t("Copiar")}
             </Button>
           </div>
+          {whatsapp ? (
+            <a
+              href={whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block underline-offset-4 hover:underline"
+              data-testid="documento-link-whatsapp"
+            >
+              {t("Enviar pelo WhatsApp")}
+            </a>
+          ) : (
+            <p className="text-text-muted">
+              {t("Paciente sem telefone válido: copie o link e envie por outro canal.")}
+            </p>
+          )}
         </div>
       ) : null}
       {aberto && !colhendo ? <TextoDoTermo conteudo={doc.conteudo} /> : null}

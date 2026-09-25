@@ -22,6 +22,7 @@ const PASTAS = [
   "app/api/v1/clinic/atendimentos",
   "app/api/v1/clinic/agendamentos/[id]/atendimento",
   "app/api/v1/clinic/pacientes/[contactId]/prontuario",
+  "app/api/v1/clinic/pacientes/[contactId]/cabecalho",
   "app/api/v1/clinic/pacientes/[contactId]/anexos",
   "app/api/v1/clinic/pacientes/[contactId]/documentos",
   "app/api/v1/clinic/pacientes/[contactId]/planos",
@@ -71,7 +72,8 @@ const PERMITIDAS = new Set([
   "para",
 ]);
 /** Nomes que, se aparecerem, quase certamente carregam texto clínico ou pessoal. */
-const PROIBIDAS = /^(texto|motivo|descricao|respostas|conteudo|observacoes|intercorrencias|orientacoes|resposta|regiao|nome|nome_digitado|protocolo|recomendacoes|objetivo|titulo|parametros)$/;
+const PROIBIDAS =
+  /^(texto|motivo|descricao|respostas|conteudo|observacoes|intercorrencias|orientacoes|resposta|regiao|nome|nome_digitado|protocolo|recomendacoes|objetivo|titulo|parametros)$/;
 
 function arquivos(pasta: string): string[] {
   const abs = join(RAIZ, pasta);
@@ -98,7 +100,8 @@ function chavesDeMetadata(fonte: string): string[] {
       const corpo = objeto[1] ?? "";
       // `chave: valor` e a forma curta `{ chave }` / `, chave,` — nunca o valor.
       for (const k of corpo.matchAll(/(?:^|[{,])\s*([a-z_][a-z0-9_]*)\s*:/gi)) chaves.push(k[1]!);
-      for (const k of corpo.matchAll(/(?:^|[{,])\s*([a-z_][a-z0-9_]*)\s*(?=,|$)/gi)) chaves.push(k[1]!);
+      for (const k of corpo.matchAll(/(?:^|[{,])\s*([a-z_][a-z0-9_]*)\s*(?=,|$)/gi))
+        chaves.push(k[1]!);
     }
   }
   return chaves;
@@ -110,11 +113,9 @@ describe("audit clínico sem conteúdo clínico", () => {
   it("há rotas clínicas auditando (controle positivo)", () => {
     const comAudit = todos.filter((f) => /\baudit\(\{/.test(readFileSync(join(RAIZ, f), "utf8")));
     expect(comAudit.length).toBeGreaterThan(15);
-    expect(chavesDeMetadata(`audit({ metadata: { secao: "x", atendimento_id: id, texto } , requestId`)).toEqual([
-      "secao",
-      "atendimento_id",
-      "texto",
-    ]);
+    expect(
+      chavesDeMetadata(`audit({ metadata: { secao: "x", atendimento_id: id, texto } , requestId`),
+    ).toEqual(["secao", "atendimento_id", "texto"]);
   });
 
   it("toda chave de metadata é um metadado permitido, e nenhuma carrega texto", () => {
@@ -126,6 +127,9 @@ describe("audit clínico sem conteúdo clínico", () => {
         if (PROIBIDAS.test(k) || !PERMITIDAS.has(k)) problemas.push(`${f}: metadata.${k}`);
       }
     }
-    expect(problemas, "Audit clínico leva só metadados (ids, seção, contagens, tipo). Texto de pessoa fica na tabela clínica, não no log.").toEqual([]);
+    expect(
+      problemas,
+      "Audit clínico leva só metadados (ids, seção, contagens, tipo). Texto de pessoa fica na tabela clínica, não no log.",
+    ).toEqual([]);
   });
 });

@@ -82,6 +82,7 @@ export default async function ImprimirProntuarioPage({
   return (
     <IdiomaProvider locale={user.idioma}>
       <ProntuarioImpressao
+        pdfHref={`/api/v1/clinic/pacientes/${contactId}/prontuario/pdf`}
         clinica={(empresa?.display_name as string | null) ?? null}
         paciente={nomeDoContato(
           contato as {

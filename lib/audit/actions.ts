@@ -913,6 +913,9 @@ export const AUDIT_ACTIONS = [
   // FORK clinic (F8): reabertura e exportação — metadados só
   "clinic.atendimento_reaberto",
   "clinic.prontuario_exportado",
+  // FORK clinic (F9): cabeçalho clínico e anulação — metadados só
+  "clinic.cabecalho_alterado",
+  "clinic.atendimento_anulado",
   // FORK clinic (ACL): papéis de acesso e permissões
   "acesso.papel_criado",
   "acesso.papel_alterado",

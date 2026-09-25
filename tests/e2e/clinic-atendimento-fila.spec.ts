@@ -209,6 +209,15 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     await expect(prontuario.getByText("Evolução fictícia de teste E2E.")).toBeVisible({ timeout: 20_000 });
     await expect(prontuario.getByText("Queixa fictícia de teste E2E.")).toBeVisible();
     await expect(prontuario.getByTestId("adendo")).toHaveCount(1);
+    // F9: cabeçalho clínico (alergias com versão) e filtro por período.
+    await prontuario.getByTestId("cabecalho-editar").click();
+    await prontuario.getByTestId("cabecalho-alergias").fill("Alergia fictícia E2E");
+    await prontuario.getByTestId("cabecalho-salvar").click();
+    await expect(prontuario.getByTestId("cabecalho-alergias-lidas")).toHaveText("Alergia fictícia E2E", { timeout: 20_000 });
+    await prontuario.getByTestId("filtro-desde").fill("2999-01-01");
+    await expect(prontuario.getByTestId("prontuario-atendimento")).toHaveCount(0, { timeout: 20_000 });
+    await prontuario.getByRole("button", { name: "Limpar filtros" }).click();
+    await expect(prontuario.getByTestId("prontuario-atendimento")).toHaveCount(1, { timeout: 20_000 });
     await foto(pAt, "5-prontuario");
     await pAt.goto(urlDoAtendimento);
     // o procedimento confirmado virou evento para o estoque, com o lote.

@@ -2,6 +2,8 @@
  * POST /api/v1/clinic/documentos/:id/link — gera o link de aceite à distância
  * (FORK clinic, prontuário F6). O token aparece UMA vez, nesta resposta; o banco
  * guarda só o hash. Expira (padrão 72 h) e morre no primeiro uso.
+ * F9: devolve também o telefone do paciente (lido da empresa ativa) para o
+ * botão "Enviar pelo WhatsApp".
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -26,11 +28,15 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
   const requestId = randomUUID();
-  const authz = await requirePermission("documentos.colher_aceite", { requestId, resource: "clinic_documentos_emitidos" });
+  const authz = await requirePermission("documentos.colher_aceite", {
+    requestId,
+    resource: "clinic_documentos_emitidos",
+  });
   if (!authz.ok) return authz.response;
   const t = (s: string) => traduzir(s, authz.user.idioma);
   const { id } = await ctx.params;
-  if (!z.string().uuid().safeParse(id).success) return fail("validation_failed", t("id inválido"), 422, { requestId });
+  if (!z.string().uuid().safeParse(id).success)
+    return fail("validation_failed", t("id inválido"), 422, { requestId });
   const lido = corpo.safeParse(await req.json().catch(() => ({})));
   if (!lido.success) return fail("validation_failed", t("Dados inválidos."), 422, { requestId });
   const org = authz.org.orgId;
@@ -55,6 +61,22 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     requestId,
     metadata: { horas: lido.data.horas },
   });
+  const { data: doc } = await supabase
+    .from("clinic_documentos_emitidos")
+    .select("contacts(phone_number)")
+    .eq("organization_id", org)
+    .eq("id", id)
+    .maybeSingle();
+  const contato = doc?.contacts as
+    { phone_number: string | null } | Array<{ phone_number: string | null }> | null | undefined;
+  const telefone = (Array.isArray(contato) ? contato[0] : contato)?.phone_number ?? null;
   const origem = new URL(req.url).origin;
-  return ok({ url: `${origem}/termo/${token}`, expira_em: (data as { expira_em: string }).expira_em }, { requestId });
+  return ok(
+    {
+      url: `${origem}/termo/${token}`,
+      expira_em: (data as { expira_em: string }).expira_em,
+      telefone,
+    },
+    { requestId },
+  );
 }

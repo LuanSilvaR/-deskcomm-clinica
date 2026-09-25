@@ -122,11 +122,13 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
   },
   {
     fn: "fn_set_channel_routing(uuid,uuid,uuid[],boolean)",
-    razao: "PATCH app/api/v1/settings/routing/channels/route.ts usa createClient da sessão; RPC exige manager, suporte de escrita, MFA e canal/membros da org na mesma transação. tests/invariants/channel-routing.test.ts prova viewer, tenants A/B, membro revogado, policy vazia e MFA platform aal1/aal2.",
+    razao:
+      "PATCH app/api/v1/settings/routing/channels/route.ts usa createClient da sessão; RPC exige manager, suporte de escrita, MFA e canal/membros da org na mesma transação. tests/invariants/channel-routing.test.ts prova viewer, tenants A/B, membro revogado, policy vazia e MFA platform aal1/aal2.",
   },
   {
     fn: "fn_reserve_channel_connection(uuid,uuid,text,text,boolean)",
-    razao: "lib/channels/connect-waha.ts recebe createClient das rotas channel-sessions e onboarding/whatsapp/session; RPC exige admin, suporte e MFA, cria identidade org-owned com recibo privado. tests/invariants/channel-routing.test.ts prova lease/replay/ACL do recibo e MFA platform aal1/aal2.",
+    razao:
+      "lib/channels/connect-waha.ts recebe createClient das rotas channel-sessions e onboarding/whatsapp/session; RPC exige admin, suporte e MFA, cria identidade org-owned com recibo privado. tests/invariants/channel-routing.test.ts prova lease/replay/ACL do recibo e MFA platform aal1/aal2.",
   },
   {
     fn: "fn_google_selection(uuid,jsonb,uuid[],uuid)",
@@ -480,6 +482,18 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
     fn: "fn_clinic_reabrir_atendimento(uuid,uuid,text)",
     razao:
       "app/api/v1/clinic/atendimentos/[id]/reabrir/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige atendimento.reabrir (chave clínica, gerência), suporte de escrita e MFA; atendimento finalizado da organização informada; motivo obrigatório. tests/invariants/clinic-reabrir-atendimento.test.ts prova recusa sem a permissão, registros finalizados continuam imutáveis e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9026).
+    fn: "fn_clinic_cabecalho_salvar(uuid,uuid,text,text,integer)",
+    razao:
+      "app/api/v1/clinic/pacientes/[contactId]/cabecalho/route.ts (PUT) chama com createClient da sessão; fn_acesso_exigir exige atendimento.registrar (chave clínica), suporte de escrita e MFA; paciente da organização informada; conflito de versão; toda mudança vai para clinic_prontuario_alteracoes. tests/invariants/clinic-cabecalho-e-anulacao.test.ts prova recusa sem a permissão, paciente de outra empresa, histórico e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9026).
+    fn: "fn_clinic_anular_atendimento(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/anular/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige atendimento.finalizar; atendimento em andamento da organização informada, sem registro clínico; motivo obrigatório. tests/invariants/clinic-cabecalho-e-anulacao.test.ts prova recusa com registro e o reinício do mesmo agendamento.",
   },
   {
     // FORK clinic (migration 9017).

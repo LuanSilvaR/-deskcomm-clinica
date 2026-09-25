@@ -1,6 +1,6 @@
-# Prontuário — entrega (F0 a F8)
+# Prontuário — entrega (F0 a F9)
 
-Módulo de atendimento clínico, prontuário e jornada do paciente, em 9 PRs empilhados.
+Módulo de atendimento clínico, prontuário e jornada do paciente, em 10 PRs empilhados.
 Tudo nasce **desligado** (opção "Prontuário" por clínica); com ela desligada nada muda.
 
 ## Ordem de merge (cada PR contém os anteriores)
@@ -15,7 +15,8 @@ Tudo nasce **desligado** (opção "Prontuário" por clínica); com ela desligada
 | F5 | #31 | 9022 | Procedimentos realizados, insumos (lote/validade), porta de estoque |
 | F6 | #32 | 9023 | Termos e contratos, aceite presencial e por link, uso de imagem |
 | F7 | #33 | 9024 | Fotos clínicas e anexos (Storage existente, WebP no navegador, cota) |
-| F8 | (este) | 9025 | Reabrir atendimento, exportação imprimível, limites de leitura, cerca do audit |
+| F8 | #34 | 9025 | Reabrir atendimento, exportação imprimível, limites de leitura, cerca do audit |
+| F9 | (este) | 9026 | Cabeçalho clínico (alergias/alertas com histórico, plano ativo, último/próximo), anular atendimento aberto por engano, filtros da linha do tempo, PDF gerado no servidor, link do termo pelo WhatsApp |
 
 Mesclar na ordem da tabela (merge, sem rebase). Cada PR, depois do anterior mesclado, mostra só o próprio diff.
 
@@ -34,7 +35,7 @@ Mesclar na ordem da tabela (merge, sem rebase). Cada PR, depois do anterior mesc
 
 ```bash
 git fetch origin
-git checkout feature/prontuario-f8   # contém F0–F8
+git checkout feature/prontuario-f9   # contém F0–F9
 pnpm install
 pnpm typecheck && pnpm lint && pnpm cercas
 pnpm test:unit
@@ -50,8 +51,13 @@ Roteiro manual (com a opção ligada):
    documento (emitir, colher aceite ou gerar link), foto pela câmera, evolução.
 3. **Finalizar** sem evolução → lista do que falta; com ela → finalizado. Tentar editar → só adendo.
 4. Abrir o paciente › **Prontuário** (linha do tempo), **Planos**, **Documentos**, **Fotos e anexos**.
-5. Gerência clínica: **Reabrir atendimento** (motivo) e **Exportar / imprimir prontuário**.
-6. Abrir o link do termo numa janela anônima, responder cada opção e aceitar; o link não abre de novo.
+5. Gerência clínica: **Reabrir atendimento** (motivo), **Exportar / imprimir prontuário** e **Baixar PDF**.
+6. No topo do atendimento e do Prontuário: **Editar alergias e alertas** (cada mudança fica no histórico);
+   filtros **De / Até / Profissional / Plano** na linha do tempo.
+7. Atendimento iniciado por engano (ainda sem registros): **Anular atendimento** com motivo; a visita volta
+   para "pronto". Com qualquer registro, o banco recusa — finalize e corrija por adendo.
+8. Termo: **Gerar link** → **Enviar pelo WhatsApp** abre o WhatsApp do aparelho com uma mensagem genérica.
+9. Abrir o link do termo numa janela anônima, responder cada opção e aceitar; o link não abre de novo.
 
 ## Decisões registradas
 
@@ -64,3 +70,9 @@ Roteiro manual (com a opção ligada):
   e a porta `SemEstoque` só o marca como lido (`lib/clinic/estoque/porta.ts`).
 - Arquivos no Storage que a instalação já tem (`clinical-files`, privado, sem policy); trocar para R2/B2 é
   outra implementação de `lib/clinic/anexos/armazenamento.ts`.
+- Desempenho: `tests/invariants/clinic-linha-do-tempo-indices.test.ts` roda EXPLAIN (com `enable_seqscan =
+  off`) em cada consulta da linha do tempo e reprova se alguma não tiver índice que a atenda.
+- PDF: gerado no servidor com `@react-pdf/renderer` (já era dependência), só texto, fuso da clínica,
+  `Cache-Control: private, no-store`, mesmo limite e auditoria da exportação imprimível.
+- WhatsApp: `wa.me` no aparelho de quem atende (sem integração nova); a mensagem não leva nome do termo nem
+  conteúdo clínico.

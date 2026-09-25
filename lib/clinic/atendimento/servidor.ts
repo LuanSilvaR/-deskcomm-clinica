@@ -19,8 +19,16 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
     code: "prontuario_desligado",
     mensagem: "O módulo de prontuário está desligado nesta clínica.",
   },
-  atendimento_agendamento_nao_encontrado: { status: 404, code: "not_found", mensagem: "Agendamento não encontrado." },
-  atendimento_nao_encontrado: { status: 404, code: "not_found", mensagem: "Atendimento não encontrado." },
+  atendimento_agendamento_nao_encontrado: {
+    status: 404,
+    code: "not_found",
+    mensagem: "Agendamento não encontrado.",
+  },
+  atendimento_nao_encontrado: {
+    status: 404,
+    code: "not_found",
+    mensagem: "Atendimento não encontrado.",
+  },
   atendimento_sem_paciente: {
     status: 422,
     code: "validation_failed",
@@ -100,18 +108,42 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
     mensagem: "Regras inválidas: confira o tipo de atendimento e a especialidade.",
   },
   // FORK clinic (prontuário F4, 9021).
-  plano_paciente_invalido: { status: 422, code: "validation_failed", mensagem: "Paciente inválido para este plano." },
+  plano_paciente_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Paciente inválido para este plano.",
+  },
   plano_nao_encontrado: { status: 404, code: "not_found", mensagem: "Plano não encontrado." },
-  plano_sessao_nao_encontrada: { status: 404, code: "not_found", mensagem: "Sessão não encontrada." },
-  plano_encerrado: { status: 409, code: "conflict", mensagem: "Este plano está concluído ou cancelado." },
-  plano_sessao_encerrada: { status: 409, code: "conflict", mensagem: "Esta sessão já foi realizada ou cancelada." },
+  plano_sessao_nao_encontrada: {
+    status: 404,
+    code: "not_found",
+    mensagem: "Sessão não encontrada.",
+  },
+  plano_encerrado: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Este plano está concluído ou cancelado.",
+  },
+  plano_sessao_encerrada: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Esta sessão já foi realizada ou cancelada.",
+  },
   plano_agendamento_invalido: {
     status: 422,
     code: "validation_failed",
     mensagem: "O agendamento precisa ser deste paciente e não pode estar cancelado.",
   },
-  plano_agendamento_em_uso: { status: 409, code: "conflict", mensagem: "Este agendamento já está ligado a outra sessão." },
-  plano_sessao_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo do cancelamento." },
+  plano_agendamento_em_uso: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Este agendamento já está ligado a outra sessão.",
+  },
+  plano_sessao_sem_motivo: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Informe o motivo do cancelamento.",
+  },
   plano_invalido: { status: 422, code: "validation_failed", mensagem: "Dados do plano inválidos." },
   // FORK clinic (prontuário F5, 9022).
   procedimento_invalido: {
@@ -119,41 +151,111 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
     code: "validation_failed",
     mensagem: "Procedimento inválido: confira o procedimento, o serviço e os produtos.",
   },
-  procedimento_nao_encontrado: { status: 404, code: "not_found", mensagem: "Procedimento não encontrado." },
-  procedimento_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo para anular." },
+  procedimento_nao_encontrado: {
+    status: 404,
+    code: "not_found",
+    mensagem: "Procedimento não encontrado.",
+  },
+  procedimento_sem_motivo: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Informe o motivo para anular.",
+  },
   // FORK clinic (prontuário F6, 9023). `documento_modelo_*` antes de `documento_*`.
-  documento_modelo_invalido: { status: 422, code: "validation_failed", mensagem: "Modelo de documento inválido." },
-  documento_modelo_nome_em_uso: { status: 409, code: "conflict", mensagem: "Já existe um modelo com este nome." },
-  documento_modelo_nao_encontrado: { status: 404, code: "not_found", mensagem: "Modelo não encontrado." },
-  documento_imutavel: { status: 409, code: "conflict", mensagem: "Documento emitido não pode ser alterado." },
-  documento_invalido: { status: 422, code: "validation_failed", mensagem: "Não foi possível emitir: confira o paciente e o modelo." },
-  documento_nao_encontrado: { status: 404, code: "not_found", mensagem: "Documento não encontrado." },
-  documento_ja_respondido: { status: 409, code: "conflict", mensagem: "Este documento já foi respondido, revogado ou cancelado." },
-  documento_sem_nome: { status: 422, code: "validation_failed", mensagem: "Digite o nome completo de quem aceita." },
+  documento_modelo_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Modelo de documento inválido.",
+  },
+  documento_modelo_nome_em_uso: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Já existe um modelo com este nome.",
+  },
+  documento_modelo_nao_encontrado: {
+    status: 404,
+    code: "not_found",
+    mensagem: "Modelo não encontrado.",
+  },
+  documento_imutavel: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Documento emitido não pode ser alterado.",
+  },
+  documento_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Não foi possível emitir: confira o paciente e o modelo.",
+  },
+  documento_nao_encontrado: {
+    status: 404,
+    code: "not_found",
+    mensagem: "Documento não encontrado.",
+  },
+  documento_ja_respondido: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Este documento já foi respondido, revogado ou cancelado.",
+  },
+  documento_sem_nome: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Digite o nome completo de quem aceita.",
+  },
   documento_escolhas_invalidas: {
     status: 422,
     code: "validation_failed",
     mensagem: "Responda sim ou não em cada opção. As obrigatórias precisam estar marcadas.",
   },
   documento_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo." },
-  documento_link_invalido: { status: 410, code: "token_expired", mensagem: "Este link expirou ou já foi usado." },
+  documento_link_invalido: {
+    status: 410,
+    code: "token_expired",
+    mensagem: "Este link expirou ou já foi usado.",
+  },
   // FORK clinic (prontuário F7, 9024).
-  anexo_invalido: { status: 422, code: "validation_failed", mensagem: "Arquivo inválido para este paciente." },
+  anexo_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Arquivo inválido para este paciente.",
+  },
   anexo_cota_excedida: {
     status: 413,
     code: "payload_too_large",
-    mensagem: "A clínica atingiu o limite de espaço para arquivos. Fale com quem administra o sistema.",
+    mensagem:
+      "A clínica atingiu o limite de espaço para arquivos. Fale com quem administra o sistema.",
   },
   anexo_nao_encontrado: { status: 404, code: "not_found", mensagem: "Arquivo não encontrado." },
-  anexo_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo para anular." },
+  anexo_sem_motivo: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Informe o motivo para anular.",
+  },
   anexo_sem_autorizacao_de_imagem: {
     status: 403,
     code: "forbidden_permission",
-    mensagem: "O paciente não autorizou este uso da imagem (ou a autorização venceu ou foi revogada).",
+    mensagem:
+      "O paciente não autorizou este uso da imagem (ou a autorização venceu ou foi revogada).",
   },
   // FORK clinic (prontuário F8, 9025).
   atendimento_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo." },
-  atendimento_nao_finalizado: { status: 409, code: "conflict", mensagem: "Só um atendimento finalizado pode ser reaberto." },
+  atendimento_nao_finalizado: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Só um atendimento finalizado pode ser reaberto.",
+  },
+  // FORK clinic (prontuário F9, 9026).
+  cabecalho_paciente_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Paciente inválido.",
+  },
+  atendimento_com_registros: {
+    status: 409,
+    code: "conflict",
+    mensagem:
+      "Este atendimento já tem registros clínicos: finalize e corrija por adendo em vez de anular.",
+  },
   acesso_mfa_exigido: {
     status: 403,
     code: "mfa_required",
@@ -166,13 +268,18 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
   },
 };
 
-export function erroDoBanco(error: { message: string; code?: string; details?: string | null }, requestId: string): ApiError {
+export function erroDoBanco(
+  error: { message: string; code?: string; details?: string | null },
+  requestId: string,
+): ApiError {
   const conhecido = Object.entries(ERROS_DO_BANCO).find(([chave]) => error.message.includes(chave));
   if (conhecido) {
     const [chave, e] = conhecido;
     // `requisitos_pendentes` traz no detail a lista do que falta (ex.: "evolucao,anamnese").
     const details =
-      chave === "requisitos_pendentes" && error.details ? { faltando: error.details.split(",").filter(Boolean) } : undefined;
+      chave === "requisitos_pendentes" && error.details
+        ? { faltando: error.details.split(",").filter(Boolean) }
+        : undefined;
     return new ApiError(e.status, e.code, details, requestId, e.mensagem);
   }
   return new ApiError(500, "internal_error", undefined, requestId, error.message);
@@ -204,7 +311,8 @@ export async function finalizarAtendimento(
     .eq("id", args.atendimentoId)
     .maybeSingle();
   if (e1) throw new ApiError(500, "internal_error", undefined, ctx.requestId, e1.message);
-  if (!at) throw new ApiError(404, "not_found", undefined, ctx.requestId, "Atendimento não encontrado.");
+  if (!at)
+    throw new ApiError(404, "not_found", undefined, ctx.requestId, "Atendimento não encontrado.");
 
   // O registro clínico primeiro: é ele que pode recusar (requisitos pendentes).
   const { data, error } = await supabase.rpc("fn_clinic_finalizar_atendimento", {
@@ -232,7 +340,10 @@ export async function finalizarAtendimento(
  * booleano: a recepção não lê atendimento (dado clínico), mas precisa saber
  * que não é ela quem conclui.
  */
-export async function temAtendimentoAberto(organizationId: string, appointmentId: string): Promise<boolean> {
+export async function temAtendimentoAberto(
+  organizationId: string,
+  appointmentId: string,
+): Promise<boolean> {
   const admin = createAdminClient();
   const { count, error } = await admin
     .from("clinic_atendimentos")

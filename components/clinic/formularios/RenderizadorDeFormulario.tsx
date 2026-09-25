@@ -11,32 +11,25 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/hooks/i18n/useT";
 import type { Campo, Respostas } from "@/lib/clinic/formularios/campos";
+import { valorLegivel } from "@/lib/clinic/formularios/valor-legivel";
 import { cn } from "@/lib/utils";
 
 const OPCAO =
   "min-h-11 rounded-md border px-3 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden md:min-h-9";
 
-export function valorLegivel(campo: Campo, valor: unknown, t: (s: string) => string): string {
-  if (valor === null || valor === undefined || valor === "" || (Array.isArray(valor) && valor.length === 0)) return "—";
-  const rotulo = (v: unknown) => campo.opcoes?.find((o) => o.valor === v)?.rotulo ?? String(v);
-  switch (campo.tipo) {
-    case "sim_nao":
-      return valor === true ? t("Sim") : t("Não");
-    case "escolha":
-      return t(rotulo(valor));
-    case "multipla":
-      return (valor as unknown[]).map((v) => t(rotulo(v))).join(", ");
-    case "data":
-      return String(valor).split("-").reverse().join("/");
-    default:
-      return String(valor);
-  }
-}
+export { valorLegivel };
 
-export function RespostasLidas({ campos, respostas }: { campos: readonly Campo[]; respostas: Respostas }) {
+export function RespostasLidas({
+  campos,
+  respostas,
+}: {
+  campos: readonly Campo[];
+  respostas: Respostas;
+}) {
   const t = useT();
   const preenchidos = campos.filter((c) => valorLegivel(c, respostas[c.chave], t) !== "—");
-  if (preenchidos.length === 0) return <p className="text-sm text-text-muted">{t("Nada registrado.")}</p>;
+  if (preenchidos.length === 0)
+    return <p className="text-sm text-text-muted">{t("Nada registrado.")}</p>;
   return (
     <dl className="grid gap-3 text-sm sm:grid-cols-2">
       {preenchidos.map((c) => (
@@ -82,9 +75,16 @@ export function RenderizadorDeFormulario({
             {t(c.ajuda)}
           </p>
         ) : null;
-        const aviso = pendente ? <p className="text-xs text-destructive">{t("Obrigatório para finalizar.")}</p> : null;
+        const aviso = pendente ? (
+          <p className="text-xs text-destructive">{t("Obrigatório para finalizar.")}</p>
+        ) : null;
 
-        if (c.tipo === "sim_nao" || c.tipo === "escolha" || c.tipo === "multipla" || c.tipo === "escala") {
+        if (
+          c.tipo === "sim_nao" ||
+          c.tipo === "escolha" ||
+          c.tipo === "multipla" ||
+          c.tipo === "escala"
+        ) {
           const opcoes =
             c.tipo === "sim_nao"
               ? [
@@ -92,12 +92,19 @@ export function RenderizadorDeFormulario({
                   { valor: false, rotulo: t("Não") },
                 ]
               : c.tipo === "escala"
-                ? Array.from({ length: (c.max ?? 10) - (c.min ?? 0) + 1 }, (_, i) => ({ valor: (c.min ?? 0) + i, rotulo: String((c.min ?? 0) + i) }))
+                ? Array.from({ length: (c.max ?? 10) - (c.min ?? 0) + 1 }, (_, i) => ({
+                    valor: (c.min ?? 0) + i,
+                    rotulo: String((c.min ?? 0) + i),
+                  }))
                 : (c.opcoes ?? []).map((o) => ({ valor: o.valor as unknown, rotulo: t(o.rotulo) }));
           const multipla = c.tipo === "multipla";
           const lista = Array.isArray(valor) ? (valor as unknown[]) : [];
           return (
-            <fieldset key={c.chave} className={cn("space-y-2", largo && "sm:col-span-2")} aria-describedby={ajudaId}>
+            <fieldset
+              key={c.chave}
+              className={cn("space-y-2", largo && "sm:col-span-2")}
+              aria-describedby={ajudaId}
+            >
               <legend className="text-sm font-medium">{titulo}</legend>
               {ajuda}
               <div className="flex flex-wrap gap-2" role={multipla ? "group" : "radiogroup"}>
@@ -109,9 +116,18 @@ export function RenderizadorDeFormulario({
                       type="button"
                       role={multipla ? "checkbox" : "radio"}
                       aria-checked={marcado}
-                      className={cn(OPCAO, marcado ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent/50")}
+                      className={cn(
+                        OPCAO,
+                        marcado
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "hover:bg-accent/50",
+                      )}
                       onClick={() => {
-                        if (multipla) aoMudar(c.chave, marcado ? lista.filter((v) => v !== o.valor) : [...lista, o.valor]);
+                        if (multipla)
+                          aoMudar(
+                            c.chave,
+                            marcado ? lista.filter((v) => v !== o.valor) : [...lista, o.valor],
+                          );
                         else aoMudar(c.chave, marcado ? null : o.valor);
                       }}
                     >

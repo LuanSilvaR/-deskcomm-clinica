@@ -27,8 +27,10 @@ export function ProntuarioImpressao({
   atendimentos,
   documentos,
   geradoPor,
+  pdfHref,
 }: {
   clinica: string | null;
+  pdfHref?: string;
   paciente: string | null;
   nascimento: string | null;
   atendimentos: AtendimentoNaLinhaDoTempo[];
@@ -50,7 +52,16 @@ export function ProntuarioImpressao({
       className="mx-auto max-w-3xl space-y-6 bg-white p-6 text-black print:p-0"
       data-testid="prontuario-impressao"
     >
-      <div className="flex justify-end print:hidden">
+      <div className="flex items-center justify-end gap-3 print:hidden">
+        {pdfHref ? (
+          <a
+            href={pdfHref}
+            className="text-sm underline-offset-4 hover:underline"
+            data-testid="baixar-pdf"
+          >
+            {t("Baixar PDF")}
+          </a>
+        ) : null}
         <Button onClick={() => window.print()} data-testid="imprimir">
           {t("Imprimir / salvar PDF")}
         </Button>

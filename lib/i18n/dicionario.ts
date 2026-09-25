@@ -12387,6 +12387,27 @@ export const DICIONARIO: Traducoes = {
   "Reabrir atendimento": { es: "Reabrir atención" },
   "Só um atendimento finalizado pode ser reaberto.": { es: "Solo una atención finalizada puede reabrirse." },
   "Muitas leituras seguidas. Aguarde alguns minutos.": { es: "Demasiadas lecturas seguidas. Espere unos minutos." },
+  // ── FORK clinic (prontuário F9) ──
+  "Outra pessoa alterou este registro. Recarregue para ver a versão atual.": { es: "Otra persona modificó este registro. Recargue para ver la versión actual." },
+  "Cabeçalho clínico": { es: "Encabezado clínico" },
+  "Nenhuma informada": { es: "Ninguna informada" },
+  "Plano ativo": { es: "Plan activo" },
+  "sessões realizadas": { es: "sesiones realizadas" },
+  "Último atendimento": { es: "Última atención" },
+  "Próximo agendamento": { es: "Próxima cita" },
+  "Editar alergias e alertas": { es: "Editar alergias y alertas" },
+  "Histórico de alterações": { es: "Historial de cambios" },
+  "Filtrar a linha do tempo": { es: "Filtrar la línea de tiempo" },
+  "Nenhum atendimento com esses filtros.": { es: "Ninguna atención con esos filtros." },
+  "Motivo para anular (só vale para atendimento aberto por engano, ainda sem registros)": { es: "Motivo para anular (solo para una atención abierta por error, aún sin registros)" },
+  "Anular atendimento": { es: "Anular atención" },
+  "Olá! Segue o link para você ler e aceitar um documento da clínica:": { es: "¡Hola! Aquí está el enlace para que lea y acepte un documento de la clínica:" },
+  "Enviar pelo WhatsApp": { es: "Enviar por WhatsApp" },
+  "Paciente sem telefone válido: copie o link e envie por outro canal.": { es: "Paciente sin teléfono válido: copie el enlace y envíelo por otro canal." },
+  "Paciente inválido.": { es: "Paciente inválido." },
+  "Este atendimento já tem registros clínicos: finalize e corrija por adendo em vez de anular.": { es: "Esta atención ya tiene registros clínicos: finalícela y corrija con una adenda en lugar de anularla." },
+  // ── FORK clinic (prontuário F9) ──
+  "Insumo": { es: "Insumo" },
 };
 
 /**
