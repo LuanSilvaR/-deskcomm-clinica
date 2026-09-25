@@ -1,14 +1,15 @@
 "use client";
 
 /**
- * FORK clinic (9015) — o procedimento: cadastro (dados, especializações e
- * profissionais). O POP e o histórico de versões entram como abas na próxima
- * etapa do módulo.
+ * FORK clinic (9015) — o procedimento em abas: Cadastro (dados, especializações
+ * e profissionais), POP (o documento vigente ou o rascunho) e Histórico (versões).
  */
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
+import { AbaDoHistorico, AbaDoPop } from "@/components/clinic/pops/PopDoProcedimento";
 import { EditorDoProcedimento } from "@/components/clinic/procedimentos/EditorDoProcedimento";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePessoasDaAgenda } from "@/hooks/agenda/usePessoasDaAgenda";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
@@ -61,7 +62,33 @@ export function DetalheDoProcedimento({ id }: { id: string | null }) {
           {[p.code, p.duration_minutes ? `${p.duration_minutes} min` : null, p.is_active ? t("Ativo") : t("Inativo")].filter(Boolean).join(" · ")}
         </p>
       </header>
-      <EditorDoProcedimento key={p.updated_at} procedimento={p} podeGerenciar={can("procedimentos.gerenciar")} nomeDaPessoa={nomeDaPessoa} />
+      <Tabs defaultValue="cadastro">
+        <TabsList>
+          <TabsTrigger value="cadastro" data-testid="proc-aba-cadastro">{t("Cadastro")}</TabsTrigger>
+          {can("pops.ver") ? (
+            <>
+              <TabsTrigger value="pop" data-testid="proc-aba-pop">
+                {t("POP")}
+                {p.pop?.vigente ? ` · v${p.pop.vigente.versao}` : p.pop ? ` · ${t("rascunho")}` : ""}
+              </TabsTrigger>
+              <TabsTrigger value="historico" data-testid="proc-aba-historico">{t("Histórico")}</TabsTrigger>
+            </>
+          ) : null}
+        </TabsList>
+        <TabsContent value="cadastro" className="mt-4">
+          <EditorDoProcedimento key={p.updated_at} procedimento={p} podeGerenciar={can("procedimentos.gerenciar")} nomeDaPessoa={nomeDaPessoa} />
+        </TabsContent>
+        {can("pops.ver") ? (
+          <>
+            <TabsContent value="pop" className="mt-4">
+              <AbaDoPop procedimento={p} />
+            </TabsContent>
+            <TabsContent value="historico" className="mt-4">
+              <AbaDoHistorico procedimento={p} />
+            </TabsContent>
+          </>
+        ) : null}
+      </Tabs>
     </div>
   );
 }

@@ -737,6 +737,7 @@ jobs:
         clinic-inicio-da-recepcao.spec.ts
         clinic-agenda-melhorias.spec.ts
         clinic-procedimentos.spec.ts
+        clinic-pop.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts
