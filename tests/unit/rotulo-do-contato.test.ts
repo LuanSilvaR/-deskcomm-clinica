@@ -157,6 +157,12 @@ describe("a sétima cópia não nasce", () => {
    * último caso), para não sobrar autorização em nome de código que sumiu.
    */
   const LEITURAS_LEGITIMAS: ReadonlyArray<{ arquivo: string; trecho: string; motivo: string }> = [
+    // ── FORK clinic (9015): nome do PROFISSIONAL, não de contato ──────────────
+    {
+      arquivo: "components/clinic/procedimentos/EditorDoProcedimento.tsx",
+      trecho: "p.display_name?.trim() || nomeDaPessoa(p.user_id) || t(\"Profissional\")",
+      motivo: "nome da ficha do profissional (clinic_professionals.display_name) ou o da equipe; não é rótulo de contato",
+    },
     // ── prospecção (PR #963): nenhuma destas é nome de CONTATO ──────────────
     {
       arquivo: "app/app/prospecting/_client.tsx",
