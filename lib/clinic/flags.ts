@@ -52,7 +52,7 @@ export function travaSobreposicaoLigada(settings: unknown): boolean {
 }
 
 /**
- * `organizations.settings.clinic.prontuario` (migration 9015): o módulo de
+ * `organizations.settings.clinic.prontuario` (migration 9016): o módulo de
  * atendimento clínico e prontuário. Nasce desligado; só o booleano `true` liga.
  */
 export function prontuarioLigado(settings: unknown): boolean {

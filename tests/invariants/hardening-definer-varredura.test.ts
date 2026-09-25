@@ -320,7 +320,7 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-prazo-do-paciente.test.ts prova gerente recusado (42501), faixa e anon sem EXECUTE.",
   },
   {
-    // FORK clinic (migration 9015).
+    // FORK clinic (migration 9016).
     fn: "fn_clinic_definir_prontuario(uuid,boolean)",
     razao:
       "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +

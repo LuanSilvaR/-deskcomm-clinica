@@ -11980,7 +11980,7 @@ export const DICIONARIO: Traducoes = {
   "Ver mais antigos": { es: "Ver más antiguos" },
   // ── FORK clinic (E1): busca do paciente ao marcar ──
   "Nome, telefone, CPF ou nascimento (DD/MM/AAAA)": { es: "Nombre, teléfono, CPF o nacimiento (DD/MM/AAAA)" },
-  // ── FORK clinic (9015): permissões do módulo clínico ──
+  // ── FORK clinic (9016): permissões do módulo clínico ──
   "Atendimento clínico": { es: "Atención clínica" },
   "Prontuário": { es: "Historia clínica" },
   "Planos de tratamento": { es: "Planes de tratamiento" },

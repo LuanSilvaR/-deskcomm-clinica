@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- 9015 · clinic — acesso CLÍNICO separado da administração (FORK, prontuário F0)
+-- 9016 · clinic — acesso CLÍNICO separado da administração (FORK, prontuário F0)
 -- ════════════════════════════════════════════════════════════════════════════
 --
 -- Plano: docs/tarefas/prontuario/plano.md (seções 10 e 11).
@@ -68,7 +68,7 @@ begin
 
   v_suporte := public.fn_support_context();
   if v_suporte ->> 'status' = 'active' and (v_suporte ->> 'organization_id')::uuid = p_org then
-    -- 9015: suporte nunca lê conteúdo clínico.
+    -- 9016: suporte nunca lê conteúdo clínico.
     return query
       select c.key from public.clinic_permissions c
        where not c.clinica
@@ -107,7 +107,7 @@ begin
       join public.clinic_role_permissions rp on rp.organization_id = r.organization_id and rp.role_id = r.id
       join public.clinic_permissions c on c.key = rp.permission_key
      where mr.organization_id = p_org and mr.user_id = auth.uid()
-       -- 9015: o papel de sistema Administrador não concede conteúdo clínico.
+       -- 9016: o papel de sistema Administrador não concede conteúdo clínico.
        and not (c.clinica and r.system_key is not distinct from 'administrador');
 end $$;
 revoke execute on function public.fn_member_permissions(uuid) from public, anon;
