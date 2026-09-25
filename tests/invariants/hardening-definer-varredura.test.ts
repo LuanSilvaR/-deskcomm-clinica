@@ -320,6 +320,30 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-prazo-do-paciente.test.ts prova gerente recusado (42501), faixa e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 9015).
+    fn: "fn_clinic_definir_procedimentos(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, e a escrita é só a chave settings.clinic.procedimentos. tests/invariants/clinic-procedimentos-e-pop.test.ts prova gerente recusado e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9015).
+    fn: "fn_pop_criar(uuid,text,jsonb,text)",
+    razao:
+      "Rota do POP (sessão). A organização vem do procedimento e precisa estar em fn_user_org_ids(); fn_acesso_exigir confere sessão, suporte, MFA e pops.editar. tests/invariants/clinic-procedimentos-e-pop.test.ts prova outra empresa e quem não tem a permissão recusados.",
+  },
+  {
+    // FORK clinic (migration 9015).
+    fn: "fn_pop_aprovar(uuid,integer)",
+    razao:
+      "Rota de aprovação (sessão). A versão precisa ser da empresa de quem pede (fn_user_org_ids); fn_acesso_exigir confere pops.aprovar; lock por POP. tests/invariants/clinic-procedimentos-e-pop.test.ts prova recusa sem pops.aprovar, de outra empresa e a troca da vigente.",
+  },
+  {
+    // FORK clinic (migration 9015).
+    fn: "fn_pop_nova_versao(uuid,boolean,text)",
+    razao:
+      "Rota de nova versão (sessão). O POP precisa ser da empresa de quem pede (fn_user_org_ids); fn_acesso_exigir confere pops.editar; lock por POP. tests/invariants/clinic-procedimentos-e-pop.test.ts prova numeração 1.1/2.0 e um rascunho por vez.",
+  },
+  {
     // FORK clinic (migration 9016).
     fn: "fn_clinic_definir_prontuario(uuid,boolean)",
     razao:
