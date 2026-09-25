@@ -16,6 +16,7 @@ import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { audit } from "@/lib/audit";
 import { erroDoBanco } from "@/lib/clinic/atendimento/servidor";
 import { FORMATO_DO_TOKEN, hashDoToken } from "@/lib/clinic/documentos/token";
+import { requireSupportWrite } from "@/lib/impersonate/support";
 import { escolhasSchema } from "@/lib/clinic/documentos/tipos";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -47,6 +48,10 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
 }
 
 export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
+  // Visitante sem sessão (o paciente) passa; um acompanhamento administrativo em
+  // modo leitura que abra o link não registra aceite em nome de ninguém.
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
   const requestId = crypto.randomUUID();
   const limite = await barrado(req, requestId);
   if (limite) return limite;
