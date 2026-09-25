@@ -199,6 +199,17 @@ export const NAV_CATALOG = [
     group: "atendimento",
   },
   {
+    // FORK clinic (migration 9015): o catálogo de procedimentos e o POP de cada um.
+    // Sem `sidebar` (o menu lateral está no teto); entra pelo hub de Atendimento
+    // e pelo ⌘K. A tela diz como ligar quando a opção está desligada.
+    href: "/app/procedimentos",
+    label: "Procedimentos",
+    permissao: "procedimentos.ver",
+    description: "Os procedimentos da clínica, quem pode realizar cada um e o POP de cada procedimento.",
+    icon: "ClipboardText",
+    group: "atendimento",
+  },
+  {
     // FORK clinic (migration 9003): o dia da clínica por status da visita —
     // na recepção, pronto para atendimento, em atendimento, finalizado.
     //
