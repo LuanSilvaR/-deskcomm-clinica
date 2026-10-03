@@ -559,6 +559,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/estoque/operacoes/[id]/estorno/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.estornar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; uma vez só, nunca estorno de estorno, recusa saldo negativo. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 9030).
+    fn: "fn_clinic_estoque_pendencia_resolver(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/pendencias/[id]/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; pendência e lote conferidos na organização informada (lote do mesmo produto); motivo obrigatório para descartar/ciente; uma vez só. tests/invariants/clinic-estoque-consumo.test.ts prova recusa sem permissão, outra empresa e pendência fechada.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

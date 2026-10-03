@@ -58,6 +58,21 @@ const ERROS_DO_ESTOQUE: Record<string, { status: number; code: string; mensagem:
     code: "validation_failed",
     mensagem: "Um estorno não pode ser estornado. Faça uma nova movimentação.",
   },
+  estoque_pendencia_invalida: {
+    status: 404,
+    code: "not_found",
+    mensagem: "Pendência não encontrada.",
+  },
+  estoque_pendencia_fechada: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Esta pendência já foi resolvida.",
+  },
+  estoque_ja_baixado: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Este insumo já saiu do estoque.",
+  },
   estoque_imutavel: {
     status: 409,
     code: "conflict",

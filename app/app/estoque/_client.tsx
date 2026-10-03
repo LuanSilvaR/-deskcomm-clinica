@@ -2,7 +2,8 @@
 
 /**
  * FORK clinic (estoque E0) — o painel do estoque: Posição (produtos → lotes →
- * locais, com as ações), Movimentações (histórico com estorno) e Locais.
+ * locais, com as ações), Movimentações (histórico com estorno), Pendências da
+ * baixa pelo prontuário (E2) e Locais.
  */
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -10,13 +11,14 @@ import { useState } from "react";
 
 import { LocaisDeEstoque } from "@/components/clinic/estoque/LocaisDeEstoque";
 import { Movimentacoes } from "@/components/clinic/estoque/Movimentacoes";
+import { Pendencias } from "@/components/clinic/estoque/Pendencias";
 import { PosicaoDoEstoque } from "@/components/clinic/estoque/PosicaoDoEstoque";
 import { CHAVE_DO_ESTOQUE, type DadosDoEstoque } from "@/components/clinic/estoque/tipos";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
-type Aba = "posicao" | "movimentacoes" | "locais";
+type Aba = "posicao" | "movimentacoes" | "pendencias" | "locais";
 
 export function PainelDoEstoque() {
   const t = useT();
@@ -45,6 +47,7 @@ export function PainelDoEstoque() {
   const abas: Array<{ id: Aba; rotulo: string }> = [
     { id: "posicao", rotulo: "Posição" },
     { id: "movimentacoes", rotulo: "Movimentações" },
+    { id: "pendencias", rotulo: "Pendências" },
     { id: "locais", rotulo: "Locais" },
   ];
   return (
@@ -68,6 +71,7 @@ export function PainelDoEstoque() {
       </nav>
       {aba === "posicao" ? <PosicaoDoEstoque dados={d} /> : null}
       {aba === "movimentacoes" ? <Movimentacoes podeEstornar={d.pode.estornar} /> : null}
+      {aba === "pendencias" ? <Pendencias dados={d} /> : null}
       {aba === "locais" ? (
         <LocaisDeEstoque locais={d.locais} podeConfigurar={d.pode.configurar} />
       ) : null}

@@ -869,6 +869,7 @@ export const AUDIT_ACTIONS = [
   "clinic.estoque_local_salvo",
   "clinic.estoque_movimentado",
   "clinic.estoque_estornado",
+  "clinic.estoque_pendencia_resolvida",
   "clinic.procedimento_alterado",
   "clinic.procedimento_ativado",
   "clinic.procedimento_desativado",

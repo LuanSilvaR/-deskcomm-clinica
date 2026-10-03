@@ -453,6 +453,11 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); só acrescenta (UPDATE/DELETE recusados até para service role).",
   },
   {
+    tabela: "clinic_estoque_pendencias",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-consumo.test.ts: admin de outra empresa lê 0 pendências e não resolve pendência alheia (estoque_pendencia_invalida); quem só tem estoque.ver lê mas não resolve; ninguém escreve direto (UPDATE recusado por permission denied).",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

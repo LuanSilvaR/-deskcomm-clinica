@@ -12738,6 +12738,26 @@ export const DICIONARIO: Traducoes = {
   "Configurar produtos do estoque (unidades, lote, mínimo) e locais": { es: "Configurar productos del inventario (unidades, lote, mínimo) y ubicaciones" },
   "Ver custos de lotes e do estoque": { es: "Ver costos de lotes y del inventario" },
   "Estornar uma movimentação de estoque, com motivo": { es: "Revertir un movimiento de inventario, con motivo" },
+  // ── FORK clinic (estoque E2) ──
+  "Não foi possível ler as pendências.": { es: "No fue posible leer los pendientes." },
+  "Nenhuma pendência: tudo o que foi usado nos atendimentos saiu do estoque.": { es: "Ningún pendiente: todo lo usado en las atenciones salió del inventario." },
+  "O que foi verificado? (fica registrado)": { es: "¿Qué se verificó? (queda registrado)" },
+  "Ciente": { es: "Enterado" },
+  "Baixar agora": { es: "Descontar ahora" },
+  "Por que este insumo não sai do estoque? (fica registrado)": { es: "¿Por qué este insumo no sale del inventario? (queda registrado)" },
+  "Lote informado no atendimento:": { es: "Lote informado en la atención:" },
+  "Nenhum lote com saldo suficiente. Dê entrada no estoque e volte aqui.": { es: "Ningún lote con saldo suficiente. Registre la entrada en el inventario y vuelva aquí." },
+  "De qual lote e local sai": { es: "De qué lote y ubicación sale" },
+  "Escolha…": { es: "Elija…" },
+  "Confirmar baixa": { es: "Confirmar descuento" },
+  "Pendências": { es: "Pendientes" },
+  "Pendência não encontrada.": { es: "Pendiente no encontrado." },
+  "Esta pendência já foi resolvida.": { es: "Este pendiente ya fue resuelto." },
+  "Este insumo já saiu do estoque.": { es: "Este insumo ya salió del inventario." },
+  "Sem saldo no local": { es: "Sin saldo en la ubicación" },
+  "Lote informado não existe no estoque": { es: "El lote informado no existe en el inventario" },
+  "Nenhum local de estoque ativo": { es: "Ninguna ubicación de inventario activa" },
+  "Controlado usado por conselho não permitido": { es: "Controlado usado por un consejo no permitido" },
 };
 
 /**

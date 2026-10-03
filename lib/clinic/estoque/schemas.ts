@@ -103,3 +103,11 @@ export const FUNCAO_DO_MOVIMENTO: Record<Movimento["acao"], { rpc: string; permi
 };
 
 export const estornoSchema = z.object({ motivo }).strict();
+
+/** Resolver uma pendência da baixa pelo prontuário (estoque E2). */
+export const pendenciaSchema = z.discriminatedUnion("acao", [
+  z.object({ acao: z.literal("baixar"), lote_id: uuid, local_id: uuid }).strict(),
+  z.object({ acao: z.literal("descartar"), motivo }).strict(),
+  z.object({ acao: z.literal("ciente"), motivo }).strict(),
+]);
+export type ResolucaoDePendencia = z.infer<typeof pendenciaSchema>;
