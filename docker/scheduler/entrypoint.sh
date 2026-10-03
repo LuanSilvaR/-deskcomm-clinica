@@ -89,6 +89,9 @@ CRONS="
 # FORK clinic (9004): pedido de confirmação sem resposta a 4 h da consulta vira
 # tarefa de ligar para confirmar. A janela é larga; 15 min de atraso não pesam.
 */15 * * * *|45|api/v1/cron/clinic-confirmacao-sem-resposta
+# FORK clinic (estoque E3, 9031): reserva da véspera pelo kit da sessão do plano;
+# expira a de agendamento cancelado/passado. Janela de 36 h: de hora em hora basta.
+23 * * * *|60|api/v1/cron/estoque-reservas
 */15 * * * *|60|api/v1/cron/risk-watcher
 # O CASO PARADO. De hora em hora, e não a cada 5 minutos: o prazo é de 24h, e
 # uma varredura mais frequente só gastaria consulta para descobrir o mesmo nada.

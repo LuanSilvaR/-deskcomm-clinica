@@ -565,6 +565,18 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/estoque/pendencias/[id]/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; pendência e lote conferidos na organização informada (lote do mesmo produto); motivo obrigatório para descartar/ciente; uma vez só. tests/invariants/clinic-estoque-consumo.test.ts prova recusa sem permissão, outra empresa e pendência fechada.",
   },
   {
+    // FORK clinic (migration 9031).
+    fn: "fn_clinic_estoque_kit_salvar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/procedimentos/[id]/kit/route.ts (PUT) chama com createClient da sessão; fn_acesso_exigir('procedimentos.gerenciar') (suporte de escrita, MFA, permissão); procedimento e produtos conferidos na organização informada; até 50 itens sem repetir produto. tests/invariants/clinic-estoque-kits-reservas.test.ts prova recusa sem permissão, produto/procedimento de outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9031).
+    fn: "fn_clinic_estoque_disponibilidade(uuid)",
+    razao:
+      "app/api/v1/clinic/procedimentos/opcoes/route.ts (GET) chama com createClient da sessão; só leitura (stable): exige membro da organização informada E (atendimento.registrar OU estoque.ver); devolve saldo disponível e lote sugerido por produto, sem dado de paciente. tests/invariants/clinic-estoque-kits-reservas.test.ts prova recusa de quem não é da empresa e de quem não tem a permissão.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

@@ -8,6 +8,10 @@
  * botão (versão esperada; conflito não sobrescreve). Lançado por engano com o
  * atendimento aberto → "Anular" com motivo (fica no histórico). Finalizado →
  * leitura + adendo.
+ *
+ * Estoque E3: escolher um procedimento com kit pré-preenche os insumos (se
+ * ainda não há nenhum), e cada insumo de produto do estoque mostra o
+ * disponível e o lote que sai primeiro (já como sugestão de lote e validade).
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -23,9 +27,17 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import type { AdendoLido, InsumoLido, ProcedimentoLido } from "@/lib/clinic/prontuario/leitura";
 
+interface EstoqueDoProduto {
+  unidade: string;
+  disponivel: number;
+  lote: string | null;
+  validade: string | null;
+}
 interface Opcoes {
   procedimentos: Array<{ id: string; nome: string }>;
   produtos: Array<{ id: string; nome: string; codigo: string }>;
+  kits?: Record<string, Array<{ product_id: string; quantidade: number }>>;
+  estoque?: Record<string, EstoqueDoProduto> | null;
 }
 interface InsumoEditavel {
   descricao: string;
@@ -110,6 +122,7 @@ function Editor({
   aoFechar: () => void;
 }) {
   const t = useT();
+  const tag = useTagDeIdioma();
   const qc = useQueryClient();
   const [procId, setProcId] = useState(inicial?.procedure_id ?? "");
   const [descricao, setDescricao] = useState(inicial?.descricao ?? "");
@@ -183,6 +196,23 @@ function Editor({
               setProcId(e.target.value);
               const nome = opcoes.procedimentos.find((p) => p.id === e.target.value)?.nome;
               if (nome && !descricao.trim()) setDescricao(nome);
+              const kit = opcoes.kits?.[e.target.value] ?? [];
+              if (kit.length > 0 && !insumos.some((i) => i.descricao.trim())) {
+                setInsumos(
+                  kit.map((k) => {
+                    const est = opcoes.estoque?.[k.product_id];
+                    return {
+                      ...vazioInsumo(),
+                      product_id: k.product_id,
+                      descricao: opcoes.produtos.find((p) => p.id === k.product_id)?.nome ?? "",
+                      quantidade: String(k.quantidade),
+                      unidade: est?.unidade ?? "un",
+                      lote: est?.lote ?? "",
+                      validade: est?.validade ?? "",
+                    };
+                  }),
+                );
+              }
             }}
           >
             <option value="">—</option>
@@ -245,7 +275,12 @@ function Editor({
                 value={ins.product_id}
                 onChange={(e) => {
                   const prod = opcoes.produtos.find((p) => p.id === e.target.value);
-                  mudar({ product_id: e.target.value, descricao: ins.descricao || prod?.nome || "" });
+                  const est = opcoes.estoque?.[e.target.value];
+                  mudar({
+                    product_id: e.target.value,
+                    descricao: ins.descricao || prod?.nome || "",
+                    ...(est && !ins.lote.trim() ? { unidade: est.unidade, lote: est.lote ?? "", validade: est.validade ?? "" } : {}),
+                  });
                 }}
               >
                 <option value="">{t("Produto (opcional)")}</option>
@@ -267,6 +302,9 @@ function Editor({
               <Button type="button" variant="ghost" onClick={() => setInsumos((l) => l.filter((_, j) => j !== i))}>
                 {t("Remover")}
               </Button>
+              {ins.product_id && opcoes.estoque?.[ins.product_id] ? (
+                <EstoqueDoInsumo est={opcoes.estoque[ins.product_id]!} precisa={Number(ins.quantidade.replace(",", ".")) || 0} tag={tag} />
+              ) : null}
             </div>
           );
         })}
@@ -292,6 +330,19 @@ function Editor({
         </Button>
       </div>
     </form>
+  );
+}
+
+function EstoqueDoInsumo({ est, precisa, tag }: { est: EstoqueDoProduto; precisa: number; tag: string }) {
+  const t = useT();
+  const falta = est.disponivel < precisa;
+  return (
+    <p className={`text-xs sm:col-span-6 ${falta ? "text-destructive" : "text-text-muted"}`} data-testid="insumo-estoque">
+      {t("Disponível no estoque:")} {est.disponivel.toLocaleString(tag)} {est.unidade}
+      {est.lote ? ` · ${t("sai primeiro o lote")} ${est.lote}` : ""}
+      {est.validade ? ` (${t("validade")} ${new Date(`${est.validade}T12:00:00`).toLocaleDateString(tag)})` : ""}
+      {falta ? ` · ${t("abaixo do necessário — o que faltar vira pendência no estoque")}` : ""}
+    </p>
   );
 }
 

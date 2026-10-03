@@ -12758,6 +12758,18 @@ export const DICIONARIO: Traducoes = {
   "Lote informado não existe no estoque": { es: "El lote informado no existe en el inventario" },
   "Nenhum local de estoque ativo": { es: "Ninguna ubicación de inventario activa" },
   "Controlado usado por conselho não permitido": { es: "Controlado usado por un consejo no permitido" },
+  // ── FORK clinic (estoque E3) ──
+  "O que este procedimento costuma gastar. No atendimento, os insumos já vêm preenchidos e, com o estoque ligado, ficam reservados até finalizar.": { es: "Lo que este procedimiento suele gastar. En la atención, los insumos ya vienen completados y, con el inventario activado, quedan reservados hasta finalizar." },
+  "Nenhum item no kit.": { es: "Ningún ítem en el kit." },
+  "Adicionar item": { es: "Agregar ítem" },
+  "Salvar kit": { es: "Guardar kit" },
+  "Kit salvo.": { es: "Kit guardado." },
+  "Não foi possível ler o kit.": { es: "No fue posible leer el kit." },
+  "Disponível no estoque:": { es: "Disponible en el inventario:" },
+  "sai primeiro o lote": { es: "sale primero el lote" },
+  "validade": { es: "vencimiento" },
+  "abaixo do necessário — o que faltar vira pendência no estoque": { es: "por debajo de lo necesario — lo que falte se vuelve pendiente en el inventario" },
+  "Kit": { es: "Kit" },
 };
 
 /**

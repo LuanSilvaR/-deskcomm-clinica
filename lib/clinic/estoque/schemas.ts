@@ -111,3 +111,13 @@ export const pendenciaSchema = z.discriminatedUnion("acao", [
   z.object({ acao: z.literal("ciente"), motivo }).strict(),
 ]);
 export type ResolucaoDePendencia = z.infer<typeof pendenciaSchema>;
+
+/** O kit de um procedimento (estoque E3): substitui a lista inteira. */
+export const kitSchema = z
+  .object({
+    itens: z
+      .array(z.object({ product_id: uuid, quantidade }).strict())
+      .max(50)
+      .refine((l) => new Set(l.map((i) => i.product_id)).size === l.length, "produto repetido"),
+  })
+  .strict();
