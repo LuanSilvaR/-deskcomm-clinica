@@ -15,13 +15,14 @@ import { ComprasNfe } from "@/components/clinic/estoque/ComprasNfe";
 import { Inventarios } from "@/components/clinic/estoque/Inventarios";
 import { Movimentacoes } from "@/components/clinic/estoque/Movimentacoes";
 import { Pendencias } from "@/components/clinic/estoque/Pendencias";
+import { RelatoriosDoEstoque } from "@/components/clinic/estoque/RelatoriosDoEstoque";
 import { PosicaoDoEstoque } from "@/components/clinic/estoque/PosicaoDoEstoque";
 import { CHAVE_DO_ESTOQUE, type DadosDoEstoque } from "@/components/clinic/estoque/tipos";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
-type Aba = "posicao" | "alertas" | "movimentacoes" | "pendencias" | "compras" | "inventario" | "locais";
+type Aba = "posicao" | "alertas" | "movimentacoes" | "pendencias" | "compras" | "inventario" | "relatorios" | "locais";
 
 export function PainelDoEstoque() {
   const t = useT();
@@ -56,6 +57,7 @@ export function PainelDoEstoque() {
     { id: "pendencias", rotulo: "Pendências" },
     { id: "compras", rotulo: "Compras (NF-e)" },
     { id: "inventario", rotulo: "Inventário" },
+    { id: "relatorios", rotulo: "Relatórios" },
     { id: "locais", rotulo: "Locais" },
   ];
   return (
@@ -88,6 +90,7 @@ export function PainelDoEstoque() {
       {aba === "pendencias" ? <Pendencias dados={d} /> : null}
       {aba === "compras" ? <ComprasNfe podeComprar={Boolean(d.pode.compras)} /> : null}
       {aba === "inventario" ? <Inventarios locais={d.locais} /> : null}
+      {aba === "relatorios" ? <RelatoriosDoEstoque /> : null}
       {aba === "locais" ? (
         <LocaisDeEstoque locais={d.locais} podeConfigurar={d.pode.configurar} />
       ) : null}

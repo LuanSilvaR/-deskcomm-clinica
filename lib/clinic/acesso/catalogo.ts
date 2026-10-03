@@ -239,6 +239,11 @@ export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
     dependeDe: ver("estoque"),
     critica: true,
   }),
+  // FORK clinic (9036): recall — quais pacientes receberam um lote. Dado de saúde.
+  p("estoque", "rastreio_lote", "manager", "Rastrear um lote até os pacientes que o receberam (recall)", {
+    dependeDe: ["estoque.ver", "prontuario.ver"],
+    clinica: true,
+  }),
 ]) as Readonly<Record<string, DefinicaoDePermissao>>;
 
 export type ChaveDePermissao = keyof typeof CATALOGO_DE_PERMISSOES & string;

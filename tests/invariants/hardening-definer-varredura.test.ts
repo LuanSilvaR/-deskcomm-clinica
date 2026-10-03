@@ -643,6 +643,30 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/estoque/alertas/[id]/dispensar/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção ligada; alerta conferido na organização informada; só aberto; motivo obrigatório. tests/invariants/clinic-estoque-alertas.test.ts prova recusa sem permissão, outra empresa e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 9036).
+    fn: "fn_clinic_estoque_rel_consumo(uuid,date,date,text)",
+    razao:
+      "app/api/v1/clinic/estoque/relatorios/consumo/route.ts (GET) chama com createClient da sessão; só leitura (stable): membro da organização informada + estoque.ver (fn_clinic_estoque_pode); custo só com estoque.custos; sem dado de paciente. tests/invariants/clinic-estoque-relatorios.test.ts prova recusa de outra empresa e de quem não tem a permissão.",
+  },
+  {
+    // FORK clinic (migration 9036).
+    fn: "fn_clinic_estoque_rel_perdas(uuid,date,date)",
+    razao:
+      "app/api/v1/clinic/estoque/relatorios/perdas/route.ts (GET) chama com createClient da sessão; só leitura (stable): membro + estoque.ver; custo só com estoque.custos; sem paciente. tests/invariants/clinic-estoque-relatorios.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9036).
+    fn: "fn_clinic_estoque_rel_compra(uuid)",
+    razao:
+      "app/api/v1/clinic/estoque/relatorios/compra/route.ts (GET) chama com createClient da sessão; só leitura (stable): membro + estoque.ver; sem paciente. tests/invariants/clinic-estoque-relatorios.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9036).
+    fn: "fn_clinic_estoque_rel_rastreio_lote(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/estoque/relatorios/rastreio/route.ts (GET) chama com createClient da sessão e audita a leitura; só leitura (stable): membro + chave CLÍNICA estoque.rastreio_lote (administrador e suporte não recebem por padrão); lote conferido na organização informada. tests/invariants/clinic-estoque-relatorios.test.ts prova que admin sem papel clínico e outra empresa são recusados.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:
