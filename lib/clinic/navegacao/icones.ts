@@ -1,6 +1,7 @@
 import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 
 import {
+  Archive,
   CalendarBlank,
   ChatsCircle,
   CurrencyCircleDollar,
@@ -24,6 +25,7 @@ import type { IconeDoModulo } from "./modulos";
 
 /** FORK clinic (9014): o ícone de cada módulo do menu da clínica. */
 export const ICONES_DOS_MODULOS: Record<IconeDoModulo, PhosphorIcon> = {
+  Archive,
   CalendarBlank,
   ChatsCircle,
   CurrencyCircleDollar,
