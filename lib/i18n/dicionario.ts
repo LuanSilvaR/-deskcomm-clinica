@@ -12843,6 +12843,25 @@ export const DICIONARIO: Traducoes = {
   "Este inventário já foi fechado ou cancelado.": { es: "Este inventario ya fue cerrado o cancelado." },
   "Não foi possível ler os inventários.": { es: "No fue posible leer los inventarios." },
   "Fechado": { es: "Cerrado" },
+  // ── FORK clinic (estoque E7) ──
+  "Não foi possível ler os alertas.": { es: "No fue posible leer las alertas." },
+  "Nenhum alerta. A lista é atualizada de hora em hora.": { es: "Ninguna alerta. La lista se actualiza cada hora." },
+  "saldo": { es: "saldo" },
+  "mínimo": { es: "mínimo" },
+  "ponto de pedido": { es: "punto de pedido" },
+  "vence em": { es: "vence el" },
+  "venceu em": { es: "venció el" },
+  "sobra": { es: "sobrante" },
+  "pendência(s) em Estoque › Pendências": { es: "pendiente(s) en Inventario › Pendientes" },
+  "Por que dispensar este alerta? (não volta por 7 dias)": { es: "¿Por qué descartar esta alerta? (no vuelve en 7 días)" },
+  "Dispensar": { es: "Descartar" },
+  "Alerta não encontrado.": { es: "Alerta no encontrada." },
+  "Este alerta já foi resolvido ou dispensado.": { es: "Esta alerta ya fue resuelta o descartada." },
+  "Hora de comprar (ponto de pedido)": { es: "Hora de comprar (punto de pedido)" },
+  "Validade próxima": { es: "Vencimiento próximo" },
+  "Lote vencido com saldo": { es: "Lote vencido con saldo" },
+  "Frasco aberto vencido": { es: "Frasco abierto vencido" },
+  "Pendências da baixa pelo prontuário": { es: "Pendientes del descuento por la historia clínica" },
 };
 
 /**

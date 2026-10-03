@@ -879,6 +879,8 @@ export const AUDIT_ACTIONS = [
   "clinic.estoque_inventario_aberto",
   "clinic.estoque_inventario_fechado",
   "clinic.estoque_inventario_cancelado",
+  "clinic.estoque_alertas_varridos",
+  "clinic.estoque_alerta_dispensado",
   "clinic.procedimento_alterado",
   "clinic.procedimento_ativado",
   "clinic.procedimento_desativado",

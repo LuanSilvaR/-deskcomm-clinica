@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { LocaisDeEstoque } from "@/components/clinic/estoque/LocaisDeEstoque";
+import { AlertasDoEstoque, useAlertasDoEstoque } from "@/components/clinic/estoque/AlertasDoEstoque";
 import { ComprasNfe } from "@/components/clinic/estoque/ComprasNfe";
 import { Inventarios } from "@/components/clinic/estoque/Inventarios";
 import { Movimentacoes } from "@/components/clinic/estoque/Movimentacoes";
@@ -20,7 +21,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
-type Aba = "posicao" | "movimentacoes" | "pendencias" | "compras" | "inventario" | "locais";
+type Aba = "posicao" | "alertas" | "movimentacoes" | "pendencias" | "compras" | "inventario" | "locais";
 
 export function PainelDoEstoque() {
   const t = useT();
@@ -30,6 +31,8 @@ export function PainelDoEstoque() {
     queryFn: async () =>
       (await apiClient.get<{ data: DadosDoEstoque }>("/api/v1/clinic/estoque/posicao")).data,
   });
+  const alertas = useAlertasDoEstoque(Boolean(q.data?.ligado));
+  const nAlertas = alertas.data?.alertas.length ?? 0;
 
   if (q.isLoading) return <p className="text-sm text-text-muted">{t("Carregando…")}</p>;
   if (q.isError || !q.data)
@@ -48,6 +51,7 @@ export function PainelDoEstoque() {
 
   const abas: Array<{ id: Aba; rotulo: string }> = [
     { id: "posicao", rotulo: "Posição" },
+    { id: "alertas", rotulo: "Alertas" },
     { id: "movimentacoes", rotulo: "Movimentações" },
     { id: "pendencias", rotulo: "Pendências" },
     { id: "compras", rotulo: "Compras (NF-e)" },
@@ -70,10 +74,16 @@ export function PainelDoEstoque() {
             )}
           >
             {t(a.rotulo)}
+            {a.id === "alertas" && nAlertas > 0 ? (
+              <span className="ml-1 rounded-full bg-destructive px-1.5 text-xs text-white" data-testid="estoque-alertas-contador">
+                {nAlertas}
+              </span>
+            ) : null}
           </button>
         ))}
       </nav>
       {aba === "posicao" ? <PosicaoDoEstoque dados={d} /> : null}
+      {aba === "alertas" ? <AlertasDoEstoque /> : null}
       {aba === "movimentacoes" ? <Movimentacoes podeEstornar={d.pode.estornar} /> : null}
       {aba === "pendencias" ? <Pendencias dados={d} /> : null}
       {aba === "compras" ? <ComprasNfe podeComprar={Boolean(d.pode.compras)} /> : null}

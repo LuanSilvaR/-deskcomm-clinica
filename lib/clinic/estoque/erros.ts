@@ -116,6 +116,8 @@ const ERROS_DO_ESTOQUE: Record<string, { status: number; code: string; mensagem:
     code: "conflict",
     mensagem: "Este inventário já foi fechado ou cancelado.",
   },
+  estoque_alerta_invalido: { status: 404, code: "not_found", mensagem: "Alerta não encontrado." },
+  estoque_alerta_fechado: { status: 409, code: "conflict", mensagem: "Este alerta já foi resolvido ou dispensado." },
   estoque_imutavel: {
     status: 409,
     code: "conflict",

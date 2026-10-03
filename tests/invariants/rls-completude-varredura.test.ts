@@ -503,6 +503,11 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "Prova própria em tests/invariants/clinic-estoque-inventario.test.ts: admin de outra empresa lê 0 itens de inventário.",
   },
   {
+    tabela: "clinic_estoque_alertas",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-alertas.test.ts: admin de outra empresa lê 0 alertas e não dispensa alerta alheio; ninguém escreve direto (INSERT recusado por permission denied); só a varredura (service role) cria.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

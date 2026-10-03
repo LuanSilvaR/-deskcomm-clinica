@@ -637,6 +637,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/estoque/inventarios/[id]/cancelar/route.ts (POST) chama com createClient da sessão; estoque.inventariar + opção ligada; inventário da organização informada e aberto; não mexe no saldo. tests/invariants/clinic-estoque-inventario.test.ts.",
   },
   {
+    // FORK clinic (migration 9035).
+    fn: "fn_clinic_estoque_alerta_dispensar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/alertas/[id]/dispensar/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção ligada; alerta conferido na organização informada; só aberto; motivo obrigatório. tests/invariants/clinic-estoque-alertas.test.ts prova recusa sem permissão, outra empresa e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:
