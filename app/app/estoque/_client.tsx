@@ -11,6 +11,7 @@ import { useState } from "react";
 
 import { LocaisDeEstoque } from "@/components/clinic/estoque/LocaisDeEstoque";
 import { ComprasNfe } from "@/components/clinic/estoque/ComprasNfe";
+import { Inventarios } from "@/components/clinic/estoque/Inventarios";
 import { Movimentacoes } from "@/components/clinic/estoque/Movimentacoes";
 import { Pendencias } from "@/components/clinic/estoque/Pendencias";
 import { PosicaoDoEstoque } from "@/components/clinic/estoque/PosicaoDoEstoque";
@@ -19,7 +20,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
-type Aba = "posicao" | "movimentacoes" | "pendencias" | "compras" | "locais";
+type Aba = "posicao" | "movimentacoes" | "pendencias" | "compras" | "inventario" | "locais";
 
 export function PainelDoEstoque() {
   const t = useT();
@@ -50,6 +51,7 @@ export function PainelDoEstoque() {
     { id: "movimentacoes", rotulo: "Movimentações" },
     { id: "pendencias", rotulo: "Pendências" },
     { id: "compras", rotulo: "Compras (NF-e)" },
+    { id: "inventario", rotulo: "Inventário" },
     { id: "locais", rotulo: "Locais" },
   ];
   return (
@@ -75,6 +77,7 @@ export function PainelDoEstoque() {
       {aba === "movimentacoes" ? <Movimentacoes podeEstornar={d.pode.estornar} /> : null}
       {aba === "pendencias" ? <Pendencias dados={d} /> : null}
       {aba === "compras" ? <ComprasNfe podeComprar={Boolean(d.pode.compras)} /> : null}
+      {aba === "inventario" ? <Inventarios locais={d.locais} /> : null}
       {aba === "locais" ? (
         <LocaisDeEstoque locais={d.locais} podeConfigurar={d.pode.configurar} />
       ) : null}

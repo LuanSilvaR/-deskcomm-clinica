@@ -140,3 +140,8 @@ export const conferirItemSchema = z.union([
 ]);
 export const lancarNfeSchema = z.object({ local_id: uuid, conta_id: uuid.nullish() }).strict();
 export const cancelarNfeSchema = z.object({ motivo }).strict();
+
+/** Inventário por local (estoque E6). */
+export const abrirInventarioSchema = z.object({ local_id: uuid }).strict();
+export const contarInventarioSchema = z.object({ contado: z.number().min(0).max(10_000_000).nullable() }).strict();
+export const fecharInventarioSchema = z.object({ motivo: z.string().trim().min(3).max(300).nullish() }).strict();

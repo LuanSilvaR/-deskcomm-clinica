@@ -105,6 +105,17 @@ const ERROS_DO_ESTOQUE: Record<string, { status: number; code: string; mensagem:
     code: "validation_failed",
     mensagem: "Conta financeira inválida.",
   },
+  estoque_inventario_aberto: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Já existe um inventário aberto neste local. Feche ou cancele antes de abrir outro.",
+  },
+  estoque_inventario_invalido: { status: 404, code: "not_found", mensagem: "Inventário não encontrado." },
+  estoque_inventario_fechado: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Este inventário já foi fechado ou cancelado.",
+  },
   estoque_imutavel: {
     status: 409,
     code: "conflict",

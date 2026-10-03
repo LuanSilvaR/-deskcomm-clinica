@@ -613,6 +613,30 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/estoque/nfe/[id]/cancelar/route.ts (POST) chama com createClient da sessão; estoque.compras + opção ligada; nota da organização informada e em conferência; motivo obrigatório. tests/invariants/clinic-estoque-nfe.test.ts.",
   },
   {
+    // FORK clinic (migration 9034).
+    fn: "fn_clinic_estoque_inventario_abrir(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/estoque/inventarios/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.inventariar') (suporte de escrita, MFA, permissão) + opção ligada; local conferido na organização informada; um aberto por local. tests/invariants/clinic-estoque-inventario.test.ts prova recusa sem permissão, local de outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9034).
+    fn: "fn_clinic_estoque_inventario_contar(uuid,uuid,numeric)",
+    razao:
+      "app/api/v1/clinic/estoque/inventarios/[id]/itens/[itemId]/route.ts (PATCH) chama com createClient da sessão; estoque.inventariar + opção ligada; item da organização informada; inventário aberto; contado >= 0. tests/invariants/clinic-estoque-inventario.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9034).
+    fn: "fn_clinic_estoque_inventario_fechar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/inventarios/[id]/fechar/route.ts (POST) chama com createClient da sessão; estoque.inventariar + opção ligada; inventário da organização informada e aberto; trava os lotes e confere saldo por gaveta. tests/invariants/clinic-estoque-inventario.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9034).
+    fn: "fn_clinic_estoque_inventario_cancelar(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/estoque/inventarios/[id]/cancelar/route.ts (POST) chama com createClient da sessão; estoque.inventariar + opção ligada; inventário da organização informada e aberto; não mexe no saldo. tests/invariants/clinic-estoque-inventario.test.ts.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

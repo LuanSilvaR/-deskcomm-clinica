@@ -12823,6 +12823,26 @@ export const DICIONARIO: Traducoes = {
   "escolhido na conferência": { es: "elegido en la revisión" },
   "Em conferência": { es: "En revisión" },
   "Lançada": { es: "Registrada" },
+  // ── FORK clinic (estoque E6) ──
+  "Voltar aos inventários": { es: "Volver a los inventarios" },
+  "Local a contar": { es: "Ubicación a contar" },
+  "Abrir inventário": { es: "Abrir inventario" },
+  "Nenhum inventário ainda.": { es: "Ningún inventario todavía." },
+  "Não foi possível ler o inventário.": { es: "No fue posible leer el inventario." },
+  "Nenhum lote com saldo neste local.": { es: "Ningún lote con saldo en esta ubicación." },
+  "No sistema": { es: "En el sistema" },
+  "Contado": { es: "Contado" },
+  "Diferença": { es: "Diferencia" },
+  "Quantidade contada": { es: "Cantidad contada" },
+  "Motivo do inventário (opcional, fica no histórico)": { es: "Motivo del inventario (opcional, queda en el historial)" },
+  "Contagem do estoque": { es: "Conteo del inventario" },
+  "Fechar e acertar o estoque": { es: "Cerrar y ajustar el inventario" },
+  "Cancelar inventário": { es: "Cancelar inventario" },
+  "Já existe um inventário aberto neste local. Feche ou cancele antes de abrir outro.": { es: "Ya existe un inventario abierto en esta ubicación. Ciérrelo o cancélelo antes de abrir otro." },
+  "Inventário não encontrado.": { es: "Inventario no encontrado." },
+  "Este inventário já foi fechado ou cancelado.": { es: "Este inventario ya fue cerrado o cancelado." },
+  "Não foi possível ler os inventários.": { es: "No fue posible leer los inventarios." },
+  "Fechado": { es: "Cerrado" },
 };
 
 /**
