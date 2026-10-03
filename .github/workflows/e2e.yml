@@ -745,6 +745,7 @@ jobs:
         clinic-estoque-baixa.spec.ts
         clinic-estoque-kit.spec.ts
         clinic-estoque-frascos.spec.ts
+        clinic-estoque-nfe.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts

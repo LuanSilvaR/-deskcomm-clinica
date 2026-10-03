@@ -15,6 +15,8 @@ export interface DadosDoEstoque {
     configurar: boolean;
     estornar: boolean;
     custos: boolean;
+    /** Importar/conferir/lançar NF-e (estoque E5). */
+    compras?: boolean;
   };
 }
 

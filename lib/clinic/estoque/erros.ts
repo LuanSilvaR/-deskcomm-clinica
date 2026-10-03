@@ -84,6 +84,27 @@ const ERROS_DO_ESTOQUE: Record<string, { status: number; code: string; mensagem:
     code: "conflict",
     mensagem: "Este frasco já foi encerrado.",
   },
+  estoque_nfe_duplicada: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Esta NF-e já foi importada (mesma chave de acesso).",
+  },
+  estoque_nfe_invalida: { status: 404, code: "not_found", mensagem: "NF-e não encontrada." },
+  estoque_nfe_fechada: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Esta NF-e já foi lançada ou cancelada.",
+  },
+  estoque_nfe_sem_conferencia: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Confira todos os itens antes de lançar.",
+  },
+  estoque_conta_invalida: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Conta financeira inválida.",
+  },
   estoque_imutavel: {
     status: 409,
     code: "conflict",

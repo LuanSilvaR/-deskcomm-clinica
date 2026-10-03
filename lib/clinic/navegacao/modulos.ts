@@ -182,7 +182,6 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     icon: "Archive",
     portas: [{ href: "/app/estoque", secao: "Posição do estoque" }],
     emBreve: [
-      { label: "Compras por NF-e", description: "Entrada pelo XML da nota, com conferência de lote e validade." },
       { label: "Alertas de validade e mínimo", description: "Aviso de lote vencendo e de produto abaixo do mínimo." },
     ],
   },

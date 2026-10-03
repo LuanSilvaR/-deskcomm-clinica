@@ -589,6 +589,30 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/estoque/frascos/[id]/encerrar/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') + opção ligada; frasco conferido na organização informada; motivo obrigatório; uma vez só (trava o frasco). tests/invariants/clinic-estoque-frascos.test.ts prova motivo, encerrar duas vezes e outra empresa.",
   },
   {
+    // FORK clinic (migration 9033).
+    fn: "fn_clinic_estoque_nfe_registrar(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/nfe/route.ts (POST) chama com createClient da sessão depois de ler o XML no servidor; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.compras') (suporte de escrita, MFA, permissão) + opção ligada; chave única por empresa; sugestão de produto de outra empresa vira nula. tests/invariants/clinic-estoque-nfe.test.ts prova duplicada, sem permissão, outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9033).
+    fn: "fn_clinic_estoque_nfe_item_conferir(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/nfe/[id]/itens/[itemId]/route.ts (PATCH) chama com createClient da sessão; estoque.compras + opção ligada; item e produto conferidos na organização informada; nota em conferência; lote/validade obrigatórios em produto rastreado; vencido recusado. tests/invariants/clinic-estoque-nfe.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9033).
+    fn: "fn_clinic_estoque_nfe_lancar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/nfe/[id]/lancar/route.ts (POST) chama com createClient da sessão; estoque.compras + opção ligada; nota da organização informada, em conferência e com todos os itens conferidos; local da empresa; conta a pagar só com financeiro.lancar e conta da empresa. tests/invariants/clinic-estoque-nfe.test.ts prova entradas, custo, de/para, conta a pagar e recusas.",
+  },
+  {
+    // FORK clinic (migration 9033).
+    fn: "fn_clinic_estoque_nfe_cancelar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/nfe/[id]/cancelar/route.ts (POST) chama com createClient da sessão; estoque.compras + opção ligada; nota da organização informada e em conferência; motivo obrigatório. tests/invariants/clinic-estoque-nfe.test.ts.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

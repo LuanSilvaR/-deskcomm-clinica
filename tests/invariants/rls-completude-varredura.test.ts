@@ -473,6 +473,26 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "Prova própria em tests/invariants/clinic-estoque-frascos.test.ts: admin de outra empresa lê 0 frascos (também pela view clinic_estoque_frascos_abertos), não abre com lote alheio nem encerra frasco alheio; ninguém escreve direto (INSERT recusado por permission denied).",
   },
   {
+    tabela: "clinic_estoque_fornecedores",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 fornecedores; ninguém escreve direto.",
+  },
+  {
+    tabela: "clinic_estoque_fornecedor_produtos",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 linhas de de/para; só nasce ao lançar.",
+  },
+  {
+    tabela: "clinic_estoque_nfe",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 notas e não confere, lança nem cancela nota alheia; ninguém escreve direto (INSERT recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_estoque_nfe_itens",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 itens e não confere item alheio.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

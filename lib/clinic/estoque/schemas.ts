@@ -125,3 +125,18 @@ export const kitSchema = z
 /** Abrir um frasco (estoque E4) e encerrá-lo (a sobra vira perda). */
 export const abrirFrascoSchema = z.object({ lote_id: uuid, local_id: uuid }).strict();
 export const encerrarFrascoSchema = z.object({ motivo }).strict();
+
+/** Conferência e lançamento da NF-e (estoque E5). */
+export const conferirItemSchema = z.union([
+  z.object({ ignorar: z.literal(true) }).strict(),
+  z
+    .object({
+      product_id: uuid,
+      fator: z.number().positive().max(1_000_000),
+      lote: z.string().trim().max(60).nullish(),
+      validade: data.nullish(),
+    })
+    .strict(),
+]);
+export const lancarNfeSchema = z.object({ local_id: uuid, conta_id: uuid.nullish() }).strict();
+export const cancelarNfeSchema = z.object({ motivo }).strict();
