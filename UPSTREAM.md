@@ -92,3 +92,4 @@ As skills `supabase` e `supabase-postgres-best-practices` (supabase/agent-skills
 (`~/.claude/skills`), NÃO no repositório: `.agents/skills` é reservado aos guias do produto e
 `tests/unit/skills-embutidas.test.ts` reprova skill fora desse padrão (removidas em cb03beac1).
 Reinstalar numa máquina nova: `npx skills add supabase/agent-skills -g`.
+| supabase/baseline.sql (trigger `trg_catalog_products_quantidade_do_estoque` em `catalog_products`, tabela do núcleo) | Estoque E1 (9029): nos produtos gerenciados pelo estoque (opção ligada), `catalog_products.quantidade` = saldo ÷ fator; o BEFORE UPDATE OF quantidade troca o valor digitado/importado pelo saldo (só a sincronia, via GUC `clinic.estoque_sync`, escreve). Opção desligada ou produto não gerenciado = comportamento do upstream | (este PR) |
