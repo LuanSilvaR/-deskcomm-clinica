@@ -577,6 +577,18 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/procedimentos/opcoes/route.ts (GET) chama com createClient da sessão; só leitura (stable): exige membro da organização informada E (atendimento.registrar OU estoque.ver); devolve saldo disponível e lote sugerido por produto, sem dado de paciente. tests/invariants/clinic-estoque-kits-reservas.test.ts prova recusa de quem não é da empresa e de quem não tem a permissão.",
   },
   {
+    // FORK clinic (migration 9032).
+    fn: "fn_clinic_estoque_frasco_abrir(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/frascos/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; lote e local conferidos na organização informada; só produto fracionável e lote não vencido; trava o lote e confere cada gaveta. tests/invariants/clinic-estoque-frascos.test.ts prova recusa sem permissão, produto não fracionável, outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9032).
+    fn: "fn_clinic_estoque_frasco_encerrar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/frascos/[id]/encerrar/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') + opção ligada; frasco conferido na organização informada; motivo obrigatório; uma vez só (trava o frasco). tests/invariants/clinic-estoque-frascos.test.ts prova motivo, encerrar duas vezes e outra empresa.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

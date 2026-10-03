@@ -73,6 +73,17 @@ const ERROS_DO_ESTOQUE: Record<string, { status: number; code: string; mensagem:
     code: "conflict",
     mensagem: "Este insumo já saiu do estoque.",
   },
+  estoque_nao_fracionavel: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Este produto não é fracionável. Marque “Fracionável” na configuração do produto.",
+  },
+  estoque_frasco_invalido: { status: 404, code: "not_found", mensagem: "Frasco não encontrado." },
+  estoque_frasco_encerrado: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Este frasco já foi encerrado.",
+  },
   estoque_imutavel: {
     status: 409,
     code: "conflict",

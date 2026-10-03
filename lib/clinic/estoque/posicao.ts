@@ -28,6 +28,18 @@ export interface ConfigDoProduto {
   versao: number;
 }
 
+/** Frasco aberto (estoque E4): conteúdo = soma dos movimentos do frasco. */
+export interface FrascoAberto {
+  id: string;
+  product_id: string;
+  lote_id: string;
+  local_id: string;
+  aberto_em: string;
+  vence_em: string | null;
+  conteudo: number;
+  vencido: boolean;
+}
+
 export interface LocalDeEstoque {
   id: string;
   nome: string;
@@ -159,7 +171,7 @@ export async function lerPosicao(
   supabase: SupabaseClient,
   org: string,
   opcoes: { hoje: string; verCustos: boolean; productId?: string },
-): Promise<{ locais: LocalDeEstoque[]; produtos: ProdutoNaPosicao[] }> {
+): Promise<{ locais: LocalDeEstoque[]; produtos: ProdutoNaPosicao[]; frascos: FrascoAberto[] }> {
   const pid = opcoes.productId;
   let produtosQ = supabase
     .from("catalog_products")
@@ -177,13 +189,18 @@ export async function lerPosicao(
     .from("clinic_estoque_saldos")
     .select("product_id, lote_id, local_id, saldo")
     .eq("organization_id", org);
+  let frascosQ = supabase
+    .from("clinic_estoque_frascos_abertos")
+    .select("id, product_id, lote_id, local_id, aberto_em, vence_em, conteudo, vencido")
+    .eq("organization_id", org);
   if (pid) {
+    frascosQ = frascosQ.eq("product_id", pid);
     produtosQ = produtosQ.eq("id", pid);
     configsQ = configsQ.eq("product_id", pid);
     lotesQ = lotesQ.eq("product_id", pid);
     saldosQ = saldosQ.eq("product_id", pid);
   }
-  const [locais, produtos, configs, lotes, saldos] = await Promise.all([
+  const [locais, produtos, configs, lotes, saldos, frascos] = await Promise.all([
     supabase
       .from("clinic_estoque_locais")
       .select("id, nome, tipo, resource_id, padrao, ativo")
@@ -194,8 +211,10 @@ export async function lerPosicao(
     configsQ,
     lotesQ,
     saldosQ,
+    frascosQ.order("aberto_em", { ascending: true }),
   ]);
-  const erro = locais.error ?? produtos.error ?? configs.error ?? lotes.error ?? saldos.error;
+  const erro =
+    locais.error ?? produtos.error ?? configs.error ?? lotes.error ?? saldos.error ?? frascos.error;
   if (erro) throw new Error(erro.message);
   return {
     locais: (locais.data ?? []) as LocalDeEstoque[],
@@ -208,5 +227,9 @@ export async function lerPosicao(
       },
       opcoes,
     ),
+    frascos: ((frascos.data ?? []) as Array<FrascoAberto & { conteudo: number | string }>).map((f) => ({
+      ...f,
+      conteudo: num(f.conteudo),
+    })),
   };
 }

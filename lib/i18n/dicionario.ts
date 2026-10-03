@@ -12770,6 +12770,15 @@ export const DICIONARIO: Traducoes = {
   "validade": { es: "vencimiento" },
   "abaixo do necessário — o que faltar vira pendência no estoque": { es: "por debajo de lo necesario — lo que falte se vuelve pendiente en el inventario" },
   "Kit": { es: "Kit" },
+  // ── FORK clinic (estoque E4) ──
+  "Abrir frasco": { es: "Abrir frasco" },
+  "Frascos abertos": { es: "Frascos abiertos" },
+  "vencido — registre a perda": { es: "vencido — registre la pérdida" },
+  "Motivo para encerrar o frasco (a sobra vira perda)": { es: "Motivo para cerrar el frasco (el sobrante se registra como pérdida)" },
+  "Frasco vencido": { es: "Frasco vencido" },
+  "Este produto não é fracionável. Marque “Fracionável” na configuração do produto.": { es: "Este producto no es fraccionable. Marque “Fraccionable” en la configuración del producto." },
+  "Frasco não encontrado.": { es: "Frasco no encontrado." },
+  "Este frasco já foi encerrado.": { es: "Este frasco ya fue cerrado." },
 };
 
 /**

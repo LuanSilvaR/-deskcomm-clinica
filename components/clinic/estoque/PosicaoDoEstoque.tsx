@@ -6,6 +6,8 @@
  * vencido). Abrir o produto mostra os lotes (FEFO: o que vence antes primeiro)
  * com o saldo em cada local e as ações: entrada, transferência, perda, ajuste
  * e a configuração do produto (unidades, lote, mínimo, controlado).
+ * Estoque E4: produto fracionável ganha "Abrir frasco" e a lista de frascos
+ * abertos (com o vencido em destaque e "Encerrar").
  */
 import { useState } from "react";
 
@@ -16,6 +18,7 @@ import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import type { ProdutoNaPosicao } from "@/lib/clinic/estoque/posicao";
 
+import { BotaoAbrirFrasco, FrascosDoProduto } from "./Frascos";
 import {
   ConfigDoProduto,
   FormularioDeEntrada,
@@ -90,6 +93,9 @@ function LinhaDoProduto({
   const nomeDoLocal = new Map(dados.locais.map((l) => [l.id, l.nome]));
   const dia = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(tag);
   const vencidos = p.lotes.filter((l) => l.vencido).length;
+  const frascos = (dados.frascos ?? []).filter((f) => f.product_id === p.product_id);
+  const fracionavel = Boolean(p.config?.fracionavel);
+  const fator = p.config?.fator_conversao ?? 1;
 
   return (
     <li className="p-3" data-testid="estoque-produto">
@@ -107,6 +113,7 @@ function LinhaDoProduto({
           {p.abaixo_do_minimo ? <Badge variant="warning">{t("Abaixo do mínimo")}</Badge> : null}
           {vencidos > 0 ? <Badge variant="error">{t("Lote vencido")}</Badge> : null}
           {p.config?.controlado ? <Badge variant="info">{t("Controlado")}</Badge> : null}
+          {frascos.some((f) => f.vencido) ? <Badge variant="error">{t("Frasco vencido")}</Badge> : null}
           {p.proxima_validade ? (
             <span className="text-xs text-text-muted">
               {t("vence")} {dia(p.proxima_validade)}
@@ -219,6 +226,9 @@ function LinhaDoProduto({
                                 >
                                   {t("Perda")}
                                 </Button>
+                                {fracionavel && !l.vencido && pl.saldo >= fator ? (
+                                  <BotaoAbrirFrasco loteId={l.lote_id} localId={pl.local_id} />
+                                ) : null}
                               </>
                             ) : null}
                             {dados.pode.inventariar ? (
@@ -246,6 +256,14 @@ function LinhaDoProduto({
               </table>
             </div>
           )}
+
+          <FrascosDoProduto
+            frascos={frascos}
+            unidade={unidade}
+            codigoDoLote={(id) => p.lotes.find((l) => l.lote_id === id)?.codigo ?? null}
+            nomeDoLocal={(id) => nomeDoLocal.get(id) ?? "—"}
+            podeMovimentar={dados.pode.movimentar}
+          />
 
           {painel?.tipo === "entrada" ? (
             <FormularioDeEntrada produto={p} locais={dados.locais} fechar={() => setPainel(null)} />

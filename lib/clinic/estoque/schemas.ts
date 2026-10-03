@@ -121,3 +121,7 @@ export const kitSchema = z
       .refine((l) => new Set(l.map((i) => i.product_id)).size === l.length, "produto repetido"),
   })
   .strict();
+
+/** Abrir um frasco (estoque E4) e encerrá-lo (a sobra vira perda). */
+export const abrirFrascoSchema = z.object({ lote_id: uuid, local_id: uuid }).strict();
+export const encerrarFrascoSchema = z.object({ motivo }).strict();
