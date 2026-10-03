@@ -114,6 +114,11 @@ const FORA_DO_SEAM: Record<string, { arquivo: string; marcador: string }> = {
     arquivo: "lib/ai/runtime/agent.ts",
     marcador: "buildModel",
   },
+  // FORK clinic (estoque E9): sugestão de produto da NF-e, pelo resolvedor do painel.
+  estoque_nfe_depara: {
+    arquivo: "lib/clinic/estoque/nfe/ia.ts",
+    marcador: "resolverModeloDoPonto",
+  },
 };
 
 describe("registro de pontos de IA × código", () => {

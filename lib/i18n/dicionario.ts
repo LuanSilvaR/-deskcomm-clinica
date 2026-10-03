@@ -12886,6 +12886,13 @@ export const DICIONARIO: Traducoes = {
   "Não foi possível ler os lotes.": { es: "No fue posible leer los lotes." },
   "Frasco encerrado": { es: "Frasco cerrado" },
   "Sem motivo": { es: "Sin motivo" },
+  // ── clinic estoque E9 (IA) ──
+  "Consultar o estoque da clínica": { es: "Consultar el inventario de la clínica" },
+  "Mostra quanto há de um produto no estoque, quanto já está reservado para atendimentos, a próxima validade e os alertas abertos, para o assistente responder à equipe sem chutar quantidade.": { es: "Muestra cuánto hay de un producto en el inventario, cuánto ya está reservado para atenciones, el próximo vencimiento y las alertas abiertas, para que el asistente responda al equipo sin adivinar cantidades." },
+  "Estoque da clínica": { es: "Inventario de la clínica" },
+  "Sugerir o produto dos itens da nota fiscal": { es: "Sugerir el producto de los ítems de la factura" },
+  "Ao importar o XML de uma compra, sugere qual produto da clínica é cada item que o código de barras e o histórico não reconheceram. É só sugestão: quem compra confere item a item. Só funciona depois que você escolhe o modelo deste ponto.": { es: "Al importar el XML de una compra, sugiere qué producto de la clínica es cada ítem que el código de barras y el historial no reconocieron. Es solo una sugerencia: quien compra revisa ítem por ítem. Solo funciona después de que elija el modelo de este punto." },
+  "Os itens novos da nota chegam sem produto sugerido e precisam ser escolhidos à mão na conferência.": { es: "Los ítems nuevos de la factura llegan sin producto sugerido y hay que elegirlos a mano en la revisión." },
 };
 
 /**

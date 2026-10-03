@@ -18,6 +18,7 @@ import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { sha256DeBytes } from "@/lib/clinic/anexos/arquivo";
 import { erroDoEstoque } from "@/lib/clinic/estoque/erros";
 import { sugerirCasamentos } from "@/lib/clinic/estoque/nfe/depara";
+import { sugerirComIa } from "@/lib/clinic/estoque/nfe/ia";
 import { lerNfe, NfeInvalida, TAMANHO_MAXIMO_NFE, type MotivoNfeInvalida } from "@/lib/clinic/estoque/nfe/parser";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -85,6 +86,26 @@ export async function POST(req: NextRequest): Promise<Response> {
   const outroDestinatario = Boolean(cnpjDaClinica && nfe.destinatario_cnpj && cnpjDaClinica !== nfe.destinatario_cnpj);
 
   const sugestoes = await sugerirCasamentos(supabase, org, nfe);
+  // E9: o que o de/para não casou vai para a IA do painel (só texto da nota e
+  // nome dos produtos; nada de paciente). Falhou? Segue sem sugestão.
+  const semCasamento = nfe.itens.filter((_, n) => !sugestoes[n]?.product_id);
+  if (semCasamento.length > 0) {
+    const [{ data: ativos }, { data: configs }] = await Promise.all([
+      supabase.from("catalog_products").select("id, nome").eq("organization_id", org).eq("ativo", true).limit(300),
+      supabase.from("clinic_produto_estoque").select("product_id, fator_conversao").eq("organization_id", org),
+    ]);
+    const fator = new Map(
+      ((configs ?? []) as Array<{ product_id: string; fator_conversao: number | string }>).map((c) => [c.product_id, Number(c.fator_conversao) || 1]),
+    );
+    const daIa = await sugerirComIa(org, semCasamento, (ativos ?? []) as Array<{ id: string; nome: string }>);
+    nfe.itens.forEach((item, n) => {
+      const productId = daIa.get(item.numero);
+      const atual = sugestoes[n];
+      if (productId && atual && !atual.product_id) {
+        sugestoes[n] = { ...atual, product_id: productId, origem_casamento: "ia", fator: fator.get(productId) ?? 1 };
+      }
+    });
+  }
   const caminho = `${org}/${nfe.chave}-${randomUUID()}.xml`;
   const bucket = createAdminClient().storage.from(BUCKET_NFE);
   const { error: erroUpload } = await bucket.upload(caminho, Buffer.from(bytes), {

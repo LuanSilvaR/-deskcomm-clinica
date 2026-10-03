@@ -46222,6 +46222,40 @@ revoke execute on function public.fn_clinic_estoque_rel_rastreio_lote(uuid, uuid
 grant  execute on function public.fn_clinic_estoque_rel_rastreio_lote(uuid, uuid) to authenticated;
 -- ---- fim clinic (migration 9036, fork) ----
 
+-- ---- clinic: catálogo da Groq (migration 9037, fork) ----
+insert into public.ai_models
+  (provider, model_id, display_name, description,
+   input_price_per_million_cents, output_price_per_million_cents, supports_tools)
+values
+  ('groq', 'llama-3.3-70b-versatile', 'Llama 3.3 70B (Groq)',
+   'Modelo aberto da Meta servido pela Groq, com resposta muito rápida. Bom equilíbrio entre qualidade e custo.',
+   59, 79, true),
+  ('groq', 'llama-3.1-8b-instant', 'Llama 3.1 8B Instant (Groq)',
+   'O mais barato e rápido da Groq, para tarefas curtas e classificação.',
+   5, 8, true),
+  ('groq', 'openai/gpt-oss-120b', 'GPT-OSS 120B (Groq)',
+   'Modelo aberto da OpenAI servido pela Groq, para tarefas que pedem mais raciocínio.',
+   15, 60, true)
+on conflict (provider, model_id) do update set
+  display_name = excluded.display_name,
+  description = excluded.description,
+  input_price_per_million_cents = excluded.input_price_per_million_cents,
+  output_price_per_million_cents = excluded.output_price_per_million_cents,
+  supports_tools = excluded.supports_tools;
+
+insert into public.ai_pricing
+  (model, prompt_cents_per_million_tokens, completion_cents_per_million_tokens, notes)
+values
+  ('llama-3.3-70b-versatile', 59, 79, 'catálogo 9037 (Groq)'),
+  ('llama-3.1-8b-instant',     5,  8, 'catálogo 9037 (Groq)'),
+  ('openai/gpt-oss-120b',     15, 60, 'catálogo 9037 (Groq)')
+on conflict (model) do update set
+  prompt_cents_per_million_tokens = excluded.prompt_cents_per_million_tokens,
+  completion_cents_per_million_tokens = excluded.completion_cents_per_million_tokens,
+  notes = excluded.notes,
+  superseded_at = null;
+-- ---- fim clinic (migration 9037, fork) ----
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

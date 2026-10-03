@@ -93,6 +93,18 @@ export const PROVEDORES = [
     ondePegarAChave: "https://platform.deepseek.com/api_keys",
     prefixoDaChave: "sk-…",
   },
+  // FORK clinic (estoque E9): Groq — OpenAI-compatível, roda modelos abertos
+  // (Llama, GPT-OSS) com latência muito baixa e custo baixo.
+  {
+    id: "groq",
+    rotulo: "Groq",
+    quandoUsar:
+      "Modelos abertos (Llama, GPT-OSS) com resposta muito rápida e custo baixo — bom para tarefas curtas como sugerir o produto de um item de nota fiscal.",
+    aceitaEndpointProprio: true,
+    catalogoSincronizavel: true,
+    ondePegarAChave: "https://console.groq.com/keys",
+    prefixoDaChave: "gsk_…",
+  },
 ] as const satisfies readonly ProvedorSuportado[];
 // `as const satisfies` e não anotação de tipo: a anotação apagaria os literais
 // e `Provider` viraria `string`, deixando o compilador aceitar qualquer texto

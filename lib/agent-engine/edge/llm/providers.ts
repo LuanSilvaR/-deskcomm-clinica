@@ -51,6 +51,13 @@ export const OPENROUTER_ENDPOINT = process.env.OPENROUTER_BASE_URL?.trim() || 'h
 export const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com';
 
 /**
+ * FORK clinic (estoque E9): a Groq também fala a API da OpenAI. A base é a que
+ * o provedor documenta para clientes OpenAI (`/openai/v1`); o `@ai-sdk/openai`
+ * acrescenta `/chat/completions`.
+ */
+export const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1';
+
+/**
  * Cabeçalhos OPCIONAIS de atribuição da OpenRouter.
  *
  * A doc deles chama `HTTP-Referer` e `X-Title` de "optional headers to identify
@@ -195,6 +202,11 @@ export function createDefaultRegistry(opts?: {
       const fetchFinal =
         opts?.deepseekThinking === 'disabled' ? comRaciocinioDesligado(contido) : contido;
       return createOpenAI({ apiKey, baseURL: endpoint, fetch: fetchFinal })(modelId);
+    },
+    /** FORK clinic (estoque E9): Groq, OpenAI-compatível; mesma regra do endpoint próprio. */
+    groq: (apiKey, modelId, baseUrl) => {
+      const endpoint = baseUrl ?? GROQ_ENDPOINT;
+      return createOpenAI({ apiKey, baseURL: endpoint, fetch: contain(endpoint) })(modelId);
     },
   };
 }

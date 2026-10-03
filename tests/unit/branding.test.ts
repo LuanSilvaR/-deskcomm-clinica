@@ -837,6 +837,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "endpoint da API da DeepSeek (OpenAI-compatível) no registry de produção, no runtime de ensaio, no validador de chave e na prova de crédito. É o destino do request, não texto de interface; trocar pelo domínio do revendedor faria a chamada não chegar.",
   },
+  "api.groq.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "FORK clinic (estoque E9): endpoint da API da Groq (OpenAI-compatível) no registry de produção, no runtime de ensaio, no gateway, no validador de chave e na prova de crédito. Destino do request, não texto de interface.",
+  },
   "generativelanguage.googleapis.com": {
     categoria: "FORNECEDOR",
     motivo:
@@ -900,6 +905,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     categoria: "CONSOLE",
     motivo:
       "painel onde o usuário gera a PRÓPRIA chave da DeepSeek (`ondePegarAChave` em lib/ai/pontos/provedores.ts). Endereço do fornecedor, não nosso.",
+  },
+  "console.groq.com": {
+    categoria: "CONSOLE",
+    motivo:
+      "FORK clinic (estoque E9): painel onde o usuário gera a PRÓPRIA chave da Groq (`ondePegarAChave` em lib/ai/pontos/provedores.ts). Endereço do fornecedor, não nosso.",
   },
   "aistudio.google.com": {
     categoria: "CONSOLE",
@@ -1093,6 +1103,7 @@ describe("catraca de host de terceiro no código que embarca", () => {
       "000000000000-xxxxxxxx.apps.googleusercontent.com",
       "aistudio.google.com",
       "console.anthropic.com",
+      "console.groq.com",
       "deskcomm.app",
       "meet.google.com",
       "meusistema.com",

@@ -14,7 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { ItemDaNfe, NfeLida } from "./parser";
 
-export type OrigemDoCasamento = "historico" | "ean" | "nome";
+export type OrigemDoCasamento = "historico" | "ean" | "nome" | "ia";
 
 export interface Sugestao {
   product_id: string | null;
