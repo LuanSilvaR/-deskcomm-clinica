@@ -91,6 +91,7 @@ supabase/.branches/
 .env.sentry-build-plugin
 inbox-with-real-msgs.png
 .e2e-creds.json
+.demo-clinica-creds.json
 .e2e-agente-mcp.json
 test-results/
 playwright-report/
