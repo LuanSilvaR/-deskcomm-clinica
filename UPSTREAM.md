@@ -91,3 +91,6 @@ As skills `supabase` e `supabase-postgres-best-practices` (supabase/agent-skills
 (`~/.claude/skills`), NÃO no repositório: `.agents/skills` é reservado aos guias do produto e
 `tests/unit/skills-embutidas.test.ts` reprova skill fora desse padrão (removidas em cb03beac1).
 Reinstalar numa máquina nova: `npx skills add supabase/agent-skills -g`.
+A skill `headroom` (guia do Headroom, compressão local de contexto no Claude Code) segue a mesma regra: é
+ferramenta de quem desenvolve, então vive em `docs/skills-de-usuario/headroom/` e cada pessoa instala no
+próprio perfil: `mkdir -p ~/.claude/skills && cp -r docs/skills-de-usuario/headroom ~/.claude/skills/`.
