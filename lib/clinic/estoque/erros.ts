@@ -82,7 +82,7 @@ const ERROS_DO_ESTOQUE: Record<string, { status: number; code: string; mensagem:
   estoque_frasco_encerrado: {
     status: 409,
     code: "conflict",
-    mensagem: "Este frasco já foi encerrado.",
+    mensagem: "Este frasco já foi encerrado ou venceu. Para corrigir, registre um ajuste.",
   },
   estoque_nfe_duplicada: {
     status: 409,
@@ -118,6 +118,32 @@ const ERROS_DO_ESTOQUE: Record<string, { status: number; code: string; mensagem:
   },
   estoque_alerta_invalido: { status: 404, code: "not_found", mensagem: "Alerta não encontrado." },
   estoque_alerta_fechado: { status: 409, code: "conflict", mensagem: "Este alerta já foi resolvido ou dispensado." },
+  // FORK clinic (estoque E10, 9038)
+  estoque_nfe_sem_arquivo: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "O arquivo XML da nota não foi encontrado. Envie o XML de novo.",
+  },
+  estoque_nfe_rastro_divergente: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "A soma dos lotes da nota não bate com a quantidade do item. Confira o XML com o fornecedor.",
+  },
+  estoque_limite_consultas: {
+    status: 429,
+    code: "rate_limited",
+    mensagem: "Muitas consultas de rastreio seguidas. Aguarde e tente de novo.",
+  },
+  clinic_produto_estoque_fracionavel_prazo: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Produto fracionável precisa do prazo de uso depois de aberto (horas).",
+  },
+  clinic_produto_estoque_controlado_conselho: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Produto controlado: escolha os conselhos que podem aplicar (“outro” não vale).",
+  },
   estoque_imutavel: {
     status: 409,
     code: "conflict",

@@ -43,7 +43,7 @@ interface Item {
   quantidade: number;
   custo_total_cents: number;
   registro_anvisa: string | null;
-  rastro: Array<{ lote: string; validade: string | null }>;
+  rastro: Array<{ lote: string; validade: string | null; quantidade?: number | null }>;
   product_id: string | null;
   origem_casamento: string | null;
   fator: number | null;
@@ -307,6 +307,8 @@ function ItemDaNota({
   const t = useT();
   const tag = useTagDeIdioma();
   const rastroUnico = i.rastro.length === 1 ? i.rastro[0] : null;
+  // estoque E10: vários lotes no XML entram um a um, como a nota diz
+  const variosLotes = i.rastro.length > 1;
   const [produto, setProduto] = useState(i.product_id ?? "");
   const p = produtos.find((x) => x.id === produto);
   const [fator, setFator] = useState(String(i.fator ?? p?.fator ?? 1));
@@ -367,28 +369,45 @@ function ItemDaNota({
             {t("Unidades de aplicação por")} {i.unidade}
             <Input inputMode="decimal" className="h-11 md:h-9" value={fator} onChange={(e) => setFator(e.target.value)} data-testid="nfe-item-fator" />
           </label>
-          <Input
-            aria-label={t("Lote")}
-            placeholder={p?.rastreado ? t("Lote (obrigatório)") : t("Lote")}
-            className="h-11 md:h-9"
-            maxLength={60}
-            value={lote}
-            onChange={(e) => setLote(e.target.value)}
-            data-testid="nfe-item-lote"
-          />
-          <Input
-            type="date"
-            aria-label={t("Validade")}
-            className="h-11 md:h-9"
-            value={validade}
-            onChange={(e) => setValidade(e.target.value)}
-            data-testid="nfe-item-validade"
-          />
+          {variosLotes ? (
+            <ul className="text-xs sm:col-span-2" data-testid="nfe-item-lotes">
+              {i.rastro.map((r) => (
+                <li key={r.lote}>
+                  {t("Lote")} {r.lote} · {r.quantidade ?? "—"} {i.unidade}
+                  {r.validade ? ` · ${new Date(`${r.validade}T12:00:00`).toLocaleDateString(tag)}` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <>
+            <Input
+              aria-label={t("Lote")}
+              placeholder={p?.rastreado ? t("Lote (obrigatório)") : t("Lote")}
+              className="h-11 md:h-9"
+              maxLength={60}
+              value={lote}
+              onChange={(e) => setLote(e.target.value)}
+              data-testid="nfe-item-lote"
+            />
+            <Input
+              type="date"
+              aria-label={t("Validade")}
+              className="h-11 md:h-9"
+              value={validade}
+              onChange={(e) => setValidade(e.target.value)}
+              data-testid="nfe-item-validade"
+            />
+            </>
+          )}
           <span className="flex gap-1">
             <Button
               size="sm"
               onClick={() =>
-                salvar.mutate({ product_id: produto, fator: nFator, lote: lote.trim() || null, validade: validade || null })
+                salvar.mutate(
+                  variosLotes
+                    ? { product_id: produto, fator: nFator }
+                    : { product_id: produto, fator: nFator, lote: lote.trim() || null, validade: validade || null },
+                )
               }
               disabled={!produto || !(nFator > 0) || salvar.isPending}
               data-testid="nfe-item-conferir"

@@ -60,7 +60,8 @@ interface LoteCru {
   product_id: string;
   codigo: string | null;
   validade: string | null;
-  custo_unitario_cents: number | string | null;
+  custo_unitario_cents?: number | string | null;
+  bloqueado_em?: string | null;
 }
 interface SaldoCru {
   product_id: string;
@@ -74,6 +75,8 @@ export interface LoteNaPosicao {
   codigo: string | null;
   validade: string | null;
   vencido: boolean;
+  /** Lote bloqueado (recall/quarentena, estoque E10): fora da FEFO. */
+  bloqueado: boolean;
   custo_unitario_cents: number | null;
   saldo: number;
   por_local: Array<{ local_id: string; saldo: number }>;
@@ -125,8 +128,9 @@ export function montarPosicao(
             codigo: l.codigo,
             validade: l.validade,
             vencido: !!l.validade && l.validade < opcoes.hoje,
+            bloqueado: Boolean(l.bloqueado_em),
             custo_unitario_cents:
-              opcoes.verCustos && l.custo_unitario_cents !== null
+              opcoes.verCustos && l.custo_unitario_cents !== null && l.custo_unitario_cents !== undefined
                 ? num(l.custo_unitario_cents)
                 : null,
             saldo: arred(porLocal.reduce((t, s) => t + s.saldo, 0)),
@@ -183,7 +187,8 @@ export async function lerPosicao(
     .eq("organization_id", org);
   let lotesQ = supabase
     .from("clinic_estoque_lotes")
-    .select("id, product_id, codigo, validade, custo_unitario_cents")
+    // custo não vem da tabela (privilégio por coluna, 9038): só pela função de custos
+    .select("id, product_id, codigo, validade, bloqueado_em")
     .eq("organization_id", org);
   let saldosQ = supabase
     .from("clinic_estoque_saldos")
@@ -216,13 +221,25 @@ export async function lerPosicao(
   const erro =
     locais.error ?? produtos.error ?? configs.error ?? lotes.error ?? saldos.error ?? frascos.error;
   if (erro) throw new Error(erro.message);
+  let lotesCrus = (lotes.data ?? []) as LoteCru[];
+  if (opcoes.verCustos) {
+    const custos = await supabase.rpc("fn_clinic_estoque_custos_lotes", { p_org: org, p_product: pid ?? null });
+    if (custos.error) throw new Error(custos.error.message);
+    const custoDe = new Map(
+      ((custos.data ?? []) as Array<{ lote_id: string; custo_unitario_cents: number | string | null }>).map((c) => [
+        c.lote_id,
+        c.custo_unitario_cents,
+      ]),
+    );
+    lotesCrus = lotesCrus.map((l) => ({ ...l, custo_unitario_cents: custoDe.get(l.id) ?? null }));
+  }
   return {
     locais: (locais.data ?? []) as LocalDeEstoque[],
     produtos: montarPosicao(
       {
         produtos: (produtos.data ?? []) as ProdutoCru[],
         configs: ((configs.data ?? []) as unknown as Record<string, unknown>[]).map(paraConfig),
-        lotes: (lotes.data ?? []) as LoteCru[],
+        lotes: lotesCrus,
         saldos: (saldos.data ?? []) as SaldoCru[],
       },
       opcoes,

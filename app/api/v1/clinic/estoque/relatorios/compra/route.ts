@@ -17,7 +17,6 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const query = z.object({});
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -30,7 +29,6 @@ export async function GET(req: NextRequest): Promise<Response> {
   const supabase = await createClient();
   const { data: linhas, error } = await supabase.rpc("fn_clinic_estoque_rel_compra", {
     p_org: authz.org.orgId,
-
   });
   if (error) {
     const e = erroDoEstoque(error, requestId);

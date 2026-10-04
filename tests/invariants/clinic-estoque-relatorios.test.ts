@@ -113,7 +113,7 @@ beforeAll(() => {
     );
   consumo(AT1, 20);
   consumo2 = consumo(AT2, 30);
-  sql(fn(ADM, "fn_clinic_estoque_perda", `'${ORG}', ${dados({ lote_id: lote, local_id: local, quantidade: 5, motivo: "Frasco quebrado" })}`));
+  sql(fn(ADM, "fn_clinic_estoque_perda", `'${ORG}', ${dados({ lote_id: lote, local_id: local, quantidade: 5, motivo: "Frasco quebrado", categoria: "quebra" })}`));
   const perdaEstornada = json<{ operacao_id: string }>(
     sql(fn(ADM, "fn_clinic_estoque_perda", `'${ORG}', ${dados({ lote_id: lote, local_id: local, quantidade: 7, motivo: "Lançado errado" })}`)),
   ).operacao_id;
@@ -146,7 +146,7 @@ describe("consumo, perdas e compra", () => {
 
   it("perdas por motivo, sem a estornada", () => {
     const perdas = json<Array<{ motivo: string; quantidade: number }>>(sql(fn(ADM, "fn_clinic_estoque_rel_perdas", `'${ORG}', '${hoje}', '${hoje}'`)));
-    expect(perdas).toEqual([expect.objectContaining({ motivo: "Frasco quebrado", quantidade: 5 })]);
+    expect(perdas).toEqual([expect.objectContaining({ categoria: "quebra", motivo: "Quebra", quantidade: 5 })]);
   });
 
   it("sugestão de compra: abaixo do ponto de pedido, até o dobro do nível", () => {
@@ -159,17 +159,20 @@ describe("consumo, perdas e compra", () => {
 describe("rastreio de lote (recall)", () => {
   it("profissional com a chave clínica vê os pacientes do lote", () => {
     const r = json<{ lote: { codigo: string }; pacientes: Array<{ paciente: string; quantidade: number; profissional: string }> }>(
-      sql(fn(PROF, "fn_clinic_estoque_rel_rastreio_lote", `'${ORG}', '${lote}'`)),
+      sql(fn(PROF, "fn_clinic_estoque_rel_rastreio_lote", `'${ORG}', '${lote}', 'auditoria'`)),
     );
     expect(r.lote.codigo).toBe("R1");
-    // o segundo consumo foi estornado: só o primeiro atendimento recebeu o lote
-    expect(r.pacientes).toEqual([expect.objectContaining({ paciente: "Paciente Recall", quantidade: 20, profissional: "Dra. Fictícia" })]);
+    // Desde a 9038 o recall parte dos INSUMOS do prontuário; os consumos deste
+    // arquivo são gravados direto (sem insumo), então não aparecem aqui. A prova
+    // do recall completo (baixado, estornado, pendente, presumido) está em
+    // tests/invariants/clinic-estoque-revisao.test.ts.
+    expect(Array.isArray(r.pacientes)).toBe(true);
   });
 
   it("administrador sem papel clínico, atendente e outra empresa são recusados", () => {
-    expect(erro(fn(ADM, "fn_clinic_estoque_rel_rastreio_lote", `'${ORG}', '${lote}'`))).toMatch(/acesso_proibido/);
-    expect(erro(fn(ATEND, "fn_clinic_estoque_rel_rastreio_lote", `'${ORG}', '${lote}'`))).toMatch(/acesso_proibido/);
-    expect(erro(fn(ADM_B, "fn_clinic_estoque_rel_rastreio_lote", `'${ORG}', '${lote}'`))).toMatch(/acesso_proibido/);
+    expect(erro(fn(ADM, "fn_clinic_estoque_rel_rastreio_lote", `'${ORG}', '${lote}', 'auditoria'`))).toMatch(/acesso_proibido/);
+    expect(erro(fn(ATEND, "fn_clinic_estoque_rel_rastreio_lote", `'${ORG}', '${lote}', 'auditoria'`))).toMatch(/acesso_proibido/);
+    expect(erro(fn(ADM_B, "fn_clinic_estoque_rel_rastreio_lote", `'${ORG}', '${lote}', 'auditoria'`))).toMatch(/acesso_proibido/);
     expect(erro(fn(ADM_B, "fn_clinic_estoque_rel_consumo", `'${ORG}', '${hoje}', '${hoje}', 'produto'`))).toMatch(/acesso_proibido/);
   });
 });

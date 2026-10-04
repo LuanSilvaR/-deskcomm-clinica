@@ -20,6 +20,7 @@ import { erroDoEstoque } from "@/lib/clinic/estoque/erros";
 import { FUNCAO_DO_MOVIMENTO, movimentoSchema } from "@/lib/clinic/estoque/schemas";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { logger } from "@/lib/logger";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,12 @@ interface LinhaCrua {
   lote_id: string;
   local_id: string;
   quantidade: number | string;
+}
+
+/** Falha de leitura: o detalhe do banco vai só para o log, nunca para o cliente. */
+function falhaDeLeitura(error: { code?: string; message: string }, requestId: string, t: (s: string) => string): Response {
+  logger.warn("[estoque] leitura das movimentações falhou", { requestId, codigo: error.code });
+  return fail("internal_error", t("Não foi possível ler as movimentações."), 500, { requestId });
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -68,13 +75,13 @@ export async function GET(req: NextRequest): Promise<Response> {
       .eq("product_id", params.data.produto)
       .order("created_at", { ascending: false })
       .limit(500);
-    if (error) return fail("internal_error", error.message, 500, { requestId });
+    if (error) return falhaDeLeitura(error, requestId, t);
     const ids = [...new Set((doProduto ?? []).map((m) => m.operacao_id as string))];
     if (ids.length === 0) return ok({ operacoes: [], proximo: null }, { requestId });
     opsQ = opsQ.in("id", ids);
   }
   const { data: opsData, error: opsErr } = await opsQ;
-  if (opsErr) return fail("internal_error", opsErr.message, 500, { requestId });
+  if (opsErr) return falhaDeLeitura(opsErr, requestId, t);
   const ops = (opsData ?? []).slice(0, LIMITE) as Array<{
     id: string;
     tipo: string;
@@ -99,7 +106,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       .in("estorna_operacao_id", ids),
   ]);
   if (linhas.error ?? estornos.error) {
-    return fail("internal_error", (linhas.error ?? estornos.error)!.message, 500, { requestId });
+    return falhaDeLeitura((linhas.error ?? estornos.error)!, requestId, t);
   }
   const movs = (linhas.data ?? []) as LinhaCrua[];
   const [produtos, lotes, locais] = await Promise.all([

@@ -4,7 +4,7 @@
  * A nota com os itens (dados do XML + sugestão/conferência) e o que a tela de
  * conferência precisa para escolher: produtos ativos (com unidade, fator e se
  * é rastreado), locais e — só para quem pode lançar no financeiro — as contas
- * financeiras ativas. `estoque.ver`.
+ * financeiras ativas. `estoque.compras` (estoque E10: valores só para quem compra).
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -21,7 +21,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requirePermission("estoque.ver", { requestId, resource: "clinic_estoque_nfe" });
+  const authz = await requirePermission("estoque.compras", { requestId, resource: "clinic_estoque_nfe" });
   if (!authz.ok) return authz.response;
   const t = (s: string) => traduzir(s, authz.user.idioma);
   const { id } = await ctx.params;

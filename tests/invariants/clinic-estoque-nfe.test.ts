@@ -90,6 +90,10 @@ let nfe = "";
 const item = (n: number) => ultima(sql(`select id from public.clinic_estoque_nfe_itens where nfe_id = '${nfe}' and numero = ${n};`));
 
 beforeAll(() => {
+  // 9038: a nota só se registra com o XML no bucket da própria clínica
+  sql(`insert into storage.objects (bucket_id, name) values
+         ('clinic-nfe', '${ORG}/${CHAVE}.xml'), ('clinic-nfe', '${ORG}/${CHAVE_2}.xml'), ('clinic-nfe', '${ORG_B}/${CHAVE}.xml')
+       on conflict do nothing;`);
   sql(`
     insert into auth.users (id, email) values
       ('${ADM}', 'nfe-adm@invariant.test'), ('${ATEND}', 'nfe-atend@invariant.test'), ('${ADM_B}', 'nfe-adm-b@invariant.test')
@@ -128,7 +132,7 @@ describe("registrar", () => {
     );
     expect(erro(fn(ADM, "fn_clinic_estoque_nfe_registrar", `'${ORG}', ${dados(nota(CHAVE))}`))).toMatch(/estoque_nfe_duplicada/);
     // a mesma chave em OUTRA empresa é outra nota; sugestão de produto alheio vira nula
-    const b = json<{ id: string }>(sql(fn(ADM_B, "fn_clinic_estoque_nfe_registrar", `'${ORG_B}', ${dados(nota(CHAVE))}`))).id;
+    const b = json<{ id: string }>(sql(fn(ADM_B, "fn_clinic_estoque_nfe_registrar", `'${ORG_B}', ${dados({ ...nota(CHAVE), arquivo_path: `${ORG_B}/${CHAVE}.xml` })}`))).id;
     expect(ultima(sql(`select product_id is null from public.clinic_estoque_nfe_itens where nfe_id = '${b}' and numero = 1;`))).toBe("t");
   });
 });

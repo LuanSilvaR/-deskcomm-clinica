@@ -47,10 +47,35 @@ interface LinhaCompra {
   nivel: number;
   sugerido: number;
 }
+type StatusDoRecall = "baixado" | "lote_presumido" | "pendente" | "sem_baixa" | "estornado" | "baixado_em_outro_lote";
 interface Rastreio {
-  lote: { codigo: string | null; validade: string | null; produto: string };
-  pacientes: Array<{ contact_id: string; paciente: string | null; data: string; profissional: string | null; quantidade: number }>;
+  lote: { codigo: string | null; validade: string | null; produto: string; bloqueado?: boolean };
+  pacientes: Array<{
+    contact_id: string;
+    paciente: string | null;
+    data: string;
+    profissional: string | null;
+    quantidade: number;
+    status: StatusDoRecall;
+  }>;
 }
+
+// Estoque E10: de onde vem a ligação paciente ↔ lote (o prontuário manda)
+const ROTULO_DO_STATUS: Record<StatusDoRecall, string> = {
+  baixado: "Lote anotado no prontuário",
+  lote_presumido: "Lote escolhido pelo sistema (confirme)",
+  pendente: "Baixa pendente",
+  sem_baixa: "Anotado no prontuário, sem baixa",
+  estornado: "Baixa estornada",
+  baixado_em_outro_lote: "Anotado com este lote, baixado de outro",
+};
+const TIPOS_DE_CONSULTA: Array<{ id: string; rotulo: string }> = [
+  { id: "recall_fabricante", rotulo: "Recolhimento do fabricante" },
+  { id: "alerta_sanitario", rotulo: "Alerta sanitário" },
+  { id: "evento_adverso", rotulo: "Evento adverso" },
+  { id: "auditoria", rotulo: "Auditoria interna" },
+  { id: "outro", rotulo: "Outro" },
+];
 
 const SELECT = "h-11 rounded-md border bg-surface px-2 text-sm md:h-9";
 const dataIso = (d: Date) => d.toISOString().slice(0, 10);
@@ -209,6 +234,7 @@ function RastreioDeLote() {
   const t = useT();
   const tag = useTagDeIdioma();
   const [lote, setLote] = useState("");
+  const [tipo, setTipo] = useState("");
   const todos = useQuery({
     queryKey: ["clinic", "estoque", "lotes"],
     queryFn: async () =>
@@ -219,14 +245,25 @@ function RastreioDeLote() {
     rotulo: `${l.produto} · ${t("lote")} ${l.codigo}${l.validade ? ` · ${new Date(`${l.validade}T12:00:00`).toLocaleDateString(tag)}` : ""}`,
   }));
   const q = useQuery({
-    queryKey: ["clinic", "estoque", "rastreio", lote],
-    enabled: Boolean(lote),
-    queryFn: async () => (await apiClient.get<{ data: Rastreio }>(`/api/v1/clinic/estoque/relatorios/rastreio?lote=${lote}`)).data,
+    queryKey: ["clinic", "estoque", "rastreio", lote, tipo],
+    enabled: Boolean(lote && tipo),
+    queryFn: async () =>
+      (await apiClient.get<{ data: Rastreio }>(`/api/v1/clinic/estoque/relatorios/rastreio?lote=${lote}&tipo=${tipo}`)).data,
   });
   return (
     <section className="space-y-2 rounded-lg border p-3" data-testid="relatorio-rastreio">
       <h2 className="text-base font-semibold">{t("Rastreio de lote (recall)")}</h2>
-      <p className="text-xs text-text-muted">{t("Mostra quais pacientes receberam o lote. Cada consulta fica registrada.")}</p>
+      <p className="text-xs text-text-muted">
+        {t("Mostra quais pacientes receberam o lote, pelo que foi anotado no prontuário. Cada consulta fica registrada com o motivo.")}
+      </p>
+      <select className={SELECT} value={tipo} onChange={(e) => setTipo(e.target.value)} aria-label={t("Motivo da consulta")} data-testid="relatorio-rastreio-tipo">
+        <option value="">{t("Motivo da consulta…")}</option>
+        {TIPOS_DE_CONSULTA.map((x) => (
+          <option key={x.id} value={x.id}>
+            {t(x.rotulo)}
+          </option>
+        ))}
+      </select>
       <select className={SELECT} value={lote} onChange={(e) => setLote(e.target.value)} aria-label={t("Lote")} data-testid="relatorio-rastreio-lote">
         <option value="">{t("Escolha o lote…")}</option>
         {lotes.map((l) => (
@@ -244,7 +281,8 @@ function RastreioDeLote() {
               <li key={i} className="flex flex-wrap justify-between gap-2 py-1">
                 <span>{p.paciente ?? "—"}</span>
                 <span className="text-xs text-text-muted">
-                  {new Date(p.data).toLocaleDateString(tag)} · {p.profissional ?? "—"} · {quantidade(p.quantidade, tag)}
+                  {new Date(p.data).toLocaleDateString(tag)} · {p.profissional ?? "—"} · {quantidade(p.quantidade, tag)} ·{" "}
+                  {t(ROTULO_DO_STATUS[p.status] ?? p.status)}
                 </span>
               </li>
             ))}

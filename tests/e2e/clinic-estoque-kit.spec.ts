@@ -56,6 +56,7 @@ test("estoque: kit do procedimento — pela tela", async ({ page }) => {
         unidade_aplicacao: "U",
         fator_conversao: 100,
         fracionavel: true,
+        validade_pos_abertura_horas: 24,
         rastreado: false,
         controlado: false,
         conselhos_permitidos: [],

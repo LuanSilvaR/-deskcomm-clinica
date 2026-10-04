@@ -661,10 +661,22 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/estoque/relatorios/compra/route.ts (GET) chama com createClient da sessão; só leitura (stable): membro + estoque.ver; sem paciente. tests/invariants/clinic-estoque-relatorios.test.ts.",
   },
   {
-    // FORK clinic (migration 9036).
-    fn: "fn_clinic_estoque_rel_rastreio_lote(uuid,uuid)",
+    // FORK clinic (migration 9038).
+    fn: "fn_clinic_estoque_rel_rastreio_lote(uuid,uuid,text)",
     razao:
-      "app/api/v1/clinic/estoque/relatorios/rastreio/route.ts (GET) chama com createClient da sessão e audita a leitura; só leitura (stable): membro + chave CLÍNICA estoque.rastreio_lote (administrador e suporte não recebem por padrão); lote conferido na organização informada. tests/invariants/clinic-estoque-relatorios.test.ts prova que admin sem papel clínico e outra empresa são recusados.",
+      "app/api/v1/clinic/estoque/relatorios/rastreio/route.ts (GET) chama com createClient da sessão. Recall com chave CLÍNICA estoque.rastreio_lote (fn_clinic_estoque_pode: membro + permissão); tipo da consulta categórico; limite de 30 consultas/hora por pessoa contado no próprio api_audit_log; grava a auditoria (só ids, contagem e tipo) na mesma transação. tests/invariants/clinic-estoque-revisao.test.ts prova recusa de administrador sem papel clínico, atendente, outra empresa, o limite e o registro.",
+  },
+  {
+    // FORK clinic (migration 9038).
+    fn: "fn_clinic_estoque_lote_bloquear(uuid,uuid,boolean,text)",
+    razao:
+      "app/api/v1/clinic/estoque/lotes/[id]/bloqueio/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir(org, 'estoque.configurar') (membro + permissão + suporte com MFA) antes de tudo; lote conferido na organização; motivo obrigatório. tests/invariants/clinic-estoque-revisao.test.ts prova a recusa sem permissão e de outra empresa.",
+  },
+  {
+    // FORK clinic (migration 9038).
+    fn: "fn_clinic_estoque_custos_lotes(uuid,uuid)",
+    razao:
+      "lib/clinic/estoque/posicao.ts chama com o client da sessão só quando a pessoa vê custos; só leitura (stable): fn_clinic_estoque_pode(org, 'estoque.custos'). tests/invariants/clinic-estoque-revisao.test.ts prova a recusa de quem só tem estoque.ver e de outra empresa.",
   },
   {
     // FORK clinic (migration 9017).

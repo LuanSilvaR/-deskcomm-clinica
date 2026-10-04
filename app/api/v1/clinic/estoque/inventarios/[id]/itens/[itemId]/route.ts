@@ -9,7 +9,6 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
-import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { erroDoEstoque } from "@/lib/clinic/estoque/erros";
 import { contarInventarioSchema } from "@/lib/clinic/estoque/schemas";

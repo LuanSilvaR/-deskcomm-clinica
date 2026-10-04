@@ -55,6 +55,18 @@ export const localSchema = z
   })
   .strict();
 
+/** Categorias de perda (espelha o CHECK de clinic_estoque_operacoes.motivo_categoria). */
+export const CATEGORIAS_DE_PERDA = ["vencimento", "quebra", "contaminacao", "pos_abertura", "recolhimento", "outro"] as const;
+
+/** Por que se consulta o recall (vai para o log como categoria, nunca texto livre). */
+export const TIPOS_DE_CONSULTA_DO_RASTREIO = [
+  "recall_fabricante",
+  "alerta_sanitario",
+  "evento_adverso",
+  "auditoria",
+  "outro",
+] as const;
+
 export const movimentoSchema = z.discriminatedUnion("acao", [
   z
     .object({
@@ -80,7 +92,15 @@ export const movimentoSchema = z.discriminatedUnion("acao", [
     })
     .strict(),
   z
-    .object({ acao: z.literal("perda"), lote_id: uuid, local_id: uuid, quantidade, motivo })
+    .object({
+      acao: z.literal("perda"),
+      lote_id: uuid,
+      local_id: uuid,
+      quantidade,
+      motivo,
+      // estoque E10 (9038): categoria da perda, para auditoria e descarte
+      categoria: z.enum(CATEGORIAS_DE_PERDA).optional(),
+    })
     .strict(),
   z
     .object({

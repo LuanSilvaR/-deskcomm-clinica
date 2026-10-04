@@ -59,7 +59,7 @@ export function PainelDoEstoque() {
     { id: "inventario", rotulo: "Inventário" },
     { id: "relatorios", rotulo: "Relatórios" },
     { id: "locais", rotulo: "Locais" },
-  ];
+  ].filter((a) => a.id !== "compras" || Boolean(d.pode.compras)) as Array<{ id: Aba; rotulo: string }>;
   return (
     <div className="space-y-4" data-testid="painel-do-estoque">
       <nav aria-label={t("Seções do estoque")} className="flex gap-1 border-b">

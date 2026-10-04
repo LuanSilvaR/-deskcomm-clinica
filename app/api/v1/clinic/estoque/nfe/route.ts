@@ -7,7 +7,8 @@
  * bucket privado `clinic-nfe` (só por aqui, service role); se o registro
  * falhar, o upload é desfeito. Chave repetida → 409. CNPJ do destinatário
  * diferente do da clínica → aviso (a nota ainda pode ser conferida).
- * GET: as notas mais recentes. `estoque.compras` (POST) / `estoque.ver` (GET).
+ * GET: as notas mais recentes. `estoque.compras` (POST e GET — valores da compra
+ * não ficam com quem só vê o estoque, estoque E10).
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -39,7 +40,7 @@ const MENSAGEM_DO_MOTIVO: Record<MotivoNfeInvalida, string> = {
 
 export async function GET(): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requirePermission("estoque.ver", { requestId, resource: "clinic_estoque_nfe" });
+  const authz = await requirePermission("estoque.compras", { requestId, resource: "clinic_estoque_nfe" });
   if (!authz.ok) return authz.response;
   const t = (s: string) => traduzir(s, authz.user.idioma);
   const supabase = await createClient();
@@ -61,6 +62,11 @@ export async function POST(req: NextRequest): Promise<Response> {
   const authz = await requirePermission("estoque.compras", { requestId, resource: "clinic_estoque_nfe" });
   if (!authz.ok) return authz.response;
   const t = (s: string) => traduzir(s, authz.user.idioma);
+  // O tamanho declarado é conferido ANTES de ler o corpo (folga para o envelope multipart).
+  const declarado = Number(req.headers.get("content-length") ?? "0");
+  if (declarado > TAMANHO_MAXIMO_NFE + 64 * 1024) {
+    return fail("payload_too_large", t("O XML precisa ter até 1 MB."), 413, { requestId });
+  }
   const form = await req.formData().catch(() => null);
   const arquivo = form?.get("arquivo");
   if (!(arquivo instanceof File)) return fail("validation_failed", t("Envie o arquivo XML da NF-e."), 422, { requestId });

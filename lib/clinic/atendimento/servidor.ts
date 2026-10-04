@@ -277,6 +277,12 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
     code: "forbidden_permission",
     mensagem: "Você não tem permissão para esta ação.",
   },
+  // FORK clinic (estoque E10, 9038): produto rastreado exige lote e validade no insumo
+  insumo_lote_obrigatorio: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Este produto é rastreado: informe o lote e a validade do insumo.",
+  },
 };
 
 export function erroDoBanco(

@@ -21,6 +21,7 @@ import type { ProdutoNaPosicao } from "@/lib/clinic/estoque/posicao";
 import { BotaoAbrirFrasco, FrascosDoProduto } from "./Frascos";
 import {
   ConfigDoProduto,
+  FormularioDeBloqueio,
   FormularioDeEntrada,
   FormularioDoLote,
   type AcaoDoLote,
@@ -31,6 +32,7 @@ type Painel =
   | { tipo: "entrada" }
   | { tipo: "config" }
   | { tipo: "lote"; acao: AcaoDoLote; loteId: string; localId: string }
+  | { tipo: "bloqueio"; loteId: string; bloqueado: boolean }
   | null;
 
 export function PosicaoDoEstoque({ dados }: { dados: DadosDoEstoque }) {
@@ -178,6 +180,11 @@ function LinhaDoProduto({
                               {t("vencido")}
                             </Badge>
                           ) : null}
+                          {l.bloqueado ? (
+                            <Badge variant="warning" className="ml-1" data-testid="estoque-lote-bloqueado">
+                              {t("bloqueado")}
+                            </Badge>
+                          ) : null}
                         </td>
                         <td className="py-1 pr-2">{nomeDoLocal.get(pl.local_id) ?? "—"}</td>
                         <td className="py-1 pr-2 text-right">
@@ -231,6 +238,16 @@ function LinhaDoProduto({
                                 ) : null}
                               </>
                             ) : null}
+                            {dados.pode.configurar ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setPainel({ tipo: "bloqueio", loteId: l.lote_id, bloqueado: l.bloqueado })}
+                                data-testid="estoque-lote-bloquear"
+                              >
+                                {t(l.bloqueado ? "Desbloquear" : "Bloquear")}
+                              </Button>
+                            ) : null}
                             {dados.pode.inventariar ? (
                               <Button
                                 size="sm"
@@ -270,6 +287,9 @@ function LinhaDoProduto({
           ) : null}
           {painel?.tipo === "config" ? (
             <ConfigDoProduto produto={p} fechar={() => setPainel(null)} />
+          ) : null}
+          {painel?.tipo === "bloqueio" ? (
+            <FormularioDeBloqueio loteId={painel.loteId} bloqueado={painel.bloqueado} fechar={() => setPainel(null)} />
           ) : null}
           {painel?.tipo === "lote" ? (
             <FormularioDoLote
