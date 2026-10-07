@@ -752,6 +752,7 @@ jobs:
         clinic-estoque-revisao.spec.ts
         clinic-fin-maquininhas.spec.ts
         clinic-fin-recebimentos.spec.ts
+        clinic-fin-caixa.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts

@@ -240,6 +240,7 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     portas: [
       { href: "/app/comandas", secao: "O dia do caixa" },
       { href: "/app/products", secao: "Catálogo" },
+      { href: "/app/financeiro/caixa", secao: "O dia do caixa" },
       { href: "/app/financeiro/recebiveis", secao: "O dia do caixa" },
       { href: "/app/faturamento", secao: "Indicadores" },
       { href: "/app/settings/tenant/financeiro", secao: "Ajustes do financeiro" },

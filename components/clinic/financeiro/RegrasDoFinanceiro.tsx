@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import type { ConfigFinanceiro } from "@/lib/clinic/financeiro/servidor";
+import { parseReaisToCents } from "@/lib/money";
 
 const SELECT = "h-11 rounded-md border bg-surface px-2 text-sm md:h-9";
 const CHAVE = ["clinic", "financeiro", "config"] as const;
@@ -42,11 +43,13 @@ function Formulario({
 }) {
   const [base, setBase] = useState(inicial.comissao_base);
   const [margem, setMargem] = useState(String(inicial.margem_minima_pct));
+  const [limite, setLimite] = useState((inicial.limite_conferencia_cents / 100).toFixed(2).replace(".", ","));
   const salvar = useMutation({
     mutationFn: () =>
       apiClient.patch("/api/v1/clinic/financeiro/config", {
         comissao_base: base,
         margem_minima_pct: Number(margem.replace(",", ".")),
+        limite_conferencia_cents: parseReaisToCents(limite) ?? 0,
       }),
     onSuccess: aoSalvar,
     onError: showApiError,
@@ -74,6 +77,10 @@ function Formulario({
         <label className="space-y-1 text-xs">
           <span className="block font-medium">{t("Margem mínima para alerta (%)")}</span>
           <Input value={margem} disabled={!editar} onChange={(e) => setMargem(e.target.value)} className="h-11 w-24 md:h-9" />
+        </label>
+        <label className="space-y-1 text-xs">
+          <span className="block font-medium">{t("Conferência do caixa a partir de (R$)")}</span>
+          <Input value={limite} disabled={!editar} onChange={(e) => setLimite(e.target.value)} className="h-11 w-32 md:h-9" />
         </label>
         {editar ? (
           <Button type="submit" size="sm" disabled={salvar.isPending}>

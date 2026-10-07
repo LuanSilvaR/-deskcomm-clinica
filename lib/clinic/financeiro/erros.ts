@@ -84,6 +84,20 @@ const ERROS_DO_FINANCEIRO: Record<string, { status: number; code: string; mensag
   },
   forma_de_pagamento_invalida: { status: 422, code: "validation_failed", mensagem: "Forma de pagamento inválida." },
   estorno_forbidden: { status: 403, code: "forbidden", mensagem: "Estornar uma comanda exige perfil de gerente." },
+  fin_conta_invalida: { status: 422, code: "validation_failed", mensagem: "Conta inválida ou inativa." },
+  fin_caixa_ja_aberto: { status: 409, code: "conflict", mensagem: "Já existe um caixa aberto nesta conta. Feche-o antes de abrir outro." },
+  fin_caixa_invalido: { status: 404, code: "not_found", mensagem: "Caixa não encontrado." },
+  fin_caixa_fechado: { status: 409, code: "conflict", mensagem: "Este caixa já foi fechado." },
+  fin_caixa_sem_saldo: { status: 422, code: "validation_failed", mensagem: "Não há esse valor na gaveta." },
+  fin_plano_invalido: { status: 422, code: "validation_failed", mensagem: "Categoria de despesa inválida." },
+  fin_contagem_invalida: { status: 422, code: "validation_failed", mensagem: "Contagem inválida." },
+  fin_caixa_sem_conferencia: { status: 409, code: "conflict", mensagem: "Este caixa não está aguardando conferência." },
+  fin_conferencia_mesma_pessoa: {
+    status: 403,
+    code: "forbidden",
+    mensagem: "A conferência precisa ser feita por outra pessoa, não por quem fechou o caixa.",
+  },
+  fin_caixa_imutavel: { status: 409, code: "conflict", mensagem: "Caixa fechado não se altera." },
   clinic_fin_adquirentes_nome_unico: { status: 409, code: "conflict", mensagem: "Já existe uma maquininha com esse nome." },
 };
 

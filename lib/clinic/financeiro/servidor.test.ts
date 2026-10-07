@@ -5,16 +5,17 @@ import { lerConfigFinanceiro, MARGEM_MINIMA_PADRAO, simular, type Maquininhas } 
 
 describe("lerConfigFinanceiro", () => {
   it("padrões: desligado, comissão sobre o líquido, margem 30%", () => {
-    expect(lerConfigFinanceiro(null)).toEqual({ ligado: false, comissao_base: "liquido", margem_minima_pct: MARGEM_MINIMA_PADRAO });
+    expect(lerConfigFinanceiro(null)).toEqual({ ligado: false, comissao_base: "liquido", margem_minima_pct: MARGEM_MINIMA_PADRAO, limite_conferencia_cents: 500_000 });
   });
   it("lê o que a clínica salvou; valor estranho cai no padrão", () => {
     expect(
       lerConfigFinanceiro({ clinic: { financeiro_avancado: true, fin: { comissao_base: "bruto", margem_minima_pct: 25 } } }),
-    ).toEqual({ ligado: true, comissao_base: "bruto", margem_minima_pct: 25 });
+    ).toEqual({ ligado: true, comissao_base: "bruto", margem_minima_pct: 25, limite_conferencia_cents: 500_000 });
     expect(lerConfigFinanceiro({ clinic: { financeiro_avancado: "sim", fin: { comissao_base: "x", margem_minima_pct: "25" } } })).toEqual({
       ligado: false,
       comissao_base: "liquido",
       margem_minima_pct: MARGEM_MINIMA_PADRAO,
+      limite_conferencia_cents: 500_000,
     });
   });
 });

@@ -197,7 +197,10 @@ export interface ConfigFinanceiro {
   ligado: boolean;
   comissao_base: "liquido" | "bruto";
   margem_minima_pct: number;
+  limite_conferencia_cents: number;
 }
+
+export const LIMITE_CONFERENCIA_PADRAO = 500_000;
 
 export function lerConfigFinanceiro(settings: unknown): ConfigFinanceiro {
   const clinic =
@@ -210,6 +213,8 @@ export function lerConfigFinanceiro(settings: unknown): ConfigFinanceiro {
     ligado: clinic?.financeiro_avancado === true,
     comissao_base: fin.comissao_base === "bruto" ? "bruto" : "liquido",
     margem_minima_pct: margem,
+    limite_conferencia_cents:
+      typeof fin.limite_conferencia_cents === "number" ? fin.limite_conferencia_cents : LIMITE_CONFERENCIA_PADRAO,
   };
 }
 
@@ -310,5 +315,106 @@ export async function lerRecebiveis(
       maquininha: p.pagamento?.adquirente?.nome ?? null,
     })),
     a_receber: a,
+  };
+}
+
+// ─── FN3: caixa diário ──────────────────────────────────────────────────────
+
+export interface MovimentoDeCaixa {
+  id: string;
+  tipo: "suprimento" | "sangria" | "caixa_pequeno";
+  valor_cents: number;
+  descricao: string;
+  criado_em: string;
+}
+
+export interface SessaoDeCaixa {
+  id: string;
+  account_id: string;
+  conta: string;
+  status: "aberto" | "aguardando_conferencia" | "fechado";
+  aberto_em: string;
+  aberto_por: string;
+  fundo_troco_cents: number;
+  fechado_em: string | null;
+  fechado_por: string | null;
+  esperado_cents: number | null;
+  contado_cents: number | null;
+  diferenca_cents: number | null;
+  observacao: string | null;
+  movimentos: MovimentoDeCaixa[];
+}
+
+export interface DiaFinanceiro {
+  dia: string;
+  entradas_cents: number;
+  saidas_cents: number;
+  saldo_cents: number;
+  ontem_cents: number;
+  media_7d_cents: number;
+  por_categoria: Array<{ categoria: string; direcao: "in" | "out"; total_cents: number }>;
+}
+
+export interface CaixaDoDia {
+  ligado: boolean;
+  resumo: DiaFinanceiro | null;
+  sessoes: SessaoDeCaixa[];
+  contas: Array<{ id: string; nome: string; kind: string }>;
+  planos_de_despesa: Array<{ id: string; nome: string }>;
+  /** esperado agora de cada sessão aberta */
+  esperado_agora: Record<string, number>;
+}
+
+export async function lerCaixaDoDia(supabase: SupabaseClient, orgId: string, dia: string): Promise<CaixaDoDia> {
+  const [org, resumo, sessoes, contas, planos] = await Promise.all([
+    supabase.from("organizations").select("settings").eq("id", orgId).maybeSingle(),
+    supabase.rpc("fn_clinic_fin_dia", { p_org: orgId, p_dia: dia }),
+    supabase
+      .from("clinic_fin_caixas")
+      .select(
+        "id, account_id, status, aberto_em, aberto_por, fundo_troco_cents, fechado_em, fechado_por, esperado_cents, contado_cents, diferenca_cents, observacao, conta:financial_accounts(name), movimentos:clinic_fin_caixa_movimentos(id, tipo, valor_cents, descricao, criado_em)",
+      )
+      .eq("organization_id", orgId)
+      .or(`status.neq.fechado,aberto_em.gte.${dia}T00:00:00`)
+      .order("aberto_em", { ascending: false })
+      .limit(30),
+    supabase.from("financial_accounts").select("id, name, kind").eq("organization_id", orgId).eq("is_active", true).order("name"),
+    supabase
+      .from("account_plans")
+      .select("id, name")
+      .eq("organization_id", orgId)
+      .eq("direction", "out")
+      .eq("is_active", true)
+      .order("name"),
+  ]);
+  for (const r of [sessoes, contas, planos]) if (r.error) throw r.error;
+  type Linha = Omit<SessaoDeCaixa, "conta" | "movimentos"> & {
+    conta: { name: string } | null;
+    movimentos: MovimentoDeCaixa[] | null;
+  };
+  const lista = ((sessoes.data ?? []) as unknown as Linha[]).map((s) => ({
+    ...s,
+    conta: s.conta?.name ?? "",
+    fundo_troco_cents: Number(s.fundo_troco_cents),
+    movimentos: (s.movimentos ?? [])
+      .map((m) => ({ ...m, valor_cents: Number(m.valor_cents) }))
+      .sort((a, b) => a.criado_em.localeCompare(b.criado_em)),
+  }));
+  const esperado: Record<string, number> = {};
+  await Promise.all(
+    lista
+      .filter((s) => s.status === "aberto")
+      .map(async (s) => {
+        const { data } = await supabase.rpc("fn_clinic_fin_caixa_esperado_agora", { p_org: orgId, p_caixa: s.id });
+        if (typeof data === "number" || typeof data === "string") esperado[s.id] = Number(data);
+      }),
+  );
+  return {
+    ligado: lerConfigFinanceiro((org.data as { settings?: unknown } | null)?.settings).ligado,
+    resumo: resumo.error ? null : (resumo.data as DiaFinanceiro),
+    sessoes: lista,
+    contas: ((contas.data ?? []) as Array<{ id: string; name: string; kind: string }>).map((c) => ({ id: c.id, nome: c.name, kind: c.kind })),
+    planos_de_despesa: ((planos.data ?? []) as Array<{ id: string; name: string }>).map((p) => ({ id: p.id, nome: p.name })),
+    esperado_agora: esperado,
   };
 }

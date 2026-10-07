@@ -874,6 +874,10 @@ export const AUDIT_ACTIONS = [
   "clinic.fin_antecipacao_feita",
   "clinic.fin_parcelas_baixadas",
   "clinic.fin_config_salva",
+  "clinic.fin_caixa_aberto",
+  "clinic.fin_caixa_movimentado",
+  "clinic.fin_caixa_fechado",
+  "clinic.fin_caixa_conferido",
   // FORK clinic (9028): estoque — ids e o tipo da ação, nunca dado de paciente.
   "clinic.estoque_produto_configurado",
   "clinic.estoque_local_salvo",

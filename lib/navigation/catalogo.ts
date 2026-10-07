@@ -804,6 +804,18 @@ export const NAV_CATALOG = [
   // lista as cinco (`hubSections`), então as duas continuam a um clique, com a
   // frase que explica para que servem. O ⌘K também as acha por nome.
   {
+    // FORK clinic (financeiro FN3, migration 9041): o caixa do dia e a gaveta
+    // (abertura, sangria, caixa pequeno, fechamento conferido). Sem `sidebar`;
+    // porta pelo módulo Financeiro e pelo ⌘K. `financeiro.ver`.
+    href: "/app/financeiro/caixa",
+    label: "Caixa do dia",
+    permissao: "financeiro.ver",
+    description: "Entradas, saídas e saldo do dia por categoria; abertura e fechamento da gaveta com dupla conferência.",
+    icon: "Receipt",
+    group: "analise",
+    section: "Dinheiro",
+  },
+  {
     // FORK clinic (financeiro FN2, migration 9040): as parcelas de cartão e Pix
     // a receber, a baixa e a antecipação. Sem `sidebar`; porta pelo módulo
     // Financeiro do menu da clínica e pelo ⌘K. `financeiro.ver`.

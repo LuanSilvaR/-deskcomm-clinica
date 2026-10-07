@@ -739,6 +739,42 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "Custo direto para a margem no fechamento: financeiro.lancar + opção ligada; insumos só com estoque.custos; devolve só totais.",
   },
   {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_caixa_esperado_agora(uuid,uuid)",
+    razao:
+      "Esperado da gaveta para a tela: fn_acesso_exigir financeiro.ver; sessão conferida na org do parâmetro.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_caixa_abrir(uuid,uuid,bigint)",
+    razao:
+      "Abre a sessão de caixa: financeiro.caixa + opção ligada; conta travada e conferida na org; uma sessão aberta por conta.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_caixa_movimentar(uuid,uuid,text,bigint,text,uuid)",
+    razao:
+      "Suprimento/sangria/caixa pequeno: financeiro.caixa + opção ligada; sessão da própria org travada; plano de contas da org.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_caixa_fechar(uuid,uuid,jsonb,text)",
+    razao:
+      "Fechamento com contagem: financeiro.caixa + opção ligada; sessão da própria org travada; contagem validada.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_caixa_conferir(uuid,uuid)",
+    razao:
+      "Dupla conferência: financeiro.conferir + opção ligada; recusa a mesma pessoa que fechou; sessão da própria org.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_dia(uuid,date)",
+    razao:
+      "Resumo do dia (só agregados): fn_acesso_exigir financeiro.ver; lê só a org do parâmetro conferido.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

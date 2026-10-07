@@ -538,6 +538,16 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "Prova própria em tests/invariants/clinic-fin-recebimentos.test.ts: admin de outra empresa lê 0 parcelas; só o status muda, pelas funções.",
   },
   {
+    tabela: "clinic_fin_caixas",
+    razao:
+      "Prova própria em tests/invariants/clinic-fin-caixa.test.ts: admin de outra empresa lê 0 sessões; ninguém escreve direto; sessão fechada não muda.",
+  },
+  {
+    tabela: "clinic_fin_caixa_movimentos",
+    razao:
+      "Prova própria em tests/invariants/clinic-fin-caixa.test.ts: admin de outra empresa lê 0 movimentos; movimento não muda nem sai.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

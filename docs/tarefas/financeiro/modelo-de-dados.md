@@ -45,11 +45,14 @@ organizations ─┬─ clinic_fin_adquirentes ── clinic_fin_tabelas (vigên
 - Funções: `fn_clinic_fin_finalizar`, `fn_clinic_fin_estornar`, `fn_clinic_fin_receber_parcela`, `fn_clinic_fin_antecipar`, `fn_clinic_fin_baixar_vencidas` (cron `fin-parcelas`), `fn_clinic_fin_config_salvar`, `fn_clinic_fin_custo_da_comanda`.
 - Regime de caixa = lançamentos pagos por data de pagamento (parcela + taxa caem juntas: entra o líquido); competência = `competence_date`.
 
-## FN3 a FN5 (previstas)
+## FN3 (migration 9041) — entregue
+- `clinic_fin_caixas` (sessão por conta; uma aberta por conta; esperado × contado; diferença) e `clinic_fin_caixa_movimentos` (suprimento, sangria, caixa pequeno).
+- Fundo, suprimento e sangria não viram lançamento; caixa pequeno e a diferença conferida viram `cash`.
+- Funções: `fn_clinic_fin_caixa_abrir`, `_movimentar`, `_fechar`, `_conferir`, `_esperado_agora`, `fn_clinic_fin_dia` (resumo do dia).
+
+## FN4 e FN5 (previstas)
 | Tabela | Colunas principais |
 |---|---|
-| `clinic_fin_caixas` | `account_id`, `aberto_em/por`, `fundo_troco_cents`, `fechado_em/por`, `contado_cents`, `diferenca_cents`, `conferido_por/em` |
-| `clinic_fin_caixa_movimentos` | `caixa_id`, `tipo` (`suprimento`/`sangria`/`caixa_pequeno`), `valor_cents`, `categoria`, `financial_entry_id` |
 | `clinic_fin_item_extras` | `sale_item_id`, `product_id`, `custo_cents` (congelado), `pacote_sessoes` |
 | `clinic_fin_pacotes` | `sale_item_id`, `contact_id`, `sessoes`, `valor_cents`, `consumidas` (derivado dos consumos) |
 | `clinic_fin_pacote_consumos` | `pacote_id`, `atendimento_id`/`appointment_id`, `em` |

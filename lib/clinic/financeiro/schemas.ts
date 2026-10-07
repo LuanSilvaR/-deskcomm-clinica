@@ -98,10 +98,41 @@ export const configFinanceiroSchema = z
   .object({
     comissao_base: z.enum(["liquido", "bruto"]).optional(),
     margem_minima_pct: z.number().min(0).max(95).optional(),
+    limite_conferencia_cents: z.number().int().min(0).max(1_000_000_000).optional(),
   })
   .strict()
-  .refine((v) => v.comissao_base !== undefined || v.margem_minima_pct !== undefined, {
+  .refine((v) => v.comissao_base !== undefined || v.margem_minima_pct !== undefined || v.limite_conferencia_cents !== undefined, {
     message: "Nada para salvar.",
   });
 
 export const STATUS_DE_PARCELA = ["prevista", "recebida", "antecipada", "estornada"] as const;
+
+// ─── FN3: caixa diário ──────────────────────────────────────────────────────
+
+export const abrirCaixaSchema = z
+  .object({ account_id: z.string().uuid(), fundo_troco_cents: z.number().int().min(0).max(10_000_000) })
+  .strict();
+
+export const TIPOS_DE_MOVIMENTO_DE_CAIXA = ["suprimento", "sangria", "caixa_pequeno"] as const;
+
+export const movimentoDeCaixaSchema = z
+  .object({
+    tipo: z.enum(TIPOS_DE_MOVIMENTO_DE_CAIXA),
+    valor_cents: z.number().int().min(1).max(10_000_000),
+    descricao: z.string().trim().min(2).max(200),
+    account_plan_id: z.string().uuid().nullable().default(null),
+  })
+  .strict()
+  .refine((m) => m.tipo === "caixa_pequeno" || m.account_plan_id === null, {
+    message: "Só o caixa pequeno tem categoria de despesa.",
+  });
+
+/** Valor da cédula/moeda em centavos → quantidade. */
+export const CEDULAS_E_MOEDAS = [20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50, 25, 10, 5] as const;
+
+export const fecharCaixaSchema = z
+  .object({
+    contagem: z.record(z.string().regex(/^\d{1,6}$/), z.number().int().min(0).max(99_999)),
+    observacao: z.string().trim().max(500).nullable().default(null),
+  })
+  .strict();
