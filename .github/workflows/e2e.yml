@@ -742,6 +742,14 @@ jobs:
         clinic-procedimentos.spec.ts
         clinic-pop.spec.ts
         clinic-estoque.spec.ts
+        clinic-estoque-baixa.spec.ts
+        clinic-estoque-kit.spec.ts
+        clinic-estoque-frascos.spec.ts
+        clinic-estoque-nfe.spec.ts
+        clinic-estoque-inventario.spec.ts
+        clinic-estoque-alertas.spec.ts
+        clinic-estoque-relatorios.spec.ts
+        clinic-estoque-revisao.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts

@@ -55,6 +55,18 @@ export const localSchema = z
   })
   .strict();
 
+/** Categorias de perda (espelha o CHECK de clinic_estoque_operacoes.motivo_categoria). */
+export const CATEGORIAS_DE_PERDA = ["vencimento", "quebra", "contaminacao", "pos_abertura", "recolhimento", "outro"] as const;
+
+/** Por que se consulta o recall (vai para o log como categoria, nunca texto livre). */
+export const TIPOS_DE_CONSULTA_DO_RASTREIO = [
+  "recall_fabricante",
+  "alerta_sanitario",
+  "evento_adverso",
+  "auditoria",
+  "outro",
+] as const;
+
 export const movimentoSchema = z.discriminatedUnion("acao", [
   z
     .object({
@@ -80,7 +92,15 @@ export const movimentoSchema = z.discriminatedUnion("acao", [
     })
     .strict(),
   z
-    .object({ acao: z.literal("perda"), lote_id: uuid, local_id: uuid, quantidade, motivo })
+    .object({
+      acao: z.literal("perda"),
+      lote_id: uuid,
+      local_id: uuid,
+      quantidade,
+      motivo,
+      // estoque E10 (9038): categoria da perda, para auditoria e descarte
+      categoria: z.enum(CATEGORIAS_DE_PERDA).optional(),
+    })
     .strict(),
   z
     .object({
@@ -103,3 +123,45 @@ export const FUNCAO_DO_MOVIMENTO: Record<Movimento["acao"], { rpc: string; permi
 };
 
 export const estornoSchema = z.object({ motivo }).strict();
+
+/** Resolver uma pendência da baixa pelo prontuário (estoque E2). */
+export const pendenciaSchema = z.discriminatedUnion("acao", [
+  z.object({ acao: z.literal("baixar"), lote_id: uuid, local_id: uuid }).strict(),
+  z.object({ acao: z.literal("descartar"), motivo }).strict(),
+  z.object({ acao: z.literal("ciente"), motivo }).strict(),
+]);
+export type ResolucaoDePendencia = z.infer<typeof pendenciaSchema>;
+
+/** O kit de um procedimento (estoque E3): substitui a lista inteira. */
+export const kitSchema = z
+  .object({
+    itens: z
+      .array(z.object({ product_id: uuid, quantidade }).strict())
+      .max(50)
+      .refine((l) => new Set(l.map((i) => i.product_id)).size === l.length, "produto repetido"),
+  })
+  .strict();
+
+/** Abrir um frasco (estoque E4) e encerrá-lo (a sobra vira perda). */
+export const abrirFrascoSchema = z.object({ lote_id: uuid, local_id: uuid }).strict();
+export const encerrarFrascoSchema = z.object({ motivo }).strict();
+
+/** Conferência e lançamento da NF-e (estoque E5). */
+export const conferirItemSchema = z.union([
+  z.object({ ignorar: z.literal(true) }).strict(),
+  z
+    .object({
+      product_id: uuid,
+      fator: z.number().positive().max(1_000_000),
+      lote: z.string().trim().max(60).nullish(),
+      validade: data.nullish(),
+    })
+    .strict(),
+]);
+export const lancarNfeSchema = z.object({ local_id: uuid, conta_id: uuid.nullish() }).strict();
+export const cancelarNfeSchema = z.object({ motivo }).strict();
+
+/** Inventário por local (estoque E6). */
+export const abrirInventarioSchema = z.object({ local_id: uuid }).strict();
+export const contarInventarioSchema = z.object({ contado: z.number().min(0).max(10_000_000).nullable() }).strict();
+export const fecharInventarioSchema = z.object({ motivo: z.string().trim().min(3).max(300).nullish() }).strict();

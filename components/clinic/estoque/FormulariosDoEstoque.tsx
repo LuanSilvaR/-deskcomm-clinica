@@ -15,9 +15,18 @@ import { Input } from "@/components/ui/input";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import type { LocalDeEstoque, ProdutoNaPosicao } from "@/lib/clinic/estoque/posicao";
-import { CONSELHOS } from "@/lib/clinic/estoque/schemas";
+import { CATEGORIAS_DE_PERDA, CONSELHOS } from "@/lib/clinic/estoque/schemas";
 
 import { CHAVE_DO_ESTOQUE } from "./tipos";
+
+const ROTULO_DA_CATEGORIA: Record<(typeof CATEGORIAS_DE_PERDA)[number], string> = {
+  vencimento: "Vencimento",
+  quebra: "Quebra",
+  contaminacao: "Contaminação",
+  pos_abertura: "Prazo após aberto",
+  recolhimento: "Recolhimento (recall)",
+  outro: "Outro",
+};
 
 export type AcaoDoLote = "transferencia" | "perda" | "ajuste";
 
@@ -194,6 +203,7 @@ export function FormularioDoLote({
   const [destino, setDestino] = useState(destinos[0]?.id ?? "");
   const [qtd, setQtd] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [categoria, setCategoria] = useState<(typeof CATEGORIAS_DE_PERDA)[number]>("outro");
   const unidade = produto.config?.unidade_aplicacao ?? "un";
 
   const corpo = () =>
@@ -213,6 +223,7 @@ export function FormularioDoLote({
             local_id: localId,
             quantidade: numero(qtd),
             motivo: motivo.trim(),
+            categoria,
           }
         : {
             acao,
@@ -273,6 +284,22 @@ export function FormularioDoLote({
             data-testid={`estoque-${acao}-qtd`}
           />
         </Campo>
+        {acao === "perda" ? (
+          <Campo rotulo={t("Categoria")}>
+            <select
+              className={SELECT}
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value as (typeof CATEGORIAS_DE_PERDA)[number])}
+              data-testid="estoque-perda-categoria"
+            >
+              {CATEGORIAS_DE_PERDA.map((c) => (
+                <option key={c} value={c}>
+                  {t(ROTULO_DA_CATEGORIA[c])}
+                </option>
+              ))}
+            </select>
+          </Campo>
+        ) : null}
         <Campo rotulo={exigeMotivo ? t("Motivo (obrigatório)") : t("Observação")}>
           <Input
             value={motivo}
@@ -346,7 +373,7 @@ export function ConfigDoProduto({
           : null,
         rastreado: f.rastreado,
         controlado: f.controlado,
-        conselhos_permitidos: f.controlado ? f.conselhos_permitidos : [],
+        conselhos_permitidos: f.controlado ? f.conselhos_permitidos.filter((x) => x !== "outro") : [],
         estoque_minimo: numero(f.estoque_minimo) || 0,
         ponto_pedido: f.ponto_pedido.trim() ? numero(f.ponto_pedido) : null,
         gerenciado: f.gerenciado,
@@ -426,11 +453,12 @@ export function ConfigDoProduto({
             onChange={(e) => mudar({ ponto_pedido: e.target.value })}
           />
         </Campo>
-        <Campo rotulo={t("Validade depois de aberto (horas)")}>
+        <Campo rotulo={f.fracionavel ? t("Validade depois de aberto (horas, obrigatório)") : t("Validade depois de aberto (horas)")}>
           <Input
             inputMode="numeric"
             value={f.validade_pos_abertura_horas}
             onChange={(e) => mudar({ validade_pos_abertura_horas: e.target.value })}
+            required={f.fracionavel}
           />
         </Campo>
         <Campo rotulo="EAN">
@@ -466,7 +494,8 @@ export function ConfigDoProduto({
       {f.controlado ? (
         <fieldset className="flex flex-wrap gap-3 text-sm">
           <legend className="mb-1 text-xs font-medium">{t("Conselhos que podem usar")}</legend>
-          {CONSELHOS.map((cons) => (
+          {/* "outro" não identifica a habilitação: não vale para produto controlado */}
+          {CONSELHOS.filter((cons) => cons !== "outro").map((cons) => (
             <label key={cons} className="flex items-center gap-1">
               <input
                 type="checkbox"
@@ -479,7 +508,7 @@ export function ConfigDoProduto({
                   })
                 }
               />
-              {cons === "outro" ? t("Outro") : cons}
+              {cons}
             </label>
           ))}
         </fieldset>
@@ -492,6 +521,73 @@ export function ConfigDoProduto({
           data-testid="estoque-config-salvar"
         >
           {salvar.isPending ? t("Salvando…") : t("Salvar")}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={fechar}>
+          {t("Cancelar")}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Estoque E10 — bloquear (recall, quarentena) ou desbloquear um lote, com
+ * motivo. Lote bloqueado sai da FEFO: o sistema não o escolhe para paciente.
+ */
+export function FormularioDeBloqueio({
+  loteId,
+  bloqueado,
+  fechar,
+}: {
+  loteId: string;
+  bloqueado: boolean;
+  fechar: () => void;
+}) {
+  const t = useT();
+  const recarregar = useRecarregar();
+  const [motivo, setMotivo] = useState("");
+  const salvar = useMutation({
+    mutationFn: () =>
+      apiClient.post(`/api/v1/clinic/estoque/lotes/${loteId}/bloqueio`, { bloquear: !bloqueado, motivo: motivo.trim() }),
+    onSuccess: () => {
+      recarregar();
+      fechar();
+    },
+    onError: showApiError,
+  });
+  return (
+    <form
+      className={CAIXA}
+      data-testid="estoque-form-bloqueio"
+      onSubmit={(e) => {
+        e.preventDefault();
+        salvar.mutate();
+      }}
+    >
+      <p className="text-sm font-medium">{t(bloqueado ? "Desbloquear lote" : "Bloquear lote")}</p>
+      {bloqueado ? null : (
+        <p className="text-xs text-text-muted">
+          {t("O lote bloqueado não é escolhido automaticamente para nenhum paciente (recall ou quarentena).")}
+        </p>
+      )}
+      <Campo rotulo={t("Motivo (obrigatório)")}>
+        <Input
+          value={motivo}
+          maxLength={300}
+          minLength={3}
+          required
+          onChange={(e) => setMotivo(e.target.value)}
+          data-testid="estoque-bloqueio-motivo"
+        />
+      </Campo>
+      <div className="flex gap-2">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={salvar.isPending || motivo.trim().length < 3}
+          data-testid="estoque-bloqueio-salvar"
+        >
+          {salvar.isPending ? t("Salvando…") : t("Confirmar")}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={fechar}>
           {t("Cancelar")}

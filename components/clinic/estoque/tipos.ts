@@ -1,18 +1,22 @@
 /**
  * FORK clinic (estoque E0) — a forma do GET /api/v1/clinic/estoque/posicao.
  */
-import type { LocalDeEstoque, ProdutoNaPosicao } from "@/lib/clinic/estoque/posicao";
+import type { FrascoAberto, LocalDeEstoque, ProdutoNaPosicao } from "@/lib/clinic/estoque/posicao";
 
 export interface DadosDoEstoque {
   ligado: boolean;
   locais: LocalDeEstoque[];
   produtos: ProdutoNaPosicao[];
+  /** Frascos abertos (estoque E4). */
+  frascos?: FrascoAberto[];
   pode: {
     movimentar: boolean;
     inventariar: boolean;
     configurar: boolean;
     estornar: boolean;
     custos: boolean;
+    /** Importar/conferir/lançar NF-e (estoque E5). */
+    compras?: boolean;
   };
 }
 

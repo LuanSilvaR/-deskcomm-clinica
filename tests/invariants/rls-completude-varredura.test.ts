@@ -453,6 +453,61 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); só acrescenta (UPDATE/DELETE recusados até para service role).",
   },
   {
+    tabela: "clinic_estoque_pendencias",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-consumo.test.ts: admin de outra empresa lê 0 pendências e não resolve pendência alheia (estoque_pendencia_invalida); quem só tem estoque.ver lê mas não resolve; ninguém escreve direto (UPDATE recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_procedimento_kits",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-kits-reservas.test.ts: admin de outra empresa lê 0 kits e não grava kit em procedimento alheio; ninguém escreve direto (INSERT recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_estoque_reservas",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-kits-reservas.test.ts: admin de outra empresa lê 0 reservas; ninguém escreve direto (INSERT recusado por permission denied); reservas só nascem pelos gatilhos e pela função da véspera.",
+  },
+  {
+    tabela: "clinic_estoque_frascos",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-frascos.test.ts: admin de outra empresa lê 0 frascos (também pela view clinic_estoque_frascos_abertos), não abre com lote alheio nem encerra frasco alheio; ninguém escreve direto (INSERT recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_estoque_fornecedores",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 fornecedores; ninguém escreve direto.",
+  },
+  {
+    tabela: "clinic_estoque_fornecedor_produtos",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 linhas de de/para; só nasce ao lançar.",
+  },
+  {
+    tabela: "clinic_estoque_nfe",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 notas e não confere, lança nem cancela nota alheia; ninguém escreve direto (INSERT recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_estoque_nfe_itens",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 itens e não confere item alheio.",
+  },
+  {
+    tabela: "clinic_estoque_inventarios",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-inventario.test.ts: admin de outra empresa lê 0 inventários e não cancela inventário alheio; ninguém escreve direto (INSERT recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_estoque_inventario_itens",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-inventario.test.ts: admin de outra empresa lê 0 itens de inventário.",
+  },
+  {
+    tabela: "clinic_estoque_alertas",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-alertas.test.ts: admin de outra empresa lê 0 alertas e não dispensa alerta alheio; ninguém escreve direto (INSERT recusado por permission denied); só a varredura (service role) cria.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

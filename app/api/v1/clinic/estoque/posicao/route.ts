@@ -44,6 +44,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     configurar: authz.permissoes.has("estoque.configurar"),
     estornar: authz.permissoes.has("estoque.estornar"),
     custos: authz.permissoes.has("estoque.custos"),
+    compras: authz.permissoes.has("estoque.compras"),
   };
   if (!estoqueLigado((empresa as { settings?: unknown } | null)?.settings)) {
     return ok({ ligado: false, locais: [], produtos: [], pode }, { requestId });
