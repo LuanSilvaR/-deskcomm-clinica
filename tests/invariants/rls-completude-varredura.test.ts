@@ -428,6 +428,31 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-cabecalho-e-anulacao.test.ts (FORK clinic, migration 9026): 2 orgs, quem é da A lê 0 linhas da B; append-only.",
   },
   {
+    tabela: "clinic_produto_estoque",
+    razao:
+      "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); configuração do produto.",
+  },
+  {
+    tabela: "clinic_estoque_locais",
+    razao:
+      "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); locais.",
+  },
+  {
+    tabela: "clinic_estoque_lotes",
+    razao:
+      "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); lotes.",
+  },
+  {
+    tabela: "clinic_estoque_operacoes",
+    razao:
+      "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); só acrescenta (UPDATE/DELETE recusados até para service role).",
+  },
+  {
+    tabela: "clinic_estoque_movimentos",
+    razao:
+      "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); só acrescenta (UPDATE/DELETE recusados até para service role).",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

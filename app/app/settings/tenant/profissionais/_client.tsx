@@ -22,6 +22,7 @@ interface Props {
   recursosInicial: boolean;
   procedimentosInicial: boolean;
   prontuarioInicial: boolean;
+  estoqueInicial: boolean;
   prazoInicial: number;
   podeLigar: boolean;
   ehGerencia: boolean;
@@ -36,6 +37,7 @@ export function ProfissionaisClient({
   recursosInicial,
   procedimentosInicial,
   prontuarioInicial,
+  estoqueInicial,
   prazoInicial,
   podeLigar,
   ehGerencia,
@@ -49,6 +51,7 @@ export function ProfissionaisClient({
   const [recursos, setRecursos] = useState(recursosInicial);
   const [procedimentos, setProcedimentos] = useState(procedimentosInicial);
   const [prontuario, setProntuario] = useState(prontuarioInicial);
+  const [estoque, setEstoque] = useState(estoqueInicial);
   const [prazo, setPrazo] = useState(prazoInicial);
   const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
 
@@ -66,6 +69,13 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { procedimentos: boolean } }>("/api/v1/clinic/config", { procedimentos: valor }),
     onSuccess: (r) => setProcedimentos(r.data.procedimentos),
+    onError: showApiError,
+  });
+
+  const alternarEstoque = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { estoque: boolean } }>("/api/v1/clinic/config", { estoque: valor }),
+    onSuccess: (r) => setEstoque(r.data.estoque),
     onError: showApiError,
   });
 
@@ -291,6 +301,30 @@ export function ProfissionaisClient({
             onClick={() => alternarProntuario.mutate(!prontuario)}
           >
             {prontuario ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${estoque ? "" : "bg-muted"}`}
+        data-testid="clinic-estoque"
+      >
+        <div>
+          <p className="font-medium">{estoque ? t("Estoque ligado") : t("Estoque desligado")}</p>
+          <p className="text-sm text-text-muted">
+            {estoque
+              ? t("Saldo por lote, validade e local; entradas, transferências, perdas e ajustes ficam registrados e o saldo é sempre a soma deles.")
+              : t("Ligue para controlar o estoque por lote, validade e local. Ao ligar, o sistema cria o local \"Estoque central\".")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-estoque-alternar"
+            variant={estoque ? "outline" : "default"}
+            disabled={alternarEstoque.isPending}
+            onClick={() => alternarEstoque.mutate(!estoque)}
+          >
+            {estoque ? t("Desligar") : t("Ligar")}
           </Button>
         ) : null}
       </section>

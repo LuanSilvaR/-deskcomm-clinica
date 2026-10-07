@@ -511,6 +511,54 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/anexos/[id]/route.ts (PATCH, acao divulgacao) chama com createClient da sessão; fn_acesso_exigir exige fotos.enviar (chave clínica), suporte de escrita e MFA; foto ativa da organização informada; finalidade E cada canal autorizados por termo de uso de imagem aceito, no prazo e não revogado (fn_clinic_divulgacao_autorizada). tests/invariants/clinic-revisao-conformidade.test.ts prova recusa sem canal, canal não autorizado, termo vencido e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_definir_estoque(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_procedimentos); só grava settings.clinic.estoque e, ao ligar, cria o local padrão. tests/invariants/clinic-estoque-base.test.ts prova o local padrão e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_produto_salvar(uuid,uuid,jsonb,integer)",
+    razao:
+      "app/api/v1/clinic/estoque/produtos/[productId]/route.ts (PUT) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.configurar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; conflito de versão. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_local_salvar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/locais (POST/PATCH) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.configurar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; sala (clinic_resources) da mesma empresa. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_entrada(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/movimentos/route.ts (POST entrada) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; lote vencido recusado; produto rastreado exige lote. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_transferir(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/movimentos/route.ts (POST transferencia) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; trava o lote e recusa saldo negativo. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_perda(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/movimentos/route.ts (POST perda) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; motivo obrigatório; trava o lote e recusa saldo negativo (inclusive concorrente). tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_ajustar(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/movimentos/route.ts (POST ajuste) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.inventariar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; motivo obrigatório; saldo alvo >= 0. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_estornar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/operacoes/[id]/estorno/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.estornar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; uma vez só, nunca estorno de estorno, recusa saldo negativo. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

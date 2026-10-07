@@ -22,8 +22,8 @@
  * pacientes (plano docs/tarefas/prontuario, migration 9016). No modo legado só
  * quem é profissional ativo as tem; no modo por papéis, só por papel explícito.
  *
- * Não existem ainda (e por isso não estão aqui): estoque, unidades. Entram
- * quando os módulos existirem.
+ * Não existem ainda (e por isso não estão aqui): unidades. Entram quando o
+ * módulo existir. Estoque entrou com a migration 9028.
  */
 import type { Role } from "@/lib/auth/types";
 
@@ -70,6 +70,7 @@ export const MODULOS_DE_PERMISSAO = {
   anexos: "Anexos clínicos",
   documentos: "Documentos e termos",
   modelos_clinicos: "Modelos clínicos",
+  estoque: "Estoque",
 } as const;
 
 export type ModuloDePermissao = keyof typeof MODULOS_DE_PERMISSAO;
@@ -224,6 +225,20 @@ export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
   p("documentos", "revogar", "manager", "Revogar ou cancelar documento emitido", { dependeDe: ver("documentos") }),
 
   p("modelos_clinicos", "gerenciar", "admin", "Configurar modelos de anamnese, avaliação e documentos (sem ver pacientes)"),
+
+  // ── FORK clinic (9028): estoque. Não é conteúdo clínico (saldo, lote, custo). ──
+  p("estoque", "ver", "agent", "Ver saldos, lotes, validades e movimentações do estoque"),
+  p("estoque", "movimentar", "manager", "Dar entrada, transferir entre locais e registrar perdas", { dependeDe: ver("estoque") }),
+  p("estoque", "inventariar", "manager", "Ajustar saldo e fazer inventário", { dependeDe: ver("estoque") }),
+  p("estoque", "compras", "manager", "Importar NF-e, conferir e lançar compras", { dependeDe: ver("estoque") }),
+  p("estoque", "configurar", "manager", "Configurar produtos do estoque (unidades, lote, mínimo) e locais", {
+    dependeDe: ver("estoque"),
+  }),
+  p("estoque", "custos", "manager", "Ver custos de lotes e do estoque", { dependeDe: ver("estoque") }),
+  p("estoque", "estornar", "manager", "Estornar uma movimentação de estoque, com motivo", {
+    dependeDe: ver("estoque"),
+    critica: true,
+  }),
 ]) as Readonly<Record<string, DefinicaoDePermissao>>;
 
 export type ChaveDePermissao = keyof typeof CATALOGO_DE_PERMISSOES & string;
