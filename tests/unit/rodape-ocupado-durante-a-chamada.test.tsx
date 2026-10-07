@@ -44,6 +44,8 @@ vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (texto: string) => texto }));
 // medir o rodapé, e não a rede delas.
 vi.mock("@/components/shell/Sidebar", () => ({ Sidebar: () => null }));
 vi.mock("@/components/shell/TopBar", () => ({ TopBar: () => null }));
+// As abas do módulo (menu da clínica) dependem da sessão, como o Sidebar acima.
+vi.mock("@/components/clinic/navegacao/AbasDoModulo", () => ({ AbasDoModulo: () => null }));
 vi.mock("@/components/shell/BarraDeProgressoNavegacao", () => ({
   BarraDeProgressoNavegacao: () => null,
 }));

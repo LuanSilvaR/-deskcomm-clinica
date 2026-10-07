@@ -23,6 +23,7 @@ interface Props {
   procedimentosInicial: boolean;
   prontuarioInicial: boolean;
   estoqueInicial: boolean;
+  financeiroInicial: boolean;
   prazoInicial: number;
   podeLigar: boolean;
   ehGerencia: boolean;
@@ -38,6 +39,7 @@ export function ProfissionaisClient({
   procedimentosInicial,
   prontuarioInicial,
   estoqueInicial,
+  financeiroInicial,
   prazoInicial,
   podeLigar,
   ehGerencia,
@@ -52,6 +54,7 @@ export function ProfissionaisClient({
   const [procedimentos, setProcedimentos] = useState(procedimentosInicial);
   const [prontuario, setProntuario] = useState(prontuarioInicial);
   const [estoque, setEstoque] = useState(estoqueInicial);
+  const [financeiro, setFinanceiro] = useState(financeiroInicial);
   const [prazo, setPrazo] = useState(prazoInicial);
   const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
 
@@ -76,6 +79,13 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { estoque: boolean } }>("/api/v1/clinic/config", { estoque: valor }),
     onSuccess: (r) => setEstoque(r.data.estoque),
+    onError: showApiError,
+  });
+
+  const alternarFinanceiro = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { financeiro_avancado: boolean } }>("/api/v1/clinic/config", { financeiro_avancado: valor }),
+    onSuccess: (r) => setFinanceiro(r.data.financeiro_avancado),
     onError: showApiError,
   });
 
@@ -325,6 +335,30 @@ export function ProfissionaisClient({
             onClick={() => alternarEstoque.mutate(!estoque)}
           >
             {estoque ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${financeiro ? "" : "bg-muted"}`}
+        data-testid="clinic-financeiro"
+      >
+        <div>
+          <p className="font-medium">{financeiro ? t("Financeiro da clínica ligado") : t("Financeiro da clínica desligado")}</p>
+          <p className="text-sm text-text-muted">
+            {financeiro
+              ? t("Maquininhas e taxas configuráveis em Configurações › Maquininhas; o simulador mostra quanto entra de verdade em cada forma de pagamento.")
+              : t("Ligue para cadastrar as maquininhas, as taxas de cada parcela e ver o valor líquido de cada venda. Desligado, a comanda funciona como sempre.")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-financeiro-alternar"
+            variant={financeiro ? "outline" : "default"}
+            disabled={alternarFinanceiro.isPending}
+            onClick={() => alternarFinanceiro.mutate(!financeiro)}
+          >
+            {financeiro ? t("Desligar") : t("Ligar")}
           </Button>
         ) : null}
       </section>

@@ -95,6 +95,9 @@ CRONS="
 # FORK clinic (estoque E7, 9035): alertas do estoque (mínimo, validade, frasco
 # vencido, pendências). De hora em hora; resolve sozinho o que deixou de valer.
 37 * * * *|60|api/v1/cron/estoque-alertas
+# FORK clinic (financeiro FN2, 9040): baixa das parcelas de cartão/Pix que
+# venceram no fuso da clínica (a adquirente deposita sozinha). Uma vez por dia.
+10 6 * * *|60|api/v1/cron/fin-parcelas
 */15 * * * *|60|api/v1/cron/risk-watcher
 # O CASO PARADO. De hora em hora, e não a cada 5 minutos: o prazo é de 24h, e
 # uma varredura mais frequente só gastaria consulta para descobrir o mesmo nada.
