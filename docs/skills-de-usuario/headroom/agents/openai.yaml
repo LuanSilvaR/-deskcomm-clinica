@@ -1,0 +1,6 @@
+interface:
+  display_name: "Economizar tokens com o Headroom"
+  short_description: "Instalar e usar o Headroom (compressão local de contexto) no Claude Code, com telemetria desligada e sem dado de paciente"
+  default_prompt: "Use a skill headroom e me ajude a instalar e ligar o Headroom no meu Claude Code."
+policy:
+  allow_implicit_invocation: true
