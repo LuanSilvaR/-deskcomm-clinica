@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DOCUMENTO_VAZIO, textoPuro, validarDocumento } from "@/lib/clinic/pops/documento";
-import { MODELO_PADRAO, TITULOS_DO_MODELO } from "@/lib/clinic/pops/modelo";
+import { MODELO_PADRAO, TITULOS_DO_MODELO, modeloPadrao } from "@/lib/clinic/pops/modelo";
 
 const doc = (content: unknown[]) => ({ type: "doc", content });
 
@@ -53,5 +53,20 @@ describe("documento do POP", () => {
 
   it("texto puro: títulos e parágrafos em linhas, células separadas", () => {
     expect(textoPuro(MODELO_PADRAO).split("\n")[0]).toBe("1. IDENTIFICAÇÃO");
+  });
+});
+
+describe("modelo no idioma de quem cria", () => {
+  it("espanhol: 21 seções válidas, títulos em espanhol", () => {
+    const es = modeloPadrao("es");
+    expect(validarDocumento(es).ok).toBe(true);
+    const titulos = textoPuro(es).split("\n").filter((l) => /^\d+\. /.test(l));
+    expect(titulos).toHaveLength(21);
+    expect(titulos[0]).toBe("1. IDENTIFICACIÓN");
+    expect(titulos[20]).toBe("21. CONTROL DE REVISIONES");
+  });
+  it("português é o padrão (e o de quem não tem idioma)", () => {
+    expect(modeloPadrao("pt-BR")).toBe(MODELO_PADRAO);
+    expect(modeloPadrao(undefined)).toBe(MODELO_PADRAO);
   });
 });
