@@ -207,7 +207,7 @@ describe("paridade TS × SQL", () => {
     // gerador determinístico
     let s = 20261007;
     const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
-    const pick = <T,>(xs: readonly T[]) => xs[Math.floor(rnd() * xs.length)];
+    const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rnd() * xs.length)] as T;
     const adquirentes: Record<string, Adquirente> = {
       [adqPorMes]: { id: adqPorMes, nome: "por mês", prazo_pix_dias: 0, prazo_debito_dias: 1, prazo_credito_dias: 30, tarifa_fixa_cents: 39, antecipacao_pct: 1.99, antecipacao_modo: "por_mes" },
       [adqFixa]: { id: adqFixa, nome: "fixa", prazo_pix_dias: 0, prazo_debito_dias: 2, prazo_credito_dias: 1, tarifa_fixa_cents: 0, antecipacao_pct: 4.5, antecipacao_modo: "fixa" },
@@ -246,8 +246,8 @@ describe("paridade TS × SQL", () => {
         okTs.push({
           c,
           r: calcularRecebimento({
-            adquirente: adquirentes[c.adq],
-            tabelas: tabelasPorAdq[c.adq],
+            adquirente: adquirentes[c.adq]!,
+            tabelas: tabelasPorAdq[c.adq]!,
             modalidade: c.modalidade,
             bandeira: c.bandeira,
             parcelas: c.parcelas,
@@ -273,7 +273,7 @@ describe("paridade TS × SQL", () => {
     expect(linhasSql).toHaveLength(okTs.length);
     linhasSql.forEach((linha, i) => {
       const doBanco = JSON.parse(linha) as Recebimento;
-      const doTs = okTs[i].r;
+      const doTs = okTs[i]?.r;
       expect({ ...doBanco, mdr_pct: Number(doBanco.mdr_pct), custo_total_pct: Number(doBanco.custo_total_pct) }).toEqual(doTs);
     });
     // os casos que o TS recusa, o banco também recusa, com o mesmo código

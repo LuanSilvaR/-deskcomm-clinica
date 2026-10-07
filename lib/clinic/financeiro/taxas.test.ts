@@ -160,8 +160,8 @@ describe("motor de taxas — faixas, bandeira e tarifa", () => {
     const a = adq("cielo_smart", { prazo_pix_dias: 0, prazo_debito_dias: 2 });
     const pix = calcularRecebimento({ adquirente: a, tabelas: tabelas("cielo_smart"), bandeira: null, data: "2026-05-01", modalidade: "pix", parcelas: 1, bruto_cents: 1000 });
     const deb = calcularRecebimento({ adquirente: a, tabelas: tabelas("cielo_smart"), bandeira: null, data: "2026-05-01", modalidade: "debito", parcelas: 1, bruto_cents: 1000 });
-    expect(pix.parcelas[0].vencimento).toBe("2026-05-01");
-    expect(deb.parcelas[0].vencimento).toBe("2026-05-03");
+    expect(pix.parcelas[0]?.vencimento).toBe("2026-05-01");
+    expect(deb.parcelas[0]?.vencimento).toBe("2026-05-03");
   });
 });
 
@@ -202,9 +202,9 @@ describe("ferramentas", () => {
       ["ton", "cielo_smart", "mercado_pago"].map((c) => ({ adquirente: adq(c), tabelas: tabelas(c) })),
       "2026-05-01",
     );
-    expect(r[0].adquirente_id).toBe("ton");
-    expect(r[0].sem_taxa).toEqual([]);
-    expect(r[r.length - 1].adquirente_id).toBe("mercado_pago");
-    expect(r[r.length - 1].sem_taxa.length).toBe(3);
+    expect(r[0]?.adquirente_id).toBe("ton");
+    expect(r[0]?.sem_taxa).toEqual([]);
+    expect(r.at(-1)?.adquirente_id).toBe("mercado_pago");
+    expect(r.at(-1)?.sem_taxa.length).toBe(3);
   });
 });
