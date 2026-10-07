@@ -96,3 +96,15 @@ export function estoqueLigado(settings: unknown): boolean {
   if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
   return (clinic as Record<string, unknown>).estoque === true;
 }
+
+/**
+ * `organizations.settings.clinic.financeiro_avancado` (migration 9039): o
+ * financeiro da clínica — maquininhas e taxas, parcelas, caixa, DRE e painel.
+ * Nasce desligado; desligado, a comanda e o faturamento ficam como sempre.
+ */
+export function financeiroAvancadoLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).financeiro_avancado === true;
+}

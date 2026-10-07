@@ -242,6 +242,7 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
       { href: "/app/products", secao: "Catálogo" },
       { href: "/app/faturamento", secao: "Indicadores" },
       { href: "/app/settings/tenant/financeiro", secao: "Ajustes do financeiro" },
+      { href: "/app/settings/tenant/maquininhas", secao: "Ajustes do financeiro" },
     ],
     emBreve: [{ label: "Contas a pagar e a receber", description: "Vencimentos, baixas e fluxo de caixa." }],
   },
