@@ -528,6 +528,16 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "Prova própria em tests/invariants/clinic-fin-taxas.test.ts: admin de outra empresa lê 0; forma ou adquirente de outra empresa é recusada.",
   },
   {
+    tabela: "clinic_fin_pagamentos",
+    razao:
+      "Prova própria em tests/invariants/clinic-fin-recebimentos.test.ts: admin de outra empresa lê 0 pagamentos; ninguém escreve direto; pagamento não muda nem sai.",
+  },
+  {
+    tabela: "clinic_fin_parcelas",
+    razao:
+      "Prova própria em tests/invariants/clinic-fin-recebimentos.test.ts: admin de outra empresa lê 0 parcelas; só o status muda, pelas funções.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

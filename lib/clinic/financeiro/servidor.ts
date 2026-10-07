@@ -190,3 +190,125 @@ export function simular(
     comparativo,
   };
 }
+
+// ─── FN2: configuração e contas a receber ───────────────────────────────────
+
+export interface ConfigFinanceiro {
+  ligado: boolean;
+  comissao_base: "liquido" | "bruto";
+  margem_minima_pct: number;
+}
+
+export function lerConfigFinanceiro(settings: unknown): ConfigFinanceiro {
+  const clinic =
+    settings && typeof settings === "object" && !Array.isArray(settings)
+      ? ((settings as Record<string, unknown>).clinic as Record<string, unknown> | undefined)
+      : undefined;
+  const fin = (clinic?.fin ?? {}) as Record<string, unknown>;
+  const margem = typeof fin.margem_minima_pct === "number" ? fin.margem_minima_pct : MARGEM_MINIMA_PADRAO;
+  return {
+    ligado: clinic?.financeiro_avancado === true,
+    comissao_base: fin.comissao_base === "bruto" ? "bruto" : "liquido",
+    margem_minima_pct: margem,
+  };
+}
+
+export interface ParcelaNaTela {
+  id: string;
+  pagamento_id: string;
+  sale_id: string;
+  comanda: number | null;
+  n: number;
+  de: number;
+  vencimento: string;
+  bruto_cents: number;
+  taxa_cents: number;
+  liquido_cents: number;
+  antecipacao_cents: number;
+  status: "prevista" | "recebida" | "antecipada" | "estornada";
+  forma: string | null;
+  maquininha: string | null;
+}
+
+export interface Recebiveis {
+  parcelas: ParcelaNaTela[];
+  /** líquido previsto por janela a partir de hoje */
+  a_receber: { em_30: number; em_60: number; em_90: number; total: number };
+}
+
+export async function lerRecebiveis(
+  supabase: SupabaseClient,
+  orgId: string,
+  filtro: { status?: ParcelaNaTela["status"]; de?: string; ate?: string },
+  hoje: string,
+): Promise<Recebiveis> {
+  let q = supabase
+    .from("clinic_fin_parcelas")
+    .select(
+      "id, pagamento_id, sale_id, n, vencimento, bruto_cents, mdr_cents, tarifa_cents, liquido_cents, antecipacao_cents, status, " +
+        "pagamento:clinic_fin_pagamentos!clinic_fin_parcelas_pagamento_fk(parcelas, payment_method:payment_methods(name), adquirente:clinic_fin_adquirentes!clinic_fin_pagamentos_adquirente_fk(nome)), " +
+        "venda:sales(number)",
+    )
+    .eq("organization_id", orgId)
+    .order("vencimento")
+    .order("n")
+    .limit(500);
+  if (filtro.status) q = q.eq("status", filtro.status);
+  if (filtro.de) q = q.gte("vencimento", filtro.de);
+  if (filtro.ate) q = q.lte("vencimento", filtro.ate);
+  const [lista, previstas] = await Promise.all([
+    q,
+    supabase
+      .from("clinic_fin_parcelas")
+      .select("vencimento, liquido_cents")
+      .eq("organization_id", orgId)
+      .eq("status", "prevista")
+      .limit(10000),
+  ]);
+  if (lista.error) throw lista.error;
+  if (previstas.error) throw previstas.error;
+  type Linha = {
+    id: string;
+    pagamento_id: string;
+    sale_id: string;
+    n: number;
+    vencimento: string;
+    bruto_cents: number;
+    mdr_cents: number;
+    tarifa_cents: number;
+    liquido_cents: number;
+    antecipacao_cents: number;
+    status: ParcelaNaTela["status"];
+    pagamento: { parcelas: number; payment_method: { name: string } | null; adquirente: { nome: string } | null } | null;
+    venda: { number: number } | null;
+  };
+  const dias = (iso: string) => (Date.parse(`${iso}T00:00:00Z`) - Date.parse(`${hoje}T00:00:00Z`)) / 86_400_000;
+  const a = { em_30: 0, em_60: 0, em_90: 0, total: 0 };
+  for (const p of (previstas.data ?? []) as Array<{ vencimento: string; liquido_cents: number }>) {
+    const d = dias(p.vencimento);
+    const v = Number(p.liquido_cents);
+    a.total += v;
+    if (d <= 30) a.em_30 += v;
+    if (d <= 60) a.em_60 += v;
+    if (d <= 90) a.em_90 += v;
+  }
+  return {
+    parcelas: ((lista.data ?? []) as unknown as Linha[]).map((p) => ({
+      id: p.id,
+      pagamento_id: p.pagamento_id,
+      sale_id: p.sale_id,
+      comanda: p.venda?.number ?? null,
+      n: p.n,
+      de: p.pagamento?.parcelas ?? 1,
+      vencimento: p.vencimento,
+      bruto_cents: Number(p.bruto_cents),
+      taxa_cents: Number(p.mdr_cents) + Number(p.tarifa_cents),
+      liquido_cents: Number(p.liquido_cents),
+      antecipacao_cents: Number(p.antecipacao_cents),
+      status: p.status,
+      forma: p.pagamento?.payment_method?.name ?? null,
+      maquininha: p.pagamento?.adquirente?.nome ?? null,
+    })),
+    a_receber: a,
+  };
+}

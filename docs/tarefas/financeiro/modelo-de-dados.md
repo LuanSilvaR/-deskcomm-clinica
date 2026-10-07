@@ -39,11 +39,15 @@ organizations ─┬─ clinic_fin_adquirentes ── clinic_fin_tabelas (vigên
 - `fn_clinic_fin_forma_salvar`;
 - `fn_clinic_fin_calcular` (interna; espelho do motor TS).
 
-## FN2 a FN5 (previstas)
+## FN2 (migration 9040) — entregue
+- `clinic_fin_pagamentos` (snapshot da taxa: vigência, %, MDR, tarifa, líquido) e `clinic_fin_parcelas` (só o status muda, pelas funções).
+- `financial_entries`: `competence_date` (data da venda) e `due_date` (vencimento da parcela); origens `receivable` (parcela a receber, pendente até o vencimento), `card_fee` (taxa da parcela, saída) e `anticipation` (custo de antecipar).
+- Funções: `fn_clinic_fin_finalizar`, `fn_clinic_fin_estornar`, `fn_clinic_fin_receber_parcela`, `fn_clinic_fin_antecipar`, `fn_clinic_fin_baixar_vencidas` (cron `fin-parcelas`), `fn_clinic_fin_config_salvar`, `fn_clinic_fin_custo_da_comanda`.
+- Regime de caixa = lançamentos pagos por data de pagamento (parcela + taxa caem juntas: entra o líquido); competência = `competence_date`.
+
+## FN3 a FN5 (previstas)
 | Tabela | Colunas principais |
 |---|---|
-| `clinic_fin_pagamentos` | `sale_id`, `payment_method_id`, `adquirente_id`, `modalidade`, `bandeira`, `parcelas`, `bruto_cents`, `mdr_pct` (snapshot), `tabela_id` (vigência usada), `mdr_cents`, `tarifa_cents`, `liquido_cents` |
-| `clinic_fin_parcelas` | `pagamento_id`, `n`, `vencimento`, `bruto_cents`, `mdr_cents`, `liquido_cents`, `status` (`prevista`/`recebida`/`antecipada`/`estornada`), `financial_entry_id` |
 | `clinic_fin_caixas` | `account_id`, `aberto_em/por`, `fundo_troco_cents`, `fechado_em/por`, `contado_cents`, `diferenca_cents`, `conferido_por/em` |
 | `clinic_fin_caixa_movimentos` | `caixa_id`, `tipo` (`suprimento`/`sangria`/`caixa_pequeno`), `valor_cents`, `categoria`, `financial_entry_id` |
 | `clinic_fin_item_extras` | `sale_item_id`, `product_id`, `custo_cents` (congelado), `pacote_sessoes` |

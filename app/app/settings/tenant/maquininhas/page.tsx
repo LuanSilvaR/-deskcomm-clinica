@@ -9,6 +9,7 @@
 import { redirect } from "next/navigation";
 
 import { Maquininhas } from "@/components/clinic/financeiro/Maquininhas";
+import { RegrasDoFinanceiro } from "@/components/clinic/financeiro/RegrasDoFinanceiro";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { exigePermissaoNaPagina, permissoesNaPagina } from "@/lib/clinic/acesso/pagina";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -33,6 +34,7 @@ export default async function MaquininhasPage() {
         </p>
       </header>
       <Maquininhas podeConfigurar={permissoes.has("financeiro.taxas")} />
+      <RegrasDoFinanceiro podeConfigurar={permissoes.has("financeiro.configurar")} />
     </div>
   );
 }

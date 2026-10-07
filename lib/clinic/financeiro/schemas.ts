@@ -73,3 +73,35 @@ export const simularSchema = z
     margem_pct: z.number().min(0).max(95).optional(),
   })
   .strict();
+
+// ─── FN2: fechamento com taxas, recebíveis e configuração ───────────────────
+
+export const pagamentoDaComandaSchema = z
+  .object({
+    payment_method_id: z.string().uuid(),
+    valor_cents: z.number().int().min(1).max(100_000_000_00),
+    parcelas: z.number().int().min(1).max(MAX_PARCELAS).default(1),
+    bandeira: z.enum(BANDEIRAS).nullable().default(null),
+  })
+  .strict();
+
+export const finalizarComTaxasSchema = z
+  .object({
+    pagamentos: z.array(pagamentoDaComandaSchema).min(1).max(6),
+    loyalty_points: z.number().int().min(0).max(10_000).default(0),
+  })
+  .strict();
+
+export const estornarComTaxasSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+
+export const configFinanceiroSchema = z
+  .object({
+    comissao_base: z.enum(["liquido", "bruto"]).optional(),
+    margem_minima_pct: z.number().min(0).max(95).optional(),
+  })
+  .strict()
+  .refine((v) => v.comissao_base !== undefined || v.margem_minima_pct !== undefined, {
+    message: "Nada para salvar.",
+  });
+
+export const STATUS_DE_PARCELA = ["prevista", "recebida", "antecipada", "estornada"] as const;

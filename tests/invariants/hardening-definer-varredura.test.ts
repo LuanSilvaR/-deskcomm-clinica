@@ -703,6 +703,42 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "Tipo e adquirente da forma de pagamento: financeiro.taxas + opção ligada; forma e adquirente conferidas na org.",
   },
   {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_config_salvar(uuid,jsonb)",
+    razao:
+      "Configuração do financeiro (base da comissão, margem mínima): financeiro.configurar + opção ligada; só chaves conhecidas, grava em settings da própria org.",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_finalizar(uuid,uuid,jsonb,integer)",
+    razao:
+      "Fecha a comanda com pagamento dividido e parcelas: financeiro.lancar + opção ligada; comanda travada (FOR UPDATE) e conferida na org; formas e adquirentes da própria org; idempotente.",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_receber_parcela(uuid,uuid)",
+    razao:
+      "Baixa manual de parcela: financeiro.lancar (fn_acesso_exigir); parcela conferida na org. Não exige a opção: parcela vendida continua a receber.",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_antecipar(uuid,uuid,boolean)",
+    razao:
+      "Simula (financeiro.ver) ou antecipa (financeiro.lancar) as parcelas previstas de um pagamento da própria org (fn_acesso_exigir).",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_estornar(uuid,uuid,text)",
+    razao:
+      "Estorno: financeiro.estornar (fn_acesso_exigir; vale mesmo com a opção desligada depois); chama fn_estornar_comanda (que confere papel e org) e contra-lança parcelas, taxas e antecipação da comanda da própria org.",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_custo_da_comanda(uuid,uuid)",
+    razao:
+      "Custo direto para a margem no fechamento: financeiro.lancar + opção ligada; insumos só com estoque.custos; devolve só totais.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

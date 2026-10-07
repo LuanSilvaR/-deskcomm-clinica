@@ -39,6 +39,9 @@ function traduzirErro(mensagem: string): { code: string; status: number; texto: 
       texto: "Estornar uma comanda exige perfil de gerente.",
     };
   }
+  if (mensagem.includes("acesso_proibido")) {
+    return { code: "forbidden", status: 403, texto: "Sem permissão para estornar comandas." };
+  }
   if (mensagem.includes("comanda_nao_encontrada")) {
     return { code: "not_found", status: 404, texto: "Comanda não encontrada." };
   }
@@ -75,7 +78,15 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const { id } = await ctx.params;
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("fn_estornar_comanda", {
+  // FORK clinic (financeiro FN2): comanda fechada com o financeiro da clínica
+  // tem parcelas e taxas próprias; o estorno da clínica chama este mesmo do
+  // núcleo e contra-lança o resto. Vale mesmo com a opção desligada depois.
+  const { count: pagamentosDaClinica } = await supabase
+    .from("clinic_fin_pagamentos")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", authz.org.orgId)
+    .eq("sale_id", id);
+  const { data, error } = await supabase.rpc(pagamentosDaClinica ? "fn_clinic_fin_estornar" : "fn_estornar_comanda", {
     p_org: authz.org.orgId,
     p_sale: id,
     p_motivo: lido.data.reason,

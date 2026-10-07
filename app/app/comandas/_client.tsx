@@ -14,10 +14,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { FechamentoComTaxas } from "@/components/clinic/financeiro/FechamentoComTaxas";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import type { AdquirenteNaTela, ConfigFinanceiro, FormaNaTela } from "@/lib/clinic/financeiro/servidor";
 import { formatCents, parseReaisToCents } from "@/lib/money";
 
 import { AtendimentosSemComanda, type Pendente } from "./_pendentes";
@@ -87,6 +89,24 @@ export function Comandas({
         .data,
   });
 
+  // FORK clinic (financeiro FN2): com o financeiro da clínica ligado, o
+  // fechamento divide o pagamento, parcela e mostra a taxa ao vivo. Sem a
+  // permissão de ver o financeiro (ou desligado), o balcão segue como sempre.
+  const financeiroClinica = useQuery({
+    queryKey: ["clinic", "financeiro", "balcao"],
+    retry: false,
+    queryFn: async () => {
+      const [maq, cfg] = await Promise.all([
+        apiClient.get<{ data: { ligado: boolean; adquirentes: AdquirenteNaTela[]; formas: FormaNaTela[] } }>(
+          "/api/v1/clinic/financeiro/maquininhas",
+        ),
+        apiClient.get<{ data: ConfigFinanceiro }>("/api/v1/clinic/financeiro/config"),
+      ]);
+      return { maquininhas: maq.data, config: cfg.data };
+    },
+  });
+  const comTaxas = financeiroClinica.data?.config.ligado === true ? financeiroClinica.data : null;
+
   const tipos = useQuery({
     queryKey: ["agenda", "tipos"],
     queryFn: async () => (await apiClient.get<{ data: Tipo[] }>("/api/v1/agenda/tipos")).data,
@@ -135,7 +155,12 @@ export function Comandas({
 
   const finalizar = useMutation({
     mutationFn: (corpo: Record<string, unknown>) =>
-      apiClient.post(`/api/v1/financeiro/comandas/${abertaId}/finalizar`, corpo),
+      apiClient.post(
+        comTaxas
+          ? `/api/v1/clinic/financeiro/comandas/${abertaId}/finalizar`
+          : `/api/v1/financeiro/comandas/${abertaId}/finalizar`,
+        corpo,
+      ),
     onSuccess: recarregar,
     onError: showApiError,
   });
@@ -290,7 +315,23 @@ export function Comandas({
               />
             ) : null}
 
-            {comanda.status === "open" && podeLancar ? (
+            {comanda.status === "open" && podeLancar && comTaxas ? (
+              <FechamentoComTaxas
+                key={`${comanda.id}-${comanda.total_cents}`}
+                comandaId={comanda.id}
+                totalCents={comanda.total_cents}
+                moeda={moeda}
+                formas={formas.data ?? []}
+                maquininhas={comTaxas.maquininhas}
+                config={comTaxas.config}
+                temContato={Boolean(comanda.contact_id)}
+                pendente={finalizar.isPending}
+                onFinalizar={(corpo) => finalizar.mutate(corpo)}
+                onCancelar={() => alterar.mutate({ cancel: true })}
+              />
+            ) : null}
+
+            {comanda.status === "open" && podeLancar && !comTaxas ? (
               <Fechamento
                 formas={formas.data ?? []}
                 onFinalizar={(corpo) => finalizar.mutate(corpo)}

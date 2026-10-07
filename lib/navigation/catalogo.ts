@@ -804,6 +804,18 @@ export const NAV_CATALOG = [
   // lista as cinco (`hubSections`), então as duas continuam a um clique, com a
   // frase que explica para que servem. O ⌘K também as acha por nome.
   {
+    // FORK clinic (financeiro FN2, migration 9040): as parcelas de cartão e Pix
+    // a receber, a baixa e a antecipação. Sem `sidebar`; porta pelo módulo
+    // Financeiro do menu da clínica e pelo ⌘K. `financeiro.ver`.
+    href: "/app/financeiro/recebiveis",
+    label: "Contas a receber",
+    permissao: "financeiro.ver",
+    description: "Parcelas de cartão e Pix por vencimento, quanto entra em 30, 60 e 90 dias, baixa e antecipação.",
+    icon: "Receipt",
+    group: "analise",
+    section: "Dinheiro",
+  },
+  {
     // A terceira ponta do módulo financeiro: Configurações › Financeiro descreve
     // para onde o dinheiro vai, CRM › Comandas é onde o dia acontece, e aqui se
     // responde a pergunta do fim do mês.

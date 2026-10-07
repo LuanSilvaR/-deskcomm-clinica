@@ -58,6 +58,32 @@ const ERROS_DO_FINANCEIRO: Record<string, { status: number; code: string; mensag
     code: "validation_failed",
     mensagem: "Há duas linhas iguais na tabela (mesma bandeira, forma e parcelas).",
   },
+  fin_pagamentos_invalidos: { status: 422, code: "validation_failed", mensagem: "Pagamentos inválidos." },
+  fin_total_zero: { status: 422, code: "validation_failed", mensagem: "A comanda está zerada: inclua um item antes de finalizar." },
+  fin_soma_diferente: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "A soma dos pagamentos não bate com o total da comanda.",
+  },
+  fin_parcela_invalida: { status: 404, code: "not_found", mensagem: "Parcela não encontrada." },
+  fin_parcela_fechada: { status: 409, code: "conflict", mensagem: "Esta parcela já foi recebida, antecipada ou estornada." },
+  fin_pagamento_invalido: { status: 404, code: "not_found", mensagem: "Pagamento não encontrado ou sem maquininha." },
+  fin_nada_a_antecipar: { status: 409, code: "conflict", mensagem: "Não há parcelas a receber para antecipar neste pagamento." },
+  fin_recebimento_imutavel: { status: 409, code: "conflict", mensagem: "Recebimentos não se alteram; use o estorno." },
+  comanda_nao_encontrada: { status: 404, code: "not_found", mensagem: "Comanda não encontrada." },
+  comanda_cancelada: { status: 409, code: "conflict", mensagem: "Comanda cancelada não pode ser finalizada." },
+  comanda_nao_finalizada: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Só comanda finalizada pode ser estornada. Comanda aberta se cancela.",
+  },
+  forma_sem_conta: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Esta forma de pagamento ainda não tem conta de destino. Defina em Configurações › Financeiro.",
+  },
+  forma_de_pagamento_invalida: { status: 422, code: "validation_failed", mensagem: "Forma de pagamento inválida." },
+  estorno_forbidden: { status: 403, code: "forbidden", mensagem: "Estornar uma comanda exige perfil de gerente." },
   clinic_fin_adquirentes_nome_unico: { status: 409, code: "conflict", mensagem: "Já existe uma maquininha com esse nome." },
 };
 
