@@ -8,19 +8,16 @@
  * interface escolhida pela organização. Nenhuma porta ganha ou perde acesso por
  * morar num módulo.
  *
- * `tests/unit/clinic-menu-modulos.test.ts` reprova se uma porta do catálogo
+ * `lib/clinic/navegacao/modulos.test.ts` reprova se uma porta do catálogo
  * ficar sem módulo, aparecer em dois, ou se um módulo citar porta que não existe.
  *
- * Ordem = a lista pedida pela clínica (Início, Agenda, Pacientes, Contratos,
- * LGPD, Procedimentos, Equipamentos, Profissionais, Financeiro, Comissões, Notas
- * fiscais, Tarefas, Perfil e acesso, Configurações) mais três módulos que
- * acomodam o que não é de nenhum deles:
- *
- *  - Atendimento (Inbox, Radar, Respostas rápidas...) logo depois da Agenda: é
- *    onde a recepção passa o dia; escondê-lo dentro de Pacientes custaria um
- *    clique a cada conversa.
- *  - Marketing (Campanhas, Prospecção, Meta Ads) e Agente de IA depois de
- *    Tarefas: captação e automação são ajuste do gestor, não o dia da recepção.
+ * Ordem (organização pedida pela clínica em 2026-10, a partir de um painel de
+ * referência): Início, Notificações, Agenda, Atendimento, Pacientes, Contratos e
+ * termos (com a LGPD), Procedimentos, Estoque, Salas e equipamentos,
+ * Profissionais, Ponto, Financeiro, Comissões, Notas fiscais e Tarefas; depois,
+ * separados, Marketing e Agente de IA (captação e automação são ajuste do
+ * gestor, não o dia da recepção); no rodapé, Perfil e acesso e Configurações.
+ * Notificações, Ponto e Notas fiscais são "Em breve": aparecem só no Início.
  *
  * Os antigos "Canais" e "Análise" deixam de ser módulos: conexões são
  * configuração, e cada indicador mora no módulo do assunto dele (agenda na
@@ -30,15 +27,16 @@ import type { NavDestinationId } from "@/lib/navigation/catalogo";
 
 export type ModuloClinicaId =
   | "inicio"
+  | "notificacoes"
   | "agenda"
   | "atendimento"
   | "pacientes"
   | "contratos"
-  | "lgpd"
   | "procedimentos"
   | "estoque"
   | "equipamentos"
   | "profissionais"
+  | "ponto"
   | "financeiro"
   | "comissoes"
   | "notas-fiscais"
@@ -67,7 +65,9 @@ export type IconeDoModulo =
   | "Megaphone"
   | "Robot"
   | "UserCircle"
-  | "Gear";
+  | "Gear"
+  | "Bell"
+  | "Clock";
 
 /** Funcionalidade anunciada e ainda não construída. Não é rota: não abre nada. */
 export interface EmBreve {
@@ -86,7 +86,17 @@ export interface ModuloClinica {
   id: ModuloClinicaId;
   label: string;
   description: string;
+  /**
+   * Uma linha, para o cartão do Início (estoque/organização, 2026-10): o que a
+   * pessoa encontra ali, em poucas palavras. A `description` continua no painel.
+   */
+  resumo: string;
   icon: IconeDoModulo;
+  /**
+   * Começa um bloco separado no menu (captação e automação, que são ajuste do
+   * gestor e não o dia da clínica).
+   */
+  separarAntes?: boolean;
   /** Fica no rodapé fixo do menu, fora da área que rola. */
   rodape?: boolean;
   /** Telas existentes, na ordem em que aparecem. Vazio = módulo "Em breve". */
@@ -99,13 +109,24 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     id: "inicio",
     label: "Início",
     description: "Todos os módulos da clínica num lugar só, com o resumo do dia.",
+    resumo: "Módulos e o resumo do dia.",
     icon: "House",
     portas: [{ href: "/app/inicio", secao: "Início" }],
+  },
+  {
+    id: "notificacoes",
+    label: "Notificações",
+    description: "Avisos da agenda, do estoque, das pendências e do agente num lugar só.",
+    resumo: "Todos os avisos num lugar só.",
+    icon: "Bell",
+    portas: [],
+    emBreve: [{ label: "Central de notificações", description: "Avisos da clínica reunidos, com lido e não lido." }],
   },
   {
     id: "agenda",
     label: "Agenda",
     description: "Horários, chegada dos pacientes, faltas e a ocupação de cada profissional.",
+    resumo: "Atendimentos e status do dia.",
     icon: "CalendarBlank",
     portas: [
       { href: "/app/agenda", secao: "O dia da agenda" },
@@ -120,6 +141,7 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     id: "atendimento",
     label: "Atendimento",
     description: "Conversas com pacientes pelo WhatsApp e telefone, com a IA ao lado.",
+    resumo: "Conversas pelo WhatsApp e telefone.",
     icon: "ChatsCircle",
     portas: [
       { href: "/app/inbox", secao: "Conversas" },
@@ -133,41 +155,39 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     id: "pacientes",
     label: "Pacientes",
     description: "Cadastro, ficha e a jornada de cada paciente, do primeiro contato ao retorno.",
+    resumo: "Cadastro, ficha e prontuário.",
     icon: "IdentificationCard",
     portas: [
       { href: "/app/contacts", secao: "Cadastro" },
-      { href: "/app/kanban", secao: "Jornada do paciente" },
-      { href: "/app/settings/tenant/pipelines", secao: "Jornada do paciente" },
       // Prontuário (9016–9027): a fila do profissional; o prontuário, as fotos e os
       // termos moram como abas no detalhe do paciente.
       { href: "/app/atendimentos", secao: "Prontuário" },
+      { href: "/app/kanban", secao: "Jornada do paciente" },
+      { href: "/app/settings/tenant/pipelines", secao: "Jornada do paciente" },
     ],
   },
   {
+    // Contratos, termos e LGPD juntos (2026-10): o aceite do termo e o pedido do
+    // titular são a mesma conversa com o paciente sobre os dados dele. O antigo
+    // painel `/app/inicio/lgpd` continua abrindo (ver `ALIASES`).
     id: "contratos",
-    label: "Contratos",
-    description: "Contratos e termos dos tratamentos, assinados pelo paciente.",
+    label: "Contratos e termos",
+    description: "Modelos de contrato e termo, aceites dos pacientes e os pedidos da LGPD.",
+    resumo: "Termos, aceites e LGPD.",
     icon: "FileText",
-    portas: [],
-    emBreve: [
-      { label: "Contratos e termos", description: "Modelos de contrato por procedimento e pacote." },
-      { label: "Assinatura digital", description: "O paciente assina pelo celular, com validade jurídica." },
+    portas: [
+      { href: "/app/settings/tenant/modelos-clinicos", secao: "Modelos de termo e de prontuário" },
+      { href: "/app/lgpd/requests", secao: "LGPD" },
     ],
-  },
-  {
-    id: "lgpd",
-    label: "LGPD",
-    description: "Pedidos dos titulares sobre os próprios dados, com prazo e histórico.",
-    icon: "ShieldCheck",
-    portas: [{ href: "/app/lgpd/requests", secao: "Pedidos dos titulares" }],
     emBreve: [
-      { label: "Consentimentos", description: "Termos de uso de imagem e de dados aceitos por paciente." },
+      { label: "Contratos de pacote", description: "Contrato de pacote de sessões com saldo por paciente." },
     ],
   },
   {
     id: "procedimentos",
     label: "Procedimentos",
     description: "O que a clínica realiza, quem pode realizar e o POP de cada procedimento.",
+    resumo: "Catálogo, kit e POP.",
     icon: "Sparkle",
     portas: [{ href: "/app/procedimentos", secao: "Catálogo" }],
     emBreve: [
@@ -179,33 +199,43 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     id: "estoque",
     label: "Estoque",
     description: "Produtos e insumos por lote, validade e local, com cada entrada e saída registrada.",
+    resumo: "Lotes, validade e compras.",
     icon: "Archive",
     portas: [{ href: "/app/estoque", secao: "Posição do estoque" }],
     emBreve: [],
   },
   {
     id: "equipamentos",
-    label: "Equipamentos",
-    description: "Aparelhos da clínica, uso por procedimento e manutenção.",
+    label: "Salas e equipamentos",
+    description: "As salas e os aparelhos da clínica, e o que cada tipo de atendimento exige.",
+    resumo: "Salas e aparelhos.",
     icon: "Wrench",
-    portas: [],
-    emBreve: [
-      { label: "Equipamentos", description: "Cadastro dos aparelhos e de onde cada um está." },
-      { label: "Manutenções", description: "Revisões e calibrações com aviso de vencimento." },
-    ],
+    portas: [{ href: "/app/equipamentos", secao: "Salas e equipamentos" }],
+    emBreve: [{ label: "Manutenções", description: "Revisões e calibrações com aviso de vencimento." }],
   },
   {
     id: "profissionais",
     label: "Profissionais",
     description: "Quem atende, com especialidades, bloqueios e salas.",
+    resumo: "Equipe, especialidades e bloqueios.",
     icon: "UsersThree",
     portas: [{ href: "/app/settings/tenant/profissionais", secao: "Equipe clínica" }],
     emBreve: [{ label: "Escalas", description: "Turnos e folgas de cada profissional." }],
   },
   {
+    id: "ponto",
+    label: "Ponto",
+    description: "Entrada e saída da equipe, com as marcações do dia.",
+    resumo: "Marcações do dia.",
+    icon: "Clock",
+    portas: [],
+    emBreve: [{ label: "Registro de ponto", description: "Entrada, intervalo e saída de cada pessoa da equipe." }],
+  },
+  {
     id: "financeiro",
     label: "Financeiro",
     description: "Comandas, recebimentos e o faturamento da clínica.",
+    resumo: "Comandas e faturamento.",
     icon: "CurrencyCircleDollar",
     portas: [
       { href: "/app/comandas", secao: "O dia do caixa" },
@@ -219,17 +249,15 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     id: "comissoes",
     label: "Comissões",
     description: "Quanto cada profissional recebe por atendimento e venda.",
+    resumo: "Regras e repasses.",
     icon: "Percent",
-    portas: [],
-    emBreve: [
-      { label: "Regras de comissão", description: "Percentual ou valor fixo por procedimento e profissional." },
-      { label: "Extrato", description: "O que cada profissional tem a receber no período." },
-    ],
+    portas: [{ href: "/app/comissoes", secao: "Comissões" }],
   },
   {
     id: "notas-fiscais",
     label: "Notas fiscais",
     description: "Emissão de nota de serviço a partir do atendimento pago.",
+    resumo: "Emissão de nota de serviço.",
     icon: "Receipt",
     portas: [],
     emBreve: [{ label: "Emissão de NFS-e", description: "Nota de serviço emitida pela prefeitura, sem redigitar." }],
@@ -238,6 +266,7 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     id: "tarefas",
     label: "Tarefas",
     description: "O que precisa ser feito, por quem e até quando.",
+    resumo: "O que fazer e até quando.",
     icon: "ListChecks",
     portas: [
       { href: "/app/tasks", secao: "Tarefas" },
@@ -248,7 +277,9 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     id: "marketing",
     label: "Marketing",
     description: "Campanhas, anúncios e a busca de novos pacientes.",
+    resumo: "Campanhas e anúncios.",
     icon: "Megaphone",
+    separarAntes: true,
     portas: [
       { href: "/app/campaigns", secao: "Campanhas" },
       { href: "/app/prospecting", secao: "Campanhas" },
@@ -261,6 +292,7 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     id: "agente-de-ia",
     label: "Agente de IA",
     description: "O assistente que atende, agenda e faz follow-up pelos pacientes.",
+    resumo: "O assistente que atende e agenda.",
     icon: "Robot",
     portas: [
       { href: "/app/ai/agents", secao: "Montar o agente" },
@@ -284,6 +316,7 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     id: "perfil-e-acesso",
     label: "Perfil e acesso",
     description: "Sua conta, a equipe, os papéis de acesso e o registro de quem fez o quê.",
+    resumo: "Permissões e usuários.",
     icon: "UserCircle",
     rodape: true,
     portas: [
@@ -299,6 +332,7 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     id: "configuracoes",
     label: "Configurações",
     description: "Dados da clínica, canais de atendimento, marca e integrações.",
+    resumo: "Clínica, canais e marca.",
     icon: "Gear",
     rodape: true,
     portas: [
@@ -307,7 +341,6 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
       { href: "/app/settings/tags", secao: "Sua clínica" },
       { href: "/app/settings/marca", secao: "Sua clínica" },
       { href: "/app/settings/billing", secao: "Sua clínica" },
-      { href: "/app/settings/tenant/modelos-clinicos", secao: "Sua clínica" },
       { href: "/app/connections", secao: "Canais" },
       { href: "/app/webhooks", secao: "Canais" },
       { href: "/app/integrations/nuvemshop", secao: "Canais" },
@@ -319,13 +352,29 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
   },
 ];
 
+/**
+ * Painéis antigos que foram juntados a outro módulo. O link salvo continua
+ * abrindo — no módulo novo — em vez de virar 404 (expand/contract).
+ */
+const ALIASES: Readonly<Record<string, ModuloClinicaId>> = { lgpd: "contratos" };
+
 /** Módulo sem nenhuma tela construída — aparece com o selo "Em breve". */
 export function ehEmBreve(m: ModuloClinica): boolean {
   return m.portas.length === 0;
 }
 
 export function moduloPorId(id: string): ModuloClinica | undefined {
-  return MODULOS_CLINICA.find((m) => m.id === id);
+  const real = ALIASES[id] ?? id;
+  return MODULOS_CLINICA.find((m) => m.id === real);
+}
+
+/**
+ * Para onde o módulo leva quem clica nele (menu e cartões do Início): a
+ * PRIMEIRA tela que a pessoa vê nele — as outras ficam nas abas do módulo, no
+ * topo da tela. Sem tela visível, o painel do módulo.
+ */
+export function destinoDoModulo(m: { modulo: ModuloClinica; itens: ReadonlyArray<{ href: string }> }): string {
+  return m.itens[0]?.href ?? hrefDoPainel(m.modulo);
 }
 
 const MODULO_DA_PORTA = new Map<string, ModuloClinica>(

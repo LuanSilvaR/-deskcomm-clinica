@@ -3,10 +3,12 @@
  *
  *   1. o admin abre o Início (⌘K/URL) com o menu de sempre e liga o menu da
  *      clínica pela própria tela;
- *   2. o menu lateral passa a mostrar os módulos, com os "Em breve" desabilitados,
- *      e cabe em 1280×900 sem rolar;
- *   3. o módulo abre as telas de sempre (Agenda → Faltas) e o painel do módulo
- *      lista o inventário (Agente de IA);
+ *   2. o menu lateral passa a mostrar UMA LINHA POR MÓDULO (sem "Em breve",
+ *      que fica só no Início), cabe em 1280×900 sem rolar, e o Início mostra a
+ *      grade de módulos à vista;
+ *   3. clicar no módulo leva à primeira tela; as outras telas do módulo ficam
+ *      nas abas do topo (Agenda → Faltas), e o painel do módulo lista o
+ *      inventário (Agente de IA);
  *   4. um atendente vê o menu novo e NENHUMA tela a mais do que via antes (o
  *      módulo Financeiro-configuração/IA-gestão continua fora dele);
  *   5. desligar devolve o menu de sempre, com os mesmos cabeçalhos.
@@ -87,11 +89,17 @@ test.describe("menu da clínica", () => {
     for (const nome of ["Início", "Agenda", "Atendimento", "Pacientes", "Tarefas", "Marketing", "Agente de IA"]) {
       await expect(sidebar(page).getByText(nome, { exact: true }).first()).toBeVisible();
     }
-    // "Em breve" não é link nem botão: não abre nada.
-    const contratos = sidebar(page).locator('[aria-disabled="true"]', { hasText: "Contratos" });
-    await expect(contratos).toBeVisible();
-    await expect(contratos).toContainText("Em breve");
-    await expect(sidebar(page).getByRole("link", { name: /Contratos/ })).toHaveCount(0);
+    // O que já existe tem tela; o que não existe não ocupa o menu.
+    await expect(sidebar(page).getByRole("link", { name: "Contratos e termos" })).toBeVisible();
+    await expect(sidebar(page).getByRole("link", { name: "Salas e equipamentos" })).toBeVisible();
+    await expect(sidebar(page).getByText("Em breve")).toHaveCount(0);
+    await expect(sidebar(page).getByText("Ponto", { exact: true })).toHaveCount(0);
+
+    // Início: grade de módulos à vista; "Em breve" no fim, sem link.
+    await page.goto("/app/inicio");
+    const grade = page.getByRole("list", { name: "Módulos da clínica" });
+    await expect(grade.getByRole("link", { name: /Agenda/ })).toBeVisible();
+    await expect(page.getByTestId("inicio-em-breve")).toContainText("Ponto");
 
     // Rodapé fixo, fora da área que rola.
     await expect(page.getByRole("link", { name: "Configurações", exact: true })).toBeVisible();
@@ -112,10 +120,15 @@ test.describe("menu da clínica", () => {
     creds = await loginComoAdmin(page, creds);
     await page.goto("/app/inicio");
 
-    await sidebar(page).getByRole("button", { name: "Agenda" }).click();
-    await sidebar(page).getByRole("link", { name: "Faltas" }).click();
+    await sidebar(page).getByRole("link", { name: "Agenda" }).click();
+    await page.waitForURL(/\/app\/agenda$/);
+    await expect(sidebar(page).getByRole("link", { name: "Agenda" })).toHaveAttribute("aria-current", "page");
+    const abas = page.getByTestId("abas-do-modulo");
+    await abas.getByRole("link", { name: "Faltas" }).click();
     await page.waitForURL(/\/app\/agenda\/faltas/);
-    await expect(sidebar(page).getByRole("button", { name: "Agenda" })).toHaveAttribute("aria-expanded", "true");
+    await expect(abas.getByRole("link", { name: "Faltas" })).toHaveAttribute("aria-current", "page");
+    await expect(sidebar(page).getByRole("link", { name: "Agenda" })).toHaveAttribute("aria-current", "page");
+    await foto(page, "2a-abas-da-agenda");
 
     await page.goto("/app/inicio/agente-de-ia");
     await expect(page.getByRole("heading", { name: "Agente de IA", level: 1 })).toBeVisible();
