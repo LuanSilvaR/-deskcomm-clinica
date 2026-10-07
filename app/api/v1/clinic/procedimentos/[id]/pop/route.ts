@@ -11,7 +11,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { DOCUMENTO_VAZIO, textoPuro } from "@/lib/clinic/pops/documento";
-import { MODELO_PADRAO } from "@/lib/clinic/pops/modelo";
+import { modeloPadrao } from "@/lib/clinic/pops/modelo";
 import { falhaDoPop } from "@/lib/clinic/pops/servidor";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const { data: proc } = await supabase.from("clinic_procedures").select("id").eq("organization_id", authz.org.orgId).eq("id", id).maybeSingle();
   if (!proc) return fail("not_found", t("Procedimento não encontrado."), 404, { requestId });
 
-  const conteudo = lido.data.modelo === "padrao" ? MODELO_PADRAO : DOCUMENTO_VAZIO;
+  const conteudo = lido.data.modelo === "padrao" ? modeloPadrao(authz.user.idioma) : DOCUMENTO_VAZIO;
   const { data, error } = await supabase.rpc("fn_pop_criar", {
     p_procedure: id,
     p_code: lido.data.codigo?.trim() || null,
