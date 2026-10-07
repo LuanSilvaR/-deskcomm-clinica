@@ -508,6 +508,26 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "Prova própria em tests/invariants/clinic-estoque-alertas.test.ts: admin de outra empresa lê 0 alertas e não dispensa alerta alheio; ninguém escreve direto (INSERT recusado por permission denied); só a varredura (service role) cria.",
   },
   {
+    tabela: "clinic_fin_adquirentes",
+    razao:
+      "Prova própria em tests/invariants/clinic-fin-taxas.test.ts: admin de outra empresa lê 0 adquirentes; sem financeiro.ver lê 0; ninguém escreve direto (só pelas funções).",
+  },
+  {
+    tabela: "clinic_fin_tabelas",
+    razao:
+      "Prova própria em tests/invariants/clinic-fin-taxas.test.ts: admin de outra empresa lê 0 vigências; imutáveis (só vigência futura pode ser cancelada).",
+  },
+  {
+    tabela: "clinic_fin_taxas",
+    razao:
+      "Prova própria em tests/invariants/clinic-fin-taxas.test.ts: admin de outra empresa lê 0 linhas de taxa; UPDATE/DELETE recusados até para o service role.",
+  },
+  {
+    tabela: "clinic_fin_forma_extras",
+    razao:
+      "Prova própria em tests/invariants/clinic-fin-taxas.test.ts: admin de outra empresa lê 0; forma ou adquirente de outra empresa é recusada.",
+  },
+  {
     tabela: "clinic_atendimentos",
     razao:
       "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",

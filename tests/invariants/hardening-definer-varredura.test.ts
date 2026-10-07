@@ -679,6 +679,30 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "lib/clinic/estoque/posicao.ts chama com o client da sessão só quando a pessoa vê custos; só leitura (stable): fn_clinic_estoque_pode(org, 'estoque.custos'). tests/invariants/clinic-estoque-revisao.test.ts prova a recusa de quem só tem estoque.ver e de outra empresa.",
   },
   {
+    // FORK clinic (migration 9039).
+    fn: "fn_clinic_definir_financeiro_avancado(uuid,boolean)",
+    razao:
+      "Liga/desliga settings.clinic.financeiro_avancado: exige admin, fn_support_write_allowed e MFA provado; só grava a chave da própria org.",
+  },
+  {
+    // FORK clinic (migration 9039).
+    fn: "fn_clinic_fin_adquirente_salvar(uuid,uuid,jsonb)",
+    razao:
+      "Escrita das adquirentes só por esta função: fn_clinic_fin_exigir (financeiro.taxas + opção ligada); a org vem do parâmetro conferido pela permissão e o UPDATE filtra organization_id.",
+  },
+  {
+    // FORK clinic (migration 9039).
+    fn: "fn_clinic_fin_tabela_publicar(uuid,uuid,date,jsonb)",
+    razao:
+      "Publica uma vigência nova (as tabelas são imutáveis): financeiro.taxas + opção ligada; adquirente travada e conferida na org; data no passado só na primeira tabela.",
+  },
+  {
+    // FORK clinic (migration 9039).
+    fn: "fn_clinic_fin_forma_salvar(uuid,uuid,text,uuid)",
+    razao:
+      "Tipo e adquirente da forma de pagamento: financeiro.taxas + opção ligada; forma e adquirente conferidas na org.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:

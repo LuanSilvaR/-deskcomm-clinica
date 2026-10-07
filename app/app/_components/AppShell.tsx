@@ -1,5 +1,6 @@
 "use client";
 import type { ReactNode } from "react";
+import { AbasDoModulo } from "@/components/clinic/navegacao/AbasDoModulo";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { TopBar } from "@/components/shell/TopBar";
 import { BarraDeProgressoNavegacao } from "@/components/shell/BarraDeProgressoNavegacao";
@@ -81,6 +82,8 @@ export function AppShell({ sidebarCollapsed, podeAtender, children }: AppShellPr
           style={estiloDaReserva(ocupacaoDoRodape)}
           data-rodape-ocupado={ocupacaoDoRodape}
         >
+          {/* FORK clinic: as outras telas do módulo aberto (só com o menu da clínica). */}
+          <AbasDoModulo />
           {children}
         </main>
       </div>

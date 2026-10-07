@@ -430,6 +430,31 @@ export const NAV_CATALOG = [
     section: "Sua empresa",
   },
   {
+    // FORK clinic (organização do menu, 2026-10): salas e aparelhos ganham tela
+    // própria — o cadastro (migration 9007) vivia só numa aba de Profissionais,
+    // onde ninguém procurava. Mesma permissão da tela de origem; a aba lá continua.
+    href: "/app/equipamentos",
+    label: "Salas e equipamentos",
+    permissao: "profissionais.ver",
+    description: "As salas e os aparelhos da clínica, e o que cada tipo de atendimento exige.",
+    icon: "Buildings",
+    group: "organizacao",
+    section: "Sua empresa",
+  },
+  {
+    // FORK clinic (organização do menu, 2026-10): as regras de comissão (0240)
+    // e o caminho para o relatório por pessoa, num lugar só. Mesma permissão do
+    // catálogo financeiro, de onde as regras vêm.
+    href: "/app/comissoes",
+    label: "Comissões",
+    permissao: "financeiro.configurar",
+    description: "Regras de comissão por profissional e serviço, e quanto cada um tem a receber.",
+    icon: "ChartBar",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "viewer",
+  },
+  {
     // FORK clinic (prontuário F3, migration 9020): modelos de anamnese e
     // avaliação e o que é obrigatório para finalizar. Configuração, sem
     // paciente: `modelos_clinicos.gerenciar`.
@@ -488,6 +513,19 @@ export const NAV_CATALOG = [
     // dinheiro vai, e esconder a tela não esconde o dado — só torna a
     // conferência impossível.
     minRole: "viewer",
+  },
+  {
+    // FORK clinic (financeiro FN1, migration 9039): maquininhas — adquirentes,
+    // taxas por vigência, tipo das formas de pagamento e o simulador de
+    // recebimento líquido. Ver com `financeiro.ver`; configurar com
+    // `financeiro.taxas`. A tela diz como ligar quando está desligado.
+    href: "/app/settings/tenant/maquininhas",
+    label: "Maquininhas e taxas",
+    permissao: "financeiro.ver",
+    description: "Taxas de cada maquininha por forma e parcela, prazos de recebimento, antecipação e o simulador de valor líquido.",
+    icon: "Receipt",
+    group: "organizacao",
+    section: "Sua empresa",
   },
   {
     // Estava enterrado em Configurações e ninguém sabia que existia — o achado

@@ -10,7 +10,8 @@ import { homeDaInterface } from "@/lib/navigation/interface";
 import { searchable } from "@/lib/navigation/registry";
 
 import { ICONES_DOS_MODULOS } from "./icones";
-import { ehEmBreve, MODULOS_CLINICA, moduloDaPorta, moduloDoCaminho } from "./modulos";
+import { abasDoModulo } from "./abas";
+import { destinoDoModulo, ehEmBreve, MODULOS_CLINICA, moduloDaPorta, moduloDoCaminho, moduloPorId } from "./modulos";
 import { modulosVisiveis } from "./projecao";
 
 /**
@@ -51,31 +52,47 @@ describe("cobertura do catálogo", () => {
     for (const m of MODULOS_CLINICA) expect(ICONES_DOS_MODULOS[m.icon], m.id).toBeTruthy();
   });
 
-  it("os módulos pedidos pela clínica existem, na ordem pedida", () => {
+  it("os módulos seguem a organização pedida pela clínica (2026-10), na ordem", () => {
     const pedidos = [
       "inicio",
+      "notificacoes",
       "agenda",
+      "atendimento",
       "pacientes",
       "contratos",
-      "lgpd",
       "procedimentos",
+      "estoque",
       "equipamentos",
       "profissionais",
+      "ponto",
       "financeiro",
       "comissoes",
       "notas-fiscais",
       "tarefas",
+      "marketing",
+      "agente-de-ia",
       "perfil-e-acesso",
       "configuracoes",
     ];
-    const ordem = MODULOS_CLINICA.map((m) => m.id as string).filter((id) => pedidos.includes(id));
-    expect(ordem).toEqual(pedidos);
+    expect(MODULOS_CLINICA.map((m) => m.id)).toEqual(pedidos);
   });
 
-  it("Contratos, Equipamentos, Comissões e Notas fiscais nascem 'Em breve', com o que virá descrito", () => {
+  it("só Notificações, Ponto e Notas fiscais são 'Em breve' — o que já existe tem tela", () => {
     const emBreve = MODULOS_CLINICA.filter(ehEmBreve);
-    expect(emBreve.map((m) => m.id)).toEqual(["contratos", "equipamentos", "comissoes", "notas-fiscais"]);
+    expect(emBreve.map((m) => m.id)).toEqual(["notificacoes", "ponto", "notas-fiscais"]);
     for (const m of emBreve) expect(m.emBreve?.length, m.id).toBeGreaterThan(0);
+  });
+
+  it("todo módulo tem o resumo de uma linha do cartão do Início", () => {
+    for (const m of MODULOS_CLINICA) {
+      expect(m.resumo.length, m.id).toBeGreaterThan(0);
+      expect(m.resumo.length, m.id).toBeLessThanOrEqual(45);
+    }
+  });
+
+  it("o painel antigo de LGPD continua abrindo, agora em Contratos e termos", () => {
+    expect(moduloPorId("lgpd")?.id).toBe("contratos");
+    expect(moduloDoCaminho("/app/inicio/lgpd")?.id).toBe("contratos");
   });
 });
 
@@ -132,7 +149,7 @@ describe("projeção", () => {
     const ids = modulosVisiveis(false, "viewer", undefined, [], []).map((m) => m.modulo.id);
     expect(ids).not.toContain("financeiro");
     expect(ids).not.toContain("agente-de-ia");
-    expect(ids).toEqual(expect.arrayContaining(["contratos", "equipamentos", "comissoes", "notas-fiscais"]));
+    expect(ids).toEqual(expect.arrayContaining(["notificacoes", "ponto", "notas-fiscais"]));
   });
 
   it("financeiro some para quem não tem financeiro.ver, mesmo sendo admin no papel legado (ACL-008)", () => {
@@ -162,6 +179,9 @@ describe("módulo da tela aberta", () => {
     ["/app/contacts/123", "pacientes"],
     ["/app/inicio", "inicio"],
     ["/app/inicio/financeiro", "financeiro"],
+    ["/app/lgpd/requests", "contratos"],
+    ["/app/equipamentos", "equipamentos"],
+    ["/app/comissoes", "comissoes"],
   ])("%s → %s", (caminho, esperado) => {
     expect(moduloDoCaminho(caminho)?.id).toBe(esperado);
   });
@@ -172,6 +192,41 @@ describe("módulo da tela aberta", () => {
 
   it("moduloDaPorta devolve o módulo de uma porta", () => {
     expect(moduloDaPorta("/app/comandas")?.id).toBe("financeiro");
+  });
+});
+
+describe("destino e abas do módulo", () => {
+  const admin = () => modulosVisiveis(false, "admin", undefined, []);
+
+  it("o módulo leva à primeira tela que a pessoa vê nele", () => {
+    const agenda = admin().find((m) => m.modulo.id === "agenda")!;
+    expect(destinoDoModulo(agenda)).toBe("/app/agenda");
+  });
+
+  it("nas telas de um módulo com 2+ telas, as abas são as telas visíveis, com a ativa marcada", () => {
+    const r = abasDoModulo("/app/agenda/faltas", admin())!;
+    expect(r.modulo.id).toBe("agenda");
+    expect(r.abas.map((a) => a.href)).toEqual(admin().find((m) => m.modulo.id === "agenda")!.itens.map((i) => i.href));
+    expect(r.abas.filter((a) => a.ativa).map((a) => a.href)).toEqual(["/app/agenda/faltas"]);
+    expect(r.painel).toEqual({ href: "/app/inicio/agenda", ativo: false });
+  });
+
+  it("a aba ativa é a mais específica (avisos não acende 'casos')", () => {
+    const r = abasDoModulo("/app/ai/cases/avisos", admin())!;
+    expect(r.abas.filter((a) => a.ativa).map((a) => a.href)).toEqual(["/app/ai/cases/avisos"]);
+  });
+
+  it("sem abas no Início, fora de módulo e em módulo de uma tela só", () => {
+    expect(abasDoModulo("/app/inicio", admin())).toBeNull();
+    expect(abasDoModulo("/app/nao-existe", admin())).toBeNull();
+    expect(abasDoModulo("/app/procedimentos", admin())).toBeNull();
+  });
+
+  it("abas respeitam o acesso: quem só vê agenda e pacientes não ganha aba de outro lugar", () => {
+    const restrito = modulosVisiveis(false, "admin", undefined, [], ["agenda.ver", "pacientes.ver"]);
+    const r = abasDoModulo("/app/agenda", restrito);
+    const permitidas = new Set(searchable(false, "admin", undefined, [], ["agenda.ver", "pacientes.ver"]).map((d) => d.href as string));
+    for (const a of r?.abas ?? []) expect(permitidas.has(a.href), a.href).toBe(true);
   });
 });
 
@@ -204,6 +259,7 @@ describe("tradução", () => {
     const textos = MODULOS_CLINICA.flatMap((m) => [
       m.label,
       m.description,
+      m.resumo,
       ...m.portas.map((p) => p.secao),
       ...(m.emBreve ?? []).flatMap((e) => [e.label, e.description]),
     ]);

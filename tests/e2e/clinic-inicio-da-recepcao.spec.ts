@@ -3,7 +3,7 @@
  *
  *   1. saudação, ações rápidas (busca, cadastrar, novo agendamento, conversas),
  *      contadores do dia, pacientes de hoje, sala de espera, confirmar para
- *      amanhã e vagas; os módulos recolhidos em "Todos os módulos";
+ *      amanhã e vagas; depois, a grade de módulos à vista (organização 2026-10);
  *   2. busca de paciente: acha o paciente com "Ficha" e "Agendar" (que leva à
  *      Agenda com o paciente); nome que não existe oferece "Cadastrar";
  *   3. com um compromisso hoje: a linha aparece, o contador "A chegar" filtra, e
@@ -80,7 +80,7 @@ test("início da recepção: busca, contadores, pacientes de hoje e sala de espe
     await expect(m.getByTestId("inicio-sala-de-espera")).toBeVisible();
     await expect(m.getByTestId("inicio-confirmar-amanha")).toBeVisible();
     await expect(m.getByTestId("inicio-vagas")).toBeVisible();
-    await expect(m.getByTestId("inicio-todos-os-modulos")).not.toHaveAttribute("open", "");
+    await expect(m.getByTestId("inicio-todos-os-modulos")).toBeVisible();
     await foto(page, "01-inicio-da-recepcao");
 
     // ── 2. busca de paciente ───────────────────────────────────────────────
