@@ -18,6 +18,7 @@
  * (migration 9014). Só apresentação — não muda quem vê o quê.
  * `prontuario`: o módulo de atendimento clínico e prontuário (migration 9016).
  * `estoque`: o módulo de estoque por lotes, locais e movimentos (migration 9028).
+ * `financeiro_avancado`: maquininhas e taxas, parcelas, caixa, DRE e painel (migration 9039).
  *
  * GET: qualquer membro lê (as telas precisam saber). PATCH: só admin, pelas
  * funções `fn_clinic_definir_*`, que também exigem MFA provado quando a sessão
@@ -39,6 +40,7 @@ import { recursosLigados } from "@/lib/clinic/agenda/recursos";
 import {
   clinicProfissionaisLigado,
   estoqueLigado,
+  financeiroAvancadoLigado,
   menuClinicaLigado,
   procedimentosLigados,
   prontuarioLigado,
@@ -67,6 +69,7 @@ async function lerOpcoes(orgId: string) {
     menu_clinica: menuClinicaLigado(settings),
     prontuario: prontuarioLigado(settings),
     estoque: estoqueLigado(settings),
+    financeiro_avancado: financeiroAvancadoLigado(settings),
   };
 }
 
@@ -90,6 +93,7 @@ const patchSchema = z
     menu_clinica: z.boolean().optional(),
     prontuario: z.boolean().optional(),
     estoque: z.boolean().optional(),
+    financeiro_avancado: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "Informe se o módulo fica ligado.",
@@ -105,6 +109,7 @@ const FUNCAO_DA_OPCAO = {
   procedimentos: "fn_clinic_definir_procedimentos",
   prontuario: "fn_clinic_definir_prontuario",
   estoque: "fn_clinic_definir_estoque",
+  financeiro_avancado: "fn_clinic_definir_financeiro_avancado",
 } as const;
 
 export async function PATCH(req: NextRequest): Promise<Response> {
@@ -169,7 +174,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "financeiro_avancado"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });

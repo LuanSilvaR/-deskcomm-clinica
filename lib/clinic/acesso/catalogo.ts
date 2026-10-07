@@ -139,6 +139,11 @@ export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
   p("financeiro", "lancar", "agent", "Abrir comanda, lançar itens e finalizar", { dependeDe: ver("financeiro") }),
   p("financeiro", "estornar", "manager", "Estornar comanda e excluir lançamento", { dependeDe: ver("financeiro") }),
   p("financeiro", "configurar", "manager", "Catálogo financeiro e regras", { dependeDe: ver("financeiro") }),
+  // FORK clinic (9039): maquininhas — adquirentes, tabelas de taxa e prazos.
+  p("financeiro", "taxas", "manager", "Configurar maquininhas: adquirentes, taxas e prazos", { dependeDe: ver("financeiro") }),
+  // FORK clinic (9041): caixa diário e a dupla conferência do fechamento.
+  p("financeiro", "caixa", "agent", "Abrir e fechar o caixa, suprimento, sangria e caixa pequeno", { dependeDe: ver("financeiro") }),
+  p("financeiro", "conferir", "manager", "Conferir o fechamento de caixa de outra pessoa (dupla conferência)", { dependeDe: ver("financeiro") }),
 
   p("produtos", "ver", "viewer", "Ver produtos"),
   p("produtos", "gerenciar", "manager", "Cadastrar, importar e alterar produtos", { dependeDe: ver("produtos") }),

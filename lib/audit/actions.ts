@@ -864,6 +864,20 @@ export const AUDIT_ACTIONS = [
   "clinic.flag_alterada",
   // FORK clinic (9015): procedimentos e POP.
   "clinic.procedimento_criado",
+  // FORK clinic (9039): financeiro — maquininhas e taxas (ids, datas, contagens).
+  "clinic.fin_adquirente_salva",
+  "clinic.fin_tabela_publicada",
+  "clinic.fin_forma_configurada",
+  "clinic.fin_comanda_finalizada",
+  "clinic.fin_comanda_estornada",
+  "clinic.fin_parcela_recebida",
+  "clinic.fin_antecipacao_feita",
+  "clinic.fin_parcelas_baixadas",
+  "clinic.fin_config_salva",
+  "clinic.fin_caixa_aberto",
+  "clinic.fin_caixa_movimentado",
+  "clinic.fin_caixa_fechado",
+  "clinic.fin_caixa_conferido",
   // FORK clinic (9028): estoque — ids e o tipo da ação, nunca dado de paciente.
   "clinic.estoque_produto_configurado",
   "clinic.estoque_local_salvo",

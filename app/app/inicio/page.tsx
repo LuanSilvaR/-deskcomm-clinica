@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { PainelDaRecepcao } from "@/components/clinic/inicio/PainelDaRecepcao";
 import { AlternarMenuDaClinica } from "@/components/clinic/navegacao/AlternarMenuDaClinica";
-import { PainelDeModulos } from "@/components/clinic/navegacao/PainelDeModulos";
+import { EmBreveDoInicio, PainelDeModulos } from "@/components/clinic/navegacao/PainelDeModulos";
 import { ResumoDoDiaCards } from "@/components/clinic/navegacao/ResumoDoDiaCards";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { resumoDoDia, type ResumoDoDia } from "@/lib/clinic/navegacao/resumo-do-dia";
@@ -24,9 +24,10 @@ export const metadata: Metadata = { title: "Início" };
  * Com o menu antigo esta tela continua existindo (⌘K), e é aqui que quem
  * administra liga o menu da clínica.
  *
- * Para quem vê a agenda, o topo é o PAINEL DA RECEPÇÃO (busca de paciente,
- * cadastro, contadores do dia, pacientes de hoje, sala de espera, confirmar
- * para amanhã e vagas). Os módulos ficam recolhidos em "Todos os módulos".
+ * Organização (2026-10): "Olá, <nome>" e a GRADE DE MÓDULOS sempre à vista —
+ * escolher o módulo é o primeiro passo. "Seu dia" (o painel da recepção ou o
+ * resumo) vem logo depois; para quem vê a agenda, antes da grade, porque é a
+ * ferramenta de trabalho da recepção. O "Em breve" fica no fim, sem link.
  */
 export default async function InicioPage() {
   const user = await requireAuth();
@@ -61,35 +62,47 @@ export default async function InicioPage() {
     day: "numeric",
     month: "long",
   }).format(new Date());
-  const hora = Number(new Intl.DateTimeFormat("en-US", { timeZone: fuso, hour: "numeric", hourCycle: "h23" }).format(new Date()));
-  const saudacao = hora < 12 ? t("Bom dia") : hora < 18 ? t("Boa tarde") : t("Boa noite");
   const primeiroNome = (user.full_name ?? "").trim().split(/\s+/)[0];
+
+  const seuDia =
+    recepcao && activeOrg ? (
+      <PainelDaRecepcao orgId={activeOrg.orgId} conversasNaoLidas={resumo.conversasNaoLidas} tarefasAteHoje={resumo.tarefasAteHoje} />
+    ) : (
+      <ResumoDoDiaCards resumo={resumo} locale={idioma} />
+    );
+  const gradeDeModulos = (
+    <section aria-labelledby="inicio-modulos" data-testid="inicio-todos-os-modulos">
+      <h2 id="inicio-modulos" className="sr-only">
+        {t("Módulos da clínica")}
+      </h2>
+      <PainelDeModulos modulos={grade} locale={idioma} />
+    </section>
+  );
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">
-          {primeiroNome ? `${saudacao}, ${primeiroNome}` : t("Início")}
+          {primeiroNome ? `${t("Olá")}, ${primeiroNome}` : t("Início")}
         </h1>
         <p className="text-sm text-muted-foreground first-letter:uppercase">
-          {recepcao ? `${hojePorExtenso} · ${t("tudo o que a recepção precisa para o dia")}` : t("Todos os módulos da clínica num lugar só, com o resumo do dia.")}
+          {recepcao ? `${hojePorExtenso} · ${t("Escolha um módulo para começar.")}` : t("Escolha um módulo para começar.")}
         </p>
       </header>
 
-      {recepcao && activeOrg ? (
-        <PainelDaRecepcao orgId={activeOrg.orgId} conversasNaoLidas={resumo.conversasNaoLidas} tarefasAteHoje={resumo.tarefasAteHoje} />
+      {recepcao ? (
+        <>
+          {seuDia}
+          {gradeDeModulos}
+        </>
       ) : (
-        <ResumoDoDiaCards resumo={resumo} locale={idioma} />
+        <>
+          {gradeDeModulos}
+          {seuDia}
+        </>
       )}
 
-      <details className="group rounded-xl border p-3" open={!recepcao} data-testid="inicio-todos-os-modulos">
-        <summary className="cursor-pointer text-xs font-medium tracking-wider text-muted-foreground uppercase">
-          {t("Todos os módulos")}
-        </summary>
-        <div className="mt-3">
-          <PainelDeModulos modulos={grade} locale={idioma} />
-        </div>
-      </details>
+      <EmBreveDoInicio modulos={grade} locale={idioma} />
 
       {podeLigar && activeOrg ? <AlternarMenuDaClinica ligado={ligado} /> : null}
     </div>

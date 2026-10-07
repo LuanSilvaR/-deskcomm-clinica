@@ -679,6 +679,102 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "lib/clinic/estoque/posicao.ts chama com o client da sessão só quando a pessoa vê custos; só leitura (stable): fn_clinic_estoque_pode(org, 'estoque.custos'). tests/invariants/clinic-estoque-revisao.test.ts prova a recusa de quem só tem estoque.ver e de outra empresa.",
   },
   {
+    // FORK clinic (migration 9039).
+    fn: "fn_clinic_definir_financeiro_avancado(uuid,boolean)",
+    razao:
+      "Liga/desliga settings.clinic.financeiro_avancado: exige admin, fn_support_write_allowed e MFA provado; só grava a chave da própria org.",
+  },
+  {
+    // FORK clinic (migration 9039).
+    fn: "fn_clinic_fin_adquirente_salvar(uuid,uuid,jsonb)",
+    razao:
+      "Escrita das adquirentes só por esta função: fn_clinic_fin_exigir (financeiro.taxas + opção ligada); a org vem do parâmetro conferido pela permissão e o UPDATE filtra organization_id.",
+  },
+  {
+    // FORK clinic (migration 9039).
+    fn: "fn_clinic_fin_tabela_publicar(uuid,uuid,date,jsonb)",
+    razao:
+      "Publica uma vigência nova (as tabelas são imutáveis): financeiro.taxas + opção ligada; adquirente travada e conferida na org; data no passado só na primeira tabela.",
+  },
+  {
+    // FORK clinic (migration 9039).
+    fn: "fn_clinic_fin_forma_salvar(uuid,uuid,text,uuid)",
+    razao:
+      "Tipo e adquirente da forma de pagamento: financeiro.taxas + opção ligada; forma e adquirente conferidas na org.",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_config_salvar(uuid,jsonb)",
+    razao:
+      "Configuração do financeiro (base da comissão, margem mínima): financeiro.configurar + opção ligada; só chaves conhecidas, grava em settings da própria org.",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_finalizar(uuid,uuid,jsonb,integer)",
+    razao:
+      "Fecha a comanda com pagamento dividido e parcelas: financeiro.lancar + opção ligada; comanda travada (FOR UPDATE) e conferida na org; formas e adquirentes da própria org; idempotente.",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_receber_parcela(uuid,uuid)",
+    razao:
+      "Baixa manual de parcela: financeiro.lancar (fn_acesso_exigir); parcela conferida na org. Não exige a opção: parcela vendida continua a receber.",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_antecipar(uuid,uuid,boolean)",
+    razao:
+      "Simula (financeiro.ver) ou antecipa (financeiro.lancar) as parcelas previstas de um pagamento da própria org (fn_acesso_exigir).",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_estornar(uuid,uuid,text)",
+    razao:
+      "Estorno: financeiro.estornar (fn_acesso_exigir; vale mesmo com a opção desligada depois); chama fn_estornar_comanda (que confere papel e org) e contra-lança parcelas, taxas e antecipação da comanda da própria org.",
+  },
+  {
+    // FORK clinic (migration 9040).
+    fn: "fn_clinic_fin_custo_da_comanda(uuid,uuid)",
+    razao:
+      "Custo direto para a margem no fechamento: financeiro.lancar + opção ligada; insumos só com estoque.custos; devolve só totais.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_caixa_esperado_agora(uuid,uuid)",
+    razao:
+      "Esperado da gaveta para a tela: fn_acesso_exigir financeiro.ver; sessão conferida na org do parâmetro.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_caixa_abrir(uuid,uuid,bigint)",
+    razao:
+      "Abre a sessão de caixa: financeiro.caixa + opção ligada; conta travada e conferida na org; uma sessão aberta por conta.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_caixa_movimentar(uuid,uuid,text,bigint,text,uuid)",
+    razao:
+      "Suprimento/sangria/caixa pequeno: financeiro.caixa + opção ligada; sessão da própria org travada; plano de contas da org.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_caixa_fechar(uuid,uuid,jsonb,text)",
+    razao:
+      "Fechamento com contagem: financeiro.caixa + opção ligada; sessão da própria org travada; contagem validada.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_caixa_conferir(uuid,uuid)",
+    razao:
+      "Dupla conferência: financeiro.conferir + opção ligada; recusa a mesma pessoa que fechou; sessão da própria org.",
+  },
+  {
+    // FORK clinic (migration 9041).
+    fn: "fn_clinic_fin_dia(uuid,date)",
+    razao:
+      "Resumo do dia (só agregados): fn_acesso_exigir financeiro.ver; lê só a org do parâmetro conferido.",
+  },
+  {
     // FORK clinic (migration 9017).
     fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
     razao:
