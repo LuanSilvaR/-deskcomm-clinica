@@ -84,3 +84,15 @@ export function prontuarioLigado(settings: unknown): boolean {
   if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
   return (clinic as Record<string, unknown>).prontuario === true;
 }
+
+/**
+ * `organizations.settings.clinic.estoque` (migration 9028): o módulo de
+ * estoque (saldos por lote e local, movimentos). Nasce desligado; só o
+ * booleano `true` liga.
+ */
+export function estoqueLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).estoque === true;
+}

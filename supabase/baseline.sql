@@ -43329,6 +43329,4114 @@ revoke execute on function public.fn_clinic_procedimento_salvar(uuid, uuid, uuid
 grant  execute on function public.fn_clinic_procedimento_salvar(uuid, uuid, uuid, jsonb, jsonb, integer) to authenticated;
 -- ---- fim clinic (migration 9027, fork) ----
 
+-- ---- clinic: estoque — base (migration 9028, fork) ----
+-- ─── configuração de estoque do produto ─────────────────────────────────────
+create table if not exists public.clinic_produto_estoque (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  product_id uuid not null references public.catalog_products(id) on delete cascade,
+  ean text,
+  ncm text,
+  registro_anvisa text,
+  unidade_estoque text not null default 'un',
+  unidade_aplicacao text not null default 'un',
+  fator_conversao numeric(14,3) not null default 1,
+  fracionavel boolean not null default false,
+  validade_pos_abertura_horas integer,
+  rastreado boolean not null default false,
+  controlado boolean not null default false,
+  conselhos_permitidos text[] not null default '{}',
+  estoque_minimo numeric(14,3) not null default 0,
+  ponto_pedido numeric(14,3),
+  gerenciado boolean not null default true,
+  versao integer not null default 1,
+  created_at timestamptz not null default now(),
+  created_by uuid,
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  constraint clinic_produto_estoque_unico unique (organization_id, product_id),
+  constraint clinic_produto_estoque_org_id_key unique (organization_id, id),
+  constraint clinic_produto_estoque_ean check (ean is null or ean ~ '^[0-9]{8,14}$'),
+  constraint clinic_produto_estoque_ncm check (ncm is null or ncm ~ '^[0-9]{8}$'),
+  constraint clinic_produto_estoque_anvisa check (registro_anvisa is null or char_length(btrim(registro_anvisa)) between 1 and 40),
+  constraint clinic_produto_estoque_unidades check (
+    char_length(btrim(unidade_estoque)) between 1 and 20 and char_length(btrim(unidade_aplicacao)) between 1 and 20),
+  constraint clinic_produto_estoque_fator check (fator_conversao > 0),
+  constraint clinic_produto_estoque_pos_abertura check (validade_pos_abertura_horas is null or validade_pos_abertura_horas between 1 and 8760),
+  constraint clinic_produto_estoque_minimos check (estoque_minimo >= 0 and (ponto_pedido is null or ponto_pedido >= 0)),
+  constraint clinic_produto_estoque_conselhos check (
+    conselhos_permitidos <@ array['CRM','CRO','COREN','CRBM','CFF','CREFITO','outro']::text[])
+);
+drop trigger if exists clinic_produto_estoque_updated_at on public.clinic_produto_estoque;
+create trigger clinic_produto_estoque_updated_at before update on public.clinic_produto_estoque
+  for each row execute function public.fn_set_updated_at();
+
+-- ─── locais ─────────────────────────────────────────────────────────────────
+create table if not exists public.clinic_estoque_locais (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  nome text not null,
+  tipo text not null default 'central',
+  resource_id uuid references public.clinic_resources(id) on delete set null,
+  padrao boolean not null default false,
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid,
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  constraint clinic_estoque_locais_org_id_key unique (organization_id, id),
+  constraint clinic_estoque_locais_nome check (char_length(btrim(nome)) between 1 and 80),
+  constraint clinic_estoque_locais_tipo check (tipo in ('central', 'sala', 'carrinho', 'farmacia', 'outro'))
+);
+create unique index if not exists clinic_estoque_locais_nome_unico
+  on public.clinic_estoque_locais (organization_id, lower(btrim(nome)));
+create unique index if not exists clinic_estoque_locais_um_padrao
+  on public.clinic_estoque_locais (organization_id) where padrao;
+drop trigger if exists clinic_estoque_locais_updated_at on public.clinic_estoque_locais;
+create trigger clinic_estoque_locais_updated_at before update on public.clinic_estoque_locais
+  for each row execute function public.fn_set_updated_at();
+
+-- ─── lotes ──────────────────────────────────────────────────────────────────
+-- codigo nulo = "sem lote" (produto não rastreado). Custo em centavos, com
+-- casas decimais (custo unitário de 1 U de toxina é fração de centavo × 100).
+create table if not exists public.clinic_estoque_lotes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  product_id uuid not null references public.catalog_products(id),
+  codigo text,
+  validade date,
+  custo_unitario_cents numeric(14,4),
+  fornecedor_id uuid,
+  nfe_item_id uuid,
+  created_at timestamptz not null default now(),
+  created_by uuid,
+  constraint clinic_estoque_lotes_org_id_key unique (organization_id, id),
+  constraint clinic_estoque_lotes_codigo check (codigo is null or char_length(btrim(codigo)) between 1 and 60),
+  constraint clinic_estoque_lotes_custo check (custo_unitario_cents is null or custo_unitario_cents >= 0)
+);
+create unique index if not exists clinic_estoque_lotes_unico
+  on public.clinic_estoque_lotes (organization_id, product_id, coalesce(codigo, ''), coalesce(validade, 'infinity'::date));
+create index if not exists clinic_estoque_lotes_validade_idx
+  on public.clinic_estoque_lotes (organization_id, validade) where validade is not null;
+
+-- ─── operações (cabeçalho) e movimentos (linhas) ────────────────────────────
+create table if not exists public.clinic_estoque_operacoes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  tipo text not null,
+  origem_tipo text,
+  origem_id uuid,
+  estorna_operacao_id uuid,
+  motivo text,
+  ator uuid,
+  created_at timestamptz not null default now(),
+  constraint clinic_estoque_operacoes_org_id_key unique (organization_id, id),
+  constraint clinic_estoque_operacoes_tipo check (tipo in (
+    'entrada', 'consumo', 'transferencia', 'perda', 'ajuste', 'inventario', 'abertura_frasco', 'estorno')),
+  constraint clinic_estoque_operacoes_motivo check (motivo is null or char_length(btrim(motivo)) between 1 and 300),
+  constraint clinic_estoque_operacoes_estorno check ((tipo = 'estorno') = (estorna_operacao_id is not null)),
+  constraint clinic_estoque_operacoes_estorna_fk foreign key (organization_id, estorna_operacao_id)
+    references public.clinic_estoque_operacoes (organization_id, id)
+);
+-- Idempotência: a mesma origem (ex.: um insumo do prontuário) gera uma operação só.
+create unique index if not exists clinic_estoque_operacoes_origem_unica
+  on public.clinic_estoque_operacoes (organization_id, origem_tipo, origem_id)
+  where origem_id is not null and tipo <> 'estorno';
+-- Uma operação é estornada no máximo uma vez.
+create unique index if not exists clinic_estoque_operacoes_estorno_unico
+  on public.clinic_estoque_operacoes (organization_id, estorna_operacao_id) where estorna_operacao_id is not null;
+create index if not exists clinic_estoque_operacoes_data_idx
+  on public.clinic_estoque_operacoes (organization_id, created_at desc);
+
+create table if not exists public.clinic_estoque_movimentos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  operacao_id uuid not null,
+  product_id uuid not null references public.catalog_products(id),
+  lote_id uuid not null,
+  local_id uuid not null,
+  frasco_id uuid,
+  quantidade numeric(14,3) not null,
+  custo_unitario_cents numeric(14,4),
+  -- só no consumo (prontuário), para relatório e rastreio por lote:
+  atendimento_id uuid,
+  contact_id uuid,
+  profissional_user_id uuid,
+  procedure_id uuid,
+  created_at timestamptz not null default now(),
+  constraint clinic_estoque_movimentos_quantidade check (quantidade <> 0),
+  constraint clinic_estoque_movimentos_operacao_fk foreign key (organization_id, operacao_id)
+    references public.clinic_estoque_operacoes (organization_id, id),
+  constraint clinic_estoque_movimentos_lote_fk foreign key (organization_id, lote_id)
+    references public.clinic_estoque_lotes (organization_id, id),
+  constraint clinic_estoque_movimentos_local_fk foreign key (organization_id, local_id)
+    references public.clinic_estoque_locais (organization_id, id)
+);
+create index if not exists clinic_estoque_movimentos_saldo_idx
+  on public.clinic_estoque_movimentos (organization_id, product_id, lote_id, local_id);
+create index if not exists clinic_estoque_movimentos_operacao_idx
+  on public.clinic_estoque_movimentos (organization_id, operacao_id);
+create index if not exists clinic_estoque_movimentos_lote_idx
+  on public.clinic_estoque_movimentos (organization_id, lote_id, local_id);
+create index if not exists clinic_estoque_movimentos_atendimento_idx
+  on public.clinic_estoque_movimentos (organization_id, atendimento_id) where atendimento_id is not null;
+
+-- Só acrescenta: UPDATE recusado sempre; DELETE só na cascata da exclusão da
+-- empresa (profundidade > 1), nunca pedido direto — vale até para service role.
+create or replace function public.fn_clinic_estoque_imutavel()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+    return old;
+  end if;
+  raise exception 'estoque_imutavel' using errcode = '55000';
+end $$;
+revoke execute on function public.fn_clinic_estoque_imutavel() from public, anon, authenticated;
+drop trigger if exists trg_clinic_estoque_operacoes_imutavel on public.clinic_estoque_operacoes;
+create trigger trg_clinic_estoque_operacoes_imutavel before update or delete on public.clinic_estoque_operacoes
+  for each row execute function public.fn_clinic_estoque_imutavel();
+drop trigger if exists trg_clinic_estoque_movimentos_imutavel on public.clinic_estoque_movimentos;
+create trigger trg_clinic_estoque_movimentos_imutavel before update or delete on public.clinic_estoque_movimentos
+  for each row execute function public.fn_clinic_estoque_imutavel();
+
+-- ─── saldo = soma dos movimentos ────────────────────────────────────────────
+create or replace view public.clinic_estoque_saldos
+with (security_invoker = true) as
+  select m.organization_id, m.product_id, m.lote_id, m.local_id, sum(m.quantidade)::numeric(14,3) as saldo
+    from public.clinic_estoque_movimentos m
+   group by m.organization_id, m.product_id, m.lote_id, m.local_id
+  having sum(m.quantidade) <> 0;
+revoke all on public.clinic_estoque_saldos from anon;
+grant select on public.clinic_estoque_saldos to authenticated;
+
+-- ─── RLS: membro lê com estoque.ver; ninguém escreve direto ─────────────────
+do $rls$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'clinic_produto_estoque', 'clinic_estoque_locais', 'clinic_estoque_lotes',
+    'clinic_estoque_operacoes', 'clinic_estoque_movimentos'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format($p$create policy tenant_isolation_%s_all on public.%I
+        using ((organization_id in (select public.fn_user_org_ids()))
+               and public.fn_role_at_least(organization_id, 'viewer'))
+        with check ((organization_id in (select public.fn_user_org_ids()))
+               and public.fn_role_at_least(organization_id, 'viewer'))$p$, t, t);
+    execute format('drop policy if exists acesso_ler on public.%I', t);
+    execute format($p$create policy acesso_ler on public.%I as restrictive for select
+                      using (public.fn_has_permission(organization_id, 'estoque.ver'))$p$, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+  -- o histórico não se apaga nem por service role (o trigger também recusa)
+  execute 'revoke update, delete, truncate on public.clinic_estoque_operacoes from service_role';
+  execute 'revoke update, delete, truncate on public.clinic_estoque_movimentos from service_role';
+end
+$rls$;
+
+-- ─── permissões ─────────────────────────────────────────────────────────────
+insert into public.clinic_permissions (key, modulo, acao, nivel_base, depende_de, critica, descricao, clinica) values
+  ('estoque.ver', 'estoque', 'ver', 'agent', array[]::text[], false, 'Ver saldos, lotes, validades e movimentações do estoque', false),
+  ('estoque.movimentar', 'estoque', 'movimentar', 'manager', array['estoque.ver']::text[], false, 'Dar entrada, transferir entre locais e registrar perdas', false),
+  ('estoque.inventariar', 'estoque', 'inventariar', 'manager', array['estoque.ver']::text[], false, 'Ajustar saldo e fazer inventário', false),
+  ('estoque.compras', 'estoque', 'compras', 'manager', array['estoque.ver']::text[], false, 'Importar NF-e, conferir e lançar compras', false),
+  ('estoque.configurar', 'estoque', 'configurar', 'manager', array['estoque.ver']::text[], false, 'Configurar produtos do estoque (unidades, lote, mínimo) e locais', false),
+  ('estoque.custos', 'estoque', 'custos', 'manager', array['estoque.ver']::text[], false, 'Ver custos de lotes e do estoque', false),
+  ('estoque.estornar', 'estoque', 'estornar', 'manager', array['estoque.ver']::text[], true, 'Estornar uma movimentação de estoque, com motivo', false)
+on conflict (key) do update
+  set modulo = excluded.modulo, acao = excluded.acao, nivel_base = excluded.nivel_base,
+      depende_de = excluded.depende_de, critica = excluded.critica, descricao = excluded.descricao,
+      clinica = excluded.clinica;
+
+-- Administrador: todas. Modelos (gerente/atendente/visualizador): pelo nível.
+insert into public.clinic_role_permissions (organization_id, role_id, permission_key)
+select r.organization_id, r.id, p.key
+  from public.clinic_roles r
+  join public.clinic_permissions p on p.modulo = 'estoque'
+ where r.system_key = 'administrador'
+    or (r.system_key = 'gerente' and public.fn_nivel_rank(p.nivel_base) <= public.fn_nivel_rank('manager'))
+    or (r.system_key = 'atendente' and public.fn_nivel_rank(p.nivel_base) <= public.fn_nivel_rank('agent'))
+    or (r.system_key = 'visualizador' and public.fn_nivel_rank(p.nivel_base) <= public.fn_nivel_rank('viewer'))
+on conflict do nothing;
+
+-- ─── a opção: settings.clinic.estoque (nasce desligada) ────────────────────
+-- Ao ligar pela primeira vez, cria o local padrão "Estoque central".
+create or replace function public.fn_clinic_definir_estoque(p_org uuid, p_ligado boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_antes boolean;
+begin
+  if auth.uid() is null
+     or p_org is null
+     or p_ligado is null
+     or not public.fn_role_at_least(p_org, 'admin')
+     or not public.fn_support_write_allowed(p_org) then
+    raise exception 'clinic_flag_forbidden' using errcode = '42501';
+  end if;
+  if not public.fn_session_mfa_proven() then
+    raise exception 'clinic_flag_mfa_required' using errcode = '42501';
+  end if;
+
+  select (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb into v_antes
+    from public.organizations o
+   where o.id = p_org;
+  if not found then
+    raise exception 'organization_not_found' using errcode = 'P0002';
+  end if;
+
+  update public.organizations
+     set settings = jsonb_set(
+           coalesce(settings, '{}'::jsonb),
+           '{clinic}',
+           (case when jsonb_typeof(settings -> 'clinic') = 'object' then settings -> 'clinic' else '{}'::jsonb end)
+             || jsonb_build_object('estoque', p_ligado),
+           true)
+   where id = p_org;
+
+  if p_ligado and not exists (select 1 from public.clinic_estoque_locais l where l.organization_id = p_org) then
+    insert into public.clinic_estoque_locais (organization_id, nome, tipo, padrao, created_by, updated_by)
+    values (p_org, 'Estoque central', 'central', true, auth.uid(), auth.uid());
+  end if;
+
+  return jsonb_build_object('ligado', p_ligado, 'mudou', coalesce(v_antes, false) <> p_ligado);
+end $$;
+revoke execute on function public.fn_clinic_definir_estoque(uuid, boolean) from public, anon;
+grant  execute on function public.fn_clinic_definir_estoque(uuid, boolean) to authenticated;
+
+-- ─── peças internas ─────────────────────────────────────────────────────────
+-- Permissão + opção ligada. Interna (só as funções fn_clinic_estoque_* chamam).
+create or replace function public.fn_clinic_estoque_exigir(p_org uuid, p_permissao text)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_acesso_exigir(p_org, p_permissao);
+  if not coalesce((select (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb
+                     from public.organizations o where o.id = p_org), false) then
+    raise exception 'estoque_desligado' using errcode = '42501';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_estoque_exigir(uuid, text) from public, anon, authenticated;
+
+-- Configuração do produto; cria a padrão (un, fator 1) se ainda não existe.
+create or replace function public.fn_clinic_estoque_config(p_org uuid, p_product uuid)
+returns public.clinic_produto_estoque
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v public.clinic_produto_estoque;
+begin
+  if not exists (select 1 from public.catalog_products c where c.id = p_product and c.organization_id = p_org) then
+    raise exception 'estoque_produto_invalido' using errcode = '22023';
+  end if;
+  insert into public.clinic_produto_estoque (organization_id, product_id, created_by, updated_by)
+  values (p_org, p_product, auth.uid(), auth.uid())
+  on conflict (organization_id, product_id) do nothing;
+  select * into v from public.clinic_produto_estoque e where e.organization_id = p_org and e.product_id = p_product;
+  return v;
+end $$;
+revoke execute on function public.fn_clinic_estoque_config(uuid, uuid) from public, anon, authenticated;
+
+-- O lote (cria se é novo). Produto rastreado exige código e validade.
+create or replace function public.fn_clinic_estoque_lote(
+  p_org uuid, p_product uuid, p_codigo text, p_validade date, p_custo numeric)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_cfg public.clinic_produto_estoque;
+  v_codigo text := nullif(btrim(coalesce(p_codigo, '')), '');
+  v_id uuid;
+begin
+  v_cfg := public.fn_clinic_estoque_config(p_org, p_product);
+  if v_cfg.rastreado and (v_codigo is null or p_validade is null) then
+    raise exception 'estoque_lote_obrigatorio' using errcode = '22023';
+  end if;
+  select l.id into v_id from public.clinic_estoque_lotes l
+   where l.organization_id = p_org and l.product_id = p_product
+     and coalesce(l.codigo, '') = coalesce(v_codigo, '')
+     and coalesce(l.validade, 'infinity'::date) = coalesce(p_validade, 'infinity'::date);
+  if v_id is null then
+    insert into public.clinic_estoque_lotes (organization_id, product_id, codigo, validade, custo_unitario_cents, created_by)
+    values (p_org, p_product, v_codigo, p_validade, p_custo, auth.uid())
+    on conflict do nothing
+    returning id into v_id;
+    if v_id is null then
+      select l.id into v_id from public.clinic_estoque_lotes l
+       where l.organization_id = p_org and l.product_id = p_product
+         and coalesce(l.codigo, '') = coalesce(v_codigo, '')
+         and coalesce(l.validade, 'infinity'::date) = coalesce(p_validade, 'infinity'::date);
+    end if;
+  end if;
+  return v_id;
+end $$;
+revoke execute on function public.fn_clinic_estoque_lote(uuid, uuid, text, date, numeric) from public, anon, authenticated;
+
+-- Saldo de um lote num local (soma dos movimentos).
+create or replace function public.fn_clinic_estoque_saldo(p_org uuid, p_lote uuid, p_local uuid)
+returns numeric
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(sum(m.quantidade), 0)::numeric
+    from public.clinic_estoque_movimentos m
+   where m.organization_id = p_org and m.lote_id = p_lote and m.local_id = p_local
+$$;
+revoke execute on function public.fn_clinic_estoque_saldo(uuid, uuid, uuid) from public, anon, authenticated;
+
+-- Depois de gravar: nenhum (lote, local) da operação pode ter ficado negativo.
+create or replace function public.fn_clinic_estoque_conferir_saldos(p_org uuid, p_operacao uuid)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if exists (
+    select 1 from (select distinct m.lote_id, m.local_id from public.clinic_estoque_movimentos m
+                    where m.organization_id = p_org and m.operacao_id = p_operacao) x
+     where public.fn_clinic_estoque_saldo(p_org, x.lote_id, x.local_id) < 0
+  ) then
+    raise exception 'estoque_insuficiente' using errcode = '23514';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_estoque_conferir_saldos(uuid, uuid) from public, anon, authenticated;
+
+-- Trava os lotes em ordem de id (evita deadlock entre duas saídas concorrentes).
+create or replace function public.fn_clinic_estoque_travar(p_org uuid, p_lotes uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform 1 from public.clinic_estoque_lotes l
+   where l.organization_id = p_org and l.id = any(p_lotes)
+   order by l.id
+   for update;
+end $$;
+revoke execute on function public.fn_clinic_estoque_travar(uuid, uuid[]) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_estoque_local_valido(p_org uuid, p_local uuid)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if p_local is null or not exists (
+    select 1 from public.clinic_estoque_locais l where l.id = p_local and l.organization_id = p_org and l.ativo) then
+    raise exception 'estoque_local_invalido' using errcode = '22023';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_estoque_local_valido(uuid, uuid) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_estoque_lote_da_org(p_org uuid, p_lote uuid)
+returns uuid
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_product uuid;
+begin
+  select l.product_id into v_product from public.clinic_estoque_lotes l where l.id = p_lote and l.organization_id = p_org;
+  if v_product is null then
+    raise exception 'estoque_lote_invalido' using errcode = '22023';
+  end if;
+  return v_product;
+end $$;
+revoke execute on function public.fn_clinic_estoque_lote_da_org(uuid, uuid) from public, anon, authenticated;
+
+-- ─── configurar produto e local ─────────────────────────────────────────────
+create or replace function public.fn_clinic_estoque_produto_salvar(p_org uuid, p_product uuid, p_dados jsonb, p_versao_esperada integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_cfg public.clinic_produto_estoque;
+  v_versao integer;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.configurar');
+  if p_dados is null or jsonb_typeof(p_dados) <> 'object' then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  v_cfg := public.fn_clinic_estoque_config(p_org, p_product);
+  perform 1 from public.clinic_produto_estoque e where e.id = v_cfg.id for update;
+  if p_versao_esperada is not null and v_cfg.versao <> p_versao_esperada then
+    raise exception 'registro_conflito' using errcode = '40001';
+  end if;
+  update public.clinic_produto_estoque e set
+    ean = nullif(btrim(coalesce(p_dados ->> 'ean', '')), ''),
+    ncm = nullif(btrim(coalesce(p_dados ->> 'ncm', '')), ''),
+    registro_anvisa = nullif(btrim(coalesce(p_dados ->> 'registro_anvisa', '')), ''),
+    unidade_estoque = coalesce(nullif(btrim(p_dados ->> 'unidade_estoque'), ''), 'un'),
+    unidade_aplicacao = coalesce(nullif(btrim(p_dados ->> 'unidade_aplicacao'), ''), 'un'),
+    fator_conversao = coalesce((p_dados ->> 'fator_conversao')::numeric, 1),
+    fracionavel = coalesce((p_dados ->> 'fracionavel')::boolean, false),
+    validade_pos_abertura_horas = (p_dados ->> 'validade_pos_abertura_horas')::integer,
+    rastreado = coalesce((p_dados ->> 'rastreado')::boolean, false),
+    controlado = coalesce((p_dados ->> 'controlado')::boolean, false),
+    conselhos_permitidos = coalesce(
+      (select array_agg(x) from jsonb_array_elements_text(coalesce(p_dados -> 'conselhos_permitidos', '[]'::jsonb)) x), '{}'),
+    estoque_minimo = coalesce((p_dados ->> 'estoque_minimo')::numeric, 0),
+    ponto_pedido = (p_dados ->> 'ponto_pedido')::numeric,
+    gerenciado = coalesce((p_dados ->> 'gerenciado')::boolean, true),
+    versao = e.versao + 1,
+    updated_by = auth.uid()
+   where e.id = v_cfg.id
+  returning e.versao into v_versao;
+  return jsonb_build_object('id', v_cfg.id, 'versao', v_versao);
+end $$;
+revoke execute on function public.fn_clinic_estoque_produto_salvar(uuid, uuid, jsonb, integer) from public, anon;
+grant  execute on function public.fn_clinic_estoque_produto_salvar(uuid, uuid, jsonb, integer) to authenticated;
+
+create or replace function public.fn_clinic_estoque_local_salvar(p_org uuid, p_local uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_id uuid := p_local;
+  v_resource uuid := nullif(p_dados ->> 'resource_id', '')::uuid;
+  v_padrao boolean := coalesce((p_dados ->> 'padrao')::boolean, false);
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.configurar');
+  if p_dados is null or jsonb_typeof(p_dados) <> 'object' then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  if v_resource is not null and not exists (
+    select 1 from public.clinic_resources r where r.id = v_resource and r.organization_id = p_org) then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  if v_padrao then
+    update public.clinic_estoque_locais set padrao = false, updated_by = auth.uid()
+     where organization_id = p_org and padrao and id is distinct from v_id;
+  end if;
+  if v_id is null then
+    insert into public.clinic_estoque_locais (organization_id, nome, tipo, resource_id, padrao, ativo, created_by, updated_by)
+    values (p_org, btrim(p_dados ->> 'nome'), coalesce(p_dados ->> 'tipo', 'central'), v_resource, v_padrao,
+            coalesce((p_dados ->> 'ativo')::boolean, true), auth.uid(), auth.uid())
+    returning id into v_id;
+  else
+    update public.clinic_estoque_locais set
+      nome = btrim(p_dados ->> 'nome'),
+      tipo = coalesce(p_dados ->> 'tipo', tipo),
+      resource_id = v_resource,
+      padrao = v_padrao,
+      ativo = coalesce((p_dados ->> 'ativo')::boolean, ativo),
+      updated_by = auth.uid()
+     where id = v_id and organization_id = p_org;
+    if not found then
+      raise exception 'estoque_local_invalido' using errcode = '22023';
+    end if;
+  end if;
+  return jsonb_build_object('id', v_id);
+end $$;
+revoke execute on function public.fn_clinic_estoque_local_salvar(uuid, uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_local_salvar(uuid, uuid, jsonb) to authenticated;
+
+-- ─── movimentações ──────────────────────────────────────────────────────────
+-- Entrada manual: {product_id, local_id, quantidade, em_unidade_estoque?, lote?,
+-- validade?, custo_unitario_cents?, motivo?}. Lote vencido não entra.
+create or replace function public.fn_clinic_estoque_entrada(p_org uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_product uuid := nullif(p_dados ->> 'product_id', '')::uuid;
+  v_local uuid := nullif(p_dados ->> 'local_id', '')::uuid;
+  v_validade date := nullif(p_dados ->> 'validade', '')::date;
+  v_custo numeric := nullif(p_dados ->> 'custo_unitario_cents', '')::numeric;
+  v_qtd numeric := (p_dados ->> 'quantidade')::numeric;
+  v_cfg public.clinic_produto_estoque;
+  v_lote uuid;
+  v_op uuid;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.movimentar');
+  perform public.fn_clinic_estoque_local_valido(p_org, v_local);
+  v_cfg := public.fn_clinic_estoque_config(p_org, v_product);
+  if v_qtd is null or v_qtd <= 0 then
+    raise exception 'estoque_quantidade_invalida' using errcode = '22023';
+  end if;
+  if coalesce((p_dados ->> 'em_unidade_estoque')::boolean, false) then
+    v_qtd := v_qtd * v_cfg.fator_conversao;
+    v_custo := case when v_custo is null then null else v_custo / v_cfg.fator_conversao end;
+  end if;
+  if v_validade is not null and v_validade < current_date then
+    raise exception 'estoque_lote_vencido' using errcode = '22023';
+  end if;
+  v_lote := public.fn_clinic_estoque_lote(p_org, v_product, p_dados ->> 'lote', v_validade, v_custo);
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, motivo, ator)
+  values (p_org, 'entrada', 'manual', nullif(btrim(coalesce(p_dados ->> 'motivo', '')), ''), auth.uid())
+  returning id into v_op;
+  insert into public.clinic_estoque_movimentos (organization_id, operacao_id, product_id, lote_id, local_id, quantidade, custo_unitario_cents)
+  values (p_org, v_op, v_product, v_lote, v_local, round(v_qtd, 3), v_custo);
+  return jsonb_build_object('operacao_id', v_op, 'lote_id', v_lote);
+end $$;
+revoke execute on function public.fn_clinic_estoque_entrada(uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_entrada(uuid, jsonb) to authenticated;
+
+-- Transferência: {lote_id, origem_id, destino_id, quantidade}.
+create or replace function public.fn_clinic_estoque_transferir(p_org uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lote uuid := nullif(p_dados ->> 'lote_id', '')::uuid;
+  v_origem uuid := nullif(p_dados ->> 'origem_id', '')::uuid;
+  v_destino uuid := nullif(p_dados ->> 'destino_id', '')::uuid;
+  v_qtd numeric := (p_dados ->> 'quantidade')::numeric;
+  v_product uuid;
+  v_op uuid;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.movimentar');
+  v_product := public.fn_clinic_estoque_lote_da_org(p_org, v_lote);
+  perform public.fn_clinic_estoque_local_valido(p_org, v_origem);
+  perform public.fn_clinic_estoque_local_valido(p_org, v_destino);
+  if v_origem = v_destino or v_qtd is null or v_qtd <= 0 then
+    raise exception 'estoque_quantidade_invalida' using errcode = '22023';
+  end if;
+  perform public.fn_clinic_estoque_travar(p_org, array[v_lote]);
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, motivo, ator)
+  values (p_org, 'transferencia', 'manual', nullif(btrim(coalesce(p_dados ->> 'motivo', '')), ''), auth.uid())
+  returning id into v_op;
+  insert into public.clinic_estoque_movimentos (organization_id, operacao_id, product_id, lote_id, local_id, quantidade)
+  values (p_org, v_op, v_product, v_lote, v_origem, -round(v_qtd, 3)),
+         (p_org, v_op, v_product, v_lote, v_destino, round(v_qtd, 3));
+  perform public.fn_clinic_estoque_conferir_saldos(p_org, v_op);
+  return jsonb_build_object('operacao_id', v_op);
+end $$;
+revoke execute on function public.fn_clinic_estoque_transferir(uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_transferir(uuid, jsonb) to authenticated;
+
+-- Perda (vencimento, quebra, descarte): {lote_id, local_id, quantidade, motivo}.
+create or replace function public.fn_clinic_estoque_perda(p_org uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lote uuid := nullif(p_dados ->> 'lote_id', '')::uuid;
+  v_local uuid := nullif(p_dados ->> 'local_id', '')::uuid;
+  v_qtd numeric := (p_dados ->> 'quantidade')::numeric;
+  v_motivo text := nullif(btrim(coalesce(p_dados ->> 'motivo', '')), '');
+  v_product uuid;
+  v_op uuid;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.movimentar');
+  v_product := public.fn_clinic_estoque_lote_da_org(p_org, v_lote);
+  perform public.fn_clinic_estoque_local_valido(p_org, v_local);
+  if v_qtd is null or v_qtd <= 0 then
+    raise exception 'estoque_quantidade_invalida' using errcode = '22023';
+  end if;
+  if v_motivo is null or char_length(v_motivo) < 3 then
+    raise exception 'estoque_sem_motivo' using errcode = '22023';
+  end if;
+  perform public.fn_clinic_estoque_travar(p_org, array[v_lote]);
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, motivo, ator)
+  values (p_org, 'perda', 'manual', left(v_motivo, 300), auth.uid())
+  returning id into v_op;
+  insert into public.clinic_estoque_movimentos (organization_id, operacao_id, product_id, lote_id, local_id, quantidade)
+  values (p_org, v_op, v_product, v_lote, v_local, -round(v_qtd, 3));
+  perform public.fn_clinic_estoque_conferir_saldos(p_org, v_op);
+  return jsonb_build_object('operacao_id', v_op);
+end $$;
+revoke execute on function public.fn_clinic_estoque_perda(uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_perda(uuid, jsonb) to authenticated;
+
+-- Ajuste para um saldo contado: {lote_id, local_id, saldo_correto, motivo}.
+create or replace function public.fn_clinic_estoque_ajustar(p_org uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lote uuid := nullif(p_dados ->> 'lote_id', '')::uuid;
+  v_local uuid := nullif(p_dados ->> 'local_id', '')::uuid;
+  v_alvo numeric := (p_dados ->> 'saldo_correto')::numeric;
+  v_motivo text := nullif(btrim(coalesce(p_dados ->> 'motivo', '')), '');
+  v_product uuid;
+  v_delta numeric;
+  v_op uuid;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.inventariar');
+  v_product := public.fn_clinic_estoque_lote_da_org(p_org, v_lote);
+  perform public.fn_clinic_estoque_local_valido(p_org, v_local);
+  if v_alvo is null or v_alvo < 0 then
+    raise exception 'estoque_quantidade_invalida' using errcode = '22023';
+  end if;
+  if v_motivo is null or char_length(v_motivo) < 3 then
+    raise exception 'estoque_sem_motivo' using errcode = '22023';
+  end if;
+  perform public.fn_clinic_estoque_travar(p_org, array[v_lote]);
+  v_delta := round(v_alvo, 3) - public.fn_clinic_estoque_saldo(p_org, v_lote, v_local);
+  if v_delta = 0 then
+    return jsonb_build_object('operacao_id', null, 'diferenca', 0);
+  end if;
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, motivo, ator)
+  values (p_org, 'ajuste', 'manual', left(v_motivo, 300), auth.uid())
+  returning id into v_op;
+  insert into public.clinic_estoque_movimentos (organization_id, operacao_id, product_id, lote_id, local_id, quantidade)
+  values (p_org, v_op, v_product, v_lote, v_local, v_delta);
+  return jsonb_build_object('operacao_id', v_op, 'diferenca', v_delta);
+end $$;
+revoke execute on function public.fn_clinic_estoque_ajustar(uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_ajustar(uuid, jsonb) to authenticated;
+
+-- Estorno: operação nova com as linhas invertidas. Recusa estornar estorno,
+-- estornar duas vezes e estorno que deixaria algum saldo negativo (ex.: uma
+-- entrada cujo produto já foi usado).
+create or replace function public.fn_clinic_estoque_estornar(p_org uuid, p_operacao uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_tipo text;
+  v_op uuid;
+  v_lotes uuid[];
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.estornar');
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'estoque_sem_motivo' using errcode = '22023';
+  end if;
+  select o.tipo into v_tipo from public.clinic_estoque_operacoes o where o.id = p_operacao and o.organization_id = p_org;
+  if v_tipo is null then
+    raise exception 'estoque_operacao_invalida' using errcode = 'P0002';
+  end if;
+  if v_tipo = 'estorno' then
+    raise exception 'estoque_estorno_de_estorno' using errcode = '22023';
+  end if;
+  if exists (select 1 from public.clinic_estoque_operacoes o
+              where o.organization_id = p_org and o.estorna_operacao_id = p_operacao) then
+    raise exception 'estoque_ja_estornada' using errcode = '23505';
+  end if;
+  select array_agg(distinct m.lote_id) into v_lotes from public.clinic_estoque_movimentos m
+   where m.organization_id = p_org and m.operacao_id = p_operacao;
+  perform public.fn_clinic_estoque_travar(p_org, coalesce(v_lotes, '{}'));
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, estorna_operacao_id, motivo, ator)
+  values (p_org, 'estorno', 'estorno', p_operacao, left(btrim(p_motivo), 300), auth.uid())
+  returning id into v_op;
+  insert into public.clinic_estoque_movimentos
+    (organization_id, operacao_id, product_id, lote_id, local_id, frasco_id, quantidade, custo_unitario_cents,
+     atendimento_id, contact_id, profissional_user_id, procedure_id)
+  select m.organization_id, v_op, m.product_id, m.lote_id, m.local_id, m.frasco_id, -m.quantidade, m.custo_unitario_cents,
+         m.atendimento_id, m.contact_id, m.profissional_user_id, m.procedure_id
+    from public.clinic_estoque_movimentos m
+   where m.organization_id = p_org and m.operacao_id = p_operacao;
+  perform public.fn_clinic_estoque_conferir_saldos(p_org, v_op);
+  return jsonb_build_object('operacao_id', v_op);
+end $$;
+revoke execute on function public.fn_clinic_estoque_estornar(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_estoque_estornar(uuid, uuid, text) to authenticated;
+-- ---- fim clinic (migration 9028, fork) ----
+
+-- ---- clinic: estoque — sincronia com o catálogo (migration 9029, fork) ----
+-- ─── o saldo derivado de um produto (na unidade de estoque) ────────────────
+create or replace function public.fn_clinic_estoque_qtd_catalogo(p_org uuid, p_product uuid)
+returns integer
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select greatest(0, floor(coalesce(sum(m.quantidade), 0) / nullif(e.fator_conversao, 0)))::integer
+    from public.clinic_produto_estoque e
+    left join public.clinic_estoque_movimentos m
+      on m.organization_id = e.organization_id and m.product_id = e.product_id
+   where e.organization_id = p_org and e.product_id = p_product
+   group by e.fator_conversao
+$$;
+revoke execute on function public.fn_clinic_estoque_qtd_catalogo(uuid, uuid) from public, anon, authenticated;
+
+-- O produto está sob o estoque? (config gerenciada + opção da empresa ligada)
+create or replace function public.fn_clinic_estoque_gerencia(p_org uuid, p_product uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+      from public.clinic_produto_estoque e
+      join public.organizations o on o.id = e.organization_id
+     where e.organization_id = p_org
+       and e.product_id = p_product
+       and e.gerenciado
+       and (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb)
+$$;
+revoke execute on function public.fn_clinic_estoque_gerencia(uuid, uuid) from public, anon, authenticated;
+
+-- ─── a sincronia: grava a quantidade derivada nos produtos indicados ────────
+-- Trava as linhas do catálogo em ordem de id ANTES de somar: o comando seguinte
+-- (READ COMMITTED) enxerga os movimentos de quem terminou antes — duas baixas
+-- simultâneas no mesmo produto não deixam a quantidade com a soma velha.
+create or replace function public.fn_clinic_estoque_sincronizar(p_org uuid, p_products uuid[])
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ids uuid[];
+  v_n integer;
+begin
+  select coalesce(array_agg(c.id order by c.id), '{}')
+    into v_ids
+    from public.catalog_products c
+   where c.organization_id = p_org
+     and c.id = any(coalesce(p_products, '{}'))
+     and public.fn_clinic_estoque_gerencia(p_org, c.id);
+  if cardinality(v_ids) = 0 then
+    return 0;
+  end if;
+  perform 1 from public.catalog_products c where c.id = any(v_ids) order by c.id for update;
+  perform set_config('clinic.estoque_sync', 'on', true);
+  update public.catalog_products c
+     set quantidade = coalesce(public.fn_clinic_estoque_qtd_catalogo(p_org, c.id), 0)
+   where c.id = any(v_ids)
+     and c.quantidade is distinct from coalesce(public.fn_clinic_estoque_qtd_catalogo(p_org, c.id), 0);
+  get diagnostics v_n = row_count;
+  perform set_config('clinic.estoque_sync', 'off', true);
+  return v_n;
+end $$;
+revoke execute on function public.fn_clinic_estoque_sincronizar(uuid, uuid[]) from public, anon, authenticated;
+
+-- ─── gatilho 1: movimento novo → recalcula os produtos tocados ─────────────
+create or replace function public.fn_clinic_estoque_movimentos_sincronizar()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  r record;
+begin
+  for r in
+    select n.organization_id, array_agg(distinct n.product_id) as produtos
+      from novos n
+     group by n.organization_id
+     order by n.organization_id
+  loop
+    perform public.fn_clinic_estoque_sincronizar(r.organization_id, r.produtos);
+  end loop;
+  return null;
+end $$;
+revoke execute on function public.fn_clinic_estoque_movimentos_sincronizar() from public, anon, authenticated;
+drop trigger if exists trg_clinic_estoque_movimentos_sincronizar on public.clinic_estoque_movimentos;
+create trigger trg_clinic_estoque_movimentos_sincronizar
+  after insert on public.clinic_estoque_movimentos
+  referencing new table as novos
+  for each statement execute function public.fn_clinic_estoque_movimentos_sincronizar();
+
+-- ─── gatilho 2: mudou gerenciado/fator → recalcula aquele produto ──────────
+-- Adiado para o fim da transação: a configuração nasce com os padrões
+-- (gerenciado) e é gravada logo em seguida; a sincronia olha o estado FINAL —
+-- configurar como "não gerenciado" não zera a quantidade digitada.
+create or replace function public.fn_clinic_produto_estoque_sincronizar()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_clinic_estoque_sincronizar(new.organization_id, array[new.product_id]);
+  return null;
+end $$;
+revoke execute on function public.fn_clinic_produto_estoque_sincronizar() from public, anon, authenticated;
+drop trigger if exists trg_clinic_produto_estoque_sincronizar on public.clinic_produto_estoque;
+create constraint trigger trg_clinic_produto_estoque_sincronizar
+  after insert or update of gerenciado, fator_conversao on public.clinic_produto_estoque
+  deferrable initially deferred
+  for each row execute function public.fn_clinic_produto_estoque_sincronizar();
+
+-- ─── gatilho 3 (núcleo): a quantidade de produto gerenciado não se digita ───
+-- Tela de produtos, importação da planilha ou UPDATE direto: o valor novo é
+-- trocado pelo saldo. Só a sincronia (GUC ligado) passa.
+create or replace function public.fn_clinic_catalogo_quantidade_do_estoque()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.quantidade is distinct from old.quantidade
+     and coalesce(current_setting('clinic.estoque_sync', true), '') <> 'on'
+     and public.fn_clinic_estoque_gerencia(new.organization_id, new.id) then
+    new.quantidade := coalesce(public.fn_clinic_estoque_qtd_catalogo(new.organization_id, new.id), 0);
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_catalogo_quantidade_do_estoque() from public, anon, authenticated;
+drop trigger if exists trg_catalog_products_quantidade_do_estoque on public.catalog_products;
+create trigger trg_catalog_products_quantidade_do_estoque
+  before update of quantidade on public.catalog_products
+  for each row execute function public.fn_clinic_catalogo_quantidade_do_estoque();
+
+-- ─── a opção: ligar também ressincroniza todos os produtos gerenciados ─────
+-- Igual à da 9028 + a ressincronia no fim.
+create or replace function public.fn_clinic_definir_estoque(p_org uuid, p_ligado boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_antes boolean;
+  v_produtos uuid[];
+begin
+  if auth.uid() is null
+     or p_org is null
+     or p_ligado is null
+     or not public.fn_role_at_least(p_org, 'admin')
+     or not public.fn_support_write_allowed(p_org) then
+    raise exception 'clinic_flag_forbidden' using errcode = '42501';
+  end if;
+  if not public.fn_session_mfa_proven() then
+    raise exception 'clinic_flag_mfa_required' using errcode = '42501';
+  end if;
+
+  select (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb into v_antes
+    from public.organizations o
+   where o.id = p_org;
+  if not found then
+    raise exception 'organization_not_found' using errcode = 'P0002';
+  end if;
+
+  update public.organizations
+     set settings = jsonb_set(
+           coalesce(settings, '{}'::jsonb),
+           '{clinic}',
+           (case when jsonb_typeof(settings -> 'clinic') = 'object' then settings -> 'clinic' else '{}'::jsonb end)
+             || jsonb_build_object('estoque', p_ligado),
+           true)
+   where id = p_org;
+
+  if p_ligado and not exists (select 1 from public.clinic_estoque_locais l where l.organization_id = p_org) then
+    insert into public.clinic_estoque_locais (organization_id, nome, tipo, padrao, created_by, updated_by)
+    values (p_org, 'Estoque central', 'central', true, auth.uid(), auth.uid());
+  end if;
+
+  if p_ligado then
+    select array_agg(e.product_id) into v_produtos
+      from public.clinic_produto_estoque e
+     where e.organization_id = p_org and e.gerenciado;
+    perform public.fn_clinic_estoque_sincronizar(p_org, v_produtos);
+  end if;
+
+  return jsonb_build_object('ligado', p_ligado, 'mudou', coalesce(v_antes, false) <> p_ligado);
+end $$;
+revoke execute on function public.fn_clinic_definir_estoque(uuid, boolean) from public, anon;
+grant  execute on function public.fn_clinic_definir_estoque(uuid, boolean) to authenticated;
+-- ---- fim clinic (migration 9029, fork) ----
+
+-- ---- clinic: estoque — baixa pelo prontuário (migration 9030, fork) ----
+create table if not exists public.clinic_estoque_pendencias (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  insumo_id uuid not null references public.clinic_procedimento_insumos(id) on delete cascade,
+  atendimento_id uuid not null,
+  product_id uuid not null references public.catalog_products(id),
+  quantidade numeric(14,3) not null,
+  lote_informado text,
+  motivo text not null,
+  status text not null default 'aberta',
+  operacao_id uuid,
+  resolucao text,
+  resolvida_por uuid,
+  resolvida_em timestamptz,
+  created_at timestamptz not null default now(),
+  constraint clinic_estoque_pendencias_org_id_key unique (organization_id, id),
+  constraint clinic_estoque_pendencias_unica unique (insumo_id, motivo),
+  constraint clinic_estoque_pendencias_motivo check (motivo in (
+    'sem_saldo', 'lote_desconhecido', 'sem_local', 'profissional_nao_habilitado')),
+  constraint clinic_estoque_pendencias_status check (status in ('aberta', 'resolvida', 'descartada')),
+  constraint clinic_estoque_pendencias_quantidade check (quantidade > 0),
+  constraint clinic_estoque_pendencias_resolucao check (resolucao is null or char_length(btrim(resolucao)) between 1 and 300),
+  constraint clinic_estoque_pendencias_atendimento_fk foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id) on delete cascade,
+  constraint clinic_estoque_pendencias_operacao_fk foreign key (organization_id, operacao_id)
+    references public.clinic_estoque_operacoes (organization_id, id)
+);
+create index if not exists clinic_estoque_pendencias_abertas_idx
+  on public.clinic_estoque_pendencias (organization_id, created_at desc) where status = 'aberta';
+
+do $rls$
+begin
+  alter table public.clinic_estoque_pendencias enable row level security;
+  drop policy if exists tenant_isolation_clinic_estoque_pendencias_all on public.clinic_estoque_pendencias;
+  create policy tenant_isolation_clinic_estoque_pendencias_all on public.clinic_estoque_pendencias
+    using ((organization_id in (select public.fn_user_org_ids()))
+           and public.fn_role_at_least(organization_id, 'viewer'))
+    with check ((organization_id in (select public.fn_user_org_ids()))
+           and public.fn_role_at_least(organization_id, 'viewer'));
+  drop policy if exists acesso_ler on public.clinic_estoque_pendencias;
+  create policy acesso_ler on public.clinic_estoque_pendencias as restrictive for select
+    using (public.fn_has_permission(organization_id, 'estoque.ver'));
+  revoke all on public.clinic_estoque_pendencias from anon;
+  revoke insert, update, delete, truncate on public.clinic_estoque_pendencias from authenticated;
+end
+$rls$;
+
+-- ─── peças internas ─────────────────────────────────────────────────────────
+-- Onde o atendimento tira o estoque: o local de uma sala do agendamento, senão
+-- o local padrão. Nulo = nenhum local ativo.
+create or replace function public.fn_clinic_estoque_local_do_atendimento(p_org uuid, p_atendimento uuid)
+returns uuid
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(
+    (select l.id
+       from public.clinic_atendimentos a
+       join public.clinic_appointment_resources r on r.appointment_id = a.appointment_id
+       join public.clinic_estoque_locais l
+         on l.resource_id = r.resource_id and l.organization_id = p_org and l.ativo
+      where a.id = p_atendimento and a.organization_id = p_org
+      order by l.id
+      limit 1),
+    (select l.id from public.clinic_estoque_locais l
+      where l.organization_id = p_org and l.padrao and l.ativo
+      limit 1))
+$$;
+revoke execute on function public.fn_clinic_estoque_local_do_atendimento(uuid, uuid) from public, anon, authenticated;
+
+-- Grava a saída de UM insumo: escolhe os lotes (informado ou FEFO), trava,
+-- confere saldo e grava a operação. Devolve o id da operação, ou nulo +
+-- o motivo da pendência em p_motivo (nada gravado).
+create or replace function public.fn_clinic_estoque_consumir(
+  p_org uuid, p_insumo uuid, p_local uuid, p_lotes uuid[], p_qtd numeric, p_ator uuid,
+  out operacao_id uuid, out motivo text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ins record;
+  v_restante numeric := round(p_qtd, 3);
+  v_l record;
+  v_tira numeric;
+begin
+  select i.id, i.product_id, p.atendimento_id, p.procedure_id,
+         coalesce(p.executor_user_id, a.professional_user_id) as profissional, a.contact_id
+    into v_ins
+    from public.clinic_procedimento_insumos i
+    join public.clinic_procedimentos_realizados p on p.id = i.procedimento_id and p.organization_id = p_org
+    join public.clinic_atendimentos a on a.id = p.atendimento_id and a.organization_id = p_org
+   where i.id = p_insumo and i.organization_id = p_org;
+  if v_ins.id is null then
+    raise exception 'estoque_insumo_invalido' using errcode = 'P0002';
+  end if;
+  if p_local is null then
+    motivo := 'sem_local';
+    return;
+  end if;
+  if cardinality(coalesce(p_lotes, '{}')) = 0 then
+    motivo := 'sem_saldo';
+    return;
+  end if;
+
+  perform public.fn_clinic_estoque_travar(p_org, p_lotes);
+  -- FEFO entre os lotes candidatos, com o saldo travado.
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, origem_id, ator)
+  values (p_org, 'consumo', 'insumo', p_insumo, p_ator)
+  returning id into operacao_id;
+  for v_l in
+    select l.id, l.custo_unitario_cents, public.fn_clinic_estoque_saldo(p_org, l.id, p_local) as saldo
+      from public.clinic_estoque_lotes l
+     where l.organization_id = p_org and l.id = any(p_lotes) and l.product_id = v_ins.product_id
+     order by l.validade nulls last, l.created_at, l.id
+  loop
+    exit when v_restante <= 0;
+    continue when v_l.saldo <= 0;
+    v_tira := least(v_l.saldo, v_restante);
+    insert into public.clinic_estoque_movimentos
+      (organization_id, operacao_id, product_id, lote_id, local_id, quantidade, custo_unitario_cents,
+       atendimento_id, contact_id, profissional_user_id, procedure_id)
+    values (p_org, operacao_id, v_ins.product_id, v_l.id, p_local, -v_tira, v_l.custo_unitario_cents,
+            v_ins.atendimento_id, v_ins.contact_id, v_ins.profissional, v_ins.procedure_id);
+    v_restante := v_restante - v_tira;
+  end loop;
+  if v_restante > 0 then
+    -- desfaz só esta operação (o chamador roda num subbloco)
+    raise exception 'estoque_insuficiente' using errcode = '23514';
+  end if;
+  perform public.fn_clinic_estoque_conferir_saldos(p_org, operacao_id);
+
+  update public.clinic_procedimento_insumos set movimento_estoque_id = operacao_id
+   where id = p_insumo and organization_id = p_org;
+end $$;
+revoke execute on function public.fn_clinic_estoque_consumir(uuid, uuid, uuid, uuid[], numeric, uuid) from public, anon, authenticated;
+
+-- Quantidade do insumo na unidade de aplicação.
+create or replace function public.fn_clinic_estoque_qtd_aplicacao(p_cfg public.clinic_produto_estoque, p_qtd numeric, p_unidade text)
+returns numeric
+language sql
+immutable
+set search_path = public, pg_temp
+as $$
+  select round(case
+    when lower(btrim(coalesce(p_unidade, ''))) = lower(btrim(p_cfg.unidade_estoque))
+     and lower(btrim(p_cfg.unidade_estoque)) <> lower(btrim(p_cfg.unidade_aplicacao))
+    then p_qtd * p_cfg.fator_conversao
+    else p_qtd end, 3)
+$$;
+revoke execute on function public.fn_clinic_estoque_qtd_aplicacao(public.clinic_produto_estoque, numeric, text) from public, anon, authenticated;
+
+-- ─── a baixa de um procedimento finalizado (consumidor, service role) ───────
+create or replace function public.fn_clinic_estoque_baixar_procedimento(p_org uuid, p_procedimento uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_proc record;
+  v_local uuid;
+  v_conselho text;
+  v_i record;
+  v_cfg public.clinic_produto_estoque;
+  v_qtd numeric;
+  v_lotes uuid[];
+  v_r record;
+  v_op uuid;
+  v_baixados integer := 0;
+  v_pendencias integer := 0;
+  v_livres integer := 0;
+begin
+  if not coalesce((select (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb
+                     from public.organizations o where o.id = p_org), false) then
+    return jsonb_build_object('ligado', false);
+  end if;
+  select p.id, p.atendimento_id, p.status, coalesce(p.executor_user_id, a.professional_user_id) as profissional
+    into v_proc
+    from public.clinic_procedimentos_realizados p
+    join public.clinic_atendimentos a on a.id = p.atendimento_id and a.organization_id = p_org
+   where p.id = p_procedimento and p.organization_id = p_org;
+  if v_proc.id is null or v_proc.status <> 'finalizado' then
+    raise exception 'estoque_procedimento_invalido' using errcode = 'P0002';
+  end if;
+
+  v_local := public.fn_clinic_estoque_local_do_atendimento(p_org, v_proc.atendimento_id);
+  select cp.council into v_conselho from public.clinic_professionals cp
+   where cp.organization_id = p_org and cp.user_id = v_proc.profissional;
+
+  for v_i in
+    select i.id, i.product_id, i.quantidade, i.unidade, nullif(btrim(coalesce(i.lote, '')), '') as lote, i.validade,
+           i.movimento_estoque_id
+      from public.clinic_procedimento_insumos i
+     where i.organization_id = p_org and i.procedimento_id = p_procedimento and i.product_id is not null
+     order by i.created_at, i.id
+  loop
+    select * into v_cfg from public.clinic_produto_estoque e
+     where e.organization_id = p_org and e.product_id = v_i.product_id;
+    if v_cfg.id is null then
+      v_livres := v_livres + 1;   -- produto fora do estoque: consumo livre
+      continue;
+    end if;
+    v_qtd := public.fn_clinic_estoque_qtd_aplicacao(v_cfg, v_i.quantidade, v_i.unidade);
+
+    -- já baixado (redelivery do evento)?
+    select o.id into v_op from public.clinic_estoque_operacoes o
+     where o.organization_id = p_org and o.origem_tipo = 'insumo' and o.origem_id = v_i.id and o.tipo <> 'estorno';
+    if v_op is null then
+      if v_i.lote is not null then
+        select array_agg(l.id) into v_lotes from public.clinic_estoque_lotes l
+         where l.organization_id = p_org and l.product_id = v_i.product_id and l.codigo = v_i.lote
+           and (v_i.validade is null or l.validade = v_i.validade);
+        if v_lotes is null then
+          insert into public.clinic_estoque_pendencias
+            (organization_id, insumo_id, atendimento_id, product_id, quantidade, lote_informado, motivo)
+          values (p_org, v_i.id, v_proc.atendimento_id, v_i.product_id, v_qtd, v_i.lote, 'lote_desconhecido')
+          on conflict (insumo_id, motivo) do nothing;
+          v_pendencias := v_pendencias + 1;
+          continue;
+        end if;
+      else
+        select array_agg(l.id) into v_lotes from public.clinic_estoque_lotes l
+         where l.organization_id = p_org and l.product_id = v_i.product_id
+           and (l.validade is null or l.validade >= current_date);
+      end if;
+
+      begin
+        select * into v_r from public.fn_clinic_estoque_consumir(p_org, v_i.id, v_local, v_lotes, v_qtd, v_proc.profissional);
+      exception
+        when sqlstate '23514' then
+          select null::uuid as operacao_id, 'sem_saldo'::text as motivo into v_r;
+        when unique_violation then
+          -- outro consumidor baixou o mesmo insumo agora: fica a dele
+          select o.id as operacao_id, null::text as motivo into v_r from public.clinic_estoque_operacoes o
+           where o.organization_id = p_org and o.origem_tipo = 'insumo' and o.origem_id = v_i.id and o.tipo <> 'estorno';
+      end;
+      if v_r.operacao_id is null then
+        insert into public.clinic_estoque_pendencias
+          (organization_id, insumo_id, atendimento_id, product_id, quantidade, lote_informado, motivo)
+        values (p_org, v_i.id, v_proc.atendimento_id, v_i.product_id, v_qtd, v_i.lote, v_r.motivo)
+        on conflict (insumo_id, motivo) do nothing;
+        v_pendencias := v_pendencias + 1;
+        continue;
+      end if;
+      v_op := v_r.operacao_id;
+    elsif v_i.movimento_estoque_id is distinct from v_op then
+      update public.clinic_procedimento_insumos set movimento_estoque_id = v_op
+       where id = v_i.id and organization_id = p_org;
+    end if;
+    v_baixados := v_baixados + 1;
+
+    if v_cfg.controlado and (v_conselho is null or not (v_conselho = any(v_cfg.conselhos_permitidos))) then
+      insert into public.clinic_estoque_pendencias
+        (organization_id, insumo_id, atendimento_id, product_id, quantidade, lote_informado, motivo, operacao_id)
+      values (p_org, v_i.id, v_proc.atendimento_id, v_i.product_id, v_qtd, v_i.lote, 'profissional_nao_habilitado', v_op)
+      on conflict (insumo_id, motivo) do nothing;
+      v_pendencias := v_pendencias + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object('ligado', true, 'baixados', v_baixados, 'pendencias', v_pendencias, 'livres', v_livres);
+end $$;
+revoke execute on function public.fn_clinic_estoque_baixar_procedimento(uuid, uuid) from public, anon, authenticated;
+grant  execute on function public.fn_clinic_estoque_baixar_procedimento(uuid, uuid) to service_role;
+
+-- ─── resolver uma pendência pela tela ───────────────────────────────────────
+--   acao 'baixar'    (sem_saldo, lote_desconhecido, sem_local): escolhe lote e
+--                    local; grava a saída e liga ao insumo;
+--   acao 'descartar' (qualquer): o insumo não sai do estoque — motivo;
+--   acao 'ciente'    (profissional_nao_habilitado): revisado — motivo.
+create or replace function public.fn_clinic_estoque_pendencia_resolver(p_org uuid, p_pendencia uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_p public.clinic_estoque_pendencias;
+  v_acao text := p_dados ->> 'acao';
+  v_motivo text := nullif(btrim(coalesce(p_dados ->> 'motivo', '')), '');
+  v_lote uuid := nullif(p_dados ->> 'lote_id', '')::uuid;
+  v_local uuid := nullif(p_dados ->> 'local_id', '')::uuid;
+  v_r record;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.movimentar');
+  select * into v_p from public.clinic_estoque_pendencias p
+   where p.id = p_pendencia and p.organization_id = p_org
+   for update;
+  if v_p.id is null then
+    raise exception 'estoque_pendencia_invalida' using errcode = 'P0002';
+  end if;
+  if v_p.status <> 'aberta' then
+    raise exception 'estoque_pendencia_fechada' using errcode = '22023';
+  end if;
+
+  if v_acao = 'baixar' then
+    if v_p.motivo = 'profissional_nao_habilitado' then
+      raise exception 'estoque_dados_invalidos' using errcode = '22023';
+    end if;
+    if public.fn_clinic_estoque_lote_da_org(p_org, v_lote) <> v_p.product_id then
+      raise exception 'estoque_lote_invalido' using errcode = '22023';
+    end if;
+    perform public.fn_clinic_estoque_local_valido(p_org, v_local);
+    if exists (select 1 from public.clinic_estoque_operacoes o
+                where o.organization_id = p_org and o.origem_tipo = 'insumo' and o.origem_id = v_p.insumo_id
+                  and o.tipo <> 'estorno') then
+      raise exception 'estoque_ja_baixado' using errcode = '23505';
+    end if;
+    select * into v_r from public.fn_clinic_estoque_consumir(
+      p_org, v_p.insumo_id, v_local, array[v_lote], v_p.quantidade, auth.uid());
+    update public.clinic_estoque_pendencias
+       set status = 'resolvida', operacao_id = v_r.operacao_id, resolvida_por = auth.uid(), resolvida_em = now()
+     where id = v_p.id;
+    return jsonb_build_object('status', 'resolvida', 'operacao_id', v_r.operacao_id);
+  elsif v_acao in ('descartar', 'ciente') then
+    if v_motivo is null or char_length(v_motivo) < 3 then
+      raise exception 'estoque_sem_motivo' using errcode = '22023';
+    end if;
+    if (v_acao = 'ciente') <> (v_p.motivo = 'profissional_nao_habilitado') then
+      raise exception 'estoque_dados_invalidos' using errcode = '22023';
+    end if;
+    update public.clinic_estoque_pendencias
+       set status = case when v_acao = 'ciente' then 'resolvida' else 'descartada' end,
+           resolucao = left(v_motivo, 300), resolvida_por = auth.uid(), resolvida_em = now()
+     where id = v_p.id;
+    return jsonb_build_object('status', case when v_acao = 'ciente' then 'resolvida' else 'descartada' end);
+  end if;
+  raise exception 'estoque_dados_invalidos' using errcode = '22023';
+end $$;
+revoke execute on function public.fn_clinic_estoque_pendencia_resolver(uuid, uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_pendencia_resolver(uuid, uuid, jsonb) to authenticated;
+-- ---- fim clinic (migration 9030, fork) ----
+
+-- ---- clinic: estoque — kit por procedimento e reservas (migration 9031, fork) ----
+create table if not exists public.clinic_procedimento_kits (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  procedure_id uuid not null,
+  product_id uuid not null references public.catalog_products(id) on delete cascade,
+  quantidade numeric(14,3) not null,
+  created_at timestamptz not null default now(),
+  created_by uuid,
+  constraint clinic_procedimento_kits_unico unique (organization_id, procedure_id, product_id),
+  constraint clinic_procedimento_kits_quantidade check (quantidade > 0 and quantidade <= 10000000),
+  constraint clinic_procedimento_kits_procedimento_fk foreign key (organization_id, procedure_id)
+    references public.clinic_procedures (organization_id, id) on delete cascade
+);
+
+create table if not exists public.clinic_estoque_reservas (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  atendimento_id uuid,
+  appointment_id uuid references public.calendar_appointments(id) on delete cascade,
+  product_id uuid not null references public.catalog_products(id) on delete cascade,
+  local_id uuid,
+  quantidade numeric(14,3) not null,
+  status text not null default 'ativa',
+  created_at timestamptz not null default now(),
+  fechada_em timestamptz,
+  constraint clinic_estoque_reservas_org_id_key unique (organization_id, id),
+  constraint clinic_estoque_reservas_status check (status in ('ativa', 'convertida', 'liberada', 'expirada')),
+  constraint clinic_estoque_reservas_quantidade check (quantidade > 0),
+  constraint clinic_estoque_reservas_alvo check (atendimento_id is not null or appointment_id is not null),
+  constraint clinic_estoque_reservas_atendimento_fk foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id) on delete cascade,
+  constraint clinic_estoque_reservas_local_fk foreign key (organization_id, local_id)
+    references public.clinic_estoque_locais (organization_id, id)
+);
+create unique index if not exists clinic_estoque_reservas_atendimento_ativa
+  on public.clinic_estoque_reservas (organization_id, atendimento_id, product_id)
+  where status = 'ativa' and atendimento_id is not null;
+create unique index if not exists clinic_estoque_reservas_agendamento_ativa
+  on public.clinic_estoque_reservas (organization_id, appointment_id, product_id)
+  where status = 'ativa' and atendimento_id is null;
+create index if not exists clinic_estoque_reservas_ativas_idx
+  on public.clinic_estoque_reservas (organization_id, product_id) where status = 'ativa';
+
+do $rls$
+begin
+  alter table public.clinic_procedimento_kits enable row level security;
+  drop policy if exists tenant_isolation_clinic_procedimento_kits_all on public.clinic_procedimento_kits;
+  create policy tenant_isolation_clinic_procedimento_kits_all on public.clinic_procedimento_kits
+    using ((organization_id in (select public.fn_user_org_ids()))
+           and public.fn_role_at_least(organization_id, 'viewer'))
+    with check ((organization_id in (select public.fn_user_org_ids()))
+           and public.fn_role_at_least(organization_id, 'viewer'));
+  -- o kit é configuração: lê quem vê procedimentos ou registra atendimento
+  drop policy if exists acesso_ler on public.clinic_procedimento_kits;
+  create policy acesso_ler on public.clinic_procedimento_kits as restrictive for select
+    using (public.fn_has_permission(organization_id, 'procedimentos.ver')
+           or public.fn_has_permission(organization_id, 'atendimento.registrar'));
+  revoke all on public.clinic_procedimento_kits from anon;
+  revoke insert, update, delete, truncate on public.clinic_procedimento_kits from authenticated;
+
+  alter table public.clinic_estoque_reservas enable row level security;
+  drop policy if exists tenant_isolation_clinic_estoque_reservas_all on public.clinic_estoque_reservas;
+  create policy tenant_isolation_clinic_estoque_reservas_all on public.clinic_estoque_reservas
+    using ((organization_id in (select public.fn_user_org_ids()))
+           and public.fn_role_at_least(organization_id, 'viewer'))
+    with check ((organization_id in (select public.fn_user_org_ids()))
+           and public.fn_role_at_least(organization_id, 'viewer'));
+  drop policy if exists acesso_ler on public.clinic_estoque_reservas;
+  create policy acesso_ler on public.clinic_estoque_reservas as restrictive for select
+    using (public.fn_has_permission(organization_id, 'estoque.ver'));
+  revoke all on public.clinic_estoque_reservas from anon;
+  revoke insert, update, delete, truncate on public.clinic_estoque_reservas from authenticated;
+end
+$rls$;
+
+-- ─── o kit de um procedimento (substitui a lista inteira) ──────────────────
+create or replace function public.fn_clinic_estoque_kit_salvar(p_org uuid, p_procedure uuid, p_itens jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_n integer;
+begin
+  perform public.fn_acesso_exigir(p_org, 'procedimentos.gerenciar');
+  if not exists (select 1 from public.clinic_procedures p where p.id = p_procedure and p.organization_id = p_org) then
+    raise exception 'estoque_procedimento_invalido' using errcode = 'P0002';
+  end if;
+  if p_itens is null or jsonb_typeof(p_itens) <> 'array' or jsonb_array_length(p_itens) > 50 then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  if exists (
+    select 1 from jsonb_array_elements(p_itens) x
+     where nullif(x ->> 'product_id', '') is null
+        or coalesce((x ->> 'quantidade')::numeric, 0) <= 0
+        or not exists (select 1 from public.catalog_products c
+                        where c.id = (x ->> 'product_id')::uuid and c.organization_id = p_org)) then
+    raise exception 'estoque_produto_invalido' using errcode = '22023';
+  end if;
+  if (select count(distinct x ->> 'product_id') from jsonb_array_elements(p_itens) x) <> jsonb_array_length(p_itens) then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+
+  delete from public.clinic_procedimento_kits k where k.organization_id = p_org and k.procedure_id = p_procedure;
+  insert into public.clinic_procedimento_kits (organization_id, procedure_id, product_id, quantidade, created_by)
+  select p_org, p_procedure, (x ->> 'product_id')::uuid, round((x ->> 'quantidade')::numeric, 3), auth.uid()
+    from jsonb_array_elements(p_itens) x;
+  get diagnostics v_n = row_count;
+  return jsonb_build_object('itens', v_n);
+end $$;
+revoke execute on function public.fn_clinic_estoque_kit_salvar(uuid, uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_kit_salvar(uuid, uuid, jsonb) to authenticated;
+
+-- ─── reservas de um atendimento = soma dos kits (interna) ──────────────────
+-- Procedimentos em rascunho do atendimento; sem nenhum registrado, o kit do
+-- procedimento da sessão do plano ligada ao agendamento.
+create or replace function public.fn_clinic_estoque_reservar_atendimento(p_org uuid, p_atendimento uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_at record;
+  v_local uuid;
+  v_desejada jsonb;
+begin
+  if not coalesce((select (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb
+                     from public.organizations o where o.id = p_org), false) then
+    return;
+  end if;
+  select a.id, a.status, a.appointment_id into v_at
+    from public.clinic_atendimentos a where a.id = p_atendimento and a.organization_id = p_org;
+  if v_at.id is null or v_at.status <> 'em_andamento' then
+    return;
+  end if;
+  v_local := public.fn_clinic_estoque_local_do_atendimento(p_org, p_atendimento);
+
+  -- as reservas da véspera passam para o atendimento
+  if v_at.appointment_id is not null then
+    update public.clinic_estoque_reservas r
+       set status = 'convertida', fechada_em = now()
+     where r.organization_id = p_org and r.appointment_id = v_at.appointment_id
+       and r.atendimento_id is null and r.status = 'ativa';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object('product_id', x.product_id, 'quantidade', x.quantidade)), '[]'::jsonb)
+    into v_desejada
+    from (select k.product_id, sum(k.quantidade) as quantidade
+            from public.clinic_procedimentos_realizados p
+            join public.clinic_procedimento_kits k on k.organization_id = p_org and k.procedure_id = p.procedure_id
+            join public.clinic_produto_estoque e on e.organization_id = p_org and e.product_id = k.product_id
+           where p.organization_id = p_org and p.atendimento_id = p_atendimento and p.status = 'rascunho'
+           group by k.product_id) x;
+  if not exists (select 1 from public.clinic_procedimentos_realizados p
+                  where p.organization_id = p_org and p.atendimento_id = p_atendimento and p.status <> 'anulado')
+     and v_at.appointment_id is not null then
+    select coalesce(jsonb_agg(jsonb_build_object('product_id', x.product_id, 'quantidade', x.quantidade)), '[]'::jsonb)
+      into v_desejada
+      from (select k.product_id, sum(k.quantidade) as quantidade
+              from public.clinic_plano_sessoes s
+              join public.clinic_procedimento_kits k on k.organization_id = p_org and k.procedure_id = s.procedure_id
+              join public.clinic_produto_estoque e on e.organization_id = p_org and e.product_id = k.product_id
+             where s.organization_id = p_org and s.appointment_id = v_at.appointment_id and s.status <> 'cancelada'
+             group by k.product_id) x;
+  end if;
+
+  update public.clinic_estoque_reservas r
+     set status = 'liberada', fechada_em = now()
+   where r.organization_id = p_org and r.atendimento_id = p_atendimento and r.status = 'ativa'
+     and not exists (select 1 from jsonb_to_recordset(v_desejada) d(product_id uuid, quantidade numeric)
+                      where d.product_id = r.product_id);
+  update public.clinic_estoque_reservas r
+     set quantidade = d.quantidade, local_id = v_local
+    from jsonb_to_recordset(v_desejada) d(product_id uuid, quantidade numeric)
+   where r.organization_id = p_org and r.atendimento_id = p_atendimento and r.status = 'ativa'
+     and r.product_id = d.product_id
+     and (r.quantidade <> d.quantidade or r.local_id is distinct from v_local);
+  insert into public.clinic_estoque_reservas (organization_id, atendimento_id, appointment_id, product_id, local_id, quantidade)
+  select p_org, p_atendimento, v_at.appointment_id, d.product_id, v_local, d.quantidade
+    from jsonb_to_recordset(v_desejada) d(product_id uuid, quantidade numeric)
+   where not exists (select 1 from public.clinic_estoque_reservas r
+                      where r.organization_id = p_org and r.atendimento_id = p_atendimento
+                        and r.status = 'ativa' and r.product_id = d.product_id);
+end $$;
+revoke execute on function public.fn_clinic_estoque_reservar_atendimento(uuid, uuid) from public, anon, authenticated;
+
+-- ─── gatilhos do ciclo ──────────────────────────────────────────────────────
+create or replace function public.fn_clinic_estoque_reservas_do_atendimento()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'INSERT' then
+    perform public.fn_clinic_estoque_reservar_atendimento(new.organization_id, new.id);
+  elsif new.status is distinct from old.status then
+    if new.status in ('finalizado', 'anulado') then
+      update public.clinic_estoque_reservas r
+         set status = case when new.status = 'finalizado' then 'convertida' else 'liberada' end, fechada_em = now()
+       where r.organization_id = new.organization_id and r.atendimento_id = new.id and r.status = 'ativa';
+    end if;
+  end if;
+  return null;
+end $$;
+revoke execute on function public.fn_clinic_estoque_reservas_do_atendimento() from public, anon, authenticated;
+drop trigger if exists trg_clinic_estoque_reservas_do_atendimento on public.clinic_atendimentos;
+create trigger trg_clinic_estoque_reservas_do_atendimento
+  after insert or update of status on public.clinic_atendimentos
+  for each row execute function public.fn_clinic_estoque_reservas_do_atendimento();
+
+create or replace function public.fn_clinic_estoque_reservas_do_procedimento()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  -- finalizar (fn_clinic_congelar_registros) não recalcula: a reserva vira
+  -- `convertida` quando o atendimento fecha.
+  if tg_op = 'UPDATE' and new.status = 'finalizado' then
+    return null;
+  end if;
+  perform public.fn_clinic_estoque_reservar_atendimento(new.organization_id, new.atendimento_id);
+  return null;
+end $$;
+revoke execute on function public.fn_clinic_estoque_reservas_do_procedimento() from public, anon, authenticated;
+drop trigger if exists trg_clinic_estoque_reservas_do_procedimento on public.clinic_procedimentos_realizados;
+create trigger trg_clinic_estoque_reservas_do_procedimento
+  after insert or update of procedure_id, status on public.clinic_procedimentos_realizados
+  for each row execute function public.fn_clinic_estoque_reservas_do_procedimento();
+
+-- ─── véspera: reservar pelos agendamentos (cron estoque-reservas) ──────────
+-- Agendamentos das próximas 36 h ligados a sessão de plano com kit, ainda sem
+-- atendimento. Reservas de agendamento que passou (12 h) ou foi cancelado
+-- expiram. Só service role.
+create or replace function public.fn_clinic_estoque_reservar_agenda()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_criadas integer;
+  v_expiradas integer;
+begin
+  update public.clinic_estoque_reservas r
+     set status = 'expirada', fechada_em = now()
+    from public.calendar_appointments ap
+   where r.status = 'ativa' and r.atendimento_id is null and ap.id = r.appointment_id
+     and (ap.status in ('cancelled', 'no_show') or ap.starts_at < now() - interval '12 hours');
+  get diagnostics v_expiradas = row_count;
+
+  insert into public.clinic_estoque_reservas (organization_id, appointment_id, product_id, local_id, quantidade)
+  select s.organization_id, s.appointment_id, k.product_id,
+         (select l.id from public.clinic_estoque_locais l
+           where l.organization_id = s.organization_id and l.padrao and l.ativo limit 1),
+         sum(k.quantidade)
+    from public.clinic_plano_sessoes s
+    join public.calendar_appointments ap on ap.id = s.appointment_id and ap.organization_id = s.organization_id
+    join public.organizations o on o.id = s.organization_id and (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb
+    join public.clinic_procedimento_kits k on k.organization_id = s.organization_id and k.procedure_id = s.procedure_id
+    join public.clinic_produto_estoque e on e.organization_id = s.organization_id and e.product_id = k.product_id
+   where s.status = 'agendada'
+     and ap.status in ('pending', 'confirmed')
+     and ap.starts_at between now() and now() + interval '36 hours'
+     and not exists (select 1 from public.clinic_atendimentos a where a.appointment_id = ap.id)
+   group by s.organization_id, s.appointment_id, k.product_id
+  on conflict (organization_id, appointment_id, product_id) where status = 'ativa' and atendimento_id is null
+  do update set quantidade = excluded.quantidade;
+  get diagnostics v_criadas = row_count;
+  return jsonb_build_object('reservadas', v_criadas, 'expiradas', v_expiradas);
+end $$;
+revoke execute on function public.fn_clinic_estoque_reservar_agenda() from public, anon, authenticated;
+grant  execute on function public.fn_clinic_estoque_reservar_agenda() to service_role;
+
+-- ─── disponível por produto (para a tela do atendimento) ────────────────────
+-- Saldo de lotes não vencidos − reservas ativas, e o lote que sai primeiro
+-- (FEFO). Para quem registra atendimento (não precisa de estoque.ver) ou vê o
+-- estoque. Sem dado de paciente. Opção desligada → nulo.
+create or replace function public.fn_clinic_estoque_disponibilidade(p_org uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is null or p_org is null
+     or not (p_org in (select public.fn_user_org_ids()))
+     or not (public.fn_has_permission(p_org, 'atendimento.registrar') or public.fn_has_permission(p_org, 'estoque.ver')) then
+    raise exception 'acesso_proibido' using errcode = '42501';
+  end if;
+  if not coalesce((select (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb
+                     from public.organizations o where o.id = p_org), false) then
+    return null;
+  end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'product_id', e.product_id,
+             'unidade', e.unidade_aplicacao,
+             'disponivel', round(coalesce(s.saldo, 0) - coalesce(r.reservado, 0), 3),
+             'lote', f.codigo,
+             'validade', f.validade))
+      from public.clinic_produto_estoque e
+      left join lateral (
+        select sum(m.quantidade) as saldo
+          from public.clinic_estoque_movimentos m
+          join public.clinic_estoque_lotes l on l.id = m.lote_id
+         where m.organization_id = p_org and m.product_id = e.product_id
+           and (l.validade is null or l.validade >= current_date)) s on true
+      left join lateral (
+        select sum(x.quantidade) as reservado
+          from public.clinic_estoque_reservas x
+         where x.organization_id = p_org and x.product_id = e.product_id and x.status = 'ativa') r on true
+      left join lateral (
+        select l.codigo, l.validade
+          from public.clinic_estoque_lotes l
+         where l.organization_id = p_org and l.product_id = e.product_id
+           and (l.validade is null or l.validade >= current_date)
+           and (select coalesce(sum(m.quantidade), 0) from public.clinic_estoque_movimentos m
+                 where m.organization_id = p_org and m.lote_id = l.id) > 0
+         order by l.validade nulls last, l.created_at, l.id
+         limit 1) f on true
+     where e.organization_id = p_org), '[]'::jsonb);
+end $$;
+revoke execute on function public.fn_clinic_estoque_disponibilidade(uuid) from public, anon;
+grant  execute on function public.fn_clinic_estoque_disponibilidade(uuid) to authenticated;
+-- ---- fim clinic (migration 9031, fork) ----
+
+-- ---- clinic: estoque — fracionamento e frascos abertos (migration 9032, fork) ----
+create table if not exists public.clinic_estoque_frascos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  product_id uuid not null references public.catalog_products(id),
+  lote_id uuid not null,
+  local_id uuid not null,
+  aberto_em timestamptz not null default now(),
+  vence_em timestamptz,
+  status text not null default 'aberto',
+  encerrado_em timestamptz,
+  aberto_por uuid,
+  encerrado_por uuid,
+  constraint clinic_estoque_frascos_org_id_key unique (organization_id, id),
+  constraint clinic_estoque_frascos_status check (status in ('aberto', 'encerrado')),
+  constraint clinic_estoque_frascos_encerrado check ((status = 'encerrado') = (encerrado_em is not null)),
+  constraint clinic_estoque_frascos_lote_fk foreign key (organization_id, lote_id)
+    references public.clinic_estoque_lotes (organization_id, id),
+  constraint clinic_estoque_frascos_local_fk foreign key (organization_id, local_id)
+    references public.clinic_estoque_locais (organization_id, id)
+);
+create index if not exists clinic_estoque_frascos_abertos_idx
+  on public.clinic_estoque_frascos (organization_id, lote_id, local_id) where status = 'aberto';
+
+-- o movimento aponta para um frasco da mesma empresa
+do $fk$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'clinic_estoque_movimentos_frasco_fk') then
+    alter table public.clinic_estoque_movimentos
+      add constraint clinic_estoque_movimentos_frasco_fk foreign key (organization_id, frasco_id)
+      references public.clinic_estoque_frascos (organization_id, id);
+  end if;
+end
+$fk$;
+create index if not exists clinic_estoque_movimentos_frasco_idx
+  on public.clinic_estoque_movimentos (organization_id, frasco_id) where frasco_id is not null;
+
+do $rls$
+begin
+  alter table public.clinic_estoque_frascos enable row level security;
+  drop policy if exists tenant_isolation_clinic_estoque_frascos_all on public.clinic_estoque_frascos;
+  create policy tenant_isolation_clinic_estoque_frascos_all on public.clinic_estoque_frascos
+    using ((organization_id in (select public.fn_user_org_ids()))
+           and public.fn_role_at_least(organization_id, 'viewer'))
+    with check ((organization_id in (select public.fn_user_org_ids()))
+           and public.fn_role_at_least(organization_id, 'viewer'));
+  drop policy if exists acesso_ler on public.clinic_estoque_frascos;
+  create policy acesso_ler on public.clinic_estoque_frascos as restrictive for select
+    using (public.fn_has_permission(organization_id, 'estoque.ver'));
+  revoke all on public.clinic_estoque_frascos from anon;
+  revoke insert, update, delete, truncate on public.clinic_estoque_frascos from authenticated;
+end
+$rls$;
+
+create or replace view public.clinic_estoque_frascos_abertos
+with (security_invoker = true) as
+  select f.id, f.organization_id, f.product_id, f.lote_id, f.local_id, f.aberto_em, f.vence_em,
+         coalesce((select sum(m.quantidade) from public.clinic_estoque_movimentos m
+                    where m.organization_id = f.organization_id and m.frasco_id = f.id), 0)::numeric(14,3) as conteudo,
+         (f.vence_em is not null and f.vence_em <= now()) as vencido
+    from public.clinic_estoque_frascos f
+   where f.status = 'aberto';
+revoke all on public.clinic_estoque_frascos_abertos from anon;
+grant select on public.clinic_estoque_frascos_abertos to authenticated;
+
+-- ─── conferência por gaveta (redefinida da 9028) ────────────────────────────
+-- Nenhum (lote, local) E nenhuma gaveta (lacrado / cada frasco) da operação
+-- pode ficar negativa.
+create or replace function public.fn_clinic_estoque_conferir_saldos(p_org uuid, p_operacao uuid)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if exists (
+    select 1 from (select distinct m.lote_id, m.local_id, m.frasco_id from public.clinic_estoque_movimentos m
+                    where m.organization_id = p_org and m.operacao_id = p_operacao) x
+     where (select coalesce(sum(m.quantidade), 0) from public.clinic_estoque_movimentos m
+             where m.organization_id = p_org and m.lote_id = x.lote_id and m.local_id = x.local_id
+               and m.frasco_id is not distinct from x.frasco_id) < 0
+        or public.fn_clinic_estoque_saldo(p_org, x.lote_id, x.local_id) < 0
+  ) then
+    raise exception 'estoque_insuficiente' using errcode = '23514';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_estoque_conferir_saldos(uuid, uuid) from public, anon, authenticated;
+
+-- ─── abrir um frasco (interna): grava a operação; devolve o frasco ──────────
+create or replace function public.fn_clinic_estoque_frasco_abrir_interno(
+  p_org uuid, p_lote uuid, p_local uuid, p_ator uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lote public.clinic_estoque_lotes;
+  v_cfg public.clinic_produto_estoque;
+  v_frasco uuid;
+  v_op uuid;
+  v_vence timestamptz;
+begin
+  select * into v_lote from public.clinic_estoque_lotes l where l.id = p_lote and l.organization_id = p_org;
+  if v_lote.id is null then
+    raise exception 'estoque_lote_invalido' using errcode = '22023';
+  end if;
+  select * into v_cfg from public.clinic_produto_estoque e
+   where e.organization_id = p_org and e.product_id = v_lote.product_id;
+  if v_cfg.id is null or not v_cfg.fracionavel then
+    raise exception 'estoque_nao_fracionavel' using errcode = '22023';
+  end if;
+  if v_lote.validade is not null and v_lote.validade < current_date then
+    raise exception 'estoque_lote_vencido' using errcode = '22023';
+  end if;
+  v_vence := case when v_cfg.validade_pos_abertura_horas is not null
+                  then now() + make_interval(hours => v_cfg.validade_pos_abertura_horas) end;
+  if v_lote.validade is not null then
+    v_vence := least(coalesce(v_vence, 'infinity'::timestamptz), (v_lote.validade + 1)::timestamptz);
+  end if;
+  insert into public.clinic_estoque_frascos (organization_id, product_id, lote_id, local_id, vence_em, aberto_por)
+  values (p_org, v_lote.product_id, p_lote, p_local, v_vence, p_ator)
+  returning id into v_frasco;
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, origem_id, ator)
+  values (p_org, 'abertura_frasco', 'frasco', v_frasco, p_ator)
+  returning id into v_op;
+  insert into public.clinic_estoque_movimentos (organization_id, operacao_id, product_id, lote_id, local_id, frasco_id, quantidade, custo_unitario_cents)
+  values (p_org, v_op, v_lote.product_id, p_lote, p_local, null, -v_cfg.fator_conversao, v_lote.custo_unitario_cents),
+         (p_org, v_op, v_lote.product_id, p_lote, p_local, v_frasco, v_cfg.fator_conversao, v_lote.custo_unitario_cents);
+  perform public.fn_clinic_estoque_conferir_saldos(p_org, v_op);
+  return v_frasco;
+end $$;
+revoke execute on function public.fn_clinic_estoque_frasco_abrir_interno(uuid, uuid, uuid, uuid) from public, anon, authenticated;
+
+-- Pela tela do estoque (estoque.movimentar).
+create or replace function public.fn_clinic_estoque_frasco_abrir(p_org uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lote uuid := nullif(p_dados ->> 'lote_id', '')::uuid;
+  v_local uuid := nullif(p_dados ->> 'local_id', '')::uuid;
+  v_frasco uuid;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.movimentar');
+  perform public.fn_clinic_estoque_lote_da_org(p_org, v_lote);
+  perform public.fn_clinic_estoque_local_valido(p_org, v_local);
+  perform public.fn_clinic_estoque_travar(p_org, array[v_lote]);
+  v_frasco := public.fn_clinic_estoque_frasco_abrir_interno(p_org, v_lote, v_local, auth.uid());
+  return jsonb_build_object('frasco_id', v_frasco);
+end $$;
+revoke execute on function public.fn_clinic_estoque_frasco_abrir(uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_frasco_abrir(uuid, jsonb) to authenticated;
+
+-- Encerrar: a sobra vira perda (com motivo); o frasco sai da lista.
+create or replace function public.fn_clinic_estoque_frasco_encerrar(p_org uuid, p_frasco uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_f public.clinic_estoque_frascos;
+  v_sobra numeric;
+  v_op uuid;
+  v_motivo text := nullif(btrim(coalesce(p_motivo, '')), '');
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.movimentar');
+  if v_motivo is null or char_length(v_motivo) < 3 then
+    raise exception 'estoque_sem_motivo' using errcode = '22023';
+  end if;
+  select * into v_f from public.clinic_estoque_frascos f where f.id = p_frasco and f.organization_id = p_org;
+  if v_f.id is null then
+    raise exception 'estoque_frasco_invalido' using errcode = 'P0002';
+  end if;
+  perform public.fn_clinic_estoque_travar(p_org, array[v_f.lote_id]);
+  select * into v_f from public.clinic_estoque_frascos f where f.id = p_frasco for update;
+  if v_f.status <> 'aberto' then
+    raise exception 'estoque_frasco_encerrado' using errcode = '22023';
+  end if;
+  select coalesce(sum(m.quantidade), 0) into v_sobra from public.clinic_estoque_movimentos m
+   where m.organization_id = p_org and m.frasco_id = p_frasco;
+  if v_sobra > 0 then
+    insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, motivo, ator)
+    values (p_org, 'perda', 'frasco', left(v_motivo, 300), auth.uid())
+    returning id into v_op;
+    insert into public.clinic_estoque_movimentos (organization_id, operacao_id, product_id, lote_id, local_id, frasco_id, quantidade)
+    values (p_org, v_op, v_f.product_id, v_f.lote_id, v_f.local_id, p_frasco, -v_sobra);
+    perform public.fn_clinic_estoque_conferir_saldos(p_org, v_op);
+  end if;
+  update public.clinic_estoque_frascos set status = 'encerrado', encerrado_em = now(), encerrado_por = auth.uid()
+   where id = p_frasco;
+  return jsonb_build_object('perda', v_sobra, 'operacao_id', v_op);
+end $$;
+revoke execute on function public.fn_clinic_estoque_frasco_encerrar(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_estoque_frasco_encerrar(uuid, uuid, text) to authenticated;
+
+-- ─── a baixa de um insumo (redefinida da 9030): frasco aberto primeiro ─────
+-- Ordem: frascos abertos no prazo (vence primeiro), depois o lacrado por FEFO
+-- do lote. Do lacrado de produto fracionável, abre frasco (um por vez) e tira
+-- dele; do não fracionável, tira direto.
+create or replace function public.fn_clinic_estoque_consumir(
+  p_org uuid, p_insumo uuid, p_local uuid, p_lotes uuid[], p_qtd numeric, p_ator uuid,
+  out operacao_id uuid, out motivo text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ins record;
+  v_cfg public.clinic_produto_estoque;
+  v_restante numeric := round(p_qtd, 3);
+  v_g record;
+  v_tira numeric;
+  v_frasco uuid;
+  v_lacrado numeric;
+begin
+  select i.id, i.product_id, p.atendimento_id, p.procedure_id,
+         coalesce(p.executor_user_id, a.professional_user_id) as profissional, a.contact_id
+    into v_ins
+    from public.clinic_procedimento_insumos i
+    join public.clinic_procedimentos_realizados p on p.id = i.procedimento_id and p.organization_id = p_org
+    join public.clinic_atendimentos a on a.id = p.atendimento_id and a.organization_id = p_org
+   where i.id = p_insumo and i.organization_id = p_org;
+  if v_ins.id is null then
+    raise exception 'estoque_insumo_invalido' using errcode = 'P0002';
+  end if;
+  if p_local is null then
+    motivo := 'sem_local';
+    return;
+  end if;
+  if cardinality(coalesce(p_lotes, '{}')) = 0 then
+    motivo := 'sem_saldo';
+    return;
+  end if;
+  select * into v_cfg from public.clinic_produto_estoque e
+   where e.organization_id = p_org and e.product_id = v_ins.product_id;
+
+  perform public.fn_clinic_estoque_travar(p_org, p_lotes);
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, origem_id, ator)
+  values (p_org, 'consumo', 'insumo', p_insumo, p_ator)
+  returning id into operacao_id;
+
+  -- 1) frascos abertos no prazo
+  for v_g in
+    select f.id as frasco_id, f.lote_id, l.custo_unitario_cents,
+           (select coalesce(sum(m.quantidade), 0) from public.clinic_estoque_movimentos m
+             where m.organization_id = p_org and m.frasco_id = f.id) as saldo
+      from public.clinic_estoque_frascos f
+      join public.clinic_estoque_lotes l on l.id = f.lote_id
+     where f.organization_id = p_org and f.status = 'aberto' and f.local_id = p_local
+       and f.lote_id = any(p_lotes) and f.product_id = v_ins.product_id
+       and (f.vence_em is null or f.vence_em > now())
+     order by f.vence_em nulls last, f.aberto_em, f.id
+  loop
+    exit when v_restante <= 0;
+    continue when v_g.saldo <= 0;
+    v_tira := least(v_g.saldo, v_restante);
+    insert into public.clinic_estoque_movimentos
+      (organization_id, operacao_id, product_id, lote_id, local_id, frasco_id, quantidade, custo_unitario_cents,
+       atendimento_id, contact_id, profissional_user_id, procedure_id)
+    values (p_org, operacao_id, v_ins.product_id, v_g.lote_id, p_local, v_g.frasco_id, -v_tira, v_g.custo_unitario_cents,
+            v_ins.atendimento_id, v_ins.contact_id, v_ins.profissional, v_ins.procedure_id);
+    v_restante := v_restante - v_tira;
+  end loop;
+
+  -- 2) lacrado, por FEFO do lote
+  for v_g in
+    select l.id as lote_id, l.custo_unitario_cents, (l.validade is not null and l.validade < current_date) as vencido
+      from public.clinic_estoque_lotes l
+     where l.organization_id = p_org and l.id = any(p_lotes) and l.product_id = v_ins.product_id
+     order by l.validade nulls last, l.created_at, l.id
+  loop
+    exit when v_restante <= 0;
+    loop
+      exit when v_restante <= 0;
+      select coalesce(sum(m.quantidade), 0) into v_lacrado from public.clinic_estoque_movimentos m
+       where m.organization_id = p_org and m.lote_id = v_g.lote_id and m.local_id = p_local and m.frasco_id is null;
+      exit when v_lacrado <= 0;
+      -- lote vencido informado no insumo: o que foi usado sai direto (não abre frasco)
+      if coalesce(v_cfg.fracionavel, false) and not v_g.vencido and v_lacrado >= v_cfg.fator_conversao then
+        -- abre um frasco e tira dele
+        v_frasco := public.fn_clinic_estoque_frasco_abrir_interno(p_org, v_g.lote_id, p_local, p_ator);
+        v_tira := least(v_cfg.fator_conversao, v_restante);
+      else
+        v_frasco := null;
+        v_tira := least(v_lacrado, v_restante);
+      end if;
+      insert into public.clinic_estoque_movimentos
+        (organization_id, operacao_id, product_id, lote_id, local_id, frasco_id, quantidade, custo_unitario_cents,
+         atendimento_id, contact_id, profissional_user_id, procedure_id)
+      values (p_org, operacao_id, v_ins.product_id, v_g.lote_id, p_local, v_frasco, -v_tira, v_g.custo_unitario_cents,
+              v_ins.atendimento_id, v_ins.contact_id, v_ins.profissional, v_ins.procedure_id);
+      v_restante := v_restante - v_tira;
+    end loop;
+  end loop;
+
+  if v_restante > 0 then
+    raise exception 'estoque_insuficiente' using errcode = '23514';
+  end if;
+  perform public.fn_clinic_estoque_conferir_saldos(p_org, operacao_id);
+
+  update public.clinic_procedimento_insumos set movimento_estoque_id = operacao_id
+   where id = p_insumo and organization_id = p_org;
+end $$;
+revoke execute on function public.fn_clinic_estoque_consumir(uuid, uuid, uuid, uuid[], numeric, uuid) from public, anon, authenticated;
+-- ---- fim clinic (migration 9032, fork) ----
+
+-- ---- clinic: estoque — compras pelo XML da NF-e (migration 9033, fork) ----
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('clinic-nfe', 'clinic-nfe', false, 1048576, array['application/xml', 'text/xml'])
+on conflict (id) do update
+  set public = false,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+create table if not exists public.clinic_estoque_fornecedores (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  cnpj text not null,
+  nome text not null,
+  created_at timestamptz not null default now(),
+  constraint clinic_estoque_fornecedores_org_id_key unique (organization_id, id),
+  constraint clinic_estoque_fornecedores_cnpj_unico unique (organization_id, cnpj),
+  constraint clinic_estoque_fornecedores_cnpj check (cnpj ~ '^[0-9]{14}$'),
+  constraint clinic_estoque_fornecedores_nome check (char_length(btrim(nome)) between 1 and 200)
+);
+
+create table if not exists public.clinic_estoque_fornecedor_produtos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  fornecedor_id uuid not null,
+  codigo text not null,
+  product_id uuid not null references public.catalog_products(id) on delete cascade,
+  fator numeric(14,3) not null default 1,
+  updated_at timestamptz not null default now(),
+  constraint clinic_estoque_fornecedor_produtos_unico unique (organization_id, fornecedor_id, codigo),
+  constraint clinic_estoque_fornecedor_produtos_fator check (fator > 0),
+  constraint clinic_estoque_fornecedor_produtos_codigo check (char_length(codigo) between 1 and 60),
+  constraint clinic_estoque_fornecedor_produtos_fornecedor_fk foreign key (organization_id, fornecedor_id)
+    references public.clinic_estoque_fornecedores (organization_id, id) on delete cascade
+);
+
+create table if not exists public.clinic_estoque_nfe (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  chave text not null,
+  numero text not null,
+  serie text not null,
+  emissao date,
+  fornecedor_id uuid,
+  emitente_cnpj text,
+  emitente_nome text not null,
+  destinatario_cnpj text,
+  total_cents bigint not null default 0,
+  arquivo_path text,
+  sha256 text not null,
+  status text not null default 'conferencia',
+  local_id uuid,
+  financial_entry_id uuid references public.financial_entries(id) on delete set null,
+  motivo text,
+  created_at timestamptz not null default now(),
+  created_by uuid,
+  lancada_em timestamptz,
+  lancada_por uuid,
+  constraint clinic_estoque_nfe_org_id_key unique (organization_id, id),
+  constraint clinic_estoque_nfe_chave_unica unique (organization_id, chave),
+  constraint clinic_estoque_nfe_chave check (chave ~ '^[0-9]{44}$'),
+  constraint clinic_estoque_nfe_sha check (sha256 ~ '^[0-9a-f]{64}$'),
+  constraint clinic_estoque_nfe_status check (status in ('conferencia', 'lancada', 'cancelada')),
+  constraint clinic_estoque_nfe_textos check (
+    char_length(numero) <= 20 and char_length(serie) <= 10 and char_length(emitente_nome) <= 200
+    and coalesce(char_length(motivo), 0) <= 300),
+  constraint clinic_estoque_nfe_fornecedor_fk foreign key (organization_id, fornecedor_id)
+    references public.clinic_estoque_fornecedores (organization_id, id),
+  constraint clinic_estoque_nfe_local_fk foreign key (organization_id, local_id)
+    references public.clinic_estoque_locais (organization_id, id)
+);
+create index if not exists clinic_estoque_nfe_data_idx on public.clinic_estoque_nfe (organization_id, created_at desc);
+
+create table if not exists public.clinic_estoque_nfe_itens (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  nfe_id uuid not null,
+  numero integer not null,
+  codigo text not null,
+  descricao text not null,
+  ean text,
+  ncm text,
+  unidade text not null,
+  quantidade numeric(14,4) not null,
+  valor_total_cents bigint not null default 0,
+  custo_total_cents bigint not null default 0,
+  registro_anvisa text,
+  rastro jsonb not null default '[]'::jsonb,
+  product_id uuid references public.catalog_products(id),
+  origem_casamento text,
+  fator numeric(14,3),
+  lote text,
+  validade date,
+  ignorado boolean not null default false,
+  conferido boolean not null default false,
+  operacao_id uuid,
+  constraint clinic_estoque_nfe_itens_unico unique (nfe_id, numero),
+  constraint clinic_estoque_nfe_itens_origem check (origem_casamento is null
+    or origem_casamento in ('ean', 'historico', 'nome', 'ia', 'manual')),
+  constraint clinic_estoque_nfe_itens_quantidade check (quantidade > 0),
+  constraint clinic_estoque_nfe_itens_fator check (fator is null or fator > 0),
+  constraint clinic_estoque_nfe_itens_textos check (
+    char_length(codigo) <= 60 and char_length(descricao) <= 200 and char_length(unidade) <= 20
+    and coalesce(char_length(lote), 0) <= 60 and coalesce(char_length(registro_anvisa), 0) <= 40),
+  constraint clinic_estoque_nfe_itens_rastro check (jsonb_typeof(rastro) = 'array'),
+  constraint clinic_estoque_nfe_itens_nfe_fk foreign key (organization_id, nfe_id)
+    references public.clinic_estoque_nfe (organization_id, id) on delete cascade,
+  constraint clinic_estoque_nfe_itens_operacao_fk foreign key (organization_id, operacao_id)
+    references public.clinic_estoque_operacoes (organization_id, id)
+);
+
+do $rls$
+declare
+  t text;
+begin
+  foreach t in array array['clinic_estoque_fornecedores', 'clinic_estoque_fornecedor_produtos',
+                           'clinic_estoque_nfe', 'clinic_estoque_nfe_itens'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format($p$create policy tenant_isolation_%s_all on public.%I
+        using ((organization_id in (select public.fn_user_org_ids()))
+               and public.fn_role_at_least(organization_id, 'viewer'))
+        with check ((organization_id in (select public.fn_user_org_ids()))
+               and public.fn_role_at_least(organization_id, 'viewer'))$p$, t, t);
+    execute format('drop policy if exists acesso_ler on public.%I', t);
+    execute format($p$create policy acesso_ler on public.%I as restrictive for select
+                      using (public.fn_has_permission(organization_id, 'estoque.ver'))$p$, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end
+$rls$;
+
+-- ─── registrar a nota (em conferência) ─────────────────────────────────────
+-- p_dados = a nota lida + sugestões por item (product_id, origem, fator, lote,
+-- validade) + arquivo_path + sha256. Sugestão de produto de outra empresa vira
+-- nula. Chave repetida → estoque_nfe_duplicada.
+create or replace function public.fn_clinic_estoque_nfe_registrar(p_org uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_chave text := p_dados ->> 'chave';
+  v_cnpj text := nullif(p_dados -> 'emitente' ->> 'cnpj', '');
+  v_nome text := left(coalesce(nullif(btrim(p_dados -> 'emitente' ->> 'nome'), ''), 'Fornecedor'), 200);
+  v_fornecedor uuid;
+  v_id uuid;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.compras');
+  if v_chave is null or v_chave !~ '^[0-9]{44}$' or jsonb_typeof(p_dados -> 'itens') <> 'array'
+     or jsonb_array_length(p_dados -> 'itens') = 0 or jsonb_array_length(p_dados -> 'itens') > 990 then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  if exists (select 1 from public.clinic_estoque_nfe n where n.organization_id = p_org and n.chave = v_chave) then
+    raise exception 'estoque_nfe_duplicada' using errcode = '23505';
+  end if;
+  if v_cnpj ~ '^[0-9]{14}$' then
+    insert into public.clinic_estoque_fornecedores (organization_id, cnpj, nome)
+    values (p_org, v_cnpj, v_nome)
+    on conflict (organization_id, cnpj) do update set nome = excluded.nome
+    returning id into v_fornecedor;
+  end if;
+
+  insert into public.clinic_estoque_nfe
+    (organization_id, chave, numero, serie, emissao, fornecedor_id, emitente_cnpj, emitente_nome,
+     destinatario_cnpj, total_cents, arquivo_path, sha256, created_by)
+  values (p_org, v_chave, left(coalesce(p_dados ->> 'numero', ''), 20), left(coalesce(p_dados ->> 'serie', ''), 10),
+          (p_dados ->> 'emissao')::date, v_fornecedor, v_cnpj, v_nome, nullif(p_dados ->> 'destinatario_cnpj', ''),
+          coalesce((p_dados ->> 'total_cents')::bigint, 0), p_dados ->> 'arquivo_path', p_dados ->> 'sha256', auth.uid())
+  returning id into v_id;
+
+  insert into public.clinic_estoque_nfe_itens
+    (organization_id, nfe_id, numero, codigo, descricao, ean, ncm, unidade, quantidade, valor_total_cents,
+     custo_total_cents, registro_anvisa, rastro, product_id, origem_casamento, fator, lote, validade)
+  select p_org, v_id, (i ->> 'numero')::integer, left(coalesce(i ->> 'codigo', ''), 60), left(coalesce(i ->> 'descricao', ''), 200),
+         nullif(i ->> 'ean', ''), nullif(i ->> 'ncm', ''), left(coalesce(nullif(i ->> 'unidade', ''), 'un'), 20),
+         (i ->> 'quantidade')::numeric, coalesce((i ->> 'valor_total_cents')::bigint, 0),
+         coalesce((i ->> 'custo_total_cents')::bigint, 0), left(nullif(i ->> 'registro_anvisa', ''), 40),
+         coalesce(i -> 'rastro', '[]'::jsonb),
+         c.id,
+         case when c.id is not null then i ->> 'origem_casamento' end,
+         nullif(i ->> 'fator', '')::numeric,
+         left(nullif(btrim(coalesce(i ->> 'lote', '')), ''), 60),
+         nullif(i ->> 'validade', '')::date
+    from jsonb_array_elements(p_dados -> 'itens') i
+    left join public.catalog_products c
+      on c.id = nullif(i ->> 'product_id', '')::uuid and c.organization_id = p_org;
+  return jsonb_build_object('id', v_id);
+end $$;
+revoke execute on function public.fn_clinic_estoque_nfe_registrar(uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_nfe_registrar(uuid, jsonb) to authenticated;
+
+-- ─── conferir um item ───────────────────────────────────────────────────────
+-- { product_id, fator, lote, validade } ou { ignorar: true } (frete, brinde,
+-- item que não é de estoque).
+create or replace function public.fn_clinic_estoque_nfe_item_conferir(p_org uuid, p_item uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_item public.clinic_estoque_nfe_itens;
+  v_status text;
+  v_product uuid := nullif(p_dados ->> 'product_id', '')::uuid;
+  v_fator numeric := coalesce(nullif(p_dados ->> 'fator', '')::numeric, 1);
+  v_lote text := left(nullif(btrim(coalesce(p_dados ->> 'lote', '')), ''), 60);
+  v_validade date := nullif(p_dados ->> 'validade', '')::date;
+  v_rastreado boolean;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.compras');
+  select * into v_item from public.clinic_estoque_nfe_itens i where i.id = p_item and i.organization_id = p_org for update;
+  if v_item.id is null then
+    raise exception 'estoque_nfe_invalida' using errcode = 'P0002';
+  end if;
+  select n.status into v_status from public.clinic_estoque_nfe n where n.id = v_item.nfe_id for update;
+  if v_status <> 'conferencia' then
+    raise exception 'estoque_nfe_fechada' using errcode = '22023';
+  end if;
+
+  if coalesce((p_dados ->> 'ignorar')::boolean, false) then
+    update public.clinic_estoque_nfe_itens
+       set ignorado = true, conferido = true, product_id = null, origem_casamento = null, fator = null, lote = null, validade = null
+     where id = p_item;
+    return jsonb_build_object('conferido', true, 'ignorado', true);
+  end if;
+
+  if v_product is null or not exists (select 1 from public.catalog_products c where c.id = v_product and c.organization_id = p_org) then
+    raise exception 'estoque_produto_invalido' using errcode = '22023';
+  end if;
+  if v_fator <= 0 then
+    raise exception 'estoque_quantidade_invalida' using errcode = '22023';
+  end if;
+  select coalesce(e.rastreado, false) into v_rastreado from public.clinic_produto_estoque e
+   where e.organization_id = p_org and e.product_id = v_product;
+  if coalesce(v_rastreado, false) and (v_lote is null or v_validade is null) then
+    raise exception 'estoque_lote_obrigatorio' using errcode = '22023';
+  end if;
+  if v_validade is not null and v_validade < current_date then
+    raise exception 'estoque_lote_vencido' using errcode = '22023';
+  end if;
+
+  update public.clinic_estoque_nfe_itens
+     set product_id = v_product,
+         origem_casamento = case when v_item.product_id = v_product then coalesce(v_item.origem_casamento, 'manual') else 'manual' end,
+         fator = v_fator, lote = v_lote, validade = v_validade, ignorado = false, conferido = true
+   where id = p_item;
+  return jsonb_build_object('conferido', true, 'ignorado', false);
+end $$;
+revoke execute on function public.fn_clinic_estoque_nfe_item_conferir(uuid, uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_nfe_item_conferir(uuid, uuid, jsonb) to authenticated;
+
+-- ─── lançar a nota ──────────────────────────────────────────────────────────
+-- { local_id, conta_id? }. Todos os itens conferidos.
+create or replace function public.fn_clinic_estoque_nfe_lancar(p_org uuid, p_nfe uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_nfe public.clinic_estoque_nfe;
+  v_local uuid := nullif(p_dados ->> 'local_id', '')::uuid;
+  v_conta uuid := nullif(p_dados ->> 'conta_id', '')::uuid;
+  v_i public.clinic_estoque_nfe_itens;
+  v_qtd numeric;
+  v_custo numeric;
+  v_lote uuid;
+  v_op uuid;
+  v_entradas integer := 0;
+  v_fin uuid;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.compras');
+  select * into v_nfe from public.clinic_estoque_nfe n where n.id = p_nfe and n.organization_id = p_org for update;
+  if v_nfe.id is null then
+    raise exception 'estoque_nfe_invalida' using errcode = 'P0002';
+  end if;
+  if v_nfe.status <> 'conferencia' then
+    raise exception 'estoque_nfe_fechada' using errcode = '22023';
+  end if;
+  perform public.fn_clinic_estoque_local_valido(p_org, v_local);
+  if exists (select 1 from public.clinic_estoque_nfe_itens i where i.nfe_id = p_nfe and not i.conferido) then
+    raise exception 'estoque_nfe_sem_conferencia' using errcode = '22023';
+  end if;
+  if v_conta is not null then
+    if not public.fn_has_permission(p_org, 'financeiro.lancar') then
+      raise exception 'acesso_proibido' using errcode = '42501';
+    end if;
+    if not exists (select 1 from public.financial_accounts a where a.id = v_conta and a.organization_id = p_org) then
+      raise exception 'estoque_conta_invalida' using errcode = '22023';
+    end if;
+  end if;
+
+  for v_i in
+    select * from public.clinic_estoque_nfe_itens i
+     where i.nfe_id = p_nfe and not i.ignorado and i.product_id is not null
+     order by i.numero
+  loop
+    v_qtd := round(v_i.quantidade * coalesce(v_i.fator, 1), 3);
+    v_custo := case when v_qtd > 0 then round(v_i.custo_total_cents::numeric / v_qtd, 4) end;
+    v_lote := public.fn_clinic_estoque_lote(p_org, v_i.product_id, v_i.lote, v_i.validade, v_custo);
+    update public.clinic_estoque_lotes l
+       set fornecedor_id = coalesce(l.fornecedor_id, v_nfe.fornecedor_id),
+           nfe_item_id = coalesce(l.nfe_item_id, v_i.id),
+           custo_unitario_cents = coalesce(l.custo_unitario_cents, v_custo)
+     where l.id = v_lote;
+    insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, origem_id, motivo, ator)
+    values (p_org, 'entrada', 'nfe_item', v_i.id, left('NF-e ' || v_nfe.numero || ' — ' || v_nfe.emitente_nome, 300), auth.uid())
+    returning id into v_op;
+    insert into public.clinic_estoque_movimentos (organization_id, operacao_id, product_id, lote_id, local_id, quantidade, custo_unitario_cents)
+    values (p_org, v_op, v_i.product_id, v_lote, v_local, v_qtd, v_custo);
+    update public.clinic_estoque_nfe_itens set operacao_id = v_op where id = v_i.id;
+    if v_nfe.fornecedor_id is not null then
+      insert into public.clinic_estoque_fornecedor_produtos (organization_id, fornecedor_id, codigo, product_id, fator)
+      values (p_org, v_nfe.fornecedor_id, v_i.codigo, v_i.product_id, coalesce(v_i.fator, 1))
+      on conflict (organization_id, fornecedor_id, codigo)
+      do update set product_id = excluded.product_id, fator = excluded.fator, updated_at = now();
+    end if;
+    v_entradas := v_entradas + 1;
+  end loop;
+
+  if v_conta is not null and v_nfe.total_cents > 0 then
+    insert into public.financial_entries
+      (organization_id, account_id, direction, amount_cents, description, entry_date, status, origin, created_by_user_id)
+    values (p_org, v_conta, 'out', v_nfe.total_cents,
+            left('NF-e ' || v_nfe.numero || '/' || v_nfe.serie || ' — ' || v_nfe.emitente_nome, 300),
+            current_date, 'pending', 'manual', auth.uid())
+    returning id into v_fin;
+  end if;
+
+  update public.clinic_estoque_nfe
+     set status = 'lancada', local_id = v_local, financial_entry_id = v_fin, lancada_em = now(), lancada_por = auth.uid()
+   where id = p_nfe;
+  return jsonb_build_object('entradas', v_entradas, 'financial_entry_id', v_fin);
+end $$;
+revoke execute on function public.fn_clinic_estoque_nfe_lancar(uuid, uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_nfe_lancar(uuid, uuid, jsonb) to authenticated;
+
+-- ─── cancelar (só em conferência) ──────────────────────────────────────────
+create or replace function public.fn_clinic_estoque_nfe_cancelar(p_org uuid, p_nfe uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.compras');
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'estoque_sem_motivo' using errcode = '22023';
+  end if;
+  select n.status into v_status from public.clinic_estoque_nfe n where n.id = p_nfe and n.organization_id = p_org for update;
+  if v_status is null then
+    raise exception 'estoque_nfe_invalida' using errcode = 'P0002';
+  end if;
+  if v_status <> 'conferencia' then
+    raise exception 'estoque_nfe_fechada' using errcode = '22023';
+  end if;
+  update public.clinic_estoque_nfe set status = 'cancelada', motivo = left(btrim(p_motivo), 300) where id = p_nfe;
+  return jsonb_build_object('status', 'cancelada');
+end $$;
+revoke execute on function public.fn_clinic_estoque_nfe_cancelar(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_estoque_nfe_cancelar(uuid, uuid, text) to authenticated;
+-- ---- fim clinic (migration 9033, fork) ----
+
+-- ---- clinic: estoque — inventário por local (migration 9034, fork) ----
+create table if not exists public.clinic_estoque_inventarios (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  local_id uuid not null,
+  status text not null default 'aberto',
+  motivo text,
+  operacao_id uuid,
+  created_at timestamptz not null default now(),
+  created_by uuid,
+  fechado_em timestamptz,
+  fechado_por uuid,
+  constraint clinic_estoque_inventarios_org_id_key unique (organization_id, id),
+  constraint clinic_estoque_inventarios_status check (status in ('aberto', 'fechado', 'cancelado')),
+  constraint clinic_estoque_inventarios_motivo check (motivo is null or char_length(btrim(motivo)) between 1 and 300),
+  constraint clinic_estoque_inventarios_local_fk foreign key (organization_id, local_id)
+    references public.clinic_estoque_locais (organization_id, id),
+  constraint clinic_estoque_inventarios_operacao_fk foreign key (organization_id, operacao_id)
+    references public.clinic_estoque_operacoes (organization_id, id)
+);
+create unique index if not exists clinic_estoque_inventarios_um_aberto
+  on public.clinic_estoque_inventarios (organization_id, local_id) where status = 'aberto';
+
+create table if not exists public.clinic_estoque_inventario_itens (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  inventario_id uuid not null,
+  product_id uuid not null references public.catalog_products(id),
+  lote_id uuid not null,
+  quantidade_sistema numeric(14,3) not null,
+  contado numeric(14,3),
+  contado_em timestamptz,
+  contado_por uuid,
+  constraint clinic_estoque_inventario_itens_unico unique (inventario_id, lote_id),
+  constraint clinic_estoque_inventario_itens_contado check (contado is null or contado >= 0),
+  constraint clinic_estoque_inventario_itens_inventario_fk foreign key (organization_id, inventario_id)
+    references public.clinic_estoque_inventarios (organization_id, id) on delete cascade,
+  constraint clinic_estoque_inventario_itens_lote_fk foreign key (organization_id, lote_id)
+    references public.clinic_estoque_lotes (organization_id, id)
+);
+
+do $rls$
+declare
+  t text;
+begin
+  foreach t in array array['clinic_estoque_inventarios', 'clinic_estoque_inventario_itens'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format($p$create policy tenant_isolation_%s_all on public.%I
+        using ((organization_id in (select public.fn_user_org_ids()))
+               and public.fn_role_at_least(organization_id, 'viewer'))
+        with check ((organization_id in (select public.fn_user_org_ids()))
+               and public.fn_role_at_least(organization_id, 'viewer'))$p$, t, t);
+    execute format('drop policy if exists acesso_ler on public.%I', t);
+    execute format($p$create policy acesso_ler on public.%I as restrictive for select
+                      using (public.fn_has_permission(organization_id, 'estoque.ver'))$p$, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end
+$rls$;
+
+-- ─── abrir ──────────────────────────────────────────────────────────────────
+create or replace function public.fn_clinic_estoque_inventario_abrir(p_org uuid, p_local uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_id uuid;
+  v_n integer;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.inventariar');
+  perform public.fn_clinic_estoque_local_valido(p_org, p_local);
+  if exists (select 1 from public.clinic_estoque_inventarios i
+              where i.organization_id = p_org and i.local_id = p_local and i.status = 'aberto') then
+    raise exception 'estoque_inventario_aberto' using errcode = '23505';
+  end if;
+  insert into public.clinic_estoque_inventarios (organization_id, local_id, created_by)
+  values (p_org, p_local, auth.uid())
+  returning id into v_id;
+  insert into public.clinic_estoque_inventario_itens (organization_id, inventario_id, product_id, lote_id, quantidade_sistema)
+  select p_org, v_id, s.product_id, s.lote_id, sum(s.saldo)
+    from public.clinic_estoque_saldos s
+   where s.organization_id = p_org and s.local_id = p_local
+   group by s.product_id, s.lote_id
+  having sum(s.saldo) <> 0;
+  get diagnostics v_n = row_count;
+  return jsonb_build_object('id', v_id, 'itens', v_n);
+end $$;
+revoke execute on function public.fn_clinic_estoque_inventario_abrir(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_estoque_inventario_abrir(uuid, uuid) to authenticated;
+
+-- ─── contar um lote (nulo = desfazer a contagem) ───────────────────────────
+create or replace function public.fn_clinic_estoque_inventario_contar(p_org uuid, p_item uuid, p_contado numeric)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_inv uuid;
+  v_status text;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.inventariar');
+  select it.inventario_id into v_inv from public.clinic_estoque_inventario_itens it
+   where it.id = p_item and it.organization_id = p_org;
+  if v_inv is null then
+    raise exception 'estoque_inventario_invalido' using errcode = 'P0002';
+  end if;
+  select i.status into v_status from public.clinic_estoque_inventarios i where i.id = v_inv for update;
+  if v_status <> 'aberto' then
+    raise exception 'estoque_inventario_fechado' using errcode = '22023';
+  end if;
+  if p_contado is not null and (p_contado < 0 or p_contado > 10000000) then
+    raise exception 'estoque_quantidade_invalida' using errcode = '22023';
+  end if;
+  update public.clinic_estoque_inventario_itens
+     set contado = round(p_contado, 3), contado_em = case when p_contado is null then null else now() end,
+         contado_por = case when p_contado is null then null else auth.uid() end
+   where id = p_item;
+  return jsonb_build_object('contado', p_contado);
+end $$;
+revoke execute on function public.fn_clinic_estoque_inventario_contar(uuid, uuid, numeric) from public, anon;
+grant  execute on function public.fn_clinic_estoque_inventario_contar(uuid, uuid, numeric) to authenticated;
+
+-- ─── fechar: uma operação com as diferenças ────────────────────────────────
+create or replace function public.fn_clinic_estoque_inventario_fechar(p_org uuid, p_inventario uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_inv public.clinic_estoque_inventarios;
+  v_lotes uuid[];
+  v_op uuid;
+  v_ajustes integer;
+  v_motivo text := nullif(btrim(coalesce(p_motivo, '')), '');
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.inventariar');
+  select * into v_inv from public.clinic_estoque_inventarios i
+   where i.id = p_inventario and i.organization_id = p_org for update;
+  if v_inv.id is null then
+    raise exception 'estoque_inventario_invalido' using errcode = 'P0002';
+  end if;
+  if v_inv.status <> 'aberto' then
+    raise exception 'estoque_inventario_fechado' using errcode = '22023';
+  end if;
+  select array_agg(it.lote_id) into v_lotes from public.clinic_estoque_inventario_itens it
+   where it.inventario_id = p_inventario and it.contado is not null;
+  perform public.fn_clinic_estoque_travar(p_org, coalesce(v_lotes, '{}'));
+
+  select count(*) into v_ajustes from public.clinic_estoque_inventario_itens it
+   where it.inventario_id = p_inventario and it.contado is not null
+     and it.contado <> public.fn_clinic_estoque_saldo(p_org, it.lote_id, v_inv.local_id);
+  if v_ajustes > 0 then
+    insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, origem_id, motivo, ator)
+    values (p_org, 'inventario', 'inventario', p_inventario, left(coalesce(v_motivo, 'Inventário'), 300), auth.uid())
+    returning id into v_op;
+    insert into public.clinic_estoque_movimentos (organization_id, operacao_id, product_id, lote_id, local_id, quantidade, custo_unitario_cents)
+    select p_org, v_op, it.product_id, it.lote_id, v_inv.local_id,
+           it.contado - public.fn_clinic_estoque_saldo(p_org, it.lote_id, v_inv.local_id), l.custo_unitario_cents
+      from public.clinic_estoque_inventario_itens it
+      join public.clinic_estoque_lotes l on l.id = it.lote_id
+     where it.inventario_id = p_inventario and it.contado is not null
+       and it.contado <> public.fn_clinic_estoque_saldo(p_org, it.lote_id, v_inv.local_id);
+    perform public.fn_clinic_estoque_conferir_saldos(p_org, v_op);
+  end if;
+  update public.clinic_estoque_inventarios
+     set status = 'fechado', motivo = v_motivo, operacao_id = v_op, fechado_em = now(), fechado_por = auth.uid()
+   where id = p_inventario;
+  return jsonb_build_object('ajustes', v_ajustes, 'operacao_id', v_op);
+end $$;
+revoke execute on function public.fn_clinic_estoque_inventario_fechar(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_estoque_inventario_fechar(uuid, uuid, text) to authenticated;
+
+-- ─── cancelar ───────────────────────────────────────────────────────────────
+create or replace function public.fn_clinic_estoque_inventario_cancelar(p_org uuid, p_inventario uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.inventariar');
+  select i.status into v_status from public.clinic_estoque_inventarios i
+   where i.id = p_inventario and i.organization_id = p_org for update;
+  if v_status is null then
+    raise exception 'estoque_inventario_invalido' using errcode = 'P0002';
+  end if;
+  if v_status <> 'aberto' then
+    raise exception 'estoque_inventario_fechado' using errcode = '22023';
+  end if;
+  update public.clinic_estoque_inventarios set status = 'cancelado', fechado_em = now(), fechado_por = auth.uid()
+   where id = p_inventario;
+  return jsonb_build_object('status', 'cancelado');
+end $$;
+revoke execute on function public.fn_clinic_estoque_inventario_cancelar(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_estoque_inventario_cancelar(uuid, uuid) to authenticated;
+-- ---- fim clinic (migration 9034, fork) ----
+
+-- ---- clinic: estoque — alertas (migration 9035, fork) ----
+create table if not exists public.clinic_estoque_alertas (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  tipo text not null,
+  chave text not null,
+  product_id uuid references public.catalog_products(id) on delete cascade,
+  lote_id uuid,
+  frasco_id uuid,
+  detalhe jsonb not null default '{}'::jsonb,
+  status text not null default 'aberto',
+  aberto_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now(),
+  fechado_em timestamptz,
+  dispensado_por uuid,
+  motivo text,
+  constraint clinic_estoque_alertas_org_id_key unique (organization_id, id),
+  constraint clinic_estoque_alertas_tipo check (tipo in (
+    'abaixo_minimo', 'ponto_pedido', 'validade_proxima', 'lote_vencido', 'frasco_vencido', 'pendencias_baixa')),
+  constraint clinic_estoque_alertas_status check (status in ('aberto', 'resolvido', 'dispensado')),
+  constraint clinic_estoque_alertas_chave check (char_length(chave) between 1 and 200),
+  constraint clinic_estoque_alertas_detalhe check (jsonb_typeof(detalhe) = 'object' and octet_length(detalhe::text) <= 2048),
+  constraint clinic_estoque_alertas_motivo check (motivo is null or char_length(btrim(motivo)) between 1 and 300),
+  constraint clinic_estoque_alertas_lote_fk foreign key (organization_id, lote_id)
+    references public.clinic_estoque_lotes (organization_id, id),
+  constraint clinic_estoque_alertas_frasco_fk foreign key (organization_id, frasco_id)
+    references public.clinic_estoque_frascos (organization_id, id)
+);
+create unique index if not exists clinic_estoque_alertas_um_aberto
+  on public.clinic_estoque_alertas (organization_id, chave) where status = 'aberto';
+create index if not exists clinic_estoque_alertas_abertos_idx
+  on public.clinic_estoque_alertas (organization_id, aberto_em desc) where status = 'aberto';
+
+do $rls$
+begin
+  alter table public.clinic_estoque_alertas enable row level security;
+  drop policy if exists tenant_isolation_clinic_estoque_alertas_all on public.clinic_estoque_alertas;
+  create policy tenant_isolation_clinic_estoque_alertas_all on public.clinic_estoque_alertas
+    using ((organization_id in (select public.fn_user_org_ids()))
+           and public.fn_role_at_least(organization_id, 'viewer'))
+    with check ((organization_id in (select public.fn_user_org_ids()))
+           and public.fn_role_at_least(organization_id, 'viewer'));
+  drop policy if exists acesso_ler on public.clinic_estoque_alertas;
+  create policy acesso_ler on public.clinic_estoque_alertas as restrictive for select
+    using (public.fn_has_permission(organization_id, 'estoque.ver'));
+  revoke all on public.clinic_estoque_alertas from anon;
+  revoke insert, update, delete, truncate on public.clinic_estoque_alertas from authenticated;
+end
+$rls$;
+
+-- ─── o que vale AGORA numa clínica (interna) ───────────────────────────────
+create or replace function public.fn_clinic_estoque_alertas_atuais(p_org uuid)
+returns table (tipo text, chave text, product_id uuid, lote_id uuid, frasco_id uuid, detalhe jsonb)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  with por_produto as (
+    select m.product_id, sum(m.quantidade) as saldo
+      from public.clinic_estoque_movimentos m
+     where m.organization_id = p_org
+     group by m.product_id
+  ),
+  por_lote as (
+    select m.lote_id, sum(m.quantidade) as saldo
+      from public.clinic_estoque_movimentos m
+     where m.organization_id = p_org
+     group by m.lote_id
+    having sum(m.quantidade) > 0
+  )
+  select 'abaixo_minimo', 'abaixo_minimo:' || e.product_id, e.product_id, null::uuid, null::uuid,
+         jsonb_build_object('saldo', coalesce(s.saldo, 0), 'minimo', e.estoque_minimo, 'unidade', e.unidade_aplicacao)
+    from public.clinic_produto_estoque e
+    left join por_produto s on s.product_id = e.product_id
+   where e.organization_id = p_org and e.estoque_minimo > 0 and coalesce(s.saldo, 0) < e.estoque_minimo
+  union all
+  select 'ponto_pedido', 'ponto_pedido:' || e.product_id, e.product_id, null, null,
+         jsonb_build_object('saldo', coalesce(s.saldo, 0), 'ponto_pedido', e.ponto_pedido, 'unidade', e.unidade_aplicacao)
+    from public.clinic_produto_estoque e
+    left join por_produto s on s.product_id = e.product_id
+   where e.organization_id = p_org and e.ponto_pedido is not null and coalesce(s.saldo, 0) <= e.ponto_pedido
+     and not (e.estoque_minimo > 0 and coalesce(s.saldo, 0) < e.estoque_minimo)
+  union all
+  select 'lote_vencido', 'lote_vencido:' || l.id, l.product_id, l.id, null,
+         jsonb_build_object('validade', l.validade, 'saldo', sl.saldo)
+    from public.clinic_estoque_lotes l
+    join por_lote sl on sl.lote_id = l.id
+   where l.organization_id = p_org and l.validade < current_date
+  union all
+  select 'validade_proxima',
+         'validade:' || l.id || ':' || f.faixa,
+         l.product_id, l.id, null,
+         jsonb_build_object('validade', l.validade, 'dias', l.validade - current_date, 'faixa', f.faixa, 'saldo', sl.saldo)
+    from public.clinic_estoque_lotes l
+    join por_lote sl on sl.lote_id = l.id
+    cross join lateral (select case when l.validade - current_date <= 30 then 30
+                                    when l.validade - current_date <= 60 then 60 else 90 end as faixa) f
+   where l.organization_id = p_org and l.validade between current_date and current_date + 90
+  union all
+  select 'frasco_vencido', 'frasco_vencido:' || fa.id, fa.product_id, fa.lote_id, fa.id,
+         jsonb_build_object('vence_em', fa.vence_em, 'conteudo', fa.conteudo)
+    from public.clinic_estoque_frascos_abertos fa
+   where fa.organization_id = p_org and fa.vencido and fa.conteudo > 0
+  union all
+  select 'pendencias_baixa', 'pendencias_baixa', null, null, null, jsonb_build_object('quantidade', count(*))
+    from public.clinic_estoque_pendencias p
+   where p.organization_id = p_org and p.status = 'aberta'
+  having count(*) > 0
+$$;
+revoke execute on function public.fn_clinic_estoque_alertas_atuais(uuid) from public, anon, authenticated;
+
+-- ─── a varredura (cron, service role) ──────────────────────────────────────
+create or replace function public.fn_clinic_estoque_varrer_alertas()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_org uuid;
+  v_atuais jsonb;
+  v_n integer;
+  v_abertos integer := 0;
+  v_resolvidos integer := 0;
+begin
+  for v_org in
+    select o.id from public.organizations o where (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb
+  loop
+    select coalesce(jsonb_agg(to_jsonb(a)), '[]'::jsonb) into v_atuais from public.fn_clinic_estoque_alertas_atuais(v_org) a;
+
+    -- resolve o que deixou de valer
+    update public.clinic_estoque_alertas x
+       set status = 'resolvido', fechado_em = now(), atualizado_em = now()
+     where x.organization_id = v_org and x.status = 'aberto'
+       and not exists (select 1 from jsonb_array_elements(v_atuais) a where a ->> 'chave' = x.chave);
+    get diagnostics v_n = row_count;
+    v_resolvidos := v_resolvidos + v_n;
+
+    -- atualiza o detalhe do que continua
+    update public.clinic_estoque_alertas x
+       set detalhe = a -> 'detalhe', atualizado_em = now()
+      from jsonb_array_elements(v_atuais) a
+     where x.organization_id = v_org and x.status = 'aberto' and x.chave = a ->> 'chave'
+       and x.detalhe is distinct from a -> 'detalhe';
+
+    -- abre o que surgiu (dispensado há menos de 7 dias não volta)
+    insert into public.clinic_estoque_alertas (organization_id, tipo, chave, product_id, lote_id, frasco_id, detalhe)
+    select v_org, a ->> 'tipo', a ->> 'chave', nullif(a ->> 'product_id', '')::uuid, nullif(a ->> 'lote_id', '')::uuid,
+           nullif(a ->> 'frasco_id', '')::uuid, coalesce(a -> 'detalhe', '{}'::jsonb)
+      from jsonb_array_elements(v_atuais) a
+     where not exists (select 1 from public.clinic_estoque_alertas x
+                        where x.organization_id = v_org and x.chave = a ->> 'chave'
+                          and (x.status = 'aberto' or (x.status = 'dispensado' and x.fechado_em > now() - interval '7 days')));
+    get diagnostics v_n = row_count;
+    v_abertos := v_abertos + v_n;
+  end loop;
+  return jsonb_build_object('abertos', v_abertos, 'resolvidos', v_resolvidos);
+end $$;
+revoke execute on function public.fn_clinic_estoque_varrer_alertas() from public, anon, authenticated;
+grant  execute on function public.fn_clinic_estoque_varrer_alertas() to service_role;
+
+-- ─── dispensar (com motivo) ─────────────────────────────────────────────────
+create or replace function public.fn_clinic_estoque_alerta_dispensar(p_org uuid, p_alerta uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.movimentar');
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'estoque_sem_motivo' using errcode = '22023';
+  end if;
+  select a.status into v_status from public.clinic_estoque_alertas a
+   where a.id = p_alerta and a.organization_id = p_org for update;
+  if v_status is null then
+    raise exception 'estoque_alerta_invalido' using errcode = 'P0002';
+  end if;
+  if v_status <> 'aberto' then
+    raise exception 'estoque_alerta_fechado' using errcode = '22023';
+  end if;
+  update public.clinic_estoque_alertas
+     set status = 'dispensado', motivo = left(btrim(p_motivo), 300), dispensado_por = auth.uid(),
+         fechado_em = now(), atualizado_em = now()
+   where id = p_alerta;
+  return jsonb_build_object('status', 'dispensado');
+end $$;
+revoke execute on function public.fn_clinic_estoque_alerta_dispensar(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_estoque_alerta_dispensar(uuid, uuid, text) to authenticated;
+-- ---- fim clinic (migration 9035, fork) ----
+
+-- ---- clinic: estoque — relatórios e rastreio de lote (migration 9036, fork) ----
+-- ─── 1. a ligação com o paciente sai da leitura direta ─────────────────────
+revoke select on public.clinic_estoque_movimentos from authenticated;
+grant select (id, organization_id, operacao_id, product_id, lote_id, local_id, frasco_id, quantidade,
+              custo_unitario_cents, procedure_id, created_at)
+  on public.clinic_estoque_movimentos to authenticated;
+
+-- ─── 2. a chave clínica do rastreio ────────────────────────────────────────
+insert into public.clinic_permissions (key, modulo, acao, nivel_base, depende_de, critica, descricao, clinica) values
+  ('estoque.rastreio_lote', 'estoque', 'rastreio_lote', 'manager', array['estoque.ver', 'prontuario.ver']::text[], false,
+   'Rastrear um lote até os pacientes que o receberam (recall)', true)
+on conflict (key) do update
+  set modulo = excluded.modulo, acao = excluded.acao, nivel_base = excluded.nivel_base,
+      depende_de = excluded.depende_de, critica = excluded.critica, descricao = excluded.descricao,
+      clinica = excluded.clinica;
+
+-- quem pode ler (membro da empresa + a permissão); interna
+create or replace function public.fn_clinic_estoque_pode(p_org uuid, p_permissao text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select auth.uid() is not null and p_org is not null
+     and p_org in (select public.fn_user_org_ids())
+     and public.fn_has_permission(p_org, p_permissao)
+$$;
+revoke execute on function public.fn_clinic_estoque_pode(uuid, text) from public, anon, authenticated;
+
+-- ─── 3. consumo ─────────────────────────────────────────────────────────────
+create or replace function public.fn_clinic_estoque_rel_consumo(p_org uuid, p_de date, p_ate date, p_agrupar text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_custos boolean;
+begin
+  if not public.fn_clinic_estoque_pode(p_org, 'estoque.ver') then
+    raise exception 'acesso_proibido' using errcode = '42501';
+  end if;
+  if p_de is null or p_ate is null or p_ate < p_de or p_ate - p_de > 400
+     or p_agrupar not in ('procedimento', 'profissional', 'produto') then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  v_custos := public.fn_has_permission(p_org, 'estoque.custos');
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'grupo_id', x.grupo_id, 'grupo', x.grupo, 'product_id', x.product_id, 'produto', c.nome,
+             'unidade', coalesce(e.unidade_aplicacao, 'un'), 'quantidade', x.quantidade,
+             'atendimentos', x.atendimentos,
+             'custo_cents', case when v_custos then x.custo end)
+           order by x.grupo nulls last, c.nome)
+      from (
+        select case p_agrupar when 'procedimento' then m.procedure_id
+                              when 'profissional' then m.profissional_user_id
+                              else m.product_id end as grupo_id,
+               case p_agrupar
+                 when 'procedimento' then (select pr.name from public.clinic_procedures pr where pr.id = m.procedure_id)
+                 when 'profissional' then (select cp.display_name from public.clinic_professionals cp
+                                            where cp.organization_id = p_org and cp.user_id = m.profissional_user_id limit 1)
+                 else null end as grupo,
+               m.product_id,
+               -sum(m.quantidade) as quantidade,
+               count(distinct m.atendimento_id) as atendimentos,
+               round(-sum(m.quantidade * coalesce(m.custo_unitario_cents, 0))) as custo
+          from public.clinic_estoque_movimentos m
+         where m.organization_id = p_org and m.atendimento_id is not null
+           and m.created_at >= p_de and m.created_at < p_ate + 1
+         group by 1, 2, m.product_id
+        having sum(m.quantidade) <> 0
+      ) x
+      join public.catalog_products c on c.id = x.product_id
+      left join public.clinic_produto_estoque e on e.organization_id = p_org and e.product_id = x.product_id
+  ), '[]'::jsonb);
+end $$;
+revoke execute on function public.fn_clinic_estoque_rel_consumo(uuid, date, date, text) from public, anon;
+grant  execute on function public.fn_clinic_estoque_rel_consumo(uuid, date, date, text) to authenticated;
+
+-- ─── 4. perdas ──────────────────────────────────────────────────────────────
+create or replace function public.fn_clinic_estoque_rel_perdas(p_org uuid, p_de date, p_ate date)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_custos boolean;
+begin
+  if not public.fn_clinic_estoque_pode(p_org, 'estoque.ver') then
+    raise exception 'acesso_proibido' using errcode = '42501';
+  end if;
+  if p_de is null or p_ate is null or p_ate < p_de or p_ate - p_de > 400 then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  v_custos := public.fn_has_permission(p_org, 'estoque.custos');
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'product_id', x.product_id, 'produto', c.nome, 'unidade', coalesce(e.unidade_aplicacao, 'un'),
+             'motivo', x.motivo, 'quantidade', x.quantidade, 'ocorrencias', x.ocorrencias,
+             'custo_cents', case when v_custos then x.custo end)
+           order by x.quantidade desc)
+      from (
+        select m.product_id,
+               case when o.origem_tipo = 'frasco' then 'Frasco encerrado'
+                    when o.motivo ilike '%venc%' then 'Vencimento'
+                    else coalesce(left(o.motivo, 80), 'Sem motivo') end as motivo,
+               -sum(m.quantidade) as quantidade,
+               count(distinct o.id) as ocorrencias,
+               round(-sum(m.quantidade * coalesce(m.custo_unitario_cents, 0))) as custo
+          from public.clinic_estoque_operacoes o
+          join public.clinic_estoque_movimentos m on m.organization_id = o.organization_id and m.operacao_id = o.id
+         where o.organization_id = p_org and o.tipo = 'perda'
+           and o.created_at >= p_de and o.created_at < p_ate + 1
+           -- perda estornada não conta
+           and not exists (select 1 from public.clinic_estoque_operacoes e2
+                            where e2.organization_id = p_org and e2.estorna_operacao_id = o.id)
+         group by 1, 2
+        having sum(m.quantidade) <> 0
+      ) x
+      join public.catalog_products c on c.id = x.product_id
+      left join public.clinic_produto_estoque e on e.organization_id = p_org and e.product_id = x.product_id
+  ), '[]'::jsonb);
+end $$;
+revoke execute on function public.fn_clinic_estoque_rel_perdas(uuid, date, date) from public, anon;
+grant  execute on function public.fn_clinic_estoque_rel_perdas(uuid, date, date) to authenticated;
+
+-- ─── 5. sugestão de compra ──────────────────────────────────────────────────
+create or replace function public.fn_clinic_estoque_rel_compra(p_org uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not public.fn_clinic_estoque_pode(p_org, 'estoque.ver') then
+    raise exception 'acesso_proibido' using errcode = '42501';
+  end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'product_id', x.product_id, 'produto', c.nome, 'unidade_aplicacao', x.unidade_aplicacao,
+             'unidade_estoque', x.unidade_estoque, 'disponivel', x.disponivel, 'nivel', x.nivel,
+             'sugerido', ceil(greatest(0, 2 * x.nivel - x.disponivel) / x.fator)::integer)
+           order by c.nome)
+      from (
+        select e.product_id, e.unidade_aplicacao, e.unidade_estoque, e.fator_conversao as fator,
+               greatest(e.estoque_minimo, coalesce(e.ponto_pedido, 0)) as nivel,
+               coalesce((select sum(m.quantidade) from public.clinic_estoque_movimentos m
+                          join public.clinic_estoque_lotes l on l.id = m.lote_id
+                         where m.organization_id = p_org and m.product_id = e.product_id
+                           and (l.validade is null or l.validade >= current_date)), 0)
+               - coalesce((select sum(r.quantidade) from public.clinic_estoque_reservas r
+                            where r.organization_id = p_org and r.product_id = e.product_id and r.status = 'ativa'), 0)
+                 as disponivel
+          from public.clinic_produto_estoque e
+         where e.organization_id = p_org and (e.estoque_minimo > 0 or e.ponto_pedido is not null)
+      ) x
+      join public.catalog_products c on c.id = x.product_id and c.ativo
+     where x.nivel > 0 and x.disponivel <= x.nivel
+  ), '[]'::jsonb);
+end $$;
+revoke execute on function public.fn_clinic_estoque_rel_compra(uuid) from public, anon;
+grant  execute on function public.fn_clinic_estoque_rel_compra(uuid) to authenticated;
+
+-- ─── 6. rastreio de lote (recall) — chave clínica ──────────────────────────
+create or replace function public.fn_clinic_estoque_rel_rastreio_lote(p_org uuid, p_lote uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lote public.clinic_estoque_lotes;
+begin
+  if not public.fn_clinic_estoque_pode(p_org, 'estoque.rastreio_lote') then
+    raise exception 'acesso_proibido' using errcode = '42501';
+  end if;
+  select * into v_lote from public.clinic_estoque_lotes l where l.id = p_lote and l.organization_id = p_org;
+  if v_lote.id is null then
+    raise exception 'estoque_lote_invalido' using errcode = '22023';
+  end if;
+  return jsonb_build_object(
+    'lote', jsonb_build_object('id', v_lote.id, 'codigo', v_lote.codigo, 'validade', v_lote.validade,
+                               'produto', (select c.nome from public.catalog_products c where c.id = v_lote.product_id)),
+    'pacientes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'contact_id', x.contact_id, 'paciente', ct.name, 'atendimento_id', x.atendimento_id,
+               'data', x.data, 'profissional', cp.display_name, 'quantidade', x.quantidade)
+             order by x.data desc)
+        from (
+          select m.contact_id, m.atendimento_id, m.profissional_user_id, min(m.created_at) as data,
+                 -sum(m.quantidade) as quantidade
+            from public.clinic_estoque_movimentos m
+           where m.organization_id = p_org and m.lote_id = p_lote and m.atendimento_id is not null
+           group by m.contact_id, m.atendimento_id, m.profissional_user_id
+          having sum(m.quantidade) < 0
+        ) x
+        left join public.contacts ct on ct.id = x.contact_id and ct.organization_id = p_org
+        left join public.clinic_professionals cp on cp.organization_id = p_org and cp.user_id = x.profissional_user_id
+    ), '[]'::jsonb));
+end $$;
+revoke execute on function public.fn_clinic_estoque_rel_rastreio_lote(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_estoque_rel_rastreio_lote(uuid, uuid) to authenticated;
+-- ---- fim clinic (migration 9036, fork) ----
+
+-- ---- clinic: catálogo da Groq (migration 9037, fork) ----
+insert into public.ai_models
+  (provider, model_id, display_name, description,
+   input_price_per_million_cents, output_price_per_million_cents, supports_tools)
+values
+  ('groq', 'llama-3.3-70b-versatile', 'Llama 3.3 70B (Groq)',
+   'Modelo aberto da Meta servido pela Groq, com resposta muito rápida. Bom equilíbrio entre qualidade e custo.',
+   59, 79, true),
+  ('groq', 'llama-3.1-8b-instant', 'Llama 3.1 8B Instant (Groq)',
+   'O mais barato e rápido da Groq, para tarefas curtas e classificação.',
+   5, 8, true),
+  ('groq', 'openai/gpt-oss-120b', 'GPT-OSS 120B (Groq)',
+   'Modelo aberto da OpenAI servido pela Groq, para tarefas que pedem mais raciocínio.',
+   15, 60, true)
+on conflict (provider, model_id) do update set
+  display_name = excluded.display_name,
+  description = excluded.description,
+  input_price_per_million_cents = excluded.input_price_per_million_cents,
+  output_price_per_million_cents = excluded.output_price_per_million_cents,
+  supports_tools = excluded.supports_tools;
+
+insert into public.ai_pricing
+  (model, prompt_cents_per_million_tokens, completion_cents_per_million_tokens, notes)
+values
+  ('llama-3.3-70b-versatile', 59, 79, 'catálogo 9037 (Groq)'),
+  ('llama-3.1-8b-instant',     5,  8, 'catálogo 9037 (Groq)'),
+  ('openai/gpt-oss-120b',     15, 60, 'catálogo 9037 (Groq)')
+on conflict (model) do update set
+  prompt_cents_per_million_tokens = excluded.prompt_cents_per_million_tokens,
+  completion_cents_per_million_tokens = excluded.completion_cents_per_million_tokens,
+  notes = excluded.notes,
+  superseded_at = null;
+-- ---- fim clinic (migration 9037, fork) ----
+
+-- ---- clinic: estoque — correções das revisões (migration 9038, fork) ----
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9038 · clinic — estoque: correções das revisões (FORK, estoque E10)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/estoque/plano.md ("E10"). As revisões security-lgpd e
+-- health-compliance sobre E0–E9 acharam, sobretudo, furos de RASTREABILIDADE
+-- do lote até o paciente. Aqui:
+--
+--   C1  insumo de produto rastreado exige lote e validade no prontuário; o que
+--       a FEFO escolheu sozinha fica marcado `lote_presumido` no movimento;
+--   C2  recall novo: parte dos INSUMOS do prontuário (o lote que o profissional
+--       escreveu) unidos aos movimentos — acha estornado, pendente e sem baixa;
+--   C3  NF-e com vários `rastro` num item vira um lote por rastro (soma conferida);
+--   C4  lote vencido aplicado: baixa (o prontuário manda) e alerta de evento;
+--   C5  conselho conferido também quando a baixa vira pendência e no resolver;
+--       `outro` não vale como conselho de produto controlado;
+--   C6  lote guarda registro ANVISA e fabricação da NF-e; registro divergente
+--       do cadastro vira alerta;
+--   C7  fracionável exige prazo pós-abertura (escrita nova);
+--   C8  bloqueio de lote (recall/quarentena): fora da FEFO e da baixa manual;
+--   C9  estorno não devolve conteúdo a frasco encerrado ou vencido;
+--   C10 perda com categoria (vencimento, quebra, contaminação…);
+--   C11 código de lote normalizado (maiúsculas, sem espaços nas pontas);
+--   C13 quem só tem `estoque.ver` não lê a ligação indireta com o atendimento
+--       (pendências, reservas, origem da operação) — privilégio por coluna;
+--   S1  recall auditado e limitado DENTRO do banco (a RPC direta deixa de ser
+--       um atalho sem registro); a versão antiga sai do alcance do cliente;
+--   S2  custo sai da leitura direta de `estoque.ver` (lotes, movimentos, NF-e);
+--   S4  registrar NF-e exige o XML no Storage da própria clínica.
+--
+-- Aditiva: colunas novas com default, constraints `not valid` (valem para a
+-- escrita nova), funções redefinidas com a mesma assinatura ou criadas novas
+-- (as antigas ficam). Também anexada ao fim de supabase/baseline.sql.
+
+-- ─── 1. colunas novas ───────────────────────────────────────────────────────
+alter table public.clinic_estoque_movimentos
+  add column if not exists lote_presumido boolean not null default false;
+
+alter table public.clinic_estoque_lotes
+  add column if not exists registro_anvisa text,
+  add column if not exists fabricacao date,
+  add column if not exists bloqueado_em timestamptz,
+  add column if not exists bloqueado_por uuid,
+  add column if not exists bloqueio_motivo text;
+
+alter table public.clinic_estoque_operacoes
+  add column if not exists motivo_categoria text;
+
+do $c$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'clinic_estoque_lotes_revisao_textos') then
+    alter table public.clinic_estoque_lotes add constraint clinic_estoque_lotes_revisao_textos check (
+      coalesce(char_length(registro_anvisa), 0) <= 40
+      and (bloqueio_motivo is null or char_length(btrim(bloqueio_motivo)) between 3 and 300));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'clinic_estoque_operacoes_motivo_categoria') then
+    alter table public.clinic_estoque_operacoes add constraint clinic_estoque_operacoes_motivo_categoria check (
+      motivo_categoria is null or motivo_categoria in
+        ('vencimento', 'quebra', 'contaminacao', 'pos_abertura', 'recolhimento', 'outro'));
+  end if;
+  -- C7 e C5: valem para a escrita nova (dados antigos não são reavaliados)
+  if not exists (select 1 from pg_constraint where conname = 'clinic_produto_estoque_fracionavel_prazo') then
+    alter table public.clinic_produto_estoque add constraint clinic_produto_estoque_fracionavel_prazo
+      check (not fracionavel or validade_pos_abertura_horas is not null) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'clinic_produto_estoque_controlado_conselho') then
+    alter table public.clinic_produto_estoque add constraint clinic_produto_estoque_controlado_conselho
+      check (not controlado or not ('outro' = any(conselhos_permitidos))) not valid;
+  end if;
+  -- alertas de EVENTO (não vêm da varredura): ampliar a lista de tipos
+  alter table public.clinic_estoque_alertas drop constraint if exists clinic_estoque_alertas_tipo;
+  alter table public.clinic_estoque_alertas add constraint clinic_estoque_alertas_tipo check (tipo in (
+    'abaixo_minimo', 'ponto_pedido', 'validade_proxima', 'lote_vencido', 'frasco_vencido', 'pendencias_baixa',
+    'consumo_lote_vencido', 'lote_bloqueado_consumido', 'nfe_registro_divergente'));
+end
+$c$;
+
+-- ─── 2. C11: código de lote normalizado na entrada ─────────────────────────
+create or replace function public.fn_clinic_estoque_lote_normalizar()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  new.codigo := nullif(upper(btrim(coalesce(new.codigo, ''))), '');
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_estoque_lote_normalizar() from public, anon, authenticated;
+drop trigger if exists trg_clinic_estoque_lote_normalizar on public.clinic_estoque_lotes;
+create trigger trg_clinic_estoque_lote_normalizar
+  before insert on public.clinic_estoque_lotes
+  for each row execute function public.fn_clinic_estoque_lote_normalizar();
+
+create or replace function public.fn_clinic_estoque_lote(
+  p_org uuid, p_product uuid, p_codigo text, p_validade date, p_custo numeric)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_cfg public.clinic_produto_estoque;
+  v_codigo text := nullif(upper(btrim(coalesce(p_codigo, ''))), '');
+  v_id uuid;
+begin
+  v_cfg := public.fn_clinic_estoque_config(p_org, p_product);
+  if v_cfg.rastreado and (v_codigo is null or p_validade is null) then
+    raise exception 'estoque_lote_obrigatorio' using errcode = '22023';
+  end if;
+  -- compara normalizado: lotes antigos gravados em minúsculas continuam achados
+  select l.id into v_id from public.clinic_estoque_lotes l
+   where l.organization_id = p_org and l.product_id = p_product
+     and upper(btrim(coalesce(l.codigo, ''))) = coalesce(v_codigo, '')
+     and coalesce(l.validade, 'infinity'::date) = coalesce(p_validade, 'infinity'::date)
+   order by l.created_at, l.id
+   limit 1;
+  if v_id is null then
+    insert into public.clinic_estoque_lotes (organization_id, product_id, codigo, validade, custo_unitario_cents, created_by)
+    values (p_org, p_product, v_codigo, p_validade, p_custo, auth.uid())
+    on conflict do nothing
+    returning id into v_id;
+    if v_id is null then
+      select l.id into v_id from public.clinic_estoque_lotes l
+       where l.organization_id = p_org and l.product_id = p_product
+         and coalesce(l.codigo, '') = coalesce(v_codigo, '')
+         and coalesce(l.validade, 'infinity'::date) = coalesce(p_validade, 'infinity'::date);
+    end if;
+  end if;
+  return v_id;
+end $$;
+revoke execute on function public.fn_clinic_estoque_lote(uuid, uuid, text, date, numeric) from public, anon, authenticated;
+
+-- ─── 3. C1: insumo de produto rastreado exige lote e validade ──────────────
+create or replace function public.fn_clinic_estoque_insumo_lote_exigido()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.product_id is not null
+     and (nullif(btrim(coalesce(new.lote, '')), '') is null or new.validade is null)
+     and exists (select 1 from public.organizations o
+                  where o.id = new.organization_id and (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb)
+     and exists (select 1 from public.clinic_produto_estoque e
+                  where e.organization_id = new.organization_id and e.product_id = new.product_id and e.rastreado) then
+    raise exception 'insumo_lote_obrigatorio' using errcode = '22023';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_estoque_insumo_lote_exigido() from public, anon, authenticated;
+drop trigger if exists trg_clinic_estoque_insumo_lote_exigido on public.clinic_procedimento_insumos;
+create trigger trg_clinic_estoque_insumo_lote_exigido
+  before insert or update of product_id, lote, validade on public.clinic_procedimento_insumos
+  for each row execute function public.fn_clinic_estoque_insumo_lote_exigido();
+
+-- ─── 4. alertas de evento (C4, C6, C8) ─────────────────────────────────────
+-- Gravados na hora do fato; a varredura não os resolve sozinha (só quem
+-- dispensa, com motivo). Sem dado de paciente no detalhe.
+create or replace function public.fn_clinic_estoque_alerta_evento(
+  p_org uuid, p_tipo text, p_chave text, p_product uuid, p_lote uuid, p_detalhe jsonb)
+returns void
+language sql
+security definer
+set search_path = public, pg_temp
+as $$
+  insert into public.clinic_estoque_alertas (organization_id, tipo, chave, product_id, lote_id, detalhe)
+  values (p_org, p_tipo, left(p_chave, 200), p_product, p_lote, coalesce(p_detalhe, '{}'::jsonb))
+  on conflict (organization_id, chave) where status = 'aberto' do nothing
+$$;
+revoke execute on function public.fn_clinic_estoque_alerta_evento(uuid, text, text, uuid, uuid, jsonb) from public, anon, authenticated;
+
+-- A varredura só resolve os tipos que ELA calcula.
+create or replace function public.fn_clinic_estoque_varrer_alertas()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_org uuid;
+  v_atuais jsonb;
+  v_n integer;
+  v_abertos integer := 0;
+  v_resolvidos integer := 0;
+begin
+  for v_org in
+    select o.id from public.organizations o where (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb
+  loop
+    select coalesce(jsonb_agg(to_jsonb(a)), '[]'::jsonb) into v_atuais from public.fn_clinic_estoque_alertas_atuais(v_org) a;
+
+    update public.clinic_estoque_alertas x
+       set status = 'resolvido', fechado_em = now(), atualizado_em = now()
+     where x.organization_id = v_org and x.status = 'aberto'
+       and x.tipo in ('abaixo_minimo', 'ponto_pedido', 'validade_proxima', 'lote_vencido', 'frasco_vencido', 'pendencias_baixa')
+       and not exists (select 1 from jsonb_array_elements(v_atuais) a where a ->> 'chave' = x.chave);
+    get diagnostics v_n = row_count;
+    v_resolvidos := v_resolvidos + v_n;
+
+    update public.clinic_estoque_alertas x
+       set detalhe = a -> 'detalhe', atualizado_em = now()
+      from jsonb_array_elements(v_atuais) a
+     where x.organization_id = v_org and x.status = 'aberto' and x.chave = a ->> 'chave'
+       and x.detalhe is distinct from a -> 'detalhe';
+
+    insert into public.clinic_estoque_alertas (organization_id, tipo, chave, product_id, lote_id, frasco_id, detalhe)
+    select v_org, a ->> 'tipo', a ->> 'chave', nullif(a ->> 'product_id', '')::uuid, nullif(a ->> 'lote_id', '')::uuid,
+           nullif(a ->> 'frasco_id', '')::uuid, coalesce(a -> 'detalhe', '{}'::jsonb)
+      from jsonb_array_elements(v_atuais) a
+     where not exists (select 1 from public.clinic_estoque_alertas x
+                        where x.organization_id = v_org and x.chave = a ->> 'chave'
+                          and (x.status = 'aberto' or (x.status = 'dispensado' and x.fechado_em > now() - interval '7 days')));
+    get diagnostics v_n = row_count;
+    v_abertos := v_abertos + v_n;
+  end loop;
+  return jsonb_build_object('abertos', v_abertos, 'resolvidos', v_resolvidos);
+end $$;
+revoke execute on function public.fn_clinic_estoque_varrer_alertas() from public, anon, authenticated;
+grant  execute on function public.fn_clinic_estoque_varrer_alertas() to service_role;
+
+-- ─── 5. a saída de um insumo: presumido, bloqueado, vencido ────────────────
+-- Versão nova com `p_presumido` (lote escolhido pelo sistema). A de 6
+-- argumentos fica e passa a chamar esta: presumido = o insumo não tem lote.
+create or replace function public.fn_clinic_estoque_consumir(
+  p_org uuid, p_insumo uuid, p_local uuid, p_lotes uuid[], p_qtd numeric, p_ator uuid, p_presumido boolean,
+  out operacao_id uuid, out motivo text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ins record;
+  v_cfg public.clinic_produto_estoque;
+  v_restante numeric := round(p_qtd, 3);
+  v_lotes uuid[];
+  v_g record;
+  v_tira numeric;
+  v_frasco uuid;
+  v_lacrado numeric;
+begin
+  select i.id, i.product_id, p.atendimento_id, p.procedure_id,
+         coalesce(p.executor_user_id, a.professional_user_id) as profissional, a.contact_id
+    into v_ins
+    from public.clinic_procedimento_insumos i
+    join public.clinic_procedimentos_realizados p on p.id = i.procedimento_id and p.organization_id = p_org
+    join public.clinic_atendimentos a on a.id = p.atendimento_id and a.organization_id = p_org
+   where i.id = p_insumo and i.organization_id = p_org;
+  if v_ins.id is null then
+    raise exception 'estoque_insumo_invalido' using errcode = 'P0002';
+  end if;
+  if p_local is null then
+    motivo := 'sem_local';
+    return;
+  end if;
+  -- lote escolhido pelo sistema nunca é um lote bloqueado
+  select array_agg(l.id) into v_lotes from public.clinic_estoque_lotes l
+   where l.organization_id = p_org and l.id = any(coalesce(p_lotes, '{}'))
+     and (not coalesce(p_presumido, false) or l.bloqueado_em is null);
+  if cardinality(coalesce(v_lotes, '{}')) = 0 then
+    motivo := 'sem_saldo';
+    return;
+  end if;
+  select * into v_cfg from public.clinic_produto_estoque e
+   where e.organization_id = p_org and e.product_id = v_ins.product_id;
+
+  perform public.fn_clinic_estoque_travar(p_org, v_lotes);
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, origem_id, ator)
+  values (p_org, 'consumo', 'insumo', p_insumo, p_ator)
+  returning id into operacao_id;
+
+  -- 1) frascos abertos no prazo
+  for v_g in
+    select f.id as frasco_id, f.lote_id, l.custo_unitario_cents,
+           (select coalesce(sum(m.quantidade), 0) from public.clinic_estoque_movimentos m
+             where m.organization_id = p_org and m.frasco_id = f.id) as saldo
+      from public.clinic_estoque_frascos f
+      join public.clinic_estoque_lotes l on l.id = f.lote_id
+     where f.organization_id = p_org and f.status = 'aberto' and f.local_id = p_local
+       and f.lote_id = any(v_lotes) and f.product_id = v_ins.product_id
+       and (f.vence_em is null or f.vence_em > now())
+     order by f.vence_em nulls last, f.aberto_em, f.id
+  loop
+    exit when v_restante <= 0;
+    continue when v_g.saldo <= 0;
+    v_tira := least(v_g.saldo, v_restante);
+    insert into public.clinic_estoque_movimentos
+      (organization_id, operacao_id, product_id, lote_id, local_id, frasco_id, quantidade, custo_unitario_cents,
+       atendimento_id, contact_id, profissional_user_id, procedure_id, lote_presumido)
+    values (p_org, operacao_id, v_ins.product_id, v_g.lote_id, p_local, v_g.frasco_id, -v_tira, v_g.custo_unitario_cents,
+            v_ins.atendimento_id, v_ins.contact_id, v_ins.profissional, v_ins.procedure_id, coalesce(p_presumido, false));
+    v_restante := v_restante - v_tira;
+  end loop;
+
+  -- 2) lacrado, por FEFO do lote
+  for v_g in
+    select l.id as lote_id, l.custo_unitario_cents, (l.validade is not null and l.validade < current_date) as vencido
+      from public.clinic_estoque_lotes l
+     where l.organization_id = p_org and l.id = any(v_lotes) and l.product_id = v_ins.product_id
+     order by l.validade nulls last, l.created_at, l.id
+  loop
+    exit when v_restante <= 0;
+    loop
+      exit when v_restante <= 0;
+      select coalesce(sum(m.quantidade), 0) into v_lacrado from public.clinic_estoque_movimentos m
+       where m.organization_id = p_org and m.lote_id = v_g.lote_id and m.local_id = p_local and m.frasco_id is null;
+      exit when v_lacrado <= 0;
+      if coalesce(v_cfg.fracionavel, false) and not v_g.vencido and v_lacrado >= v_cfg.fator_conversao then
+        v_frasco := public.fn_clinic_estoque_frasco_abrir_interno(p_org, v_g.lote_id, p_local, p_ator);
+        v_tira := least(v_cfg.fator_conversao, v_restante);
+      else
+        v_frasco := null;
+        v_tira := least(v_lacrado, v_restante);
+      end if;
+      insert into public.clinic_estoque_movimentos
+        (organization_id, operacao_id, product_id, lote_id, local_id, frasco_id, quantidade, custo_unitario_cents,
+         atendimento_id, contact_id, profissional_user_id, procedure_id, lote_presumido)
+      values (p_org, operacao_id, v_ins.product_id, v_g.lote_id, p_local, v_frasco, -v_tira, v_g.custo_unitario_cents,
+              v_ins.atendimento_id, v_ins.contact_id, v_ins.profissional, v_ins.procedure_id, coalesce(p_presumido, false));
+      v_restante := v_restante - v_tira;
+    end loop;
+  end loop;
+
+  if v_restante > 0 then
+    raise exception 'estoque_insuficiente' using errcode = '23514';
+  end if;
+  perform public.fn_clinic_estoque_conferir_saldos(p_org, operacao_id);
+
+  -- C4 / C8: aplicou lote vencido ou bloqueado → alerta (sem paciente no detalhe)
+  perform public.fn_clinic_estoque_alerta_evento(
+            p_org,
+            case when l.validade is not null and l.validade < current_date then 'consumo_lote_vencido'
+                 else 'lote_bloqueado_consumido' end,
+            case when l.validade is not null and l.validade < current_date then 'consumo_lote_vencido:'
+                 else 'lote_bloqueado_consumido:' end || operacao_id || ':' || l.id,
+            l.product_id, l.id,
+            jsonb_build_object('validade', l.validade, 'operacao_id', operacao_id))
+     from public.clinic_estoque_lotes l
+    where l.organization_id = p_org
+      and l.id in (select distinct m.lote_id from public.clinic_estoque_movimentos m
+                    where m.organization_id = p_org and m.operacao_id = fn_clinic_estoque_consumir.operacao_id)
+      and ((l.validade is not null and l.validade < current_date) or l.bloqueado_em is not null);
+
+  update public.clinic_procedimento_insumos set movimento_estoque_id = operacao_id
+   where id = p_insumo and organization_id = p_org;
+end $$;
+revoke execute on function public.fn_clinic_estoque_consumir(uuid, uuid, uuid, uuid[], numeric, uuid, boolean) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_estoque_consumir(
+  p_org uuid, p_insumo uuid, p_local uuid, p_lotes uuid[], p_qtd numeric, p_ator uuid,
+  out operacao_id uuid, out motivo text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_r record;
+begin
+  select * into v_r from public.fn_clinic_estoque_consumir(
+    p_org, p_insumo, p_local, p_lotes, p_qtd, p_ator,
+    not exists (select 1 from public.clinic_procedimento_insumos i
+                 where i.id = p_insumo and i.organization_id = p_org and nullif(btrim(coalesce(i.lote, '')), '') is not null));
+  operacao_id := v_r.operacao_id;
+  motivo := v_r.motivo;
+end $$;
+revoke execute on function public.fn_clinic_estoque_consumir(uuid, uuid, uuid, uuid[], numeric, uuid) from public, anon, authenticated;
+
+-- ─── 6. a baixa do procedimento: lote normalizado, sem bloqueado, conselho ──
+create or replace function public.fn_clinic_estoque_baixar_procedimento(p_org uuid, p_procedimento uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_proc record;
+  v_local uuid;
+  v_conselho text;
+  v_i record;
+  v_cfg public.clinic_produto_estoque;
+  v_qtd numeric;
+  v_lotes uuid[];
+  v_r record;
+  v_op uuid;
+  v_nao_habilitado boolean;
+  v_baixados integer := 0;
+  v_pendencias integer := 0;
+  v_livres integer := 0;
+begin
+  if not coalesce((select (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb
+                     from public.organizations o where o.id = p_org), false) then
+    return jsonb_build_object('ligado', false);
+  end if;
+  select p.id, p.atendimento_id, p.status, coalesce(p.executor_user_id, a.professional_user_id) as profissional
+    into v_proc
+    from public.clinic_procedimentos_realizados p
+    join public.clinic_atendimentos a on a.id = p.atendimento_id and a.organization_id = p_org
+   where p.id = p_procedimento and p.organization_id = p_org;
+  if v_proc.id is null or v_proc.status <> 'finalizado' then
+    raise exception 'estoque_procedimento_invalido' using errcode = 'P0002';
+  end if;
+
+  v_local := public.fn_clinic_estoque_local_do_atendimento(p_org, v_proc.atendimento_id);
+  select cp.council into v_conselho from public.clinic_professionals cp
+   where cp.organization_id = p_org and cp.user_id = v_proc.profissional;
+
+  for v_i in
+    select i.id, i.product_id, i.quantidade, i.unidade, nullif(upper(btrim(coalesce(i.lote, ''))), '') as lote, i.validade,
+           i.movimento_estoque_id
+      from public.clinic_procedimento_insumos i
+     where i.organization_id = p_org and i.procedimento_id = p_procedimento and i.product_id is not null
+     order by i.created_at, i.id
+  loop
+    select * into v_cfg from public.clinic_produto_estoque e
+     where e.organization_id = p_org and e.product_id = v_i.product_id;
+    if v_cfg.id is null then
+      v_livres := v_livres + 1;
+      continue;
+    end if;
+    v_qtd := public.fn_clinic_estoque_qtd_aplicacao(v_cfg, v_i.quantidade, v_i.unidade);
+    v_op := null;
+    -- C5: a habilitação é avaliada ANTES de saber se a baixa sai
+    v_nao_habilitado := v_cfg.controlado and (v_conselho is null or not (v_conselho = any(v_cfg.conselhos_permitidos)));
+
+    select o.id into v_op from public.clinic_estoque_operacoes o
+     where o.organization_id = p_org and o.origem_tipo = 'insumo' and o.origem_id = v_i.id and o.tipo <> 'estorno';
+    if v_op is null then
+      v_lotes := null;
+      if v_i.lote is not null then
+        select array_agg(l.id) into v_lotes from public.clinic_estoque_lotes l
+         where l.organization_id = p_org and l.product_id = v_i.product_id
+           and upper(btrim(coalesce(l.codigo, ''))) = v_i.lote
+           and (v_i.validade is null or l.validade = v_i.validade);
+        if v_lotes is null then
+          insert into public.clinic_estoque_pendencias
+            (organization_id, insumo_id, atendimento_id, product_id, quantidade, lote_informado, motivo)
+          values (p_org, v_i.id, v_proc.atendimento_id, v_i.product_id, v_qtd, v_i.lote, 'lote_desconhecido')
+          on conflict (insumo_id, motivo) do nothing;
+          v_pendencias := v_pendencias + 1;
+        end if;
+      else
+        select array_agg(l.id) into v_lotes from public.clinic_estoque_lotes l
+         where l.organization_id = p_org and l.product_id = v_i.product_id
+           and (l.validade is null or l.validade >= current_date)
+           and l.bloqueado_em is null;
+      end if;
+
+      if v_lotes is not null or v_i.lote is null then
+        begin
+          select * into v_r from public.fn_clinic_estoque_consumir(
+            p_org, v_i.id, v_local, coalesce(v_lotes, '{}'), v_qtd, v_proc.profissional, v_i.lote is null);
+        exception
+          when sqlstate '23514' then
+            select null::uuid as operacao_id, 'sem_saldo'::text as motivo into v_r;
+          when unique_violation then
+            select o.id as operacao_id, null::text as motivo into v_r from public.clinic_estoque_operacoes o
+             where o.organization_id = p_org and o.origem_tipo = 'insumo' and o.origem_id = v_i.id and o.tipo <> 'estorno';
+        end;
+        if v_r.operacao_id is null then
+          insert into public.clinic_estoque_pendencias
+            (organization_id, insumo_id, atendimento_id, product_id, quantidade, lote_informado, motivo)
+          values (p_org, v_i.id, v_proc.atendimento_id, v_i.product_id, v_qtd, v_i.lote, v_r.motivo)
+          on conflict (insumo_id, motivo) do nothing;
+          v_pendencias := v_pendencias + 1;
+        else
+          v_op := v_r.operacao_id;
+        end if;
+      end if;
+    elsif v_i.movimento_estoque_id is distinct from v_op then
+      update public.clinic_procedimento_insumos set movimento_estoque_id = v_op
+       where id = v_i.id and organization_id = p_org;
+    end if;
+    if v_op is not null then
+      v_baixados := v_baixados + 1;
+    end if;
+
+    if v_nao_habilitado then
+      insert into public.clinic_estoque_pendencias
+        (organization_id, insumo_id, atendimento_id, product_id, quantidade, lote_informado, motivo, operacao_id)
+      values (p_org, v_i.id, v_proc.atendimento_id, v_i.product_id, v_qtd, v_i.lote, 'profissional_nao_habilitado', v_op)
+      on conflict (insumo_id, motivo) do nothing;
+      v_pendencias := v_pendencias + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object('ligado', true, 'baixados', v_baixados, 'pendencias', v_pendencias, 'livres', v_livres);
+end $$;
+revoke execute on function public.fn_clinic_estoque_baixar_procedimento(uuid, uuid) from public, anon, authenticated;
+grant  execute on function public.fn_clinic_estoque_baixar_procedimento(uuid, uuid) to service_role;
+
+-- ─── 7. resolver pendência: lote escolhido por gente, conselho conferido ───
+create or replace function public.fn_clinic_estoque_pendencia_resolver(p_org uuid, p_pendencia uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_p public.clinic_estoque_pendencias;
+  v_acao text := p_dados ->> 'acao';
+  v_motivo text := nullif(btrim(coalesce(p_dados ->> 'motivo', '')), '');
+  v_lote uuid := nullif(p_dados ->> 'lote_id', '')::uuid;
+  v_local uuid := nullif(p_dados ->> 'local_id', '')::uuid;
+  v_r record;
+  v_cfg public.clinic_produto_estoque;
+  v_conselho text;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.movimentar');
+  select * into v_p from public.clinic_estoque_pendencias p
+   where p.id = p_pendencia and p.organization_id = p_org
+   for update;
+  if v_p.id is null then
+    raise exception 'estoque_pendencia_invalida' using errcode = 'P0002';
+  end if;
+  if v_p.status <> 'aberta' then
+    raise exception 'estoque_pendencia_fechada' using errcode = '22023';
+  end if;
+
+  if v_acao = 'baixar' then
+    if v_p.motivo = 'profissional_nao_habilitado' then
+      raise exception 'estoque_dados_invalidos' using errcode = '22023';
+    end if;
+    if public.fn_clinic_estoque_lote_da_org(p_org, v_lote) <> v_p.product_id then
+      raise exception 'estoque_lote_invalido' using errcode = '22023';
+    end if;
+    perform public.fn_clinic_estoque_local_valido(p_org, v_local);
+    if exists (select 1 from public.clinic_estoque_operacoes o
+                where o.organization_id = p_org and o.origem_tipo = 'insumo' and o.origem_id = v_p.insumo_id
+                  and o.tipo <> 'estorno') then
+      raise exception 'estoque_ja_baixado' using errcode = '23505';
+    end if;
+    -- lote escolhido por gente: não é presumido (vencido/bloqueado geram alerta)
+    select * into v_r from public.fn_clinic_estoque_consumir(
+      p_org, v_p.insumo_id, v_local, array[v_lote], v_p.quantidade, auth.uid(), false);
+    update public.clinic_estoque_pendencias
+       set status = 'resolvida', operacao_id = v_r.operacao_id, resolvida_por = auth.uid(), resolvida_em = now()
+     where id = v_p.id;
+    -- C5: o conselho de quem aplicou também vale aqui
+    select * into v_cfg from public.clinic_produto_estoque e where e.organization_id = p_org and e.product_id = v_p.product_id;
+    select cp.council into v_conselho
+      from public.clinic_atendimentos a
+      join public.clinic_procedimento_insumos i on i.id = v_p.insumo_id and i.organization_id = p_org
+      join public.clinic_procedimentos_realizados pr on pr.id = i.procedimento_id and pr.organization_id = p_org
+      left join public.clinic_professionals cp
+        on cp.organization_id = p_org and cp.user_id = coalesce(pr.executor_user_id, a.professional_user_id)
+     where a.id = v_p.atendimento_id and a.organization_id = p_org;
+    if coalesce(v_cfg.controlado, false)
+       and (v_conselho is null or not (v_conselho = any(v_cfg.conselhos_permitidos))) then
+      insert into public.clinic_estoque_pendencias
+        (organization_id, insumo_id, atendimento_id, product_id, quantidade, lote_informado, motivo, operacao_id)
+      values (p_org, v_p.insumo_id, v_p.atendimento_id, v_p.product_id, v_p.quantidade, v_p.lote_informado,
+              'profissional_nao_habilitado', v_r.operacao_id)
+      on conflict (insumo_id, motivo) do nothing;
+    end if;
+    return jsonb_build_object('status', 'resolvida', 'operacao_id', v_r.operacao_id);
+  elsif v_acao in ('descartar', 'ciente') then
+    if v_motivo is null or char_length(v_motivo) < 3 then
+      raise exception 'estoque_sem_motivo' using errcode = '22023';
+    end if;
+    if (v_acao = 'ciente') <> (v_p.motivo = 'profissional_nao_habilitado') then
+      raise exception 'estoque_dados_invalidos' using errcode = '22023';
+    end if;
+    update public.clinic_estoque_pendencias
+       set status = case when v_acao = 'ciente' then 'resolvida' else 'descartada' end,
+           resolucao = left(v_motivo, 300), resolvida_por = auth.uid(), resolvida_em = now()
+     where id = v_p.id;
+    return jsonb_build_object('status', case when v_acao = 'ciente' then 'resolvida' else 'descartada' end);
+  end if;
+  raise exception 'estoque_dados_invalidos' using errcode = '22023';
+end $$;
+revoke execute on function public.fn_clinic_estoque_pendencia_resolver(uuid, uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_pendencia_resolver(uuid, uuid, jsonb) to authenticated;
+
+-- ─── 8. C8: bloquear / desbloquear um lote ─────────────────────────────────
+create or replace function public.fn_clinic_estoque_lote_bloquear(p_org uuid, p_lote uuid, p_bloquear boolean, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_motivo text := nullif(btrim(coalesce(p_motivo, '')), '');
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.configurar');
+  perform public.fn_clinic_estoque_lote_da_org(p_org, p_lote);
+  if v_motivo is null or char_length(v_motivo) < 3 then
+    raise exception 'estoque_sem_motivo' using errcode = '22023';
+  end if;
+  update public.clinic_estoque_lotes
+     set bloqueado_em = case when p_bloquear then coalesce(bloqueado_em, now()) end,
+         bloqueado_por = case when p_bloquear then auth.uid() end,
+         bloqueio_motivo = case when p_bloquear then left(v_motivo, 300) end
+   where id = p_lote and organization_id = p_org;
+  return jsonb_build_object('bloqueado', coalesce(p_bloquear, false));
+end $$;
+revoke execute on function public.fn_clinic_estoque_lote_bloquear(uuid, uuid, boolean, text) from public, anon;
+grant  execute on function public.fn_clinic_estoque_lote_bloquear(uuid, uuid, boolean, text) to authenticated;
+
+-- Saída manual (perda é permitida: é o descarte do lote recolhido); a
+-- transferência de lote bloqueado também (levar para a quarentena).
+
+-- ─── 9. C10: perda com categoria ───────────────────────────────────────────
+create or replace function public.fn_clinic_estoque_perda(p_org uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lote uuid := nullif(p_dados ->> 'lote_id', '')::uuid;
+  v_local uuid := nullif(p_dados ->> 'local_id', '')::uuid;
+  v_qtd numeric := (p_dados ->> 'quantidade')::numeric;
+  v_motivo text := nullif(btrim(coalesce(p_dados ->> 'motivo', '')), '');
+  v_categoria text := coalesce(nullif(p_dados ->> 'categoria', ''), 'outro');
+  v_product uuid;
+  v_op uuid;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.movimentar');
+  v_product := public.fn_clinic_estoque_lote_da_org(p_org, v_lote);
+  perform public.fn_clinic_estoque_local_valido(p_org, v_local);
+  if v_qtd is null or v_qtd <= 0 then
+    raise exception 'estoque_quantidade_invalida' using errcode = '22023';
+  end if;
+  if v_motivo is null or char_length(v_motivo) < 3 then
+    raise exception 'estoque_sem_motivo' using errcode = '22023';
+  end if;
+  if v_categoria not in ('vencimento', 'quebra', 'contaminacao', 'pos_abertura', 'recolhimento', 'outro') then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  perform public.fn_clinic_estoque_travar(p_org, array[v_lote]);
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, motivo, motivo_categoria, ator)
+  values (p_org, 'perda', 'manual', left(v_motivo, 300), v_categoria, auth.uid())
+  returning id into v_op;
+  insert into public.clinic_estoque_movimentos (organization_id, operacao_id, product_id, lote_id, local_id, quantidade)
+  values (p_org, v_op, v_product, v_lote, v_local, -round(v_qtd, 3));
+  perform public.fn_clinic_estoque_conferir_saldos(p_org, v_op);
+  return jsonb_build_object('operacao_id', v_op);
+end $$;
+revoke execute on function public.fn_clinic_estoque_perda(uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_perda(uuid, jsonb) to authenticated;
+
+-- A perda que nasce de outros caminhos (encerrar frasco) ganha categoria sozinha.
+create or replace function public.fn_clinic_estoque_operacao_categoria()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if new.tipo = 'perda' and new.motivo_categoria is null then
+    new.motivo_categoria := case when new.origem_tipo = 'frasco' then 'pos_abertura' else 'outro' end;
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_estoque_operacao_categoria() from public, anon, authenticated;
+drop trigger if exists trg_clinic_estoque_operacao_categoria on public.clinic_estoque_operacoes;
+create trigger trg_clinic_estoque_operacao_categoria
+  before insert on public.clinic_estoque_operacoes
+  for each row execute function public.fn_clinic_estoque_operacao_categoria();
+
+create or replace function public.fn_clinic_estoque_rel_perdas(p_org uuid, p_de date, p_ate date)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_custos boolean;
+begin
+  if not public.fn_clinic_estoque_pode(p_org, 'estoque.ver') then
+    raise exception 'acesso_proibido' using errcode = '42501';
+  end if;
+  if p_de is null or p_ate is null or p_ate < p_de or p_ate - p_de > 400 then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  v_custos := public.fn_has_permission(p_org, 'estoque.custos');
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'product_id', x.product_id, 'produto', c.nome, 'unidade', coalesce(e.unidade_aplicacao, 'un'),
+             'categoria', x.categoria, 'motivo', x.motivo, 'quantidade', x.quantidade, 'ocorrencias', x.ocorrencias,
+             'custo_cents', case when v_custos then x.custo end)
+           order by x.quantidade desc)
+      from (
+        select m.product_id,
+               coalesce(o.motivo_categoria,
+                        case when o.origem_tipo = 'frasco' then 'pos_abertura'
+                             when o.motivo ilike '%venc%' then 'vencimento' else 'outro' end) as categoria,
+               case coalesce(o.motivo_categoria,
+                             case when o.origem_tipo = 'frasco' then 'pos_abertura'
+                                  when o.motivo ilike '%venc%' then 'vencimento' else 'outro' end)
+                 when 'vencimento' then 'Vencimento'
+                 when 'quebra' then 'Quebra'
+                 when 'contaminacao' then 'Contaminação'
+                 when 'pos_abertura' then 'Prazo após aberto'
+                 when 'recolhimento' then 'Recolhimento (recall)'
+                 else 'Outro' end as motivo,
+               -sum(m.quantidade) as quantidade,
+               count(distinct o.id) as ocorrencias,
+               round(-sum(m.quantidade * coalesce(m.custo_unitario_cents, 0))) as custo
+          from public.clinic_estoque_operacoes o
+          join public.clinic_estoque_movimentos m on m.organization_id = o.organization_id and m.operacao_id = o.id
+         where o.organization_id = p_org and o.tipo = 'perda'
+           and o.created_at >= p_de and o.created_at < p_ate + 1
+           and not exists (select 1 from public.clinic_estoque_operacoes e2
+                            where e2.organization_id = p_org and e2.estorna_operacao_id = o.id)
+         group by 1, 2, 3
+        having sum(m.quantidade) <> 0
+      ) x
+      join public.catalog_products c on c.id = x.product_id
+      left join public.clinic_produto_estoque e on e.organization_id = p_org and e.product_id = x.product_id
+  ), '[]'::jsonb);
+end $$;
+revoke execute on function public.fn_clinic_estoque_rel_perdas(uuid, date, date) from public, anon;
+grant  execute on function public.fn_clinic_estoque_rel_perdas(uuid, date, date) to authenticated;
+
+-- ─── 10. C9: estorno não devolve conteúdo a frasco encerrado ou vencido ─────
+create or replace function public.fn_clinic_estoque_estornar(p_org uuid, p_operacao uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_tipo text;
+  v_op uuid;
+  v_lotes uuid[];
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.estornar');
+  if char_length(btrim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'estoque_sem_motivo' using errcode = '22023';
+  end if;
+  select o.tipo into v_tipo from public.clinic_estoque_operacoes o where o.id = p_operacao and o.organization_id = p_org;
+  if v_tipo is null then
+    raise exception 'estoque_operacao_invalida' using errcode = 'P0002';
+  end if;
+  if v_tipo = 'estorno' then
+    raise exception 'estoque_estorno_de_estorno' using errcode = '22023';
+  end if;
+  if exists (select 1 from public.clinic_estoque_operacoes o
+              where o.organization_id = p_org and o.estorna_operacao_id = p_operacao) then
+    raise exception 'estoque_ja_estornada' using errcode = '23505';
+  end if;
+  if exists (select 1 from public.clinic_estoque_movimentos m
+               join public.clinic_estoque_frascos f on f.id = m.frasco_id and f.organization_id = p_org
+              where m.organization_id = p_org and m.operacao_id = p_operacao
+                and m.quantidade < 0
+                and (f.status <> 'aberto' or (f.vence_em is not null and f.vence_em <= now()))) then
+    raise exception 'estoque_frasco_encerrado' using errcode = '22023';
+  end if;
+  select array_agg(distinct m.lote_id) into v_lotes from public.clinic_estoque_movimentos m
+   where m.organization_id = p_org and m.operacao_id = p_operacao;
+  perform public.fn_clinic_estoque_travar(p_org, coalesce(v_lotes, '{}'));
+  insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, estorna_operacao_id, motivo, ator)
+  values (p_org, 'estorno', 'estorno', p_operacao, left(btrim(p_motivo), 300), auth.uid())
+  returning id into v_op;
+  insert into public.clinic_estoque_movimentos
+    (organization_id, operacao_id, product_id, lote_id, local_id, frasco_id, quantidade, custo_unitario_cents,
+     atendimento_id, contact_id, profissional_user_id, procedure_id, lote_presumido)
+  select m.organization_id, v_op, m.product_id, m.lote_id, m.local_id, m.frasco_id, -m.quantidade, m.custo_unitario_cents,
+         m.atendimento_id, m.contact_id, m.profissional_user_id, m.procedure_id, m.lote_presumido
+    from public.clinic_estoque_movimentos m
+   where m.organization_id = p_org and m.operacao_id = p_operacao;
+  perform public.fn_clinic_estoque_conferir_saldos(p_org, v_op);
+  return jsonb_build_object('operacao_id', v_op);
+end $$;
+revoke execute on function public.fn_clinic_estoque_estornar(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_estoque_estornar(uuid, uuid, text) to authenticated;
+
+-- ─── 11. NF-e: XML no Storage (S4), lote exigido com rastro (C3), vários
+--          lotes por item (C3), registro e fabricação no lote (C6) ─────────────
+create or replace function public.fn_clinic_estoque_nfe_registrar(p_org uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_chave text := p_dados ->> 'chave';
+  v_cnpj text := nullif(p_dados -> 'emitente' ->> 'cnpj', '');
+  v_nome text := left(coalesce(nullif(btrim(p_dados -> 'emitente' ->> 'nome'), ''), 'Fornecedor'), 200);
+  v_path text := p_dados ->> 'arquivo_path';
+  v_fornecedor uuid;
+  v_id uuid;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.compras');
+  if v_chave is null or v_chave !~ '^[0-9]{44}$' or jsonb_typeof(p_dados -> 'itens') <> 'array'
+     or jsonb_array_length(p_dados -> 'itens') = 0 or jsonb_array_length(p_dados -> 'itens') > 990 then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  -- S4: a nota só existe com o XML guardado no bucket da clínica
+  if v_path is null or v_path not like p_org::text || '/%'
+     or not exists (select 1 from storage.objects s where s.bucket_id = 'clinic-nfe' and s.name = v_path) then
+    raise exception 'estoque_nfe_sem_arquivo' using errcode = '22023';
+  end if;
+  if exists (select 1 from public.clinic_estoque_nfe n where n.organization_id = p_org and n.chave = v_chave) then
+    raise exception 'estoque_nfe_duplicada' using errcode = '23505';
+  end if;
+  if v_cnpj ~ '^[0-9]{14}$' then
+    insert into public.clinic_estoque_fornecedores (organization_id, cnpj, nome)
+    values (p_org, v_cnpj, v_nome)
+    on conflict (organization_id, cnpj) do update set nome = excluded.nome
+    returning id into v_fornecedor;
+  end if;
+
+  insert into public.clinic_estoque_nfe
+    (organization_id, chave, numero, serie, emissao, fornecedor_id, emitente_cnpj, emitente_nome,
+     destinatario_cnpj, total_cents, arquivo_path, sha256, created_by)
+  values (p_org, v_chave, left(coalesce(p_dados ->> 'numero', ''), 20), left(coalesce(p_dados ->> 'serie', ''), 10),
+          (p_dados ->> 'emissao')::date, v_fornecedor, v_cnpj, v_nome, nullif(p_dados ->> 'destinatario_cnpj', ''),
+          coalesce((p_dados ->> 'total_cents')::bigint, 0), v_path, p_dados ->> 'sha256', auth.uid())
+  returning id into v_id;
+
+  insert into public.clinic_estoque_nfe_itens
+    (organization_id, nfe_id, numero, codigo, descricao, ean, ncm, unidade, quantidade, valor_total_cents,
+     custo_total_cents, registro_anvisa, rastro, product_id, origem_casamento, fator, lote, validade)
+  select p_org, v_id, (i ->> 'numero')::integer, left(coalesce(i ->> 'codigo', ''), 60), left(coalesce(i ->> 'descricao', ''), 200),
+         nullif(i ->> 'ean', ''), nullif(i ->> 'ncm', ''), left(coalesce(nullif(i ->> 'unidade', ''), 'un'), 20),
+         (i ->> 'quantidade')::numeric, coalesce((i ->> 'valor_total_cents')::bigint, 0),
+         coalesce((i ->> 'custo_total_cents')::bigint, 0), left(nullif(i ->> 'registro_anvisa', ''), 40),
+         coalesce(i -> 'rastro', '[]'::jsonb),
+         c.id,
+         case when c.id is not null then i ->> 'origem_casamento' end,
+         nullif(i ->> 'fator', '')::numeric,
+         left(nullif(upper(btrim(coalesce(i ->> 'lote', ''))), ''), 60),
+         nullif(i ->> 'validade', '')::date
+    from jsonb_array_elements(p_dados -> 'itens') i
+    left join public.catalog_products c
+      on c.id = nullif(i ->> 'product_id', '')::uuid and c.organization_id = p_org;
+  return jsonb_build_object('id', v_id);
+end $$;
+revoke execute on function public.fn_clinic_estoque_nfe_registrar(uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_nfe_registrar(uuid, jsonb) to authenticated;
+
+create or replace function public.fn_clinic_estoque_nfe_item_conferir(p_org uuid, p_item uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_item public.clinic_estoque_nfe_itens;
+  v_status text;
+  v_product uuid := nullif(p_dados ->> 'product_id', '')::uuid;
+  v_fator numeric := coalesce(nullif(p_dados ->> 'fator', '')::numeric, 1);
+  v_lote text := left(nullif(upper(btrim(coalesce(p_dados ->> 'lote', ''))), ''), 60);
+  v_validade date := nullif(p_dados ->> 'validade', '')::date;
+  v_rastreado boolean;
+  v_varios boolean;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.compras');
+  select * into v_item from public.clinic_estoque_nfe_itens i where i.id = p_item and i.organization_id = p_org for update;
+  if v_item.id is null then
+    raise exception 'estoque_nfe_invalida' using errcode = 'P0002';
+  end if;
+  select n.status into v_status from public.clinic_estoque_nfe n where n.id = v_item.nfe_id for update;
+  if v_status <> 'conferencia' then
+    raise exception 'estoque_nfe_fechada' using errcode = '22023';
+  end if;
+
+  if coalesce((p_dados ->> 'ignorar')::boolean, false) then
+    update public.clinic_estoque_nfe_itens
+       set ignorado = true, conferido = true, product_id = null, origem_casamento = null, fator = null, lote = null, validade = null
+     where id = p_item;
+    return jsonb_build_object('conferido', true, 'ignorado', true);
+  end if;
+
+  if v_product is null or not exists (select 1 from public.catalog_products c where c.id = v_product and c.organization_id = p_org) then
+    raise exception 'estoque_produto_invalido' using errcode = '22023';
+  end if;
+  if v_fator <= 0 then
+    raise exception 'estoque_quantidade_invalida' using errcode = '22023';
+  end if;
+  -- vários lotes no XML: os lotes vêm do `rastro` (lançados um a um)
+  v_varios := jsonb_array_length(v_item.rastro) > 1;
+  if v_varios then
+    v_lote := null;
+    v_validade := null;
+  else
+    select coalesce(e.rastreado, false) into v_rastreado from public.clinic_produto_estoque e
+     where e.organization_id = p_org and e.product_id = v_product;
+    -- produto rastreado, item com rastro ou com registro ANVISA: lote e validade
+    if (coalesce(v_rastreado, false) or jsonb_array_length(v_item.rastro) = 1 or v_item.registro_anvisa is not null)
+       and (v_lote is null or v_validade is null) then
+      raise exception 'estoque_lote_obrigatorio' using errcode = '22023';
+    end if;
+    if v_validade is not null and v_validade < current_date then
+      raise exception 'estoque_lote_vencido' using errcode = '22023';
+    end if;
+  end if;
+
+  update public.clinic_estoque_nfe_itens
+     set product_id = v_product,
+         origem_casamento = case when v_item.product_id = v_product then coalesce(v_item.origem_casamento, 'manual') else 'manual' end,
+         fator = v_fator, lote = v_lote, validade = v_validade, ignorado = false, conferido = true
+   where id = p_item;
+  return jsonb_build_object('conferido', true, 'ignorado', false);
+end $$;
+revoke execute on function public.fn_clinic_estoque_nfe_item_conferir(uuid, uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_nfe_item_conferir(uuid, uuid, jsonb) to authenticated;
+
+create or replace function public.fn_clinic_estoque_nfe_lancar(p_org uuid, p_nfe uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_nfe public.clinic_estoque_nfe;
+  v_local uuid := nullif(p_dados ->> 'local_id', '')::uuid;
+  v_conta uuid := nullif(p_dados ->> 'conta_id', '')::uuid;
+  v_i public.clinic_estoque_nfe_itens;
+  v_r jsonb;
+  v_partes jsonb;
+  v_p jsonb;
+  v_qtd numeric;
+  v_custo numeric;
+  v_lote uuid;
+  v_op uuid;
+  v_registro text;
+  v_entradas integer := 0;
+  v_fin uuid;
+begin
+  perform public.fn_clinic_estoque_exigir(p_org, 'estoque.compras');
+  select * into v_nfe from public.clinic_estoque_nfe n where n.id = p_nfe and n.organization_id = p_org for update;
+  if v_nfe.id is null then
+    raise exception 'estoque_nfe_invalida' using errcode = 'P0002';
+  end if;
+  if v_nfe.status <> 'conferencia' then
+    raise exception 'estoque_nfe_fechada' using errcode = '22023';
+  end if;
+  perform public.fn_clinic_estoque_local_valido(p_org, v_local);
+  if exists (select 1 from public.clinic_estoque_nfe_itens i where i.nfe_id = p_nfe and not i.conferido) then
+    raise exception 'estoque_nfe_sem_conferencia' using errcode = '22023';
+  end if;
+  if v_conta is not null then
+    if not public.fn_has_permission(p_org, 'financeiro.lancar') then
+      raise exception 'acesso_proibido' using errcode = '42501';
+    end if;
+    if not exists (select 1 from public.financial_accounts a where a.id = v_conta and a.organization_id = p_org) then
+      raise exception 'estoque_conta_invalida' using errcode = '22023';
+    end if;
+  end if;
+
+  for v_i in
+    select * from public.clinic_estoque_nfe_itens i
+     where i.nfe_id = p_nfe and not i.ignorado and i.product_id is not null
+     order by i.numero
+  loop
+    v_qtd := round(v_i.quantidade * coalesce(v_i.fator, 1), 3);
+    v_custo := case when v_qtd > 0 then round(v_i.custo_total_cents::numeric / v_qtd, 4) end;
+    -- as partes do item: um lote por `rastro` (vários) ou o lote conferido
+    if jsonb_array_length(v_i.rastro) > 1 then
+      if abs(coalesce((select sum((r ->> 'quantidade')::numeric) from jsonb_array_elements(v_i.rastro) r), -1)
+             - v_i.quantidade) > 0.001 then
+        raise exception 'estoque_nfe_rastro_divergente' using errcode = '22023';
+      end if;
+      v_partes := v_i.rastro;
+    else
+      v_partes := jsonb_build_array(jsonb_build_object(
+        'lote', v_i.lote, 'validade', v_i.validade, 'quantidade', v_i.quantidade,
+        'fabricacao', case when jsonb_array_length(v_i.rastro) = 1
+                            and upper(btrim(coalesce(v_i.rastro -> 0 ->> 'lote', ''))) = coalesce(v_i.lote, '')
+                           then v_i.rastro -> 0 ->> 'fabricacao' end));
+    end if;
+
+    insert into public.clinic_estoque_operacoes (organization_id, tipo, origem_tipo, origem_id, motivo, ator)
+    values (p_org, 'entrada', 'nfe_item', v_i.id, left('NF-e ' || v_nfe.numero || ' — ' || v_nfe.emitente_nome, 300), auth.uid())
+    returning id into v_op;
+    for v_p in select * from jsonb_array_elements(v_partes)
+    loop
+      if nullif(v_p ->> 'validade', '')::date < current_date then
+        raise exception 'estoque_lote_vencido' using errcode = '22023';
+      end if;
+      v_lote := public.fn_clinic_estoque_lote(p_org, v_i.product_id, v_p ->> 'lote',
+                                              nullif(v_p ->> 'validade', '')::date, v_custo);
+      update public.clinic_estoque_lotes l
+         set fornecedor_id = coalesce(l.fornecedor_id, v_nfe.fornecedor_id),
+             nfe_item_id = coalesce(l.nfe_item_id, v_i.id),
+             custo_unitario_cents = coalesce(l.custo_unitario_cents, v_custo),
+             registro_anvisa = coalesce(l.registro_anvisa, v_i.registro_anvisa),
+             fabricacao = coalesce(l.fabricacao, nullif(v_p ->> 'fabricacao', '')::date)
+       where l.id = v_lote;
+      insert into public.clinic_estoque_movimentos (organization_id, operacao_id, product_id, lote_id, local_id, quantidade, custo_unitario_cents)
+      values (p_org, v_op, v_i.product_id, v_lote, v_local,
+              round((v_p ->> 'quantidade')::numeric * coalesce(v_i.fator, 1), 3), v_custo);
+    end loop;
+    update public.clinic_estoque_nfe_itens set operacao_id = v_op where id = v_i.id;
+
+    -- C6: registro da nota diferente do cadastro do produto → alerta
+    select e.registro_anvisa into v_registro from public.clinic_produto_estoque e
+     where e.organization_id = p_org and e.product_id = v_i.product_id;
+    if v_i.registro_anvisa is not null and v_registro is not null
+       and regexp_replace(v_i.registro_anvisa, '\D', '', 'g') <> regexp_replace(v_registro, '\D', '', 'g') then
+      perform public.fn_clinic_estoque_alerta_evento(
+        p_org, 'nfe_registro_divergente', 'nfe_registro_divergente:' || v_i.id, v_i.product_id, null,
+        jsonb_build_object('registro_nfe', v_i.registro_anvisa, 'registro_cadastro', v_registro, 'nfe_id', p_nfe));
+    end if;
+
+    if v_nfe.fornecedor_id is not null then
+      insert into public.clinic_estoque_fornecedor_produtos (organization_id, fornecedor_id, codigo, product_id, fator)
+      values (p_org, v_nfe.fornecedor_id, v_i.codigo, v_i.product_id, coalesce(v_i.fator, 1))
+      on conflict (organization_id, fornecedor_id, codigo)
+      do update set product_id = excluded.product_id, fator = excluded.fator, updated_at = now();
+    end if;
+    v_entradas := v_entradas + 1;
+  end loop;
+
+  if v_conta is not null and v_nfe.total_cents > 0 then
+    insert into public.financial_entries
+      (organization_id, account_id, direction, amount_cents, description, entry_date, status, origin, created_by_user_id)
+    values (p_org, v_conta, 'out', v_nfe.total_cents,
+            left('NF-e ' || v_nfe.numero || '/' || v_nfe.serie || ' — ' || v_nfe.emitente_nome, 300),
+            current_date, 'pending', 'manual', auth.uid())
+    returning id into v_fin;
+  end if;
+
+  update public.clinic_estoque_nfe
+     set status = 'lancada', local_id = v_local, financial_entry_id = v_fin, lancada_em = now(), lancada_por = auth.uid()
+   where id = p_nfe;
+  return jsonb_build_object('entradas', v_entradas, 'financial_entry_id', v_fin);
+end $$;
+revoke execute on function public.fn_clinic_estoque_nfe_lancar(uuid, uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_estoque_nfe_lancar(uuid, uuid, jsonb) to authenticated;
+
+-- ─── 12. S1 + C2: recall a partir do prontuário, auditado e limitado ───────
+-- p_tipo = por que se consulta (categoria, nunca texto livre no log):
+-- recall_fabricante | alerta_sanitario | evento_adverso | auditoria | outro.
+create or replace function public.fn_clinic_estoque_rel_rastreio_lote(p_org uuid, p_lote uuid, p_tipo text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lote public.clinic_estoque_lotes;
+  v_codigo text;
+  v_pacientes jsonb;
+begin
+  if not public.fn_clinic_estoque_pode(p_org, 'estoque.rastreio_lote') then
+    raise exception 'acesso_proibido' using errcode = '42501';
+  end if;
+  if p_tipo is null or p_tipo not in ('recall_fabricante', 'alerta_sanitario', 'evento_adverso', 'auditoria', 'outro') then
+    raise exception 'estoque_dados_invalidos' using errcode = '22023';
+  end if;
+  select * into v_lote from public.clinic_estoque_lotes l where l.id = p_lote and l.organization_id = p_org;
+  if v_lote.id is null then
+    raise exception 'estoque_lote_invalido' using errcode = '22023';
+  end if;
+  -- limite por pessoa: 30 consultas por hora, contadas no próprio log
+  if (select count(*) from public.api_audit_log a
+       where a.actor_user_id = auth.uid() and a.action = 'clinic.estoque_rastreio_consultado'
+         and a.created_at > now() - interval '1 hour') >= 30 then
+    raise exception 'estoque_limite_consultas' using errcode = '54000';
+  end if;
+  v_codigo := upper(btrim(coalesce(v_lote.codigo, '')));
+
+  with insumos as (
+    -- o que o PRONTUÁRIO diz: insumo deste produto com este código de lote,
+    -- ou insumo cuja baixa saiu deste lote (inclusive pela FEFO)
+    select i.id as insumo_id, a.contact_id, a.id as atendimento_id,
+           coalesce(pr.executor_user_id, a.professional_user_id) as profissional,
+           coalesce(a.finished_at, a.started_at) as data,
+           i.quantidade, i.unidade,
+           (v_codigo <> '' and upper(btrim(coalesce(i.lote, ''))) = v_codigo) as lote_no_prontuario
+      from public.clinic_procedimento_insumos i
+      join public.clinic_procedimentos_realizados pr on pr.id = i.procedimento_id and pr.organization_id = p_org
+      join public.clinic_atendimentos a on a.id = pr.atendimento_id and a.organization_id = p_org
+     where i.organization_id = p_org and i.product_id = v_lote.product_id
+       and ((v_codigo <> '' and upper(btrim(coalesce(i.lote, ''))) = v_codigo)
+            or exists (select 1 from public.clinic_estoque_operacoes o
+                         join public.clinic_estoque_movimentos m on m.operacao_id = o.id and m.organization_id = p_org
+                        where o.organization_id = p_org and o.origem_tipo = 'insumo' and o.origem_id = i.id
+                          and o.tipo = 'consumo' and m.lote_id = p_lote))
+  ),
+  situacao as (
+    select x.*,
+           (select o.id from public.clinic_estoque_operacoes o
+             where o.organization_id = p_org and o.origem_tipo = 'insumo' and o.origem_id = x.insumo_id
+               and o.tipo = 'consumo' limit 1) as op
+      from insumos x
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'contact_id', s.contact_id, 'paciente', ct.name, 'atendimento_id', s.atendimento_id,
+           'data', s.data, 'profissional', cp.display_name, 'quantidade', s.quantidade, 'unidade', s.unidade,
+           'status', case
+             when s.op is null and exists (select 1 from public.clinic_estoque_pendencias p
+                                            where p.organization_id = p_org and p.insumo_id = s.insumo_id and p.status = 'aberta')
+               then 'pendente'
+             when s.op is null then 'sem_baixa'
+             when exists (select 1 from public.clinic_estoque_operacoes e
+                           where e.organization_id = p_org and e.estorna_operacao_id = s.op) then 'estornado'
+             when not exists (select 1 from public.clinic_estoque_movimentos m
+                               where m.organization_id = p_org and m.operacao_id = s.op and m.lote_id = p_lote)
+               then 'baixado_em_outro_lote'
+             when exists (select 1 from public.clinic_estoque_movimentos m
+                           where m.organization_id = p_org and m.operacao_id = s.op and m.lote_id = p_lote and m.lote_presumido)
+               then 'lote_presumido'
+             else 'baixado' end)
+         order by s.data desc), '[]'::jsonb)
+    into v_pacientes
+    from situacao s
+    left join public.contacts ct on ct.id = s.contact_id and ct.organization_id = p_org
+    left join public.clinic_professionals cp on cp.organization_id = p_org and cp.user_id = s.profissional;
+
+  -- auditoria na MESMA transação: sem registro, sem resposta (só ids e contagem)
+  insert into public.api_audit_log (organization_id, actor_user_id, action, resource_type, resource_id, metadata)
+  values (p_org, auth.uid(), 'clinic.estoque_rastreio_consultado', 'clinic_estoque_lote', p_lote,
+          jsonb_build_object('numero', jsonb_array_length(v_pacientes), 'tipo', p_tipo));
+
+  return jsonb_build_object(
+    'lote', jsonb_build_object('id', v_lote.id, 'codigo', v_lote.codigo, 'validade', v_lote.validade,
+                               'bloqueado', v_lote.bloqueado_em is not null,
+                               'produto', (select c.nome from public.catalog_products c where c.id = v_lote.product_id)),
+    'pacientes', v_pacientes);
+end $$;
+revoke execute on function public.fn_clinic_estoque_rel_rastreio_lote(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_estoque_rel_rastreio_lote(uuid, uuid, text) to authenticated;
+-- a versão de 2 argumentos (sem auditoria no banco) sai do alcance do cliente
+revoke execute on function public.fn_clinic_estoque_rel_rastreio_lote(uuid, uuid) from authenticated;
+
+-- ─── 13. S2: custo sob `estoque.custos` ────────────────────────────────────
+create or replace function public.fn_clinic_estoque_custos_lotes(p_org uuid, p_product uuid)
+returns table (lote_id uuid, custo_unitario_cents numeric)
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not public.fn_clinic_estoque_pode(p_org, 'estoque.custos') then
+    raise exception 'acesso_proibido' using errcode = '42501';
+  end if;
+  return query
+    select l.id, l.custo_unitario_cents from public.clinic_estoque_lotes l
+     where l.organization_id = p_org and (p_product is null or l.product_id = p_product);
+end $$;
+revoke execute on function public.fn_clinic_estoque_custos_lotes(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_estoque_custos_lotes(uuid, uuid) to authenticated;
+
+-- NF-e (valores da compra): leitura só para quem compra ou vê custos
+do $rls$
+declare
+  t text;
+begin
+  foreach t in array array['clinic_estoque_nfe', 'clinic_estoque_nfe_itens'] loop
+    execute format('drop policy if exists acesso_ler on public.%I', t);
+    execute format($p$create policy acesso_ler on public.%I as restrictive for select
+                      using (public.fn_has_permission(organization_id, 'estoque.compras')
+                             or public.fn_has_permission(organization_id, 'estoque.custos'))$p$, t);
+  end loop;
+end
+$rls$;
+
+-- ─── 14. C13 + S2: privilégio por COLUNA ───────────────────────────────────
+-- Grant de select = todas as colunas MENOS as listadas. Coluna nova nessas
+-- tabelas precisa entrar num grant (senão fica ilegível para o cliente).
+do $col$
+declare
+  v record;
+  v_cols text;
+begin
+  for v in
+    select * from (values
+      ('clinic_estoque_movimentos', array['contact_id', 'atendimento_id', 'profissional_user_id', 'custo_unitario_cents']),
+      ('clinic_estoque_lotes',      array['custo_unitario_cents']),
+      ('clinic_estoque_pendencias', array['atendimento_id', 'insumo_id']),
+      ('clinic_estoque_reservas',   array['atendimento_id', 'appointment_id']),
+      ('clinic_estoque_operacoes',  array['origem_id'])
+    ) as x(tabela, fora)
+  loop
+    select string_agg(quote_ident(c.column_name), ', ' order by c.ordinal_position) into v_cols
+      from information_schema.columns c
+     where c.table_schema = 'public' and c.table_name = v.tabela and c.column_name <> all(v.fora);
+    execute format('revoke select on public.%I from authenticated', v.tabela);
+    execute format('grant select (%s) on public.%I to authenticated', v_cols, v.tabela);
+  end loop;
+end
+$col$;
+-- ---- fim clinic (migration 9038, fork) ----
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

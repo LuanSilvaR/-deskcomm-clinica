@@ -4,6 +4,7 @@
  * Entrega os insumos do procedimento à porta de estoque (lib/clinic/estoque/
  * porta.ts) e grava de volta o `movimento_estoque_id` de cada insumo que ela
  * devolver. Com `SemEstoque`, só marca o evento como lido ("skipped").
+ * `EstoqueReal` (estoque E2) grava tudo ele mesmo e devolve só o resumo.
  */
 import type { EventHandler, HandlerResult } from "@/lib/event-log/dispatcher";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -20,7 +21,13 @@ export const clinicEstoqueConsumoHandler: EventHandler = {
     if (!lido.success) {
       return { consumer_key: CLINIC_ESTOQUE_HANDLER_KEY, status: "skipped", detail: "payload inválido" };
     }
-    const r = await portaDeEstoque().registrarConsumo(row.organization_id, lido.data);
+    let r;
+    try {
+      r = await portaDeEstoque().registrarConsumo(row.organization_id, lido.data, { procedimentoId: row.entity_id });
+    } catch (e) {
+      return { consumer_key: CLINIC_ESTOQUE_HANDLER_KEY, status: "error", detail: (e as Error).message };
+    }
+    if (r.concluido) return { consumer_key: CLINIC_ESTOQUE_HANDLER_KEY, status: "ok", detail: r.concluido };
     if (r.movimentos.length === 0) {
       return { consumer_key: CLINIC_ESTOQUE_HANDLER_KEY, status: "skipped", detail: r.motivo ?? "nada a baixar" };
     }

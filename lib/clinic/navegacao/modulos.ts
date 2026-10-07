@@ -36,6 +36,7 @@ export type ModuloClinicaId =
   | "contratos"
   | "lgpd"
   | "procedimentos"
+  | "estoque"
   | "equipamentos"
   | "profissionais"
   | "financeiro"
@@ -57,6 +58,7 @@ export type IconeDoModulo =
   | "ShieldCheck"
   | "Sparkle"
   | "Wrench"
+  | "Archive"
   | "UsersThree"
   | "CurrencyCircleDollar"
   | "Percent"
@@ -172,6 +174,14 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
       { label: "Protocolos", description: "Sessões, intervalos e cuidados de cada tratamento." },
       { label: "Pacotes", description: "Sessões vendidas juntas, com saldo por paciente." },
     ],
+  },
+  {
+    id: "estoque",
+    label: "Estoque",
+    description: "Produtos e insumos por lote, validade e local, com cada entrada e saída registrada.",
+    icon: "Archive",
+    portas: [{ href: "/app/estoque", secao: "Posição do estoque" }],
+    emBreve: [],
   },
   {
     id: "equipamentos",

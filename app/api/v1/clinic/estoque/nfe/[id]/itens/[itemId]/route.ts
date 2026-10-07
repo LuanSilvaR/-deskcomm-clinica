@@ -1,0 +1,60 @@
+/**
+ * PATCH /api/v1/clinic/estoque/nfe/:id/itens/:itemId — FORK clinic (estoque E5).
+ *
+ * Confere um item: produto, fator (quantas unidades de aplicação vêm em 1
+ * unidade da nota), lote e validade (obrigatórios em produto rastreado; vencido
+ * recusado) — ou { ignorar: true } (frete, brinde). `estoque.compras`.
+ */
+import { randomUUID } from "node:crypto";
+import type { NextRequest } from "next/server";
+import { z } from "zod";
+
+import { ok, fail } from "@/lib/api/wrappers";
+import { audit } from "@/lib/audit";
+import { requirePermission } from "@/lib/clinic/acesso/require-permission";
+import { erroDoEstoque } from "@/lib/clinic/estoque/erros";
+import { conferirItemSchema } from "@/lib/clinic/estoque/schemas";
+import { requireSupportWrite } from "@/lib/impersonate/support";
+import { traduzir } from "@/lib/i18n/dicionario";
+import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+
+type Ctx = { params: Promise<{ id: string; itemId: string }> };
+
+export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+  const requestId = randomUUID();
+  const authz = await requirePermission("estoque.compras", { requestId, resource: "clinic_estoque_nfe" });
+  if (!authz.ok) return authz.response;
+  const t = (s: string) => traduzir(s, authz.user.idioma);
+  const { id, itemId } = await ctx.params;
+  if (!z.string().uuid().safeParse(id).success)
+    return fail("validation_failed", t("id inválido"), 422, { requestId });
+  if (!z.string().uuid().safeParse(itemId).success)
+    return fail("validation_failed", t("id inválido"), 422, { requestId });
+  const lido = conferirItemSchema.safeParse(await req.json().catch(() => ({})));
+  if (!lido.success) return fail("validation_failed", t("Dados inválidos."), 422, { requestId });
+  const org = authz.org.orgId;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_clinic_estoque_nfe_item_conferir", {
+    p_org: org,
+    p_item: itemId,
+    p_dados: lido.data,
+  });
+  if (error) {
+    const e = erroDoEstoque(error, requestId);
+    return fail(e.code, t(e.message), e.status, { requestId });
+  }
+  void audit({
+    action: "clinic.estoque_nfe_conferida",
+    actorUserId: authz.user.id,
+    organizationId: org,
+    resourceType: "clinic_estoque_nfe",
+    resourceId: id,
+    requestId,
+    metadata: { tipo: "ignorar" in lido.data ? "ignorado" : "conferido" },
+  });
+  return ok(data as { conferido: boolean; ignorado: boolean }, { requestId });
+}

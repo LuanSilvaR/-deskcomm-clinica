@@ -51,6 +51,7 @@ import {
 import { crmListContactOrders, crmSearchProducts } from "./comercio";
 import { crmDescribeExternalData, crmQueryExternalData } from "./dados-externos";
 import { crmListPrivacyRequests } from "./privacidade";
+import { crmConsultarEstoque } from "./estoque";
 import {
   crmArchiveStage,
   crmCreateStage,
@@ -119,6 +120,7 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmDescribeExternalData,
   crmQueryExternalData,
   crmListPrivacyRequests,
+  crmConsultarEstoque,
   // read — organizar a operação (W4)
   crmListStages,
   crmListTags,

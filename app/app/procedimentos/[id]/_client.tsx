@@ -3,10 +3,12 @@
 /**
  * FORK clinic (9015) — o procedimento em abas: Cadastro (dados, especializações
  * e profissionais), POP (o documento vigente ou o rascunho) e Histórico (versões).
+ * Estoque E3: aba Kit (o que o procedimento costuma gastar).
  */
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
+import { KitDoProcedimento } from "@/components/clinic/estoque/KitDoProcedimento";
 import { AbaDoHistorico, AbaDoPop } from "@/components/clinic/pops/PopDoProcedimento";
 import { EditorDoProcedimento } from "@/components/clinic/procedimentos/EditorDoProcedimento";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -65,6 +67,7 @@ export function DetalheDoProcedimento({ id }: { id: string | null }) {
       <Tabs defaultValue="cadastro">
         <TabsList>
           <TabsTrigger value="cadastro" data-testid="proc-aba-cadastro">{t("Cadastro")}</TabsTrigger>
+          <TabsTrigger value="kit" data-testid="proc-aba-kit">{t("Kit")}</TabsTrigger>
           {can("pops.ver") ? (
             <>
               <TabsTrigger value="pop" data-testid="proc-aba-pop">
@@ -77,6 +80,9 @@ export function DetalheDoProcedimento({ id }: { id: string | null }) {
         </TabsList>
         <TabsContent value="cadastro" className="mt-4">
           <EditorDoProcedimento key={p.updated_at} procedimento={p} podeGerenciar={can("procedimentos.gerenciar")} nomeDaPessoa={nomeDaPessoa} />
+        </TabsContent>
+        <TabsContent value="kit" className="mt-4">
+          <KitDoProcedimento procedimentoId={p.id} podeGerenciar={can("procedimentos.gerenciar")} />
         </TabsContent>
         {can("pops.ver") ? (
           <>

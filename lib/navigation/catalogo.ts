@@ -210,6 +210,17 @@ export const NAV_CATALOG = [
     group: "atendimento",
   },
   {
+    // FORK clinic (estoque E0, migration 9028): saldo por lote, validade e local,
+    // e o histórico de movimentos. Sem `sidebar`; porta pelo módulo Estoque do
+    // menu da clínica e pelo ⌘K. A tela diz como ligar quando está desligado.
+    href: "/app/estoque",
+    label: "Estoque",
+    permissao: "estoque.ver",
+    description: "Saldo de cada produto por lote, validade e local, com entradas, transferências, perdas e ajustes.",
+    icon: "Archive",
+    group: "atendimento",
+  },
+  {
     // FORK clinic (migration 9003): o dia da clínica por status da visita —
     // na recepção, pronto para atendimento, em atendimento, finalizado.
     //

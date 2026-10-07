@@ -32,6 +32,7 @@ import { generateText, stepCountIs, type LanguageModel, type StopCondition, type
 import {
   cabecalhosDeAtribuicaoOpenRouter,
   DEEPSEEK_ENDPOINT,
+  GROQ_ENDPOINT,
   OPENROUTER_ENDPOINT,
 } from "@/lib/agent-engine/edge/llm/providers";
 import { CredentialUnavailableError, loadCredential } from "@/lib/ai/credentials";
@@ -190,6 +191,9 @@ export function buildModel(provider: string, apiKey: string, modelId: string): L
     // rígido que a produção mente sobre o que está quebrado.
     case "deepseek":
       return createOpenAI({ apiKey, baseURL: DEEPSEEK_ENDPOINT })(modelId);
+    // FORK clinic (estoque E9): Groq, OpenAI-compatível — mesma razão.
+    case "groq":
+      return createOpenAI({ apiKey, baseURL: GROQ_ENDPOINT })(modelId);
     default:
       throw new Error(`unsupported_provider: ${provider}`);
   }
