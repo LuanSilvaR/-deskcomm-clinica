@@ -24,6 +24,11 @@ import type { Json } from "@/lib/database.types";
  * para o modelo, e nenhum dos dois reimplementa a decisão.
  */
 import { coletaOQueOcupa, horariosLivresDaOrg } from "@/lib/agenda/consulta";
+import {
+  DURACAO_MAXIMA_MIN,
+  DURACAO_MINIMA_MIN,
+  duracaoEscolhidaValida,
+} from "@/lib/agenda/duracao-escolhida";
 import { colide } from "@/lib/agenda/horarios-livres";
 import {
   atividadeDaTransicao,
@@ -99,6 +104,20 @@ export interface MarcarInput {
    * é o worker de push.
    */
   guest_email?: string;
+  /**
+   * A duração deste atendimento, em minutos — ausente, a do tipo (issue #3709).
+   *
+   * ⚠️ ELA É O COMPRIMENTO DO COMPROMISSO (`ends_at`), não uma coluna: em
+   * `calendar_appointments` a duração É o intervalo. Um valor fora de 5…1440 é
+   * recusado aqui com 422, e não silenciosamente trocado pelo do tipo — quem
+   * pediu 3 minutos precisa saber que não marcou 30.
+   *
+   * É o que muda o TAMANHO DO BLOCO e, com ele, tudo o que depende dele: a
+   * checagem de horário livre passa a exigir este tanto de tempo vago
+   * (`exigeHorarioLivre`), o Google publica o evento com este fim, e o lembrete
+   * continua sendo o do tipo.
+   */
+  duration_minutes?: number;
 }
 
 export interface AlterarInput {
@@ -253,6 +272,20 @@ export async function marcarAgendamentoHandler(
   if (input.encaixe && ctx.actor.type !== "user") {
     throw new ApiError(403, "encaixe_so_pessoa", undefined, ctx.requestId, "Encaixe só pode ser feito por uma pessoa da equipe.");
   }
+  // A DURAÇÃO ESCOLHIDA NA MARCAÇÃO (issue #3709). Fora da faixa dos moldes é
+  // recusa NOMEADA, não troca silenciosa pelo padrão: quem digitou 3 ou 5000
+  // minutos precisa saber que não marcou o que pediu. A faixa é a mesma dos
+  // `check` de `calendar_event_types` e de `calendar_service_schedule`
+  // (`lib/agenda/duracao-escolhida.ts`).
+  if (input.duration_minutes !== undefined && !duracaoEscolhidaValida(input.duration_minutes)) {
+    throw new ApiError(
+      422,
+      "agenda_duracao_invalida",
+      undefined,
+      ctx.requestId,
+      `A duração precisa ser um número inteiro de minutos entre ${DURACAO_MINIMA_MIN} e ${DURACAO_MAXIMA_MIN}.`,
+    );
+  }
 
   const { data: tipo, error: erroTipo } = await supabase
     .from("calendar_event_types")
@@ -357,13 +390,19 @@ export async function marcarAgendamentoHandler(
     }
   }
 
-  const fim = new Date(inicio.getTime() + tipo.duration_minutes * 60_000);
+  // O FIM nasce da duração ESCOLHIDA quando ela veio, e do molde quando não.
+  // Tudo o que depende do tamanho do bloco sai daqui: a checagem de horário
+  // livre (que precisa exigir ESTE tanto de tempo vago), o `ends_at` gravado, o
+  // evento do Google e a altura do bloco na grade.
+  const duracaoMin = input.duration_minutes ?? Number(tipo.duration_minutes);
+  const fim = new Date(inicio.getTime() + duracaoMin * 60_000);
   const consulta = await exigeHorarioLivre(supabase, ctx, {
     eventTypeId: tipo.id,
     donoId,
     inicio,
     fim,
     encaixe: Boolean(input.encaixe), // FORK clinic (agenda S6b)
+    duracaoMin,
   });
 
   const booking = tipo.location_kind === "google_meet" ? ctx.meetingBooking : undefined;
@@ -508,6 +547,11 @@ export async function alterarAgendamentoHandler(
     "owner_user_id",
     "contact_id",
     "starts_at",
+    // `ends_at` entrou com a #3709: remarcar PRESERVA o comprimento do bloco.
+    // Sem ele o novo fim saía do molde do tipo, e um atendimento de 90 minutos
+    // voltava a ter 30 no primeiro arrasto — em silêncio, e com a grade
+    // desenhando um bloco que já não é o combinado.
+    "ends_at",
     "status",
     "time_zone",
   ]);
@@ -589,7 +633,22 @@ export async function alterarAgendamentoHandler(
       throw new ApiError(404, "not_found", undefined, ctx.requestId, "O tipo deste agendamento não existe mais.");
     }
 
-    const novoFim = new Date(novoInicio.getTime() + tipo.duration_minutes * 60_000);
+    /**
+     * O COMPRIMENTO DO BLOCO QUE JÁ EXISTE — ele viaja com a remarcação.
+     *
+     * ⚠️ A duração é do COMPROMISSO, não do molde: quem marcou 90 minutos porque
+     * o atendimento é longo não pode ver o bloco virar 30 ao arrastá-lo de
+     * terça para quinta. O molde do tipo é só o PADRÃO de quem está marcando do
+     * zero (issue #3709). Um intervalo ilegível (linha antiga, fim antes do
+     * começo) cai no molde, que é o comportamento anterior.
+     */
+    const duracaoDoBlocoMin = duracaoDoBloco(
+      atual.starts_at as string,
+      atual.ends_at as string | null,
+      Number(tipo.duration_minutes),
+    );
+    const novoFim = new Date(novoInicio.getTime() + duracaoDoBlocoMin * 60_000);
+
     // ⚠️ O PRÓPRIO COMPROMISSO OCUPA O HORÁRIO DELE. Remarcar para o mesmo
     // instante é no-op — sem esta guarda ele se veria como conflito e recusaria
     // a si mesmo.
@@ -603,6 +662,10 @@ export async function alterarAgendamentoHandler(
         donoId: atual.owner_user_id as string,
         inicio: novoInicio,
         fim: novoFim,
+        // A grade confere o tamanho do bloco que ESTE compromisso tem, não o do
+        // molde — senão remarcar um atendimento de 90 minutos passaria por cima
+        // de outro de 30 (issue #3709).
+        duracaoMin: duracaoDoBlocoMin,
         ignorarAgendamentoId: atual.id as string,
       });
       mudanca.starts_at = novoInicio.toISOString();
@@ -827,6 +890,23 @@ export function podeMarcarForaDaGrade(actor: Actor): boolean {
 }
 
 /**
+ * QUANTO DURA O BLOCO QUE JÁ EXISTE, em minutos — o comprimento que a
+ * remarcação carrega junto (issue #3709).
+ *
+ * A duração de um compromisso não é coluna: é `ends_at - starts_at`. Aqui ela é
+ * lida do par, com três guardas: datas ilegíveis, `ends_at` ausente e um
+ * intervalo fora da faixa dos moldes caem no PADRÃO do tipo — que é exatamente
+ * o comportamento anterior a esta entrega. Preferir o padrão a um número
+ * absurdo é a escolha segura: um fim inventado pode encavalar com o próximo
+ * paciente.
+ */
+function duracaoDoBloco(inicioISO: string, fimISO: string | null, padraoMin: number): number {
+  if (!fimISO) return padraoMin;
+  const minutos = Math.round((new Date(fimISO).getTime() - new Date(inicioISO).getTime()) / 60_000);
+  return duracaoEscolhidaValida(minutos) ? minutos : padraoMin;
+}
+
+/**
  * O horário pedido pode ser marcado por QUEM está pedindo?
  *
  * ⚠️ Pela MESMA coleta que responde o GET e as ferramentas de leitura
@@ -888,6 +968,17 @@ async function exigeHorarioLivre(
     inicio: Date;
     fim: Date;
     /**
+     * O comprimento que este pedido exige livre, em minutos — o mesmo de
+     * `fim - inicio`, quando quem chama quer a grade calculada para ele.
+     *
+     * ⚠️ SEM ISTO A GRADE MENTE. Ela confere o horário pedido contra os slots
+     * que `horariosLivres` calcula para a janela do pedido, e o slot tem o
+     * comprimento do MOLDE: um atendimento de 90 minutos sobre um de 30 às 09:30
+     * passava, porque a colisão checada era de 30 (issue #3709). Ausente, o
+     * motor usa a duração do tipo, como sempre.
+     */
+    duracaoMin?: number;
+    /**
      * O compromisso sendo remarcado: ocupa o horário de ONDE SAI, não o de DESTINO.
      *
      * Vale para os DOIS ramos. A pergunta é a mesma nos dois — "o que já está
@@ -910,6 +1001,7 @@ async function exigeHorarioLivre(
     ate: args.fim,
     agora: new Date(),
     ignorarAgendamentoId: args.ignorarAgendamentoId,
+    duracaoMin: args.duracaoMin ?? null,
   });
 
   if (!consulta.ok) {

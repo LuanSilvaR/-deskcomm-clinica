@@ -1875,6 +1875,14 @@ export const DICIONARIO: Traducoes = {
   "A IA escolhe a hora": { es: "La IA elige el momento" },
   "Como calcular a espera": { es: "Cómo calcular la espera" },
   "Duração (minutos)": { es: "Duración (minutos)" },
+  // Duração escolhida na marcação (#3709) — o campo do painel, com o valor do
+  // serviço como padrão.
+  "O padrão é a duração do serviço. Mude se este atendimento precisar de mais ou menos tempo.": {
+    es: "El valor por defecto es la duración del servicio. Cámbialo si esta atención necesita más o menos tiempo.",
+  },
+  "Escolha uma duração entre 5 e 1440 minutos.": {
+    es: "Elige una duración entre 5 y 1440 minutos.",
+  },
   "Mínimo (min)": { es: "Mínimo (min)" },
   "Máximo (min)": { es: "Máximo (min)" },
   "Orientação (opcional)": { es: "Orientación (opcional)" },
@@ -13046,6 +13054,12 @@ export const DICIONARIO: Traducoes = {
     es: "Permitir escribir el título de la cita al agendar (aparece en la agenda y en el recordatorio al paciente)",
   },
   "Permitir encaixe (marcar por cima de um horário ocupado, com motivo)": { es: "Permitir sobrecupo (agendar sobre un horario ocupado, con motivo)" },
+  // FORK clinic (#80) — opção da duração escolhida na marcação.
+  "Duração na marcação ligada": { es: "Duración al agendar activada" },
+  "Duração na marcação desligada": { es: "Duración al agendar desactivada" },
+  "Permitir ajustar a duração do atendimento ao marcar (o padrão continua sendo a do tipo)": {
+    es: "Permitir ajustar la duración de la atención al agendar (el valor por defecto sigue siendo el del tipo)",
+  },
 };
 
 /**

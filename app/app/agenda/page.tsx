@@ -15,7 +15,7 @@ import { lerOcupacaoExterna } from "@/lib/agenda/ocupacao-externa";
 import { PROVEDOR_GOOGLE } from "@/lib/agenda/tipos";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { permissoesNaPagina } from "@/lib/clinic/acesso/pagina";
-import { tituloLivreLigadoNaConfig } from "@/lib/clinic/flags";
+import { duracaoNaMarcacaoLigadaNaConfig, tituloLivreLigadoNaConfig } from "@/lib/clinic/flags";
 import { diaDeHojeNoFuso, semanaSemente } from "@/lib/agenda/semana-semente";
 import { fusoUtilizavel } from "@/lib/tempo/fusos";
 import { nomeDoContato, type ContatoNomeavel } from "@/lib/contacts/rotulo-do-contato";
@@ -312,6 +312,8 @@ export default async function AgendaPage({
       contextoDaUrl={contextoDaUrl}
       // FORK clinic (#81): o título livre nasce desligado por clínica.
       tituloLivreLigado={tituloLivreLigadoNaConfig(orgDaAgenda?.settings)}
+      // FORK clinic (#80): escolher a duração ao marcar nasce desligado por clínica.
+      duracaoNaMarcacaoLigada={duracaoNaMarcacaoLigadaNaConfig(orgDaAgenda?.settings)}
       tiposIniciais={(tipos ?? []).map((t) => ({
         id: t.id,
         nome: t.name,

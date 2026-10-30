@@ -112,3 +112,11 @@ export function tituloLivreLigadoNaConfig(settings: unknown): boolean {
   if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
   return (clinic as Record<string, unknown>).titulo_livre === true;
 }
+
+/** `settings.clinic.duracao_na_marcacao` (migration 8005): duração escolhida ao marcar (upstream #3714). Só `true` liga. */
+export function duracaoNaMarcacaoLigadaNaConfig(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).duracao_na_marcacao === true;
+}
