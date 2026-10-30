@@ -7256,6 +7256,12 @@ export const DICIONARIO: Traducoes = {
   "Período anterior": { es: "Período anterior" },
   "Próximo período": { es: "Período siguiente" },
   "Tipo de agendamento": { es: "Tipo de cita" },
+  // #3766 — o título livre do compromisso.
+  "Título do compromisso": { es: "Título de la cita" },
+  "OS 1234 · Atendimento fulano": { es: "OS 1234 · Atención a fulano" },
+  "Aparece na agenda e também para o cliente, no lembrete e no convite. Em branco, usa o nome do tipo de agendamento.": {
+    es: "Aparece en la agenda y también para el cliente, en el recordatorio y en la invitación. En blanco, usa el nombre del tipo de cita.",
+  },
   "Por que está cancelando?": { es: "¿Por qué estás cancelando?" },
   "O paciente pediu para remarcar por telefone": { es: "El paciente pidió reprogramar por teléfono" },
   "Sincronizar com o Google ainda não está disponível": { es: "Sincronizar con Google todavía no está disponible" },
@@ -13006,6 +13012,12 @@ export const DICIONARIO: Traducoes = {
   "Não foi encaixado. Tente de novo.": { es: "No se pudo agregar. Inténtelo de nuevo." },
   "Encaixe ligado": { es: "Sobrecupo activado" },
   "Encaixe desligado": { es: "Sobrecupo desactivado" },
+  // FORK clinic (#81) — opção do título livre.
+  "Título livre ligado": { es: "Título libre activado" },
+  "Título livre desligado": { es: "Título libre desactivado" },
+  "Permitir digitar o título do compromisso ao marcar (aparece na agenda e no lembrete ao paciente)": {
+    es: "Permitir escribir el título de la cita al agendar (aparece en la agenda y en el recordatorio al paciente)",
+  },
   "Permitir encaixe (marcar por cima de um horário ocupado, com motivo)": { es: "Permitir sobrecupo (agendar sobre un horario ocupado, con motivo)" },
 };
 

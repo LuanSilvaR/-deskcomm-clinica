@@ -15,6 +15,7 @@ import { lerOcupacaoExterna } from "@/lib/agenda/ocupacao-externa";
 import { PROVEDOR_GOOGLE } from "@/lib/agenda/tipos";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { permissoesNaPagina } from "@/lib/clinic/acesso/pagina";
+import { tituloLivreLigadoNaConfig } from "@/lib/clinic/flags";
 import { diaDeHojeNoFuso, semanaSemente } from "@/lib/agenda/semana-semente";
 import { fusoUtilizavel } from "@/lib/tempo/fusos";
 import { nomeDoContato, type ContatoNomeavel } from "@/lib/contacts/rotulo-do-contato";
@@ -269,6 +270,12 @@ export default async function AgendaPage({
   // DUAS fontes estão vazias — mandar editar o `.env` de uma instalação que
   // gravou a credencial pela tela seria pior que não dizer nada.
   const googleConfigurado = await googleEstaConfigurado();
+  // FORK clinic (#81): as opções da clínica que a tela precisa (RLS + filtro da org ativa).
+  const { data: orgDaAgenda } = await supabase
+    .from("organizations")
+    .select("settings")
+    .eq("id", activeOrg.orgId)
+    .maybeSingle();
   const faltaNoGoogle = googleConfigurado ? [] : await faltaParaConectarOGoogle();
 
   return (
@@ -303,6 +310,8 @@ export default async function AgendaPage({
       orgId={activeOrg.orgId}
       filtrosDaUrl={filtrosDaUrl}
       contextoDaUrl={contextoDaUrl}
+      // FORK clinic (#81): o título livre nasce desligado por clínica.
+      tituloLivreLigado={tituloLivreLigadoNaConfig(orgDaAgenda?.settings)}
       tiposIniciais={(tipos ?? []).map((t) => ({
         id: t.id,
         nome: t.name,

@@ -39,6 +39,7 @@ import { recursosLigados } from "@/lib/clinic/agenda/recursos";
 import {
   clinicProfissionaisLigado,
   encaixeLigadoNaConfig,
+  tituloLivreLigadoNaConfig,
   estoqueLigado,
   menuClinicaLigado,
   procedimentosLigados,
@@ -70,6 +71,8 @@ async function lerOpcoes(orgId: string) {
     estoque: estoqueLigado(settings),
     // FORK clinic (agenda S6b)
     encaixe: encaixeLigadoNaConfig(settings),
+    // FORK clinic (#81)
+    titulo_livre: tituloLivreLigadoNaConfig(settings),
   };
 }
 
@@ -94,6 +97,7 @@ const patchSchema = z
     prontuario: z.boolean().optional(),
     estoque: z.boolean().optional(),
     encaixe: z.boolean().optional(),
+    titulo_livre: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "Informe se o módulo fica ligado.",
@@ -110,6 +114,7 @@ const FUNCAO_DA_OPCAO = {
   prontuario: "fn_clinic_definir_prontuario",
   estoque: "fn_clinic_definir_estoque",
   encaixe: "fn_clinic_definir_encaixe",
+  titulo_livre: "fn_clinic_definir_titulo_livre",
 } as const;
 
 export async function PATCH(req: NextRequest): Promise<Response> {
@@ -174,7 +179,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });

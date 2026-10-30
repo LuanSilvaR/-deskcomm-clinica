@@ -185,3 +185,11 @@ Universo: 1447 PRs do upstream entre `09d4da341` (2026-09-22) e `7dcd2fff5` (202
 | #3278 | `c132deee4` | fix(inbox): o aviso de sugestão que falhou sai da tela quando a conversa anda |
 | #3763 | `e383e704e` | fix(inbox): sugestão de resposta fala na voz do atendente, não na do agente (#3757) |
 | #3871 | `515d0a37e` | docs(adr): ADR-0007 — consulta em pg com Postgres próprio (#3715) |
+
+### Lote 2 — adaptação manual (épico #78)
+
+Uma funcionalidade por branch `feature/upstream-<id>`, cherry-pick `-m 1 -x` com ajuste ao fork, ou reescrita quando não aplica.
+
+| Issue | PR upstream | Commit upstream | Título | Adaptação |
+|---|---|---|---|---|
+| #81 | #3775 | `c55d17e7b` | feat(agenda): título livre no compromisso | atrás da opção `settings.clinic.titulo_livre` (migration **8003**, nasce desligada; interruptor em Configurações › Profissionais); o título entra no `marcarEm` do fork (S6b) em vez do corpo inline do upstream; sem `duration_minutes` (#80); teste com as chaves da agenda (S6a) e sem `fusoDaAgenda` |
