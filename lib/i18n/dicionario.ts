@@ -13051,6 +13051,12 @@ export const DICIONARIO: Traducoes = {
   "mínimo de 5 caracteres": { es: "mínimo 5 caracteres" },
   "Encaixando…": { es: "Agregando…" },
   "Confirmar encaixe": { es: "Confirmar sobrecupo" },
+  // #85 (upstream Spec 31 B1): os telefones da ficha.
+  "Principal": { es: "Principal" },
+  "Tem WhatsApp": { es: "Tiene WhatsApp" },
+  "Sem WhatsApp": { es: "Sin WhatsApp" },
+  "WhatsApp: não sabemos": { es: "WhatsApp: no sabemos" },
+  "Veio da junção de fichas": { es: "Vino de la unión de fichas" },
   "Escolha um tipo de agendamento.": { es: "Elija un tipo de cita." },
   "Escolha o paciente antes de confirmar.": { es: "Elija el paciente antes de confirmar." },
   "Escolha o paciente que será atendido.": { es: "Elija el paciente que será atendido." },

@@ -34,6 +34,7 @@ import { ProntuarioDoPaciente } from "@/components/clinic/prontuario/ProntuarioD
 import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
 import { HistoricoDeAtendimentos } from "@/components/clinic/HistoricoDeAtendimentos";
 import { DialButton } from "@/components/voice/DialButton";
+import type { Contact } from "@/lib/types/contacts";
 
 interface Props {
   contactId: string;
@@ -55,6 +56,82 @@ function NivelDaOrigem({ rotulo, valor }: { rotulo: string; valor: string | null
     <div>
       <dt className="text-xs uppercase text-muted-foreground">{rotulo}</dt>
       <dd className="mt-1 break-words">{valor}</dd>
+    </div>
+  );
+}
+
+/**
+ * Rótulos do tipo e do WhatsApp de um telefone (#85, upstream Spec 31 B1). Cada ramo traz o
+ * `t("...")` LITERAL: o guardião de espanhol só enxerga texto escrito na tela, e
+ * `t(variavel)` escapa dele.
+ */
+function textoDoTipoDoTelefone(tipo: string | null | undefined, t: (texto: string) => string): string | null {
+  if (tipo === "fixo") return t("Fixo");
+  if (tipo === "celular") return t("Celular");
+  if (tipo === "outro") return t("Outro");
+  return null;
+}
+
+function textoDoWhatsappDoTelefone(
+  whatsapp: string | null | undefined,
+  t: (texto: string) => string,
+): string | null {
+  if (whatsapp === "sim") return t("Tem WhatsApp");
+  if (whatsapp === "nao") return t("Sem WhatsApp");
+  if (whatsapp === "nao_sei") return t("WhatsApp: não sabemos");
+  return null;
+}
+
+/**
+ * O bloco "Telefones" da ficha (Spec 31, B1), SÓ LEITURA: o principal e cada
+ * extra, com tipo, WhatsApp, rótulo e, quando a fusão trouxe o número, a origem.
+ * Editar é a próxima entrega (B2). Só aparece com extra; sem extra a ficha segue
+ * como hoje, com o tipo ao lado do número.
+ */
+function BlocoDeTelefones({ contato, t }: { contato: Contact; t: (texto: string) => string }) {
+  const extras = contato.additional_phones ?? [];
+  return (
+    <div className="md:col-span-2">
+      <dt className="text-xs uppercase text-muted-foreground">{t("Telefones")}</dt>
+      <dd className="mt-1">
+        <ul className="flex flex-col gap-2">
+          {contato.phone_number && (
+            <li className="flex flex-wrap items-center gap-2">
+              <span>{phoneForDisplay(contato.phone_number)}</span>
+              <Badge variant="secondary">{t("Principal")}</Badge>
+              {textoDoTipoDoTelefone(contato.phone_type, t) && (
+                <span className="text-xs text-muted-foreground">
+                  {textoDoTipoDoTelefone(contato.phone_type, t)}
+                </span>
+              )}
+              {textoDoWhatsappDoTelefone(contato.phone_whatsapp, t) && (
+                <span className="text-xs text-muted-foreground">
+                  {textoDoWhatsappDoTelefone(contato.phone_whatsapp, t)}
+                </span>
+              )}
+            </li>
+          )}
+          {extras.map((extra) => (
+            <li key={extra.phone_number} className="flex flex-wrap items-center gap-2">
+              <span>{phoneForDisplay(extra.phone_number)}</span>
+              {textoDoTipoDoTelefone(extra.type, t) && (
+                <span className="text-xs text-muted-foreground">
+                  {textoDoTipoDoTelefone(extra.type, t)}
+                </span>
+              )}
+              {textoDoWhatsappDoTelefone(extra.whatsapp, t) && (
+                <span className="text-xs text-muted-foreground">
+                  {textoDoWhatsappDoTelefone(extra.whatsapp, t)}
+                </span>
+              )}
+              {extra.label && <span className="text-xs text-muted-foreground">{extra.label}</span>}
+              {extra.origin === "fusao" && (
+                <span className="text-xs text-muted-foreground">{t("Veio da junção de fichas")}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </dd>
     </div>
   );
 }
@@ -239,12 +316,25 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
                 <dt className="text-xs uppercase text-muted-foreground">Email</dt>
                 <dd className="mt-1">{contact.email ?? "—"}</dd>
               </div>
-              <div>
-                <dt className="text-xs uppercase text-muted-foreground">{t("Telefone")}</dt>
-                <dd className="mt-1">
-                  {contact.phone_number ? phoneForDisplay(contact.phone_number) : "—"}
-                </dd>
-              </div>
+              {/*
+                Com telefone extra, o bloco lista o principal e os extras (Spec 31,
+                B1). Sem extra, a linha segue como hoje; o tipo do número vai ao lado.
+              */}
+              {contact.additional_phones && contact.additional_phones.length > 0 ? (
+                <BlocoDeTelefones contato={contact} t={t} />
+              ) : (
+                <div>
+                  <dt className="text-xs uppercase text-muted-foreground">{t("Telefone")}</dt>
+                  <dd className="mt-1">
+                    {contact.phone_number ? phoneForDisplay(contact.phone_number) : "—"}
+                    {contact.phone_number && textoDoTipoDoTelefone(contact.phone_type, t) && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {textoDoTipoDoTelefone(contact.phone_type, t)}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
               {/*
                 A origem sai do `source_metadata` quando ele tem algo melhor a
                 dizer, e cai na coluna `source` quando não tem. Antes esta linha

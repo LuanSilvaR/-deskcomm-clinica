@@ -92,6 +92,10 @@ const TABELAS_NA_CASCATA = [
   // `lgpd-alcanca-prospeccao-de-quem-ja-era-contato.test.ts`.
   "prospecting_candidates",
   "voice_calls", //        0235 — o telefone de quem falou ao telefone
+  // 9043 do upstream (#85, 8011 no fork) (Spec 31 §B8) — os telefones extras da ficha, com o `lid` do WhatsApp
+  // de cada um. A linha sai inteira (passo 1b): número de telefone não tem
+  // versão anonimizada que ainda sirva para alguma coisa.
+  "contact_phones",
 ] as const;
 
 /**
