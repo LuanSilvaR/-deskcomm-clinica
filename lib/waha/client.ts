@@ -419,6 +419,39 @@ export class WahaClient {
    * instalação real). Quem chama baixa e persiste; guardar a URL faz a foto
    * sumir sozinha depois.
    */
+  /**
+   * Grupos em que o número está (trazido do upstream para o aviso de agendamento
+   * em grupo, #84). `GET /api/{session}/groups` devolve um OBJETO chaveado por id
+   * de grupo, não um array — a tolerância a array fica para uma versão futura do
+   * WAHA. O id termina em `@g.us` nos dois formatos (moderno e legado).
+   */
+  async listarGrupos(session: string): Promise<Array<{ chatId: string; subject: string | null }>> {
+    const res = await this.fetchComTeto(`${this.baseUrl}/api/${encodeURIComponent(session)}/groups`, {
+      headers: { "X-Api-Key": this.apiKey },
+    });
+    if (!res.ok) throw new Error(`waha_groups_${res.status}`);
+    const bruto = (await res.json().catch(() => null)) as unknown;
+    const lista = Array.isArray(bruto) ? bruto : bruto && typeof bruto === "object" ? Object.values(bruto) : [];
+    const grupos: Array<{ chatId: string; subject: string | null }> = [];
+    for (const item of lista) {
+      if (!item || typeof item !== "object") continue;
+      const o = item as Record<string, unknown>;
+      const id = o.id;
+      const chatId =
+        typeof id === "string"
+          ? id
+          : id && typeof id === "object" && typeof (id as Record<string, unknown>)._serialized === "string"
+            ? ((id as Record<string, unknown>)._serialized as string)
+            : typeof o.JID === "string"
+              ? (o.JID as string)
+              : null;
+      if (!chatId || !chatId.endsWith("@g.us")) continue;
+      const subject = typeof o.subject === "string" ? o.subject : typeof o.name === "string" ? o.name : null;
+      grupos.push({ chatId, subject });
+    }
+    return grupos;
+  }
+
   async getProfilePictureUrl(session: string, chatId: string): Promise<string | null> {
     try {
       const res = await this.fetchComTeto(
