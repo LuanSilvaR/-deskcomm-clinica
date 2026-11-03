@@ -785,6 +785,13 @@ export const DICIONARIO: Traducoes = {
   "Nenhum dia fora da rotina daqui para a frente.": { es: "No hay días fuera de la rutina a partir de hoy." },
   "Nenhum dia fechado daqui para a frente.": { es: "No hay días cerrados a partir de hoy." },
   "aberto excepcionalmente": { es: "abierto excepcionalmente" },
+  "Fechado": { es: "Cerrado" },
+  "Fechar só algumas horas": { es: "Cerrar solo algunas horas" },
+  "Fechar estas horas": { es: "Cerrar estas horas" },
+  "fechado nessas horas": { es: "cerrado en esas horas" },
+  "Nessas horas a agenda deixa de oferecer horários, para a equipe e para a IA. O resto do dia segue a jornada de sempre.": {
+    es: "En esas horas la agenda deja de ofrecer horarios, al equipo y a la IA. El resto del día sigue la jornada de siempre.",
+  },
   "Abrir atendimento": { es: "Abrir atención" },
   "Abra o atendimento e diga o que fazer: concluir, pedir informação ao cliente ou passar para uma pessoa.": { es: "Abre la atención e indica qué hacer: concluirla, pedir información al cliente o pasarla a una persona." },
   "Um atendimento espera decisão da equipe": { es: "Una atención espera la decisión del equipo" },
@@ -12843,7 +12850,6 @@ export const DICIONARIO: Traducoes = {
   "Inventário não encontrado.": { es: "Inventario no encontrado." },
   "Este inventário já foi fechado ou cancelado.": { es: "Este inventario ya fue cerrado o cancelado." },
   "Não foi possível ler os inventários.": { es: "No fue posible leer los inventarios." },
-  "Fechado": { es: "Cerrado" },
   // ── FORK clinic (estoque E7) ──
   "Não foi possível ler os alertas.": { es: "No fue posible leer las alertas." },
   "Nenhum alerta. A lista é atualizada de hora em hora.": { es: "Ninguna alerta. La lista se actualiza cada hora." },

@@ -185,3 +185,11 @@ Universo: 1447 PRs do upstream entre `09d4da341` (2026-09-22) e `7dcd2fff5` (202
 | #3278 | `c132deee4` | fix(inbox): o aviso de sugestão que falhou sai da tela quando a conversa anda |
 | #3763 | `e383e704e` | fix(inbox): sugestão de resposta fala na voz do atendente, não na do agente (#3757) |
 | #3871 | `515d0a37e` | docs(adr): ADR-0007 — consulta em pg com Postgres próprio (#3715) |
+
+### Lote 2 — adaptação manual (épico #78)
+
+Uma funcionalidade por branch `feature/upstream-<id>`, cherry-pick `-m 1 -x` com ajuste ao fork, ou reescrita quando não aplica.
+
+| Issue | PR upstream | Commit upstream | Título | Adaptação |
+|---|---|---|---|---|
+| #79 | #3888 | `37a5326bf` | feat(agenda): fechar só algumas horas de um dia e ver o fechamento na grade | a grade do fork desenha no horário local (sem a prop `fuso` do upstream): `trechoNoDia` recorta pelo horário local, a consulta usa o fuso do navegador e a pessoa isolada é o `donoDaAgenda` do fork; a faixa convive com a camada de bloqueios da clínica (`CamadaForaDaAgenda`); chave "Fechado" duplicada no dicionário removida; teste da grade fixa `TZ` em São Paulo. Sem flag: a opção nova só tem efeito quando alguém a usa |

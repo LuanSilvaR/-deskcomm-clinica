@@ -28,6 +28,7 @@ import {
   type HorarioPublicado,
   type MotivoDaGradeTravada,
 } from "@/lib/agenda/grade-interativa";
+import type { FechamentoDaGrade } from "@/lib/agenda/fechamentos-na-grade";
 import { cn } from "@/lib/utils";
 import { Lock } from "@/lib/ui/icons";
 import { useT } from "@/hooks/i18n/useT";
@@ -384,6 +385,115 @@ function CamadaDeMarcacao({
 }
 
 /**
+ * O pedaço de um fechamento que cai NESTE dia, em minutos do dia (`0..1440`), no
+ * fuso da grade.
+ *
+ * O fechamento chega em INSTANTES, já convertidos no fuso da jornada da pessoa
+ * (`lib/agenda/fechamentos-na-grade.ts`) — a grade não sabe que fuso é esse e
+ * não precisa saber. Aqui ele é só recortado pelas bordas do dia, como um
+ * compromisso seria: num fuso diferente do da organização um "dia todo" pode
+ * atravessar a meia-noite da grade e virar dois pedaços, um em cada coluna.
+ */
+function trechoNoDia(
+  f: FechamentoDaGrade,
+  dia: Date,
+): { de: number; ate: number } | null {
+  // FORK: a grade do fork desenha no horário local do navegador (`instanteDoMinuto`),
+  // como os cards; o upstream recorta num fuso explícito que o fork ainda não tem.
+  const minutoDoInstante = (d: Date) => d.getHours() * 60 + d.getMinutes();
+  const inicioDoDia = instanteDoMinuto(dia, 0).getTime();
+  const inicioDoSeguinte = instanteDoMinuto(addDays(dia, 1), 0).getTime();
+  const comeca = new Date(f.comeca).getTime();
+  const termina = new Date(f.termina).getTime();
+  if (!(termina > inicioDoDia && comeca < inicioDoSeguinte)) return null;
+  const de = comeca <= inicioDoDia ? 0 : minutoDoInstante(new Date(comeca));
+  const ate = termina >= inicioDoSeguinte ? 24 * 60 : minutoDoInstante(new Date(termina));
+  return ate > de ? { de, ate } : null;
+}
+
+/** "14:00–15:30", ou "o dia todo" quando o trecho cobre o dia inteiro da grade. */
+function rotuloDoTrecho(trecho: { de: number; ate: number }, t: (s: string) => string): string {
+  if (trecho.de === 0 && trecho.ate === 24 * 60) return t("o dia todo");
+  const hhmm = (m: number) =>
+    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  return `${hhmm(trecho.de)}–${hhmm(trecho.ate)}`;
+}
+
+/**
+ * Hachura NEUTRA, com traço fino: diz "aqui não tem atendimento" sem parecer um
+ * compromisso (que tem fundo de trilha) nem a ocupação do Google (hachura larga,
+ * de bloco). Só tokens: o tema escuro troca as cores sem regra própria.
+ */
+const HACHURA_DO_FECHAMENTO =
+  "repeating-linear-gradient(135deg, var(--color-border) 0 1px, transparent 1px 7px), var(--color-surface-elevated)";
+
+/**
+ * A FAIXA FECHADA — o "Dias fora da rotina" desenhado na própria grade.
+ *
+ * Até aqui o fechamento só existia na lista das configurações e na AUSÊNCIA de
+ * horários: o dono fechava 14h–15h e a grade mostrava o mesmo vazio de sempre,
+ * sem nada que dissesse que aquele vazio era escolha dele (pedido real numa
+ * instalação em 02/11/2026: "isso aparece marcado com alguma cor?").
+ *
+ * ⚠️ NÃO INTERCEPTA O PONTEIRO. Os horários fechados já nascem desabilitados na
+ * camada de marcação (quem decide é a rota de horários livres, que conhece o
+ * fechamento); a faixa é só leitura por cima deles, e um card que caia ali —
+ * marcado antes do fechamento — continua clicável por cima dela.
+ *
+ * O comentário de `CamadaDeMarcacao` recusa pintar o vazio indisponível, e esta
+ * faixa não o contradiz: ela não pinta TODO horário sem oferta (fora da
+ * jornada, aviso mínimo, lotado), só o que alguém fechou de propósito — poucos
+ * trechos, cada um com nome.
+ */
+function FaixaFechada({
+  fechamento,
+  trecho,
+  pessoa,
+  mostrarQuem,
+}: {
+  fechamento: FechamentoDaGrade;
+  trecho: { de: number; ate: number };
+  pessoa: Pessoa | undefined;
+  /** Com duas pessoas ou mais na grade, a faixa diz DE QUEM é o fechamento. */
+  mostrarQuem: boolean;
+}) {
+  const t = useT();
+  const topo = Math.max(trecho.de, PRIMEIRA_HORA * 60);
+  const fim = Math.min(trecho.ate, (ULTIMA_HORA + 1) * 60);
+  // Fechamento todo fora da janela desenhada (22h–23h, por exemplo): não há
+  // onde pô-lo, e uma faixa de altura zero só confundiria o teste e o leitor.
+  if (fim <= topo) return null;
+  const texto = [t("Fechado"), mostrarQuem ? pessoa?.nome : null, fechamento.motivo]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div
+      data-testid={`fechamento-${fechamento.id}`}
+      data-responsavel={fechamento.responsavelId}
+      className="pointer-events-none absolute inset-x-0 overflow-hidden border-y border-border px-1.5 py-0.5"
+      style={{
+        top: pixelsDe(topo - PRIMEIRA_HORA * 60),
+        height: pixelsDe(fim - topo),
+        background: HACHURA_DO_FECHAMENTO,
+      }}
+    >
+      {mostrarQuem && pessoa && (
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-[3px]"
+          style={{ backgroundColor: corDaTrilha(pessoa.trilha) }}
+        />
+      )}
+      <span className="ml-1 block truncate text-[10px] font-semibold leading-4 text-text-muted">
+        {texto}
+        <span className="sr-only"> · {rotuloDoTrecho(trecho, t)}</span>
+      </span>
+    </div>
+  );
+}
+
+/**
  * O bloco de um agendamento dentro de um dia.
  *
  * A faixa lateral tem 3px, e não os 2px do card do funil, porque ali a cor diz
@@ -642,6 +752,7 @@ function ColunaDeDia({
   dia,
   agora,
   agendamentos,
+  fechamentos,
   pessoas,
   onAbrir,
   destacado,
@@ -656,6 +767,7 @@ function ColunaDeDia({
   /** FORK clinic: jornada e bloqueios do profissional em contexto, neste dia. */
   foraDaAgenda?: ForaDaAgendaDoDia;
   agendamentos: Agendamento[];
+  fechamentos: FechamentoDaGrade[];
   pessoas: Pessoa[];
   onAbrir?: (id: string) => void;
   destacado: boolean;
@@ -733,6 +845,20 @@ function ColunaDeDia({
           />
         )}
         {foraDaAgenda && <CamadaForaDaAgenda chave={chaveDoDia(dia)} info={foraDaAgenda} />}
+        {/* Depois da camada de marcação e ANTES dos cards: a faixa cobre os
+            blocos (já desabilitados) e fica por baixo do que está marcado. */}
+        {fechamentos.map((f) => {
+          const trecho = trechoNoDia(f, dia);
+          return trecho ? (
+            <FaixaFechada
+              key={f.id}
+              fechamento={f}
+              trecho={trecho}
+              pessoa={pessoas.find((p) => p.id === f.responsavelId)}
+              mostrarQuem={pessoas.length > 1}
+            />
+          ) : null;
+        })}
         {repartirSobrepostos(doDia).map(({ agendamento, coluna, colunas }) => (
           <BlocoDeAgendamento
             key={agendamento.id}
@@ -761,11 +887,13 @@ function VisaoDeMes({
   ancora,
   agora,
   agendamentos,
+  fechamentos,
   pessoas,
 }: {
   ancora: Date;
   agora: Date;
   agendamentos: Agendamento[];
+  fechamentos: FechamentoDaGrade[];
   pessoas: Pessoa[];
 }) {
   const t = useT();
@@ -826,6 +954,24 @@ function VisaoDeMes({
                 )}
               </div>
               <div className="space-y-0.5">
+                {/* O fechamento vem ANTES dos compromissos e não conta no "+N":
+                    é o estado do dia, não mais um item dele. */}
+                {fechamentos.flatMap((f) => {
+                  const trecho = trechoNoDia(f, d);
+                  if (!trecho) return [];
+                  return [
+                    <div
+                      key={`fechamento-${f.id}`}
+                      data-testid={`fechamento-mes-${f.id}`}
+                      className="truncate rounded-sm px-1 py-0.5 text-[10px] leading-4 text-text-muted"
+                      style={{ background: HACHURA_DO_FECHAMENTO }}
+                    >
+                      {trecho.de === 0 && trecho.ate === 24 * 60
+                        ? t("Fechado")
+                        : `${rotuloDoTrecho(trecho, t)} ${t("Fechado")}`}
+                    </div>,
+                  ];
+                })}
                 {doDia.slice(0, 2).map((c) => {
                   const trilha = pessoas.find((p) => p.id === c.responsavelId)?.trilha ?? 1;
                   return (
@@ -873,6 +1019,7 @@ export function GradeDaAgenda({
   agora,
   pessoas,
   agendamentos,
+  fechamentos = [],
   onAbrirAgendamento,
   interacao,
   foraDaAgenda,
@@ -893,6 +1040,11 @@ export function GradeDaAgenda({
   agora: Date;
   pessoas: Pessoa[];
   agendamentos: Agendamento[];
+  /**
+   * As faixas fechadas em "Dias fora da rotina", já em instantes e já filtradas
+   * pela mesma pessoa que os agendamentos. Ausente = nenhuma (a vitrine).
+   */
+  fechamentos?: FechamentoDaGrade[];
   onAbrirAgendamento?: (id: string) => void;
   /** Ausente = grade só de leitura, como a vitrine a monta. Ver `InteracaoDaGrade`. */
   interacao?: InteracaoDaGrade;
@@ -1109,7 +1261,7 @@ export function GradeDaAgenda({
       )}
     >
       {visao === "mes" ? (
-        <VisaoDeMes ancora={ancora} agora={agora} agendamentos={agendamentos} pessoas={pessoas} />
+        <VisaoDeMes ancora={ancora} agora={agora} agendamentos={agendamentos} fechamentos={fechamentos} pessoas={pessoas} />
       ) : (
         // A rolagem mora AQUI dentro, e não na página: `html, body` têm
         // `overflow-x: hidden` no globals.css, então uma grade que estourasse a
@@ -1123,6 +1275,7 @@ export function GradeDaAgenda({
                 dia={d}
                 agora={agora}
                 agendamentos={agendamentos}
+                fechamentos={fechamentos}
                 pessoas={pessoas}
                 onAbrir={onAbrirAgendamento}
                 destacado={visao === "semana" && isSameDay(d, agora)}
