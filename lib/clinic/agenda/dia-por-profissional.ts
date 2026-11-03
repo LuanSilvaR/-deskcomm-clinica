@@ -39,6 +39,8 @@ export interface BloqueioComMotivo {
   end_minute: number;
   weekdays: number[] | null;
   reason: string | null;
+  /** FORK clinic (agenda S5, 9044): almoço, reunião, pessoal… */
+  tipo?: string | null;
 }
 
 export interface CompromissoDoDia {
@@ -59,6 +61,7 @@ export interface FaixaBloqueada {
   fim_minuto: number;
   motivo: string | null;
   origem: OrigemDoBloqueio;
+  tipo?: string | null;
 }
 
 export interface ColunaDoProfissional {
@@ -113,6 +116,7 @@ export function bloqueiosNoDia(
       fim_minuto: b.end_minute,
       motivo: b.reason,
       origem: b.user_id === null ? "clinica" : "pessoa",
+      ...(b.tipo ? { tipo: b.tipo } : {}),
     }));
   const doNucleo: FaixaBloqueada[] = excecoes
     .filter((e) => e.user_id === profissionalId && e.is_unavailable)

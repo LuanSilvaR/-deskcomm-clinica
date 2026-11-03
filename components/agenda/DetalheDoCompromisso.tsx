@@ -11,6 +11,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { VisitaDoPaciente } from "@/components/clinic/VisitaDoPaciente";
+import { HistoricoDoAgendamento } from "@/components/clinic/agenda/HistoricoDoAgendamento";
 import { rotuloDoLocal } from "@/lib/agenda/locais";
 
 type Detalhe = {
@@ -51,10 +52,13 @@ export function DetalheDoCompromisso({
   id,
   onClose,
   podeEditar = true,
+  onRemarcar,
 }: {
   id: string | null;
   onClose: () => void;
   podeEditar?: boolean;
+  /** FORK clinic (agenda S4): abre o painel de remarcar da Agenda para este compromisso. */
+  onRemarcar?: (id: string) => void;
 }) {
   const t = useT();
   const tagDoIdioma = useTagDeIdioma();
@@ -197,6 +201,9 @@ export function DetalheDoCompromisso({
                 statusDoAgendamento={a.status}
                 podeMudar={podeEditar}
               />
+            ) : null}
+            {a.contact_id ? (
+              <HistoricoDoAgendamento appointmentId={a.id} />
             ) : (
               <p>{t("Compromisso pessoal, sem cliente vinculado.")}</p>
             )}
@@ -327,6 +334,15 @@ export function DetalheDoCompromisso({
                     onClick={() => decide({ status: "confirmed" })}
                   >
                     {t("Confirmar horário")}
+                  </Button>
+                ) : null}
+                {onRemarcar && ["pending", "confirmed"].includes(a.status) ? (
+                  <Button
+                    variant="outline"
+                    data-testid="detalhe-remarcar"
+                    onClick={() => onRemarcar(a.id)}
+                  >
+                    {t("Remarcar")}
                   </Button>
                 ) : null}
                 {["pending", "confirmed"].includes(a.status) ? (

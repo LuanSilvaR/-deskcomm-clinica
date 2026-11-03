@@ -7,6 +7,7 @@ import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { detalheDoPaciente } from "@/lib/clinic/pacientes/busca";
 import { filtrarContatosPelaBusca } from "@/lib/clinic/pacientes/busca-no-banco";
 import { contarFaltas } from "@/lib/clinic/agenda/faltas";
+import { contatosDoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { traduzir } from "@/lib/i18n/dicionario";
 export async function GET(req: Request) {
   const requestId = randomUUID();
@@ -25,6 +26,9 @@ export async function GET(req: Request) {
     .order("display_name", { nullsFirst: false })
     .order("name")
     .limit(30);
+  // FORK clinic (agenda S5): sem `pacientes.ver_todos`, só os pacientes da própria agenda.
+  const escopo = await contatosDoEscopo(db, auth.org.orgId, auth.user.id);
+  if (escopo) contacts = contacts.in("id", escopo.length ? escopo : ["00000000-0000-0000-0000-000000000000"]);
   if (input.data.contact_id) contacts = contacts.eq("id", input.data.contact_id);
   else if (input.data.q) {
     // FORK clinic (E1): nome, telefone, CPF (hash exato, nunca em claro) ou data

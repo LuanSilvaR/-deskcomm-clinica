@@ -10,6 +10,7 @@
  * service key ela levanta `comanda_forbidden`. A RLS diz quem lê e quem escreve,
  * e `requireRole` é só a borda de autenticação.
  */
+import { exigeChaveNoNucleo } from "@/lib/clinic/acesso/chave-no-nucleo";
 import { randomUUID } from "node:crypto";
 
 import type { NextRequest } from "next/server";
@@ -30,6 +31,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const authz = await requireRole("viewer", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.ver", requestId);
+  if (semChave) return semChave;
 
   const url = new URL(req.url);
   const status = url.searchParams.get("status");
@@ -77,6 +81,12 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const authz = await requireRole("agent", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.lancar", requestId);
+
+  if (semChave) return semChave;
 
   const lido = abrirComandaSchema.safeParse(await req.json().catch(() => ({})));
   if (!lido.success) {

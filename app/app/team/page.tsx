@@ -1,3 +1,4 @@
+import { exigePermissaoNaPagina } from "@/lib/clinic/acesso/pagina";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -32,6 +33,9 @@ export default async function TeamPage({
 }: {
   searchParams: Promise<{ aba?: string }>;
 }) {
+  // FORK clinic (agenda S5): tela administrativa — sem a chave, "acesso não autorizado" (o menu já a esconde).
+  const negado = await exigePermissaoNaPagina("equipe.ver");
+  if (negado) return negado;
   const { aba } = await searchParams;
   // Valor desconhecido cai na aba padrão em vez de deixar as duas fechadas —
   // link velho ou digitado errado não pode devolver uma tela sem conteúdo.

@@ -22,7 +22,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
-import { ACAO_PARA_AVANCAR, ROTULO_DO_STATUS, STATUS_DA_VISITA, type StatusDaVisita } from "@/lib/clinic/visitas/status";
+import { ACAO_PARA_AVANCAR, podeAvancar, ROTULO_DO_STATUS, STATUS_DA_VISITA, type StatusDaVisita } from "@/lib/clinic/visitas/status";
 
 interface ItemDoDia {
   appointment_id: string;
@@ -176,7 +176,7 @@ export function PainelDaRecepcao({
                             ? t("O profissional inicia pela fila de atendimentos")
                             : t("O profissional finaliza pela fila de atendimentos")}
                         </Link>
-                      ) : podeMudar && proximo ? (
+                      ) : proximo && podeAvancar(proximo, { ehODono: meu, podeRecepcao: podeMudar }) ? (
                         <Button
                           size="sm"
                           variant={destaque ? "default" : "outline"}

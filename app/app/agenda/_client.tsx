@@ -17,7 +17,6 @@ import { AvisoDaConexaoGoogle } from "./_components/AvisoDaConexaoGoogle";
 import { CartaoDaConexaoGoogle } from "./_components/CartaoDaConexaoGoogle";
 
 import { AgendaInterativa } from "@/components/agenda/AgendaInterativa";
-import { FiltroDePessoas } from "@/components/agenda/FiltroDePessoas";
 import { HistoricoDaAgenda } from "@/components/agenda/HistoricoDaAgenda";
 import type { Agendamento, HorarioLivre, VisaoDaAgenda } from "@/components/agenda/tipos";
 import { EmptyAgenda } from "@/components/empty";
@@ -33,6 +32,11 @@ import { EscolhaDoProfissional, useRegrasDeProfissionaisLigadas } from "@/compon
 import { BarraDeFiltrosDaAgenda, useFiltrosDaAgenda } from "@/components/clinic/agenda/BarraDeFiltrosDaAgenda";
 import { ProvedorDaInfoDaClinica, useInfoDaClinica } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
 import { ListaDoDiaDaAgenda } from "@/components/clinic/agenda/ListaDoDiaDaAgenda";
+import { CabecalhoDoProfissional } from "@/components/clinic/agenda/SeletorDeProfissional";
+import type { ForaDaAgendaDoDia } from "@/components/agenda/GradeDaAgenda";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useContextoDaAgenda, useDisponibilidadeDaAgenda } from "@/hooks/clinic/useContextoDaAgenda";
+import { tiposDoProfissional, type ContextoDaUrl } from "@/lib/clinic/agenda/contexto-da-agenda";
 import { algumFiltroAtivo, passaNosFiltros } from "@/lib/clinic/agenda/filtros-da-agenda";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAgendamentos } from "@/hooks/agenda/useAgendamentos";
@@ -44,7 +48,9 @@ import {
   useRemarcarAgendamento,
 } from "@/hooks/agenda/useRemarcarAgendamento";
 import { usePessoasDaAgenda } from "@/hooks/agenda/usePessoasDaAgenda";
-import { CalendarPlus, CaretLeft, CaretRight } from "@/lib/ui/icons";
+import { CalendarPlus, CaretLeft, CaretRight, Lock } from "@/lib/ui/icons";
+import { FormularioDeBloqueio, type ValoresIniciaisDoBloqueio } from "@/components/clinic/FormularioDeBloqueio";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const VISOES: Array<{ id: VisaoDaAgenda; rotulo: string }> = [
@@ -78,6 +84,8 @@ const VISOES: Array<{ id: VisaoDaAgenda; rotulo: string }> = [
  * `tests/unit/telas-sem-dado-de-mentira.test.ts` impede que alguém religue os
  * imports sem querer.
  */
+const SEM_PERMISSOES: readonly string[] = [];
+
 export function AgendaClient({
   fusoDeApresentacao,
   hojeNaOrganizacao,
@@ -89,9 +97,11 @@ export function AgendaClient({
   linkDeConfiguracaoDoGoogle,
   tiposIniciais,
   agendamentosIniciais,
+  permissoes = SEM_PERMISSOES,
   podeMarcar,
   orgId,
   filtrosDaUrl = "",
+  contextoDaUrl = { profissional: null, data: null, visao: null },
 }: {
   fusoDeApresentacao: string | null;
   /**
@@ -129,10 +139,17 @@ export function AgendaClient({
    * com a recusa chegando DEPOIS do gesto, que é o defeito que este nome veio
    * fechar. Esconder aqui é cortesia: quem decide segue sendo a rota.
    */
+  /** FORK clinic (agenda S5): permissões efetivas, lidas no servidor. */
+  permissoes?: readonly string[];
   podeMarcar: boolean;
   /** FORK clinic: a organização (tempo real) e os filtros que vieram na URL. */
   orgId?: string;
   filtrosDaUrl?: string;
+  /**
+   * FORK clinic (agenda por profissional): `profissional`, `data` e `visao` que
+   * vieram na URL — a agenda abre neles (F5, link interno, voltar do navegador).
+   */
+  contextoDaUrl?: ContextoDaUrl;
 }) {
   const localeDaData = useLocaleDeData();
   const t = useT();
@@ -218,9 +235,30 @@ export function AgendaClient({
   const [profissionalClinic, setProfissionalClinic] = React.useState<string | null>(null);
   // FORK clinic (E1.4): a porta do "Dia por profissional" só aparece com as regras ligadas.
   const regrasDeProfissionais = useRegrasDeProfissionaisLigadas();
-  const tipo = tiposIniciais.find((t) => t.id === tipoId) ?? tiposIniciais[0] ?? null;
+  // FORK clinic (agenda S5): o que as permissões desenham nesta tela — rótulo
+  // "Minha agenda", a porta da recepção e o "Bloquear horário" (PF18).
+  const can = React.useCallback((chave: string) => permissoes.includes(chave), [permissoes]);
+  const [bloqueando, setBloqueando] = React.useState<ValoresIniciaisDoBloqueio | null>(null);
+  /**
+   * FORK clinic (agenda por profissional): UM profissional é o contexto da tela.
+   * Tudo abaixo — compromissos, horários livres, jornada, bloqueios e o que se
+   * marca — é dele. Ele vem da URL, da memória deste navegador ou da própria
+   * agenda de quem está logado (`useContextoDaAgenda`).
+   */
+  const contexto = useContextoDaAgenda({ orgId: orgId ?? "", usuarioId, daUrl: contextoDaUrl.profissional });
+  const donoDaAgenda = contexto.profissionalId;
+  // Os tipos que ESTE profissional atende: oferecer um tipo cuja especialidade
+  // ele não tem travaria a grade com "não consegui carregar os horários".
+  const tiposDoContexto = React.useMemo(
+    () => tiposDoProfissional(tiposIniciais, contexto.profissional),
+    [tiposIniciais, contexto.profissional],
+  );
+  const tipo = tiposDoContexto.find((t) => t.id === tipoId) ?? tiposDoContexto[0] ?? null;
+  // Quem atende o que se marca: o profissional em contexto; sem contexto (clínica
+  // sem lista de profissionais), a escolha do painel, como antes.
+  const profissionalDaMarcacao = donoDaAgenda ?? profissionalClinic;
   const endereco = enderecoEditado ?? tipo?.localDetalhes ?? "";
-  const [visao, setVisao] = React.useState<VisaoDaAgenda>("semana");
+  const [visao, setVisao] = React.useState<VisaoDaAgenda>(contextoDaUrl.visao ?? "semana");
   /**
    * No CELULAR a agenda abre no DIA, não na semana.
    *
@@ -238,10 +276,11 @@ export function AgendaClient({
   React.useEffect(() => {
     // O aviso da regra é justo em geral; aqui trocar a visão É o ponto do efeito.
     // A largura só existe no cliente, e decidir antes divergiria da hidratação.
+    // Visão pedida na URL vence: é escolha de quem mandou o link ou recarregou.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (window.matchMedia("(max-width: 767px)").matches) setVisao("dia");
+    if (!contextoDaUrl.visao && window.matchMedia("(max-width: 767px)").matches) setVisao("dia");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só na montagem, como antes
   }, []);
-  const [isolada, setIsolada] = React.useState<string | null>(null);
   // FORK clinic (melhorias da Agenda): filtros da clínica e o modo da visão Dia.
   const { filtros, mudar: mudarFiltro, limpar: limparFiltros } = useFiltrosDaAgenda(filtrosDaUrl);
   const [diaEmLista, setDiaEmLista] = React.useState(false);
@@ -260,7 +299,22 @@ export function AgendaClient({
    * `ancoraLocalDoDia` transforma a data numa `Date` local ao meio-dia — a doze
    * horas de qualquer borda de horário de verão.
    */
-  const [ancora, setAncora] = React.useState(() => ancoraLocalDoDia(hojeNaOrganizacao));
+  const [ancora, setAncora] = React.useState(() => ancoraLocalDoDia(contextoDaUrl.data ?? hojeNaOrganizacao));
+
+  // FORK clinic (agenda por profissional): profissional, data e visão na URL —
+  // F5 não perde o contexto e o voltar do navegador leva de volta. `replaceState`,
+  // como os filtros: o App Router acompanha sem pedir a página ao servidor, e as
+  // outras chaves (`compromisso`, filtros) ficam como estão.
+  React.useEffect(() => {
+    const url = new URLSearchParams(window.location.search);
+    if (donoDaAgenda) url.set("profissional", donoDaAgenda);
+    url.set("data", format(ancora, "yyyy-MM-dd"));
+    url.set("visao", visao);
+    const destino = `${window.location.pathname}?${url}`;
+    if (destino !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState(window.history.state, "", destino);
+    }
+  }, [donoDaAgenda, ancora, visao]);
 
   // AS PESSOAS SÃO REAIS, e vêm da lista MÍNIMA da agenda — `/api/v1/agenda/pessoas`
   // (`ROTA_DA_LISTA_DE_PESSOAS`, `lib/agenda/lista-de-pessoas.ts`), papel mínimo
@@ -322,7 +376,7 @@ export function AgendaClient({
           event_type_id: tipo.id,
           de: janelaDeBusca.de,
           ate: janelaDeBusca.ate,
-          ...(profissionalClinic ? { owner_user_id: profissionalClinic } : {}),
+          ...(profissionalDaMarcacao ? { owner_user_id: profissionalDaMarcacao } : {}),
         }
       : null,
   );
@@ -365,6 +419,10 @@ export function AgendaClient({
         : addDays(inicio, visao === "semana" ? 7 : 1);
     return { de: inicio.toISOString(), ate: fim.toISOString() };
   }, [visao, ancora]);
+  const recorteDoDono = React.useMemo(
+    () => ({ ...recorteDaGrade, ...(donoDaAgenda ? { owner_user_id: donoDaAgenda } : {}) }),
+    [recorteDaGrade, donoDaAgenda],
+  );
 
   // A janela que o SERVIDOR pintou. Sem esta comparação, navegar para outra
   // semana mostraria os compromissos DESTA por um instante — o fallback estaria
@@ -384,7 +442,9 @@ export function AgendaClient({
   const naJanelaDoServidor =
     recorteDaGrade.de === recorteDoServidor.de && recorteDaGrade.ate === recorteDoServidor.ate;
 
-  const { data: agendamentosVivos } = useAgendamentos(recorteDaGrade);
+  const { data: agendamentosVivos, isLoading: agendaCarregando } = useAgendamentos(
+    contexto.carregando ? null : recorteDoDono,
+  );
   const todos: Agendamento[] =
     agendamentosVivos ?? (naJanelaDoServidor ? agendamentosIniciais : []);
 
@@ -392,11 +452,29 @@ export function AgendaClient({
   const { data: infoDaClinica } = useInfoDaClinica(orgId ?? "", recorteDaGrade, filtros.q);
   const agendamentos = React.useMemo(
     () =>
-      (isolada === null ? todos : todos.filter((a) => a.responsavelId === isolada)).filter((a) =>
+      (donoDaAgenda === null ? todos : todos.filter((a) => a.responsavelId === donoDaAgenda)).filter((a) =>
         passaNosFiltros(a, filtros, infoDaClinica),
       ),
-    [isolada, todos, filtros, infoDaClinica],
+    [donoDaAgenda, todos, filtros, infoDaClinica],
   );
+  // FORK clinic: jornada e bloqueios do profissional em contexto, por dia.
+  const { data: disponibilidade } = useDisponibilidadeDaAgenda(
+    donoDaAgenda && visao !== "mes"
+      ? {
+          profissional: donoDaAgenda,
+          de: format(new Date(recorteDaGrade.de), "yyyy-MM-dd"),
+          ate: format(addDays(new Date(recorteDaGrade.ate), -1), "yyyy-MM-dd"),
+        }
+      : null,
+  );
+  const foraDaAgenda = React.useMemo(() => {
+    if (!disponibilidade) return undefined;
+    const mapa: Record<string, ForaDaAgendaDoDia> = {};
+    for (const d of disponibilidade.dias) {
+      mapa[d.dia] = { jornada: d.jornada, fora: d.fora_da_jornada, bloqueios: d.bloqueios };
+    }
+    return mapa;
+  }, [disponibilidade]);
   const especialidades = React.useMemo(() => {
     const m = new Map<string, string>();
     for (const f of Object.values(infoDaClinica?.profissionais ?? {})) for (const e of f.especialidades) m.set(e.id, e.nome);
@@ -456,7 +534,17 @@ export function AgendaClient({
       */}
       <React.Suspense fallback={null}>
         <AvisoDaConexaoGoogle />
-        <EntradaDaAgenda onContext={onContext} />
+        <EntradaDaAgenda
+          onContext={onContext}
+          onRemarcar={
+            podeMarcar
+              ? (id) => {
+                  setRemarcandoId(id);
+                  setMarcando(true);
+                }
+              : undefined
+          }
+        />
       </React.Suspense>
 
       <CartaoDaConexaoGoogle
@@ -469,7 +557,7 @@ export function AgendaClient({
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("Agenda")}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t(can("agenda.ver") && !can("agenda.ver_outros") ? "Minha agenda" : "Agenda")}</h1>
           <p className="text-sm text-muted-foreground">
             {t("O que está marcado, com quem, e quem atende — seu e da equipe.")}
           </p>
@@ -477,12 +565,25 @@ export function AgendaClient({
         <div className="flex shrink-0 items-center gap-2">
           {/* FORK clinic (9003): a porta diária do painel da recepção — ele saiu
               do menu lateral, que está no teto da dobra. */}
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/app/recepcao" data-testid="agenda-abrir-recepcao">
-              {t("Painel da recepção")}
-            </Link>
-          </Button>
-          {regrasDeProfissionais ? (
+          {can("recepcao.ver_painel") ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/app/recepcao" data-testid="agenda-abrir-recepcao">
+                {t("Painel da recepção")}
+              </Link>
+            </Button>
+          ) : null}
+          {can("agenda.bloquear_horario") ? (
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="agenda-bloquear-horario"
+              onClick={() => setBloqueando({ data: format(ancora, "yyyy-MM-dd") })}
+            >
+              <Lock size={16} weight="bold" aria-hidden />
+              {t("Bloquear horário")}
+            </Button>
+          ) : null}
+          {regrasDeProfissionais && can("agenda.ver_outros") ? (
             <Button variant="outline" size="sm" asChild>
               <Link href="/app/agenda/profissionais" data-testid="agenda-abrir-dia-por-profissional">
                 {t("Dia por profissional")}
@@ -552,6 +653,19 @@ export function AgendaClient({
         </div>
       </header>
 
+      {/* FORK clinic (agenda por profissional): QUEM é o contexto da tela — vem
+          antes de QUANDO (a navegação abaixo) e de O QUÊ (a grade). */}
+      {orgId ? (
+        <CabecalhoDoProfissional
+          profissional={contexto.profissional}
+          lista={contexto.lista}
+          recentes={contexto.recentes}
+          podeTrocar={contexto.podeVerOutros}
+          carregando={contexto.carregando}
+          onTrocar={contexto.trocar}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex items-center gap-0.5">
@@ -595,7 +709,6 @@ export function AgendaClient({
             gente no filtro, ela estoura igual — e o `overflow-x: hidden` corta o
             alternador de visão em silêncio. */}
         <div className="flex flex-wrap items-center gap-3">
-          <FiltroDePessoas pessoas={pessoas} isolada={isolada} onIsolar={setIsolada} />
           {/* FORK clinic: na visão Dia, a lista por profissional (ocupação e vagas). */}
           {visao === "dia" && orgId ? (
             <div data-testid="modo-do-dia" className="flex items-center gap-0.5 rounded-md border border-border bg-surface p-0.5">
@@ -759,11 +872,11 @@ export function AgendaClient({
               />
               </div>
             ) : null}
-            {tiposIniciais.length > 1 && (
+            {tiposDoContexto.length > 1 && (
               <div className="lg:col-span-2" data-testid="tipos-de-agendamento">
                 <p className="mb-2 text-sm font-medium">{t("Tipo de agendamento")}</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {tiposIniciais.map((opcao) => (
+                  {tiposDoContexto.map((opcao) => (
                     <button
                       key={opcao.id}
                       type="button"
@@ -861,7 +974,14 @@ export function AgendaClient({
               </>
             ) : null}
           </div>
-          {tipo && !remarcandoId ? (
+          {tipo && !remarcandoId && contexto.profissional ? (
+            // FORK clinic (agenda por profissional): o profissional JÁ é o da agenda
+            // aberta — pedir de novo seria a pergunta que a tela acabou de responder.
+            <p data-testid="profissional-do-contexto" className="mt-4 text-sm">
+              <span className="text-text-muted">{t("Profissional")}: </span>
+              <span className="font-semibold">{contexto.profissional.nome}</span>
+            </p>
+          ) : tipo && !remarcandoId ? (
             <div className="mt-4">
               <EscolhaDoProfissional
                 tipoId={tipo.id}
@@ -895,7 +1015,7 @@ export function AgendaClient({
                   // regra está em `lib/agenda/responsavel-do-painel.ts`: com a
                   // lista da equipe vazia (o 403 do item 1 da issue 896) este
                   // fallback dizia "Você" para a jornada de OUTRA pessoa.
-                  resolverResponsavelDoPainel({ pessoas, donoId: profissionalClinic ?? tipo.donoId, usuarioId })
+                  resolverResponsavelDoPainel({ pessoas, donoId: profissionalDaMarcacao ?? tipo.donoId, usuarioId })
                 }
                 tipo={tipo.nome}
                 duracaoMin={tipo.duracaoMin}
@@ -973,7 +1093,7 @@ export function AgendaClient({
                   return marcar
                     .mutateAsync({
                       event_type_id: tipo.id,
-                      ...(profissionalClinic ? { owner_user_id: profissionalClinic } : {}),
+                      ...(profissionalDaMarcacao ? { owner_user_id: profissionalDaMarcacao } : {}),
                       contact_id: contactId || undefined,
                       conversation_id: conversationId || undefined,
                       starts_at: instante,
@@ -1150,7 +1270,9 @@ export function AgendaClient({
             status: "confirmed",
           })
         }
-        onRealizado={(id) =>
+        // FORK clinic (agenda S4): na clínica, "realizado" é só do profissional
+        // do agendamento (o servidor confere de novo).
+        onRealizado={regrasDeProfissionais && donoDaAgenda !== usuarioId ? undefined : (id) =>
           desfecho.mutate({
             id,
             revision: agendamentos.find((a) => a.id === id)?.revision,
@@ -1189,7 +1311,24 @@ export function AgendaClient({
             {t("Limpar filtros")}
           </Button>
         </div>
-      ) : agendamentos.length === 0 && !algumFiltroAtivo(filtros) ? (
+      ) : agendamentos.length === 0 && !algumFiltroAtivo(filtros) && contexto.profissional && !agendaCarregando ? (
+        // FORK clinic: a agenda vazia CONTINUA marcável — os horários livres
+        // seguem na grade abaixo e o botão está aqui.
+        <div data-testid="agenda-livre-do-profissional" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 text-sm">
+          <div>
+            <p className="font-semibold">{t("Nenhum agendamento neste período.")}</p>
+            <p className="text-text-muted">
+              {t("A agenda de {nome} está livre.").replace("{nome}", contexto.profissional.nome)}
+            </p>
+          </div>
+          {podeMarcar && tipo ? (
+            <Button size="sm" variant="outline" onClick={abrirMarcacao}>
+              <CalendarPlus size={16} weight="bold" aria-hidden />
+              <span>{t("Novo agendamento")}</span>
+            </Button>
+          ) : null}
+        </div>
+      ) : agendamentos.length === 0 && !algumFiltroAtivo(filtros) && !contexto.profissional ? (
         <div className="rounded-lg border border-border bg-surface p-4">
           <EmptyAgenda />
         </div>
@@ -1203,7 +1342,7 @@ export function AgendaClient({
           orgId={orgId}
           dia={format(ancora, "yyyy-MM-dd")}
           filtros={filtros}
-          isolada={isolada}
+          isolada={donoDaAgenda}
           nomeDaPessoa={(id) => pessoas.find((p) => p.id === id)?.nome}
           onAbrir={(id) => router.push(`/app/agenda?compromisso=${id}`)}
           onMarcarEm={
@@ -1217,15 +1356,31 @@ export function AgendaClient({
               : undefined
           }
         />
+      ) : contexto.carregando ? (
+        // Skeleton SÓ na área do calendário: cabeçalho, navegação e filtros
+        // continuam na tela enquanto o contexto resolve.
+        <div data-testid="grade-carregando" aria-busy className="flex min-h-0 flex-1 flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+          {Array.from({ length: 8 }, (_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
       ) : (
+      <div className="relative flex min-h-0 flex-1 flex-col" aria-busy={agendaCarregando || undefined}>
+      {agendaCarregando ? (
+        <p role="status" data-testid="agenda-atualizando" className="pointer-events-none absolute right-3 top-2 z-30 rounded-full bg-surface-elevated px-2 py-0.5 text-xs text-text-muted shadow-sm">
+          {t("Carregando…")}
+        </p>
+      ) : null}
       <AgendaInterativa
+        donoId={donoDaAgenda}
+        foraDaAgenda={foraDaAgenda}
         visao={visao}
         ancora={ancora}
         agora={new Date()}
         pessoas={pessoas}
         agendamentos={agendamentosDaGrade}
         recorte={recorteDaGrade}
-        tipos={tiposIniciais.map((t) => ({ id: t.id, nome: t.nome, duracaoMin: t.duracaoMin }))}
+        tipos={tiposDoContexto.map((t) => ({ id: t.id, nome: t.nome, duracaoMin: t.duracaoMin }))}
         tipo={tipo ? { id: tipo.id, duracaoMin: tipo.duracaoMin } : null}
         onEscolherTipo={setTipoId}
         // SEGUNDA PORTA: o clique num bloco livre da grade. Sem `onMarcarEm`, a
@@ -1240,7 +1395,18 @@ export function AgendaClient({
                 // livre abre uma marcação NOVA, e ela nasce com o vínculo da rota.
                 abrirMarcacao();
               }
-            : undefined
+            : can("agenda.bloquear_horario") && donoDaAgenda === usuarioId
+              ? // FORK clinic (agenda S5, PF18): quem não marca (o profissional)
+                // bloqueia a própria agenda pelo horário clicado.
+                (instante) => {
+                  const ini = new Date(instante);
+                  setBloqueando({
+                    data: format(ini, "yyyy-MM-dd"),
+                    horaDe: format(ini, "HH:mm"),
+                    horaAte: format(new Date(ini.getTime() + (tipo?.duracaoMin ?? 60) * 60_000), "HH:mm"),
+                  });
+                }
+              : undefined
         }
         /* Tocar num card abre o detalhe. A prop já atravessava `AgendaInterativa`
            e `GradeDaAgenda` e chegava `undefined` aqui: o toque não fazia nada, e
@@ -1251,7 +1417,25 @@ export function AgendaClient({
         onAbrirAgendamento={(id) => router.push(`/app/agenda?compromisso=${id}`)}
         className="min-h-0 flex-1"
       />
+      </div>
       )}
+      <Dialog open={bloqueando !== null} onOpenChange={(aberto) => (aberto ? null : setBloqueando(null))}>
+        <DialogContent data-testid="dialogo-bloquear-horario" className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t("Bloquear horário")}</DialogTitle>
+            <DialogDescription>{t("O horário bloqueado deixa de ser oferecido para marcar.")}</DialogDescription>
+          </DialogHeader>
+          {bloqueando ? (
+            <FormularioDeBloqueio
+              usuarioAtualId={usuarioId}
+              ehGerencia={can("agenda.configurar")}
+              inicial={can("agenda.configurar") && donoDaAgenda ? { ...bloqueando, usuarioId: donoDaAgenda } : bloqueando}
+              simples
+              onCriado={() => setBloqueando(null)}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
     </ProvedorDaInfoDaClinica>
   );

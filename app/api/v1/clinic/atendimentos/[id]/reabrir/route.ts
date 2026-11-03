@@ -25,7 +25,10 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
   const requestId = randomUUID();
-  const authz = await requirePermission("atendimento.reabrir", { requestId, resource: "clinic_atendimentos" });
+  // FORK clinic (agenda S5): reabrir com motivo é da gerência (`atendimento.reabrir`);
+  // COMPLEMENTAR (o próprio profissional, no mesmo dia) também passa por aqui —
+  // quem decide entre os dois é o banco (9043). A porta é `atendimento.finalizar`.
+  const authz = await requirePermission("atendimento.finalizar", { requestId, resource: "clinic_atendimentos" });
   if (!authz.ok) return authz.response;
   const t = (s: string) => traduzir(s, authz.user.idioma);
   const { id } = await ctx.params;
@@ -41,7 +44,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   }
   // O motivo fica no evento clínico (clinic_atendimento_eventos), não no log.
   void audit({
-    action: "clinic.atendimento_reaberto",
+    action: authz.permissoes.has("atendimento.reabrir") ? "clinic.atendimento_reaberto" : "clinic.atendimento_complementado",
     actorUserId: authz.user.id,
     organizationId: org,
     resourceType: "clinic_atendimento",

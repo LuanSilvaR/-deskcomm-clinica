@@ -11,6 +11,7 @@
  *        sobe ao bucket privado pelo service role e só então é registrado (o banco confere permissão, paciente, prefixo do
  *        caminho e cota). Registro falhou → o upload é desfeito.
  */
+import { pacienteNoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -76,6 +77,10 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   }
   const org = authz.org.orgId;
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
   const [anexos, uso, vigentes] = await Promise.all([
     supabase
       .from("clinic_anexos")
@@ -171,6 +176,10 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   const org = authz.org.orgId;
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
   // Antes de subir: o paciente é desta empresa e cabe na cota (o banco confere
   // de novo no registro; isto só evita arquivo órfão no Storage).
   const [{ data: paciente }, { data: usoAtual }] = await Promise.all([

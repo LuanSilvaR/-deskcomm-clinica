@@ -11,6 +11,7 @@
  * o desconto ali deixaria os quatro números discordando em silêncio. O caminho
  * de desfazer é o ESTORNO, que faz contra-lançamento.
  */
+import { exigeChaveNoNucleo } from "@/lib/clinic/acesso/chave-no-nucleo";
 import { randomUUID } from "node:crypto";
 
 import type { NextRequest } from "next/server";
@@ -30,6 +31,9 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const requestId = randomUUID();
   const authz = await requireRole("viewer", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.ver", requestId);
+  if (semChave) return semChave;
 
   const { id } = await ctx.params;
   const supabase = await createClient();
@@ -67,6 +71,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   const authz = await requireRole("agent", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.lancar", requestId);
+
+  if (semChave) return semChave;
 
   const lido = alterarComandaSchema.safeParse(await req.json().catch(() => ({})));
   if (!lido.success) {

@@ -10,6 +10,8 @@
  * Existe à parte da timeline do núcleo (`/api/v1/contacts/:id/timeline`), que
  * lê `crm_lead_activities` — depende de lead e não conhece a visita.
  */
+import { pacienteNoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
+import { traduzir } from "@/lib/i18n/dicionario";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -37,6 +39,10 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
   const org = authz.org.orgId;
 
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
   let q = supabase
     .from("calendar_appointments")
     .select("id, title, starts_at, ends_at, status, owner_user_id, cancellation_reason, calendar_event_types(name)")

@@ -15,6 +15,10 @@ export interface InfoDoCompromisso {
   desde: string | null;
   confirmacao: string | null;
   faltas: number;
+  /** FORK clinic (agenda S4): nenhum atendimento realizado antes deste. */
+  primeira_vez?: boolean;
+  /** FORK clinic (agenda S4): mudou de horário e ninguém confirmou depois. */
+  remarcado?: boolean;
 }
 
 export interface InfoDaClinica {
@@ -77,5 +81,5 @@ export function passaNosFiltros(
   // Sem mexer no status, ele não filtra: a grade já esconde o cancelado sozinha e
   // o histórico PRECISA dele (aba Cancelados). Mexeu, vale o que foi marcado.
   if (!f.statusMudou) return true;
-  return f.status.includes(statusDeExibicao(a.situacao, c?.visita));
+  return f.status.includes(statusDeExibicao(a.situacao, c?.visita, { confirmacao: c?.confirmacao, remarcado: c?.remarcado }));
 }

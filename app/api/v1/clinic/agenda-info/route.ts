@@ -18,6 +18,8 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { textoDoConselho, type FichaDoProfissional } from "@/lib/clinic/agenda/agenda-do-dia";
 import { contarFaltas } from "@/lib/clinic/agenda/faltas";
+import { compromissosDePrimeiraVez, compromissosRemarcados } from "@/lib/clinic/agenda/primeira-vez";
+import { PERMISSAO_VER_OUTROS } from "@/lib/clinic/agenda/escopo-da-agenda";
 import type { InfoDoCompromisso } from "@/lib/clinic/agenda/filtros-da-agenda";
 import { filtrarContatosPelaBusca } from "@/lib/clinic/pacientes/busca-no-banco";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -44,14 +46,17 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (!lido.success) return fail("validation_failed", t("Consulta inválida."), 422, { requestId });
 
   const supabase = await createClient();
+  // FORK clinic (9042): sem `agenda.ver_outros`, só os compromissos da própria agenda.
+  const soOProprio = !authz.permissoes.has(PERMISSAO_VER_OUTROS);
+  let consultaDosCompromissos = supabase
+    .from("calendar_appointments")
+    .select("id, contact_id, starts_at")
+    .eq("organization_id", org)
+    .lt("starts_at", lido.data.ate)
+    .gt("ends_at", lido.data.de);
+  if (soOProprio) consultaDosCompromissos = consultaDosCompromissos.eq("owner_user_id", authz.user.id);
   const [ags, profs] = await Promise.all([
-    supabase
-      .from("calendar_appointments")
-      .select("id, contact_id")
-      .eq("organization_id", org)
-      .lt("starts_at", lido.data.ate)
-      .gt("ends_at", lido.data.de)
-      .limit(1000),
+    consultaDosCompromissos.limit(1000),
     supabase
       .from("clinic_professionals")
       .select("user_id, display_name, council, council_number, council_uf, is_active, clinic_professional_specialties(clinic_specialties(id, name))")
@@ -60,11 +65,11 @@ export async function GET(req: NextRequest): Promise<Response> {
   const erro = ags.error ?? profs.error;
   if (erro) return fail("internal_error", erro.message, 500, { requestId });
 
-  const lista = (ags.data ?? []) as Array<{ id: string; contact_id: string | null }>;
+  const lista = (ags.data ?? []) as Array<{ id: string; contact_id: string | null; starts_at: string }>;
   const ids = lista.map((a) => a.id);
   const pacientes = [...new Set(lista.map((a) => a.contact_id).filter((x): x is string => Boolean(x)))];
 
-  const [visitas, confirmacoes, faltas, busca] = await Promise.all([
+  const [visitas, confirmacoes, faltas, busca, primeiraVez, remarcados] = await Promise.all([
     ids.length
       ? supabase.from("clinic_appointment_visits").select("appointment_id, status, changed_at").eq("organization_id", org).in("appointment_id", ids)
       : Promise.resolve({ data: [], error: null }),
@@ -75,6 +80,9 @@ export async function GET(req: NextRequest): Promise<Response> {
     lido.data.q && pacientes.length
       ? filtrarContatosPelaBusca(supabase.from("contacts").select("id").eq("organization_id", org).in("id", pacientes), lido.data.q)
       : Promise.resolve({ data: [], error: null }),
+    // FORK clinic (agenda S4): "1ª vez" e "remarcado" — informação a mais, nunca derruba a rota.
+    compromissosDePrimeiraVez(supabase, org, lista.map((a) => ({ id: a.id, contact_id: a.contact_id, inicio: a.starts_at }))),
+    compromissosRemarcados(supabase, org, ids),
   ]);
   if (visitas.error) return fail("internal_error", visitas.error.message, 500, { requestId });
 
@@ -92,6 +100,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       desde: v?.changed_at ?? null,
       confirmacao: confirmacaoPor.get(a.id) ?? null,
       faltas: a.contact_id ? (faltas.get(a.contact_id) ?? 0) : 0,
+      primeira_vez: primeiraVez.has(a.id),
+      remarcado: remarcados.has(a.id),
     };
   }
 

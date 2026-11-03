@@ -1,3 +1,4 @@
+import { exigePermissaoNaPagina } from "@/lib/clinic/acesso/pagina";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -31,6 +32,9 @@ export const metadata: Metadata = { title: "Funis" };
  * botão que o servidor recusaria seria prometer o que não se cumpre.
  */
 export default async function KanbanPickerPage() {
+  // FORK clinic (agenda S5): tela administrativa — sem a chave, "acesso não autorizado" (o menu já a esconde).
+  const negado = await exigePermissaoNaPagina("crm.ver");
+  if (negado) return negado;
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");

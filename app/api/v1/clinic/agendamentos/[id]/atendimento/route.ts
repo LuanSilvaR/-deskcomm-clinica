@@ -39,10 +39,30 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const lido = corpo.safeParse(await req.json().catch(() => ({})));
   if (!lido.success) return fail("validation_failed", t("Dados inválidos."), 422, { requestId });
   const org = authz.org.orgId;
+  const supabase = await createClient();
+
+  // FORK clinic (agenda S4): o atendimento começa quando a recepção libera o
+  // paciente ("Pronto para atendimento"); "em atendimento" é retomar o aberto.
+  // Quem pode iniciar (só o profissional do agendamento) o banco decide (9043).
+  const { data: visita } = await supabase
+    .from("clinic_appointment_visits")
+    .select("status")
+    .eq("organization_id", org)
+    .eq("appointment_id", id)
+    .maybeSingle();
+  const statusDaVisita = (visita as { status?: string } | null)?.status ?? "agendado";
+  if (statusDaVisita !== "pronto" && statusDaVisita !== "em_atendimento") {
+    return fail(
+      "atendimento_paciente_nao_pronto",
+      t("O paciente ainda não está pronto para atendimento: a recepção libera em \"Pronto para atendimento\"."),
+      409,
+      { requestId },
+    );
+  }
 
   try {
     const r = await iniciarAtendimento(
-      await createClient(),
+      supabase,
       { organization_id: org, actor: { type: "user", id: authz.user.id }, requestId },
       { appointmentId: id, especialidadeId: lido.data.especialidade_id ?? null },
     );

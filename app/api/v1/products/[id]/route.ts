@@ -1,3 +1,4 @@
+import { exigeChaveNoNucleo } from "@/lib/clinic/acesso/chave-no-nucleo";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * PATCH  /api/v1/products/:id — muda o que veio, não encosta no resto.
@@ -29,6 +30,9 @@ export async function PATCH(
   const requestId = randomUUID();
   const authz = await requireRole("manager", { requestId, resource: "catalog_products" });
   if (!authz.ok) return authz.response;
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "produtos.gerenciar", requestId);
+  if (semChave) return semChave;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const { id } = await params;
 
@@ -84,6 +88,9 @@ export async function DELETE(
   const requestId = randomUUID();
   const authz = await requireRole("manager", { requestId, resource: "catalog_products" });
   if (!authz.ok) return authz.response;
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "produtos.gerenciar", requestId);
+  if (semChave) return semChave;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const { id } = await params;
 

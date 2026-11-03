@@ -25,6 +25,17 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
   visita_agendamento_nao_encontrado: { status: 404, code: "not_found", mensagem: "Agendamento não encontrado." },
   visita_sem_paciente: { status: 422, code: "validation_failed", mensagem: "Este agendamento não tem paciente vinculado." },
   visita_agendamento_cancelado: { status: 422, code: "validation_failed", mensagem: "Este agendamento foi cancelado." },
+  // FORK clinic (agenda S4, 9043)
+  visita_so_o_profissional: {
+    status: 403,
+    code: "visita_so_o_profissional",
+    mensagem: "Só o profissional do agendamento inicia e finaliza o atendimento.",
+  },
+  visita_finalizada_bloqueada: {
+    status: 403,
+    code: "visita_finalizada_bloqueada",
+    mensagem: "Atendimento finalizado: só o próprio profissional ajusta, no mesmo dia, ou a gerência.",
+  },
   visita_correcao_sem_motivo: {
     status: 422,
     code: "validation_failed",

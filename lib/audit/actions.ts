@@ -953,6 +953,10 @@ export const AUDIT_ACTIONS = [
   "acesso.papel_excluido",
   "acesso.papeis_do_membro_alterados",
   "acesso.modo_permissoes_alterado",
+  // FORK clinic (agenda S4): a recepção conferiu telefone e e-mail do paciente
+  "clinic.dados_confirmados",
+  // FORK clinic (agenda S5): o profissional reabriu o próprio atendimento no mesmo dia
+  "clinic.atendimento_complementado",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

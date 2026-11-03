@@ -1,3 +1,4 @@
+import { exigeChaveNoNucleo } from "@/lib/clinic/acesso/chave-no-nucleo";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * POST /api/v1/products/import — o catálogo a partir da planilha que a loja já tem.
@@ -62,6 +63,9 @@ export async function POST(req: NextRequest): Promise<Response> {
   // Preço de venda é escrita de gestão: o mesmo papel do POST unitário.
   const authz = await requireRole("manager", { requestId, resource: "catalog_products" });
   if (!authz.ok) return authz.response;
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "produtos.gerenciar", requestId);
+  if (semChave) return semChave;
   const orgId = authz.org.orgId;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
@@ -291,6 +295,9 @@ export async function GET(): Promise<Response> {
   const requestId = randomUUID();
   const authz = await requireRole("manager", { requestId, resource: "catalog_products" });
   if (!authz.ok) return authz.response;
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "produtos.gerenciar", requestId);
+  if (semChave) return semChave;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
   const modelo = [

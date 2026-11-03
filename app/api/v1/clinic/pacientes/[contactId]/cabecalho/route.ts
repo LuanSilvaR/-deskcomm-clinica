@@ -7,6 +7,7 @@
  * PUT — alergias e alertas, com a versão que a tela conhecia; toda mudança
  *       fica em `clinic_prontuario_alteracoes`.
  */
+import { pacienteNoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -51,6 +52,10 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   }
   const org = authz.org.orgId;
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
   const agora = new Date().toISOString();
   const verPlanos = authz.permissoes.has("planos.ver");
 
@@ -199,6 +204,10 @@ export async function PUT(req: NextRequest, ctx: Ctx): Promise<Response> {
   if (!lido.success) return fail("validation_failed", t("Dados inválidos."), 422, { requestId });
   const org = authz.org.orgId;
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
   const { data, error } = await supabase.rpc("fn_clinic_cabecalho_salvar", {
     p_org: org,
     p_contact: contactId,

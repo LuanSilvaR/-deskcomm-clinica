@@ -1,3 +1,4 @@
+import { exigeChaveNoNucleo } from "@/lib/clinic/acesso/chave-no-nucleo";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * GET  /api/v1/products — o catálogo da organização ativa.
@@ -24,6 +25,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const authz = await requireRole("viewer", { requestId, resource: "catalog_products" });
   if (!authz.ok) return authz.response;
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "produtos.ver", requestId);
+  if (semChave) return semChave;
 
   const busca = req.nextUrl.searchParams.get("busca")?.trim() ?? "";
   const supabase = await createClient();
@@ -54,6 +58,9 @@ export async function POST(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const authz = await requireRole("manager", { requestId, resource: "catalog_products" });
   if (!authz.ok) return authz.response;
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "produtos.gerenciar", requestId);
+  if (semChave) return semChave;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
   const parsed = produtoCreateSchema.safeParse(await req.json().catch(() => null));

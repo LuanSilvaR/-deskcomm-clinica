@@ -34,6 +34,7 @@ type AgendamentoDaResposta = AgendamentoListado & { origem?: "google_sync" };
 import { ApiError } from "@/lib/api/types";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
+import { escopoDaAgendaNoServidor } from "@/lib/clinic/agenda/escopo-no-servidor";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 import {
@@ -172,10 +173,29 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   const supabase = await createClient();
+
+  // FORK clinic (agenda por profissional, 9042): a leitura da AGENDA (recorte por
+  // período, sem contato nem lead) só alcança a agenda de colegas com
+  // `agenda.ver_outros`; sem ela, o dono é sempre quem pede. A listagem por
+  // contato/lead (ficha, Inbox) segue como no núcleo.
+  let dono = parsed.data.owner_user_id ?? null;
+  const leituraDaAgenda =
+    !parsed.data.contact_id && !parsed.data.lead_id && Boolean(parsed.data.dia || (parsed.data.de && parsed.data.ate));
+  if (leituraDaAgenda) {
+    const escopo = await escopoDaAgendaNoServidor(supabase, activeOrg.orgId, authz.user.id, dono);
+    if (!escopo.ok) {
+      return fail("forbidden_permission", t("Você só pode ver a sua própria agenda."), 403, {
+        requestId,
+        details: { permissao: "agenda.ver_outros" },
+      });
+    }
+    dono = escopo.dono;
+  }
+
   const resultado = await listaAgendamentos(supabase, activeOrg.orgId, {
     contactId: parsed.data.contact_id ?? null,
     leadId: parsed.data.lead_id ?? null,
-    ownerUserId: parsed.data.owner_user_id ?? null,
+    ownerUserId: dono,
     dia: parsed.data.dia ?? null,
     de: parsed.data.de ?? null,
     ate: parsed.data.ate ?? null,
@@ -260,6 +280,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       });
     }
     for (const e of blocos) {
+      // FORK clinic: com um dono no recorte, só a ocupação dele.
+      if (leituraDaAgenda && dono && e.donoId !== dono) continue;
       externos.push({
         id: e.id,
         // Rótulo, NUNCA o título do evento: a tabela tem a coluna `title` e esta

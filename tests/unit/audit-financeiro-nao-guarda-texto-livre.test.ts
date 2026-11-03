@@ -55,6 +55,8 @@ vi.mock("@/lib/audit", () => ({
 // se a sanitização morasse num helper que o teste dublasse, ele não mediria nada.
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+// agenda S5: a chave da clínica nas rotas do núcleo é outro teste; aqui, liberada.
+vi.mock("@/lib/clinic/acesso/chave-no-nucleo", () => ({ exigeChaveNoNucleo: vi.fn(async () => null) }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 
 const ORG = "f1a1ce00-0000-4000-8000-000000000001";

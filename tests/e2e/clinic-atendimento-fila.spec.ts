@@ -120,6 +120,9 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     await loginAtendente(pAt);
     const chegou = await pAt.request.post(`/api/v1/clinic/agendamentos/${agId}/visita`, { data: { status: "na_recepcao" } });
     expect(chegou.status(), await chegou.text()).toBe(200);
+    // FORK clinic (agenda S4): o atendimento começa depois de a recepção liberar.
+    const pronto = await pAt.request.post(`/api/v1/clinic/agendamentos/${agId}/visita`, { data: { status: "pronto" } });
+    expect(pronto.status(), await pronto.text()).toBe(200);
 
     // 3. fila: o paciente está em Aguardando, com o botão de iniciar.
     await pAt.goto("/app/atendimentos");
@@ -140,6 +143,7 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     // 4. finalizar sem evolução: barrado, com a lista do que falta.
     const urlDoAtendimento = pAt.url();
     await pAt.getByTestId("atendimento-finalizar").click();
+    await pAt.getByTestId("atendimento-finalizar-confirmar").click();
     await expect(pAt.getByTestId("atendimento-pendencias")).toContainText("Evolução", { timeout: 20_000 });
     await expect(pAt.getByTestId("atendimento-status")).toHaveText("Em atendimento");
 
@@ -197,6 +201,7 @@ test("fila do profissional: chega → aguardando → iniciar → finalizar — p
     await foto(pAt, "3-registros");
 
     await pAt.getByTestId("atendimento-finalizar").click();
+    await pAt.getByTestId("atendimento-finalizar-confirmar").click();
     await expect(pAt.getByTestId("atendimento-status")).toHaveText("Finalizado", { timeout: 20_000 });
     await foto(pAt, "4-finalizado");
     // reabrir é da gerência clínica (F8): o profissional agente não vê o botão.

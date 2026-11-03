@@ -3,6 +3,7 @@
  * (FORK clinic, prontuário F9). `prontuario.exportar`, limite por pessoa,
  * auditado (só contagens). Resposta sem cache.
  */
+import { pacienteNoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -41,6 +42,10 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const org = authz.org.orgId;
 
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
   const [{ data: contato }, { data: empresa }, { data: cab }] = await Promise.all([
     supabase
       .from("contacts")

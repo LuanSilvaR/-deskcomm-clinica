@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 
+// agenda S5: a chave da clínica nas rotas do núcleo é outra régua; aqui, liberada.
+vi.mock("@/lib/clinic/acesso/chave-no-nucleo", () => ({ exigeChaveNoNucleo: vi.fn(async () => null) }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));

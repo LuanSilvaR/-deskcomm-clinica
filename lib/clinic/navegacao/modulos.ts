@@ -100,7 +100,11 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     label: "Início",
     description: "Todos os módulos da clínica num lugar só, com o resumo do dia.",
     icon: "House",
-    portas: [{ href: "/app/inicio", secao: "Início" }],
+    portas: [
+      // FORK clinic (agenda S5): a casa do profissional (só com `atendimento.iniciar`).
+      { href: "/app/meu-dia", secao: "Início" },
+      { href: "/app/inicio", secao: "Início" },
+    ],
   },
   {
     id: "agenda",

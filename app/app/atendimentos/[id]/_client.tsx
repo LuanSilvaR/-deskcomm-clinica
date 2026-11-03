@@ -27,13 +27,13 @@ import { SecaoFormulario } from "@/components/clinic/atendimento/SecaoFormulario
 import { CabecalhoClinico } from "@/components/clinic/prontuario/CabecalhoClinico";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
 import type { RegistrosDoAtendimento } from "@/lib/clinic/prontuario/leitura";
+import { AcoesDoAtendimento } from "@/components/clinic/atendimento/AcoesDoAtendimento";
 import { cn } from "@/lib/utils";
 
 interface Atendimento {
@@ -47,6 +47,9 @@ interface Atendimento {
   profissional: string | null;
   pode_finalizar: boolean;
   pode_reabrir: boolean;
+  /** FORK clinic (agenda S5): dono e mesmo dia. */
+  pode_complementar?: boolean;
+  finalizado?: { por: string | null; em: string; mesmo_dia: boolean } | null;
 }
 
 interface Registros extends RegistrosDoAtendimento {
@@ -242,52 +245,19 @@ export function AtendimentoDoDia({ id }: { id: string }) {
           >
             {t(ROTULO_DO_STATUS[a.status])}
           </Badge>
-          {a.pode_finalizar ? (
-            <Button
-              className="h-11 md:h-9"
-              disabled={finalizar.isPending}
-              data-testid="atendimento-finalizar"
-              onClick={() => finalizar.mutate()}
-            >
-              {finalizar.isPending ? t("Finalizando…") : t("Finalizar atendimento")}
-            </Button>
-          ) : null}
-          {a.pode_finalizar ? (
-            <Button
-              variant="ghost"
-              className="h-11 text-xs md:h-9"
-              disabled={anular.isPending}
-              data-testid="atendimento-anular"
-              onClick={() => {
-                const motivo = window.prompt(
-                  t(
-                    "Motivo para anular (só vale para atendimento aberto por engano, ainda sem registros)",
-                  ),
-                );
-                if (motivo && motivo.trim().length >= 3) anular.mutate(motivo.trim());
-              }}
-            >
-              {t("Anular atendimento")}
-            </Button>
-          ) : null}
-          {a.pode_reabrir ? (
-            <Button
-              variant="outline"
-              className="h-11 md:h-9"
-              disabled={reabrir.isPending}
-              data-testid="atendimento-reabrir"
-              onClick={() => {
-                const motivo = window.prompt(
-                  t("Motivo para reabrir (o que já foi registrado continua como está)"),
-                );
-                if (motivo && motivo.trim().length >= 3) reabrir.mutate(motivo.trim());
-              }}
-            >
-              {t("Reabrir atendimento")}
-            </Button>
-          ) : null}
         </div>
       </header>
+
+      {/* FORK clinic (agenda S5): finalizar à vista, complementar no mesmo dia, somente leitura depois. */}
+      <AcoesDoAtendimento
+        a={a}
+        finalizando={finalizar.isPending}
+        reabrindo={reabrir.isPending}
+        anulando={anular.isPending}
+        onFinalizar={() => finalizar.mutate()}
+        onReabrir={(m) => reabrir.mutate(m)}
+        onAnular={(m) => anular.mutate(m)}
+      />
 
       <CabecalhoClinico contactId={a.paciente.id} />
 

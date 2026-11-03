@@ -15,6 +15,7 @@
  * comanda finalizada sem a entrada correspondente — os dois números divergindo
  * em silêncio, que é exatamente o que o módulo inteiro existe para impedir.
  */
+import { exigeChaveNoNucleo } from "@/lib/clinic/acesso/chave-no-nucleo";
 import { randomUUID } from "node:crypto";
 
 import type { NextRequest } from "next/server";
@@ -42,6 +43,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   const authz = await requireRole("agent", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.lancar", requestId);
+
+  if (semChave) return semChave;
 
   const lido = alterarSchema.safeParse(await req.json().catch(() => ({})));
   if (!lido.success) {
@@ -88,6 +95,12 @@ export async function DELETE(_req: NextRequest, ctx: Ctx): Promise<Response> {
 
   const authz = await requireRole("agent", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.lancar", requestId);
+
+  if (semChave) return semChave;
 
   const { id } = await ctx.params;
   const supabase = await createClient();

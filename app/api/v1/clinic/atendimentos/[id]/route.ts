@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
+import { diaLocalISO } from "@/lib/agenda/fuso";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { comConselho, registroNoConselho, type ConselhoDoProfissional } from "@/lib/clinic/profissionais/conselho";
@@ -82,6 +83,34 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
         .maybeSingle()
     : { data: null };
 
+  // FORK clinic (agenda S5): quem finalizou e quando (o reabrir apaga
+  // `finalizado_por`; o evento guarda) e se ainda é o MESMO DIA, no fuso da
+  // clínica — o profissional complementa só até o fim do dia do atendimento.
+  const ehODono = linha.professional_user_id === authz.user.id;
+  const [{ data: ultimoFinalizado }, { data: orgRow }] = await Promise.all([
+    supabase
+      .from("clinic_atendimento_eventos")
+      .select("ator, created_at")
+      .eq("organization_id", org)
+      .eq("atendimento_id", linha.id)
+      .eq("tipo", "finalizado")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("organizations").select("timezone").eq("id", org).maybeSingle(),
+  ]);
+  const fuso = (orgRow as { timezone?: string | null } | null)?.timezone || "America/Sao_Paulo";
+  const finalizacao = ultimoFinalizado as { ator: string | null; created_at: string } | null;
+  const { data: quemFinalizou } = finalizacao?.ator
+    ? await supabase
+        .from("clinic_professionals")
+        .select("nome:display_name")
+        .eq("organization_id", org)
+        .eq("user_id", finalizacao.ator)
+        .maybeSingle()
+    : { data: null };
+  const mesmoDia = linha.finished_at ? diaLocalISO(new Date(linha.finished_at), fuso) === diaLocalISO(new Date(), fuso) : false;
+
   void audit({
     action: "clinic.atendimento_visto",
     actorUserId: authz.user.id,
@@ -110,8 +139,20 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
         (prof as { nome?: string | null } | null)?.nome ?? null,
         registroNoConselho(prof as ConselhoDoProfissional | null),
       ),
-      pode_finalizar: linha.status === "em_andamento" && authz.permissoes.has("atendimento.finalizar"),
+      // FORK clinic (agenda S5, 9043): finalizar e complementar são do
+      // profissional do atendimento; reabrir com motivo, da gerência.
+      pode_finalizar: linha.status === "em_andamento" && ehODono && authz.permissoes.has("atendimento.finalizar"),
+      pode_complementar: linha.status === "finalizado" && ehODono && mesmoDia && authz.permissoes.has("atendimento.finalizar"),
       pode_reabrir: linha.status === "finalizado" && authz.permissoes.has("atendimento.reabrir"),
+      eh_o_profissional: ehODono,
+      finalizado:
+        linha.status === "finalizado" && finalizacao
+          ? {
+              por: (quemFinalizou as { nome?: string | null } | null)?.nome ?? null,
+              em: finalizacao.created_at,
+              mesmo_dia: mesmoDia,
+            }
+          : null,
     },
     { requestId },
   );

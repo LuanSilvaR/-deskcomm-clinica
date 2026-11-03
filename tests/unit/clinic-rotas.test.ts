@@ -55,12 +55,12 @@ function falsoSupabase() {
         if (["insert", "upsert", "update", "delete"].includes(nome)) {
           c.op = nome;
           c.valor = args[0];
-        } else if (["eq", "in", "gte", "lte", "not", "is"].includes(nome)) {
+        } else if (["eq", "in", "gte", "lte", "lt", "not", "is"].includes(nome)) {
           c.filtros.push([nome, String(args[0]), args[args.length - 1]]);
         }
         return cadeia;
       };
-      for (const m of ["select", "insert", "upsert", "update", "delete", "eq", "in", "gte", "lte", "not", "is", "order", "limit"]) {
+      for (const m of ["select", "insert", "upsert", "update", "delete", "eq", "in", "gte", "lte", "lt", "not", "is", "order", "limit"]) {
         cadeia[m] = encadeia(m);
       }
       const resolver = () => respostas[`${tabela}:${c.op}`] ?? { data: { id: "novo-id" }, error: null };
@@ -93,13 +93,30 @@ function pedido(url: string, metodo: string, corpo?: unknown): NextRequest {
 
 beforeEach(() => {
   chamadas = [];
-  respostas = {};
+  // agenda S5: a conferência de conflito do bloqueio lê a agenda — vazia por padrão.
+  respostas = { "calendar_appointments:select": { data: [], error: null } };
   vi.mocked(audit).mockClear();
   vi.mocked(createClient).mockResolvedValue(falsoSupabase() as never);
 });
 
 describe("POST /api/v1/clinic/bloqueios", () => {
   const rota = () => import("@/app/api/v1/clinic/bloqueios/route");
+
+  it("agenda S5: paciente marcado na faixa → 409 bloqueio_com_agendamento, sem gravar", async () => {
+    autorizado("agent");
+    respostas["organizations:select"] = { data: { timezone: "America/Sao_Paulo" }, error: null };
+    respostas["calendar_appointments:select"] = {
+      data: [{ id: "ag-1", starts_at: "2026-10-12T15:30:00Z", ends_at: "2026-10-12T16:00:00Z", owner_user_id: EU, contacts: { name: "Paciente Teste" } }],
+      error: null,
+    };
+    const corpo = { starts_on: "2026-10-12", ends_on: "2026-10-12", start_minute: 720, end_minute: 780, tipo: "almoco" };
+    const res = await (await rota()).POST(pedido("/api/v1/clinic/bloqueios", "POST", corpo));
+    expect(res.status).toBe(409);
+    const json = (await res.json()) as { error: { code: string; details: { agendamentos: { id: string }[] } } };
+    expect(json.error.code).toBe("bloqueio_com_agendamento");
+    expect(json.error.details.agendamentos.map((a) => a.id)).toEqual(["ag-1"]);
+    expect(chamadas.some((c) => c.tabela === "clinic_agenda_blocks" && c.op === "insert")).toBe(false);
+  });
   const base = { starts_on: "2026-10-05", ends_on: "2026-10-09" };
 
   it("atendente bloqueia a própria agenda: grava user_id dele", async () => {

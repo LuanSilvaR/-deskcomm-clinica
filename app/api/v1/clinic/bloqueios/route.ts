@@ -8,6 +8,11 @@
  *   (403), a mesma régua de /api/v1/agenda/excecoes.
  * DELETE (agent): remove pelo id (a RLS decide se pode).
  *
+ * FORK clinic (agenda S5): `tipo` (almoço, reunião, pessoal, indisponível,
+ * outro) e conferência de conflito — bloqueio em cima de paciente marcado
+ * (pendente/confirmado) volta 409 `bloqueio_com_agendamento` com a lista; só a
+ * gerência pode gravar assim mesmo (`forcar`).
+ *
  * O motor de horários livres só lê estes bloqueios com o módulo ligado
  * (organizations.settings.clinic.profissionais).
  */
@@ -18,14 +23,18 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
+import { conflitosDoBloqueio, TIPOS_DE_BLOQUEIO } from "@/lib/clinic/agenda/conflito-do-bloqueio";
+import type { BloqueioDaClinica } from "@/lib/clinic/agenda/expandir-bloqueios";
 import { eMembroDaOrg, falhaDoBanco } from "@/lib/clinic/api";
+import { type ContatoNomeavel, nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
+import { fusoUtilizavel } from "@/lib/tempo/fusos";
 
 export const dynamic = "force-dynamic";
 
-const COLUNAS = "id, user_id, starts_on, ends_on, start_minute, end_minute, weekdays, reason, created_at";
+const COLUNAS = "id, user_id, starts_on, ends_on, start_minute, end_minute, weekdays, reason, tipo, created_at";
 const DATA = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use uma data em AAAA-MM-DD");
 const MSG_PROIBIDO = "Você só pode bloquear a sua própria agenda. Agenda de colega e da clínica toda é com a gerência.";
 
@@ -59,6 +68,8 @@ const criarSchema = z
     end_minute: z.number().int().min(0).max(1440).default(1440),
     weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7).nullish(),
     reason: z.string().trim().max(200).optional(),
+    tipo: z.enum(TIPOS_DE_BLOQUEIO).optional(),
+    forcar: z.boolean().default(false),
   })
   .refine((v) => v.end_minute > v.start_minute, {
     message: "O fim precisa ser depois do começo.",
@@ -107,6 +118,25 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   const weekdays = lido.data.weekdays ? [...new Set(lido.data.weekdays)].sort() : null;
+
+  // FORK clinic (agenda S5): paciente marcado na faixa? Avisa antes de gravar.
+  if (!(lido.data.forcar && gerencia)) {
+    const conflitos = await conflitosNoBanco(supabase, org, dono, {
+      user_id: dono,
+      starts_on: lido.data.starts_on,
+      ends_on: lido.data.ends_on,
+      start_minute: lido.data.start_minute,
+      end_minute: lido.data.end_minute,
+      weekdays,
+    });
+    if (conflitos === null) return fail("internal_error", t("Não foi possível conferir a agenda agora."), 500, { requestId });
+    if (conflitos.length > 0) {
+      return fail("bloqueio_com_agendamento", t("Há paciente marcado nesse horário. Remarque antes de bloquear."), 409, {
+        requestId,
+        details: { agendamentos: conflitos },
+      });
+    }
+  }
   const { data, error } = await supabase
     .from("clinic_agenda_blocks")
     .insert({
@@ -118,6 +148,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       end_minute: lido.data.end_minute,
       weekdays,
       reason: lido.data.reason || null,
+      tipo: lido.data.tipo ?? null,
       created_by: authz.user.id,
     })
     .select(COLUNAS)
@@ -137,10 +168,47 @@ export async function POST(req: NextRequest): Promise<Response> {
       starts_on: lido.data.starts_on,
       ends_on: lido.data.ends_on,
       recorrente: weekdays !== null,
+      tipo: lido.data.tipo ?? null,
       dia_inteiro: lido.data.start_minute === 0 && lido.data.end_minute === 1440,
     },
   });
   return ok(data, { requestId, status: 201 });
+}
+
+type Supa = Awaited<ReturnType<typeof createClient>>;
+
+/** Os agendamentos ativos que o bloqueio cobriria; `null` = não deu para ler. */
+async function conflitosNoBanco(
+  supabase: Supa,
+  org: string,
+  dono: string | null,
+  bloqueio: BloqueioDaClinica,
+): Promise<{ id: string; inicio: string; paciente: string | null }[] | null> {
+  const { data: orgRow } = await supabase.from("organizations").select("timezone").eq("id", org).maybeSingle();
+  const fuso = fusoUtilizavel((orgRow as { timezone?: string | null } | null)?.timezone);
+  // Folga de um dia de cada lado: o fuso da clínica não é UTC.
+  const de = new Date(Date.parse(`${bloqueio.starts_on}T00:00:00Z`) - 86_400_000).toISOString();
+  const ate = new Date(Date.parse(`${bloqueio.ends_on}T00:00:00Z`) + 2 * 86_400_000).toISOString();
+  let q = supabase
+    .from("calendar_appointments")
+    .select("id, starts_at, ends_at, owner_user_id, contacts(name, display_name)")
+    .eq("organization_id", org)
+    .in("status", ["pending", "confirmed"])
+    .gte("starts_at", de)
+    .lt("starts_at", ate)
+    .limit(2000);
+  if (dono) q = q.eq("owner_user_id", dono);
+  const { data, error } = await q;
+  if (error) return null;
+  type Linha = { id: string; starts_at: string; ends_at: string; owner_user_id: string; contacts: unknown };
+  const linhas = (data ?? []) as unknown as Linha[];
+  return linhas
+    .filter((l) => conflitosDoBloqueio(bloqueio, l.owner_user_id, [l], fuso).length > 0)
+    .slice(0, 20)
+    .map((l) => {
+      const c = (Array.isArray(l.contacts) ? l.contacts[0] : l.contacts) as ContatoNomeavel | null;
+      return { id: l.id, inicio: l.starts_at, paciente: nomeDoContato(c) };
+    });
 }
 
 const apagarSchema = z.object({ id: z.string().uuid() });

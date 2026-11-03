@@ -22,6 +22,7 @@ import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { apiClient } from "@/lib/api/client";
+import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
 import { ROTULO_DA_SECAO, SECOES_DA_FILA, type ItemNaFila, type SecaoDaFila } from "@/lib/clinic/atendimento/fila";
 
 interface RespostaDaFila {
@@ -45,6 +46,7 @@ export function FilaDeAtendimentos({
   todosInicial: boolean;
 }) {
   const t = useT();
+  const { can } = usePermissoes();
   const tag = useTagDeIdioma();
   const router = useRouter();
   const qc = useQueryClient();
@@ -101,9 +103,13 @@ export function FilaDeAtendimentos({
         <Button size="sm" variant={todos ? "outline" : "default"} aria-pressed={!todos} onClick={() => setTodos(false)}>
           {t("Meus")}
         </Button>
+        {/* FORK clinic (agenda S4): a fila da clínica é a agenda dos colegas —
+            só com `agenda.ver_outros` (o servidor também recusa). */}
+        {can("agenda.ver_outros") ? (
         <Button size="sm" variant={todos ? "default" : "outline"} aria-pressed={todos} onClick={() => setTodos(true)}>
           {t("Todos os profissionais")}
         </Button>
+        ) : null}
       </div>
 
       {dados && !dados.ligado ? (
@@ -150,7 +156,14 @@ export function FilaDeAtendimentos({
                           </span>
                         ) : null}
                       </div>
-                      {secao === "aguardando" && dados.pode_iniciar ? (
+                      {/* FORK clinic (agenda S4): iniciar é do profissional do
+                          agendamento, depois que a recepção libera ("pronto"). */}
+                      {secao === "aguardando" && dados.pode_iniciar && i.status === "na_recepcao" ? (
+                        <p className="text-xs text-text-muted" data-testid="fila-aguardando-recepcao">
+                          {t("Com a recepção — aguardando liberar para o atendimento.")}
+                        </p>
+                      ) : null}
+                      {secao === "aguardando" && dados.pode_iniciar && i.status === "pronto" && (!i.profissional_id || i.profissional_id === usuarioAtualId) ? (
                         <Button
                           size="sm"
                           className="h-11 w-full md:h-9"

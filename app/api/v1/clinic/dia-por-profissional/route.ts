@@ -20,6 +20,7 @@ import {
   type Disponibilidade,
   type ExcecaoDoNucleo,
 } from "@/lib/clinic/agenda/dia-por-profissional";
+import { PERMISSAO_VER_OUTROS } from "@/lib/clinic/agenda/escopo-da-agenda";
 import { clinicProfissionaisLigado } from "@/lib/clinic/flags";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       .eq("exception_date", pedido),
     supabase
       .from("clinic_agenda_blocks")
-      .select("user_id, starts_on, ends_on, start_minute, end_minute, weekdays, reason")
+      .select("user_id, starts_on, ends_on, start_minute, end_minute, weekdays, reason, tipo")
       .eq("organization_id", org)
       .lte("starts_on", pedido)
       .gte("ends_on", pedido),
@@ -96,6 +97,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     excecoes: (exc.data ?? []) as unknown as ExcecaoDoNucleo[],
     bloqueios: (bloq.data ?? []) as unknown as BloqueioComMotivo[],
     compromissos,
-  });
+    // FORK clinic (9042): sem `agenda.ver_outros`, só a própria coluna.
+  }).filter((c) => authz.permissoes.has(PERMISSAO_VER_OUTROS) || c.profissional_id === authz.user.id);
   return ok({ ligado: true, dia: pedido, fuso, colunas }, { requestId });
 }

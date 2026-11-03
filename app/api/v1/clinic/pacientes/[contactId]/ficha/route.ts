@@ -8,6 +8,7 @@
  * `contacts` (núcleo); o resto para `clinic_patient_profiles`. CPF só é gravado
  * como o PAR hash + cifra (`cifrarCpf`).
  */
+import { pacienteNoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -42,6 +43,10 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   if (!z.string().uuid().safeParse(contactId).success) return fail("validation_failed", "id inválido", 422, { requestId });
 
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
   const r = await lerFicha(supabase, authz.org.orgId, contactId);
   if (!r.ok) return fail("internal_error", r.erro, 500, { requestId });
   if (!r.ficha) return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
@@ -119,6 +124,10 @@ export async function PUT(req: NextRequest, ctx: Ctx): Promise<Response> {
   const d = lido.data;
   const org = authz.org.orgId;
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
 
   const atual = await lerFicha(supabase, org, contactId);
   if (!atual.ok) return fail("internal_error", atual.erro, 500, { requestId });

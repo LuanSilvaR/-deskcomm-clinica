@@ -7,6 +7,7 @@
  * inteiro de uma vez. Exige `prontuario.ver`; toda leitura é auditada (só
  * metadados).
  */
+import { pacienteNoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -58,6 +59,10 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
   const org = authz.org.orgId;
 
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
   const { limite, ...filtros } = lido.data;
   const linha = await lerLinhaDoTempo(supabase, org, contactId, {
     ...filtros,

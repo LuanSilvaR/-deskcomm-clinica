@@ -16,6 +16,7 @@ import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { contactPatchSchemaDoPais, validateRequest } from "@/lib/schemas";
 import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
+import { pacienteNoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { createClient } from "@/lib/supabase/server";
 
 import { deleteContactHandler, getContactHandler, patchContactHandler } from "../_handler";
@@ -43,6 +44,11 @@ export async function GET(
   const activeOrg = authUser ? await resolveActiveOrg(authUser) : null;
   if (!activeOrg) {
     return fail("no_active_org", t("No active organization."), 403, { requestId });
+  }
+
+  // FORK clinic (agenda S5): fora do escopo de pacientes, "não existe".
+  if (!(await pacienteNoEscopo(supabase, activeOrg.orgId, user.id, id))) {
+    return fail("not_found", t("Contato não encontrado."), 404, { requestId });
   }
 
   const decryptPurpose = req.headers.get("x-decrypt-purpose");

@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { TopBar } from "@/components/shell/TopBar";
+import { AvisoDeAtendimentoEmAndamento } from "@/components/clinic/atendimento/AvisoDeAtendimentoEmAndamento";
 import { BarraDeProgressoNavegacao } from "@/components/shell/BarraDeProgressoNavegacao";
 import { useSinalDePresenca } from "@/hooks/atendimento/useSinalDePresenca";
 import { useInboundMessageAlerts } from "@/hooks/notifications/useInboundMessageAlerts";
@@ -66,6 +67,8 @@ export function AppShell({ sidebarCollapsed, podeAtender, children }: AppShellPr
       */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <TopBar />
+        {/* FORK clinic (agenda S5): o profissional com atendimento aberto, em qualquer tela. */}
+        <AvisoDeAtendimentoEmAndamento />
         {/*
           O RODAPÉ DESCONTA O QUE AS PEÇAS FIXAS OCUPAM (issue #1305).
 

@@ -50,6 +50,7 @@ import { moverLeadParaEtapaDeAgendamento } from "@/lib/leads/appointment-stage-m
 import { logger } from "@/lib/logger";
 import { habilitacaoNaConsulta } from "@/lib/clinic/agenda/regras-da-clinica";
 import { fichaPermiteAtendimento } from "@/lib/clinic/pacientes/servidor";
+import { clinicProfissionaisLigado } from "@/lib/clinic/flags";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type SB = SupabaseClient;
@@ -486,6 +487,26 @@ export async function alterarAgendamentoHandler(
         { faltando: permite.faltando },
         ctx.requestId,
         `Complete a ficha do paciente antes de registrar o comparecimento. Falta: ${permite.faltando.join(", ")}.`,
+      );
+    }
+  }
+  // FORK clinic (agenda S4, 9043): na clínica, "realizado" é o fim do
+  // atendimento — e terminar o atendimento é SÓ do profissional do agendamento.
+  if (
+    input.status === "completed" &&
+    input.status !== atual.status &&
+    ctx.actor.type === "user" &&
+    atual.owner_user_id &&
+    atual.owner_user_id !== ctx.actor.id
+  ) {
+    const { data: org } = await supabase.from("organizations").select("settings").eq("id", ctx.organization_id).maybeSingle();
+    if (clinicProfissionaisLigado((org as { settings?: unknown } | null)?.settings)) {
+      throw new ApiError(
+        403,
+        "visita_so_o_profissional",
+        undefined,
+        ctx.requestId,
+        "Só o profissional do agendamento registra o atendimento como realizado.",
       );
     }
   }

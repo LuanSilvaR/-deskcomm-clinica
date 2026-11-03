@@ -33,7 +33,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   const supabase = await createClient();
   const { data: at, error } = await supabase
     .from("clinic_atendimentos")
-    .select("id, status, specialty_id, event_type_id")
+    .select("id, status, specialty_id, event_type_id, professional_user_id")
     .eq("organization_id", org)
     .eq("id", id)
     .maybeSingle();
@@ -63,7 +63,11 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
         status: at.status as string,
         especialidade_id: (at.specialty_id as string | null) ?? null,
         pode_registrar: at.status === "em_andamento" && authz.permissoes.has("atendimento.registrar"),
-        pode_adendo: at.status === "finalizado" && authz.permissoes.has("prontuario.adendo"),
+        // FORK clinic (agenda S5): adendo é do profissional do atendimento (ou de quem vê o dos outros).
+        pode_adendo:
+          at.status === "finalizado" &&
+          authz.permissoes.has("prontuario.adendo") &&
+          (at.professional_user_id === authz.user.id || authz.permissoes.has("prontuario.ver_outros")),
         exigidas,
         ...registros,
       },
