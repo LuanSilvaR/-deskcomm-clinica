@@ -36,6 +36,24 @@ A 9044 foi editada antes de commitar (nunca publicada); depois do commit, corre�
   padrão, usar uma config temporária com `baseURL: http://localhost:3001` e sem `webServer`.
   Beatriz (recepção) não entrou na prova de tela.
 
+## Evidências de tela (S1 e S4, seed de demonstração na 3001)
+
+S1 — um profissional por vez:
+- `evidence/agenda-por-profissional/agenda-1-recepcao.png` — recepção abre a agenda com o seletor de profissional.
+- `evidence/agenda-por-profissional/agenda-2-busca.png` — "Trocar profissional" com busca pelo nome.
+- `evidence/agenda-por-profissional/agenda-3-congresso-e-hachura.png` — bloqueio (congresso) com hachura na grade.
+- `evidence/agenda-por-profissional/agenda-4-painel.png` — painel "Novo agendamento" com o profissional herdado da agenda.
+- `evidence/agenda-por-profissional/agenda-5-bruno.png` — agenda de um profissional (Dr. Bruno).
+- `evidence/agenda-por-profissional/agenda-6-celular.png` — a mesma tela no celular.
+- `evidence/agenda-por-profissional/agenda-7-grade-ana-congresso.png` — grade da Dra. Ana com o bloqueio.
+- `evidence/agenda-por-profissional/agenda-8-grade-carla.png` — grade de outra profissional.
+
+S4 — fluxo recepção → profissional:
+- `evidence/agenda-por-profissional/s4-1-recepcao-confirmar-dados.png` — recepção confirma os dados do paciente.
+- `evidence/agenda-por-profissional/s4-3-agenda-status.png` — status único da visita na agenda.
+- `evidence/agenda-por-profissional/s4-4-fila-bruno.png` — fila "Meus atendimentos" do profissional.
+- `evidence/agenda-por-profissional/s4-5-historico.png` — histórico append-only do agendamento.
+
 ## Pendências imediatas (antes das próximas sprints)
 
 1. **Commits e PRs** de S1, S4 e S5 para `develop` (Conventional Commits em pt-BR; um PR por sprint ou
