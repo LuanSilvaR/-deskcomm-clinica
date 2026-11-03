@@ -17,6 +17,8 @@ NÃO use `supabase db reset` como prova.
 `pnpm lint` · `pnpm typecheck` · `pnpm test:unit` · `pnpm test:db` (se tocou banco; Docker ligado).
 Falha no unit só conta como "sem regressão" se o MESMO arquivo falhar num checkout limpo de `origin/develop`
 (sem `.env`: o local vaza chave para testes de IA). Tocou UI: spec Playwright contra a 3001.
+`pnpm cercas` (estrutura: evidência citada, MANIFEST, workflows…) NÃO seleciona arquivo no Windows: a prova é o
+job `verify-parte (3)` do CI — confira `gh pr checks <n>` antes de mover a issue. Imagem em `evidence/` = citada num .md.
 A saída (exit code + resumo) vai no corpo do PR. Fluxo e estágios: docs/backlog.md.
 
 ## Regras invioláveis
