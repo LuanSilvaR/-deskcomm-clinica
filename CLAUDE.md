@@ -13,6 +13,12 @@ Saída longa: redirecione para arquivo e filtre; o EXIT CODE é a autoridade, o 
 Banco fresco = `supabase/baseline.sql` + `scripts/bootstrap-owner.ts`. A cadeia `migrations/` não sobe do zero:
 NÃO use `supabase db reset` como prova.
 
+## Verify
+`pnpm lint` · `pnpm typecheck` · `pnpm test:unit` · `pnpm test:db` (se tocou banco; Docker ligado).
+Falha no unit só conta como "sem regressão" se o MESMO arquivo falhar num checkout limpo de `origin/develop`
+(sem `.env`: o local vaza chave para testes de IA). Tocou UI: spec Playwright contra a 3001.
+A saída (exit code + resumo) vai no corpo do PR. Fluxo e estágios: docs/backlog.md.
+
 ## Regras invioláveis
 1. Mudanças aditivas e reversíveis. Nada de remover/renomear coluna, rota ou prop em uso (expand/contract).
 2. Código novo em módulos `clinic` e tabelas `clinic_*`. Alterar o core só com aprovação; registrar em UPSTREAM.md.
