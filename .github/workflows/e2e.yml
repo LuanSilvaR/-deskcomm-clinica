@@ -231,6 +231,8 @@ jobs:
     # `tests/unit/clinic-experiencia-do-profissional.test.ts` e as do banco em
     # `tests/invariants/clinic-experiencia-do-profissional.test.ts`, que rodam
     # no CI.
+    # `clinic-agenda-acl` (S6a) é do mesmo seed e fica fora pelo mesmo motivo;
+    # a regra da rota está em `tests/unit/clinic-guarda-da-agenda.test.ts`.
     #
     # ═══ `aviso-de-caso-chega-no-whatsapp`: O CI NÃO TEM ENDEREÇO PÚBLICO ═══
     #
@@ -1120,6 +1122,7 @@ jobs:
         cadastro-sem-confirmacao-de-email.spec.ts
         aviso-de-caso-chega-no-whatsapp.spec.ts
         clinic-experiencia-do-profissional.spec.ts
+        clinic-agenda-acl.spec.ts
     steps:
       # ── O RELÓGIO DESTA PARTE: ONDE O TETO DE 30 MIN COMEÇA A CONTAR ──────
       #
