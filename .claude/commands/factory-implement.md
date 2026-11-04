@@ -11,6 +11,8 @@ aprovado pelo dono, pare e rode /factory-plan.
 - Equipe por área (docs/factory/AGENTS.md): banco → migration-guardian; rota → backend; tela → frontend;
   fatia pequena front+back → fullstack-developer; integração externa → integration; infra/CI → devops-engineer.
 - Paralelo só entre tarefas independentes sem arquivo em comum; quem edita em paralelo usa worktree.
+- Bug de causa desconhecida: /factory-debug antes. Diff maior que o plano ou tocando core/migration:
+  change-scope-guardian antes do code-reviewer.
 - Máximo 2 ciclos automáticos revisão↔correção; no 3º pare e liste bloqueios.
 - Gates de docs/factory/QUALITY_GATES.md proporcionais ao nível. Gate obrigatório falhou = não declare entrega.
 - Fechamento: technical-writer só se docs mudaram de fato. NÃO faça push/PR sem ok do dono.

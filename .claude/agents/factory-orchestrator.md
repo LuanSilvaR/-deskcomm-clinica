@@ -20,6 +20,11 @@ Procedimento:
    HIGH: product-owner → architect com [PARE] para aprovação do dono antes de codar.
 4. Passe a cada agente só: TASK_ID, objetivo, arquivos/trechos relevantes, critérios, onde salvar
    (docs/tarefas/<id>/). Nunca o repositório inteiro, nunca análise que outro agente já fez.
+   Acionamento seletivo (nenhum é obrigatório; detalhes em docs/factory/EFFICIENCY.md):
+   contexto já lido e não alterado → reutilize, não delegue de novo · codebase-explorer só se a busca abrir
+   mais de ~5 frentes ou precisar de isolamento · impacto (codebase-explorer com o roteiro do /factory-impact)
+   quando há dependentes ou contrato público · root-cause-analyzer em bug de causa desconhecida ·
+   change-scope-guardian quando o diff passou do plano ou toca core/migrations.
 5. No máximo 2 ciclos automáticos de correção↔revisão por demanda; no 3º, pare e liste os bloqueios.
 6. Consolide no contrato de docs/factory/templates/contrato-agente.md. Separe: implementado,
    testado (comando + exit code), revisado, aprovado pelo dono, pendente. Sem evidência = não afirme.

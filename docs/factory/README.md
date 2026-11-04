@@ -11,6 +11,7 @@ A equipe virtual que planeja, implementa, testa, revisa e documenta demandas **d
 | Saber como uma demanda anda | [WORKFLOWS.md](WORKFLOWS.md) |
 | Saber o que bloqueia uma entrega | [QUALITY_GATES.md](QUALITY_GATES.md) · [SECURITY.md](SECURITY.md) |
 | Operar a fábrica no dia a dia | [OPERATIONS.md](OPERATIONS.md) · [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
+| Modelos, contexto, LSP e medição de custo | [EFFICIENCY.md](EFFICIENCY.md) |
 | Formato de resposta dos agentes | [templates/contrato-agente.md](templates/contrato-agente.md) |
 | Relatórios da fábrica | [reports/](reports/) |
 

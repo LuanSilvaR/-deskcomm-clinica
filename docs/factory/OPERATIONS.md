@@ -14,6 +14,11 @@
 | `/factory-status [id]` | quadro, PRs, CI, bloqueios (scrum-master) | leitura |
 | `/factory-refactor <id> <alvo>` | refatoração com testes de caracterização | HIGH |
 | `/factory-init` | atualiza PROJECT_CONTEXT/ARCHITECTURE daqui | docs |
+| `/factory-context <assunto>` | contexto mínimo (arquivos:linha, regra a reusar) | leitura |
+| `/factory-impact <id> <mudança>` | dependentes, contratos, testes a rodar, nível sugerido | leitura |
+| `/factory-debug <id> <sintoma>` | causa raiz com evidência antes de corrigir | leitura → IMPLEMENT com ok |
+| `/factory-diff [id]` | escopo e preservação do diff antes do commit | REVIEW |
+| `/factory-optimize [cenário]` | mede custo/eficiência da fábrica com sessões reais | leitura (custa tokens) |
 
 Os anteriores continuam valendo: `/tarefa` (o fluxo em si), `/verificar`, `/impacto`, `/docs`, `/triagem-de-pr`.
 Todos os `factory-*` têm `disable-model-invocation: true`: só rodam quando você digita. Isso tira as
@@ -43,8 +48,9 @@ Chamado como subagente (pela ferramenta Agent), ele só devolve o plano com a eq
 | Preparar release | `/factory-release 1.4.0` |
 | Ver andamento | `/factory-status 63` (épico Agenda por profissional) |
 
-## Economia de tokens (regras de uso)
+| Investigar bug | `/factory-debug fix-historico na agenda, agendamento passado não oferece ação` |
+| Conferir escopo antes do commit | `/factory-diff agenda-s2` |
 
-Só o agente necessário · LOW sem subagente · cada agente recebe o trecho, não o repo · Grep antes de Read ·
-haiku para leitura/status, sonnet para implementar, opus para arquitetura/segurança/orquestração ·
-não revisar de novo código que não mudou · relatório de LOW em até 5 linhas · artefato só em `docs/tarefas/<id>/`.
+## Economia de tokens
+
+Modelos, contexto, ferramentas e a medição real estão em [EFFICIENCY.md](EFFICIENCY.md).

@@ -27,8 +27,17 @@ delegação. Por isso, 12 papéis são cumpridos por agentes **existentes**; 8 f
 | 19 | technical-writer | `technical-writer` | novo | haiku | sim (docs) |
 | 20 | release-manager | `release-manager` | existente | haiku | notas/checklist |
 
-Apoio já existente, fora dos 20: `codebase-explorer` (impacto, haiku, só leitura), `debugger` (falhas),
-`upstream-sync` (sincronizar upstream), `triagem-*` (triagem de PR), `gov-*` (gov-loop).
+Agentes de análise (upgrade de 2026-11-04; acionamento seletivo em [EFFICIENCY.md](EFFICIENCY.md)):
+
+| Papel | Agente | Origem | Modelo | Escreve? |
+|---|---|---|---|---|
+| exploração direcionada | `codebase-explorer` | existente | haiku | não |
+| análise de impacto | `codebase-explorer` + roteiro do `/factory-impact` | existente | haiku | não (impacto.md via sessão) |
+| causa raiz | `root-cause-analyzer` | novo | sonnet | não |
+| escopo do diff | `change-scope-guardian` | novo | haiku | não |
+
+Outros de apoio: `debugger` (corrige falhas; recebe a causa do root-cause-analyzer), `upstream-sync`,
+`triagem-*` (triagem de PR), `gov-*` (gov-loop).
 
 "Escreve? não" = sem `Edit`/`Write` no frontmatter. Quem tem `Bash` ainda pode escrever pelo shell — o que
 impede é a instrução do agente e as permissões do `.claude/settings.json`, não o frontmatter (ver SECURITY.md).
@@ -47,7 +56,9 @@ impede é a instrução do agente e as permissões do `.claude/settings.json`, n
 | Rota + tela pequenas e acopladas | `fullstack-developer` | backend + frontend juntos |
 | Pagamento, NFS-e, WhatsApp, e-mail | `integration` (+ `security-lgpd`) | — |
 | CI vermelho por infra, Docker, deploy | `devops-engineer` | debugger |
-| Teste falhando / bug sem causa | `debugger` | — |
+| Teste/build quebrou durante a implementação | `debugger` | root-cause-analyzer |
+| Bug de causa desconhecida, de tela ou produção | `root-cause-analyzer` → `debugger` corrige | debugger direto |
+| Diff cresceu além do plano / toca core ou migration | `change-scope-guardian` | code-reviewer para isso |
 | Prontuário, consentimento, fotos, insumos | `health-compliance` | — |
 | Planos de especialistas em conflito | `tech-lead` | — |
 | Algo de OutSystems | `outsystems-specialist` | — |

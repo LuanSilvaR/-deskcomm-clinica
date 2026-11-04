@@ -6,6 +6,8 @@ disable-model-invocation: true
 Demanda: $ARGUMENTS
 Modo PLAN: nenhuma edição fora de docs/tarefas/<id>/. Regras: docs/factory/WORKFLOWS.md e docs/factory/AGENTS.md.
 1. `git status -sb`. Classifique o nível pelo RISCO (WORKFLOWS.md §Classificação) e diga por quê em 1 linha.
+   MEDIUM/HIGH: procure trabalho em andamento na mesma área antes de planejar —
+   `gh pr list -R LuanSilvaR/-deskcomm-clinica --state open --search "<termo>"` e `gh issue list` idem. Sobreposição = risco no plano.
 2. LOW: plano de 3–5 linhas na resposta, sem subagente e sem arquivo.
 3. MEDIUM: codebase-explorer → docs/tarefas/<id>/impacto.md; você escreve plano.md curto (passos, testes, equipe).
 4. HIGH: product-owner → historia.md [PARE para ok do dono] → codebase-explorer → impacto.md →
