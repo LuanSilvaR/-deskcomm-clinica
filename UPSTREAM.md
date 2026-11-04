@@ -114,10 +114,13 @@ Método: `git cherry-pick -m 1 -x` de PRs mergeados no upstream, em ordem cronol
 
 ### Lote 1 — 2026-11-03 (`feature/upstream-lote-1`)
 
-Universo: 1447 PRs do upstream entre `09d4da341` (2026-09-22) e `7dcd2fff5` (2026-11-03). Filtro: 503 relevantes para clínica → 215 sem migration e sem arquivo do fork → 83 aplicam em sequência → **61** depois de tirar os que exigem código mais novo do upstream:
+Universo: 1447 PRs do upstream entre `09d4da341` (2026-09-22) e `7dcd2fff5` (2026-11-03). Filtro: 503 relevantes para clínica → 215 sem migration e sem arquivo do fork → 83 aplicam em sequência → **59** depois de tirar os que exigem código mais novo do upstream:
 
 - não compilam no fork (tipos): #3710, #3631, #2050, #3806, #3108, #2359, #2654, #2336, #2375 — e #2872, #2971, #3158, que dependiam deles;
-- o próprio teste do PR reprova no fork: #3034, #3748, #2519, #3162, #3077, #2883, #3071, #1703, #2905, #2045.
+- o próprio teste do PR reprova no fork: #3034, #3748, #2519, #3162, #3077, #2883, #3071, #1703, #2905, #2045;
+- revertidos em 2026-11-04 (o teste só reprova no CI, em `pnpm test:db`): #2083, #2201 — os dois testes provisionam o
+  catálogo de módulos do upstream (`fn_honorarios_provisionar`, tabelas `honorarios_*`, registro `modulo_secoes_lgpd`),
+  que não existe no baseline do fork. Voltam quando o catálogo de módulos for absorvido.
 
 | PR upstream | Commit upstream | Título |
 |---|---|---|
@@ -155,8 +158,6 @@ Universo: 1447 PRs do upstream entre `09d4da341` (2026-09-22) e `7dcd2fff5` (202
 | #1979 | `5cacb2153` | test(e2e): virada de mês do painel espera pelo dia futuro, não por qualquer dia |
 | #1994 | `ffb81e6e9` | test(agenda): cerca — paraEventoDoGoogle nunca vaza a anotação interna (#1959) |
 | #2101 | `b5d51cf63` | fix(lgpd): o prazo da solicitação sai no dia certo, e nao vence adiantado |
-| #2083 | `e6675cba5` | test(lgpd): módulo que cria tabela com dado pessoal precisa declarar a seção |
-| #2201 | `58b91437e` | test(invariants): varreduras de RLS, security definer e cascata de LGPD com módulo instalado (3ª alínea da  |
 | #2168 | `c268f97ef` | fix(lgpd): o painel da plataforma le o prazo como dia, e os dois selos viram juntos |
 | #2167 | `f5cc929a3` | fix(auth): mudar a exigência de MFA da empresa cobra o fator provado na sessão |
 | #2240 | `56378659b` | fix(ia): a rota do Testar lê knowledge_source_ids dos materiais (#2237) |
