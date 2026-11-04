@@ -89,6 +89,9 @@ export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
   p("agenda", "ver", "viewer", "Ver a agenda, os horários livres e os compromissos"),
   p("agenda", "ver_outros", "viewer", "Ver a agenda de outros profissionais (sem ela, só a própria)", { dependeDe: ver("agenda") }),
   p("agenda", "marcar", "agent", "Marcar compromisso", { dependeDe: ver("agenda") }),
+  p("agenda", "encaixe", "manager", "Encaixar um agendamento sobre outro compromisso do mesmo profissional (com motivo)", {
+    dependeDe: ["agenda.marcar"],
+  }),
   p("agenda", "remarcar", "agent", "Remarcar compromisso", { dependeDe: ver("agenda") }),
   p("agenda", "cancelar", "agent", "Cancelar compromisso", { dependeDe: ver("agenda") }),
   p("agenda", "registrar_desfecho", "agent", "Registrar \"Compareceu\" ou \"Faltou\"", { dependeDe: ver("agenda") }),

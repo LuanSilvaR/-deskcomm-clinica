@@ -487,6 +487,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/pacientes/[contactId]/anexos/route.ts (GET) chama com createClient da sessão; só devolve totais (bytes usados e cota) e exige que a organização esteja em fn_user_org_ids(). tests/invariants/clinic-anexos-e-fotos.test.ts prova outra empresa recusada.",
   },
   {
+    // FORK clinic (migration 9045).
+    fn: "fn_clinic_agenda_encaixar(jsonb,text)",
+    razao:
+      "POST app/api/v1/agenda/agendamentos (corpo com `encaixe`) chama com createClient da sessão: a função exige pessoa logada, a organização do corpo em fn_user_org_ids(), a chave agenda.encaixe, a flag settings.clinic.encaixe e motivo de 5 a 500 caracteres; liga o GUC clinic.encaixe_id só nessa transação. tests/invariants/clinic-agenda-encaixe.test.ts prova as recusas, o isolamento entre empresas e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9043): passou a security definer para decidir QUEM.
     fn: "fn_clinic_mudar_status_visita(uuid,uuid,text,text)",
     razao:

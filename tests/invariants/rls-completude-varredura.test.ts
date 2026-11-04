@@ -613,6 +613,11 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
   },
   {
+    tabela: "clinic_agenda_encaixes",
+    razao:
+      "Prova própria em tests/invariants/clinic-agenda-encaixe.test.ts: agente de outra empresa lê 0 encaixes; a sessão não insere nem apaga (só fn_clinic_agenda_encaixar da 9045 escreve).",
+  },
+  {
     tabela: "clinic_agenda_historico",
     razao:
       "Prova própria em tests/invariants/clinic-fluxo-operacional.test.ts: agente de outra empresa lê 0 marcos; a sessão não insere nem apaga (só o trigger da 9043 escreve).",
