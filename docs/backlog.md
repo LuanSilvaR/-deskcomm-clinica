@@ -9,13 +9,17 @@ Especificação de cada item: `docs/tarefas/<id>/` (`historia.md`, `impacto.md`,
 | Coluna do quadro | Label | Entra quando | Quem move |
 |---|---|---|---|
 | Backlog | — | issue criada; critérios ainda a refinar | `/tarefa` (passo 0) |
-| Dev | `status: dev` | PR aberto para `develop` com a evidência do Verify | `/tarefa` ao abrir o PR |
+| Pronto para iniciar | — | critérios de aceite numerados e aprovados; pode começar | dono do produto |
+| Em andamento | `status: dev` | PR aberto para `develop` com a evidência do Verify | `/tarefa` ao abrir o PR |
 | Teste | `status: test` | PR mergeado na `develop` e CI verde; rodar integração/E2E | Claude, após o merge |
-| Homologação | `status: staging` | testes de integração/E2E verdes; validação na **3001** | Claude, só com o E2E rodado |
+| Em integração | `status: integracao` | validado na **3001** (homologação) com a palavra do dono; promoção develop → main → VPS iniciada | Claude, com o ok do dono |
 | Concluído | `status: done` | validado na 3001 e publicado na **VPS (Hostinger KVM2)**; issue fechada | dono do produto |
 
+A label `status: dev` mantém o nome antigo para não quebrar filtros e histórico;
+a coluna do quadro é o nome que vale.
+
 Regras:
-- Nenhuma issue vai para Homologação sem os testes de integração/E2E executados e anexados na issue.
+- Nenhuma issue vai para Em integração sem os testes de integração/E2E executados e anexados na issue.
 - Concluído exige a palavra do dono — Claude não fecha issue sozinho.
 - Feature G = issue épico + sub-issues (relação pai-filho real, API `sub_issues`), uma por sprint/história.
 - PR usa `Refs #N` (não `Closes`): o merge na `develop` não encerra a issue, só a leva para Teste.
@@ -30,10 +34,21 @@ gh issue edit <n> -R $R --remove-label "status: dev" --add-label "status: test"
 gh project item-add 3 --owner LuanSilvaR --url https://github.com/$R/issues/<n>
 ```
 
-A coluna do quadro é o campo **Status** do projeto (opções Backlog · Dev · Teste · Homologação · Concluído);
-ao mudar a label, mude também o Status do item (`gh project item-edit`).
+A coluna do quadro é o campo **Status** do projeto (opções Backlog · Pronto para iniciar · Em andamento ·
+Teste · Em integração · Concluído); ao mudar a label, mude também o Status do item:
+
+```bash
+# campo Status = PVTSSF_lAHOAQVUq84BqE4NzhodlVc · projeto = PVT_kwHOAQVUq84BqE4N
+# opções: Backlog be296c73 · Pronto para iniciar 8af5b3a4 · Em andamento 18dfe907
+#         Teste 088877f5 · Em integração 49ae3d3a · Concluído 030416da
+gh project item-edit --project-id PVT_kwHOAQVUq84BqE4N --id <item> \
+  --field-id PVTSSF_lAHOAQVUq84BqE4NzhodlVc --single-select-option-id <opção>
+```
+
+Atenção: o `gh` deste clone aponta por padrão para o upstream — use sempre `-R $R`.
 
 ## Em andamento
 
 - Épico [#63 Agenda por profissional](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/63) —
-  S1 #64, S4 #65, S5 #66 em Dev (PR #71); S2 #67, S3 #68, S6 #69, S7 #70 no Backlog.
+  S1 #64, S4 #65, S5 #66 em Teste (PR #71 mergeado em 2026-11-04); S2 #67, S3 #68, S6 #69, S7 #70 no Backlog.
+- [#77 Fábrica de agentes](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/77) — Em andamento (PR #76).

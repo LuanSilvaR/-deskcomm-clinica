@@ -109,3 +109,79 @@ Reinstalar numa máquina nova: `npx skills add supabase/agent-skills -g`.
 | app/api/v1/contacts/route.ts, _handler.ts e [id]/route.ts (escopo de pacientes: sem `pacientes.ver_todos`, só os da própria agenda; lista com recorte opcional, detalhe 404), app/app/contacts/[id]/page.tsx (idem), app/api/v1/agenda/vinculos/route.ts (idem), app/api/v1/financeiro/**/route.ts e app/api/v1/products/**/route.ts (além do papel, a chave da clínica via `exigeChaveNoNucleo`), app/app/{page,inicio/page,comandas/page,faturamento/page,products/page,team/page,tasks/page,kanban/page,inbox/page,radar/page,metrics/page,extensions/page,activities/page}.tsx e settings/tenant/{financeiro,agenda}/page.tsx (guarda de página por permissão; casa do profissional = Meu dia), app/app/_components/AppShell.tsx (aviso "Atendimento em andamento"), lib/navigation/catalogo.ts (porta "Meu dia"; `/app/activities` com permissão), components/agenda/GradeDaAgenda.tsx (rótulo do tipo do bloqueio), app/app/agenda/_client.tsx (de novo: "Minha agenda", "Bloquear horário", portas por permissão), lib/audit/actions.ts (`clinic.atendimento_complementado`), lib/i18n/dicionario.ts (de novo) | Agenda S5 — experiência do profissional (migration 9044): papel "Profissional de saúde", Meu dia, pacientes e prontuário só os próprios (com exceção por permissão), menu e rotas por permissão, finalizar com confirmação, complementar no mesmo dia, somente leitura depois, bloqueio da própria agenda com tipo e conferência de conflito | (este PR) |
 | app/api/v1/agenda/agendamentos/route.ts (`despachar` chama `exigeChavesDaAgenda`: POST/PATCH/DELETE exigem agenda.marcar/remarcar/cancelar/registrar_desfecho além do papel), components/agenda/HistoricoDaAgenda.tsx (prop opcional `ocultarAcoesAusentes`), components/agenda/AgendaInterativa.tsx (prop opcional `podeRemarcar`: sem ela não arrasta), components/agenda/DetalheDoCompromisso.tsx e EntradaDaAgenda.tsx (prop opcional `acoes` por chave), app/app/agenda/_client.tsx (de novo: ações por chave), lib/navigation/catalogo.ts ("Dia por profissional" exige `agenda.ver_outros`), tests/unit/agenda-confirmar-pela-tela.test.tsx (trechos de fonte procurados) — defaults das props = comportamento do upstream | Agenda S6a (issue #69) — ACL das ações da agenda e porta do dia por profissional | (este PR) |
 | app/api/v1/agenda/agendamentos/route.ts (`marcarSchema` ganha `encaixe?: {motivo}` opcional), app/api/v1/agenda/agendamentos/_handler.ts (`marcarAgendamentoHandler`/`exigeHorarioLivre`: com `encaixe` confere por lib/clinic/agenda/encaixe.ts e grava por `fn_clinic_agenda_encaixar`; sem `encaixe`, flag ligada e ator pessoa, a recusa de horário ocupado vira 409 `agenda_horario_ocupado`), lib/audit/actions.ts (`clinic.agenda.encaixe`) — sem `encaixe` o contrato é o do upstream; flag desligada ou ator IA seguem 422; **tela:** components/agenda/GradeDaAgenda.tsx e AgendaInterativa.tsx (props opcionais `etiquetas`/`etiqueta`, default = nada muda), HistoricoDaAgenda.tsx (`etiquetas?`), DetalheDoCompromisso.tsx (renderiza `DetalheDoEncaixe`), components/agenda/tipos.ts (`etiqueta?`), hooks/agenda/useMarcarAgendamento.ts (`encaixe?`; sem toast no 409), app/app/agenda/_client.tsx, app/api/v1/clinic/config/route.ts + app/app/settings/tenant/profissionais/{page,_client}.tsx (toggle `encaixe`, migration 9046) | Agenda S6b (issue #69) — encaixe com motivo e rastro | (este PR) |
+
+## Absorções seletivas do upstream (sem merge)
+
+Método: `git cherry-pick -m 1 -x` de PRs mergeados no upstream, em ordem cronológica, numa branch própria a partir da `develop`. Cada commit carrega `(cherry picked from commit …)`. Nenhuma migration entra por aqui: PR com migration ou que conflite com arquivo alterado pelo fork vai para adaptação manual (issue no quadro).
+
+### Lote 1 — 2026-11-03 (`feature/upstream-lote-1`)
+
+Universo: 1447 PRs do upstream entre `09d4da341` (2026-09-22) e `7dcd2fff5` (2026-11-03). Filtro: 503 relevantes para clínica → 215 sem migration e sem arquivo do fork → 83 aplicam em sequência → **59** depois de tirar os que exigem código mais novo do upstream:
+
+- não compilam no fork (tipos): #3710, #3631, #2050, #3806, #3108, #2359, #2654, #2336, #2375 — e #2872, #2971, #3158, que dependiam deles;
+- o próprio teste do PR reprova no fork: #3034, #3748, #2519, #3162, #3077, #2883, #3071, #1703, #2905, #2045;
+- revertidos em 2026-11-04 (o teste só reprova no CI, em `pnpm test:db`): #2083, #2201 — os dois testes provisionam o
+  catálogo de módulos do upstream (`fn_honorarios_provisionar`, tabelas `honorarios_*`, registro `modulo_secoes_lgpd`),
+  que não existe no baseline do fork. Voltam quando o catálogo de módulos for absorvido.
+
+| PR upstream | Commit upstream | Título |
+|---|---|---|
+| #1503 | `0a47326b3` | fix(ia): roteador em "Automático" passa a usar a IA que a empresa escolheu |
+| #1514 | `147095081` | fix(waha): webhook do WhatsApp recusado fica arquivado e marcado como erro |
+| #1505 | `2596ccafd` | fix(waha): atribuir anúncios Meta recebidos pelo WhatsApp por QR |
+| #1515 | `3b5564031` | fix(ia): o painel do Operador mede o agente da tela, não a organização |
+| #1508 | `5b3186aa3` | fix(inbox): contenção de layout e quebra de palavras para textos longos no chat |
+| #1494 | `668330da7` | fix(canais): modelos do parceiro exigem papel, como a rota do Datafy |
+| #1492 | `6c6610bfa` | feat(canais): modelos do canal Datafy — criar e sincronizar pela tela — de @vgamkt |
+| #1543 | `6f3d27a58` | fix(agente): o "digitando…" acende enquanto a IA pensa |
+| #1519 | `72bea879b` | fix(ia): o gate de agenda barra "vou chamar X pra ver os horários" — de @gyanu2507 |
+| #1548 | `b6188d85a` | fix(leads): gerar slugs de etapas com hífen e normalizar busca no agendamento e handoff |
+| #1558 | `c60da6273` | fix(inbox): resposta enviada não some, rascunho fica e a conferência volta a rodar — de @gustavorodcruz96 |
+| #1605 | `050cb6298` | fix(agente): rascunho assistido não espera o checkpoint que ninguém lê |
+| #1622 | `328c8f64a` | fix(ia): aviso de teto aparece no pacote clicado, não fora da tela |
+| #1629 | `709b6e1be` | feat(inbox): gerar link para cada conversa selecionada |
+| #1617 | `719be21f8` | fix(inbox): ancoragem na abertura da conversa é instantânea em vez de rolar suave (#1590) |
+| #1603 | `ae2695722` | fix(quadro): consultas .in() do board em lotes — funil grande volta a abrir |
+| #1633 | `c89cb417d` | feat(canais): respostas do app WhatsApp Business entram no canal oficial (coexistência) |
+| #1609 | `e23a44e0b` | fix(agente): a mesma mensagem do cliente não recebe duas respostas |
+| #1656 | `34fd341b3` | test(e2e): a grade mede card e bloco no mesmo quadro (flake -42px da agenda) |
+| #1636 | `5c6b87b1f` | feat(preview): permitir consulta a dados externos no modo teste do agente |
+| #1665 | `e86e729a9` | fix(auth): fecha o cadastro direto do GoTrue em so_convite e mantém o convite (#1653) |
+| #1768 | `950f93d8f` | fix(retencao): a poda da captação ordena o lote e a falha deixa de ser silenciosa |
+| #1722 | `9d6838faa` | fix(followup): o envio inline enxerga o job vencido no mesmo milissegundo |
+| #1805 | `007e0fba6` | fix(opt-out): 'não me contate mais', 'entrar em contato' e 'me tire da lista' passam a bloquear — de @deskc |
+| #1796 | `07236fa1d` | fix(auth): a leitura de fatores de MFA falha fechada |
+| #1784 | `0aa8ba655` | fix(retencao): a poda do arquivo de webhooks ordena o lote e fala a falha |
+| #1794 | `4ecc2712b` | perf(auth): requireRole lê papel e MFA em paralelo, mantendo a precedência — de @gustavorodcruz96 |
+| #1821 | `b509ed3a7` | fix(canais): o WhatsApp do provedor intermediado só aceita evento da própria conta |
+| #1903 | `550c49106` | test(canais): a exclusão da conexão ganha prova de que o aviso dela sai junto (Refs #1023) |
+| #1825 | `5d7129b09` | fix(opt-out): freio do 'sair da lista' e sujeito de 3a antes de 'liga' |
+| #1934 | `65a01861e` | fix(inbox): o piso da busca sai o parêntese da régua, e a lista inteira deixa de voltar (#1895) |
+| #1979 | `5cacb2153` | test(e2e): virada de mês do painel espera pelo dia futuro, não por qualquer dia |
+| #1994 | `ffb81e6e9` | test(agenda): cerca — paraEventoDoGoogle nunca vaza a anotação interna (#1959) |
+| #2101 | `b5d51cf63` | fix(lgpd): o prazo da solicitação sai no dia certo, e nao vence adiantado |
+| #2168 | `c268f97ef` | fix(lgpd): o painel da plataforma le o prazo como dia, e os dois selos viram juntos |
+| #2167 | `f5cc929a3` | fix(auth): mudar a exigência de MFA da empresa cobra o fator provado na sessão |
+| #2240 | `56378659b` | fix(ia): a rota do Testar lê knowledge_source_ids dos materiais (#2237) |
+| #2283 | `a20869397` | fix(canais): o contato criado no app vira cadastro no CRM na coexistência (1632) |
+| #2324 | `a54d1a0da` | fix(retencao): a poda do arquivo de webhooks não manda id na URL |
+| #2332 | `de6117384` | fix(agenda): toda agenda da rodada de sincronização carimba a própria leitura (#2314) |
+| #2392 | `21a654e0a` | agenda: invalid_grant com descrição junto vira reautenticar (#2384) |
+| #2414 | `40b0b8351` | fix(inbox): a lista não volta ao skeleton num refetch (#2366) |
+| #2398 | `c9cd9b230` | fix(inbox): rajada do realtime vira uma recarga e a conversa fora da aba atualiza; prazo explícito no e2e de  |
+| #2400 | `dcc35738a` | fix(agenda): a recusa da renovação do Google diz o status HTTP e não vira “sem resposta” (#2393) |
+| #2131 | `8ad66f90a` | perf(waha): memoiza o check-exists positivo por sessão e número |
+| #2557 | `bbfe0bf4b` | fix(tarefas): reabrir uma tarefa cancelada volta para pendente (#2549) |
+| #2662 | `97b7278d1` | test(followup): o nome da sessão do teste de reatividade tem tamanho fixo (o invariants falhava por sorteio) |
+| #2709 | `cd6f59c9b` | fix(followup): follow-up em espera da data do retorno deixa de ser cancelado na hora de disparar |
+| #2740 | `018b428ee` | fix(midia): falha ao assinar a mídia vai para o log estruturado (recorte do #1921, de @mrmateussiilva) |
+| #2873 | `69b04f8fd` | docs(canais): a regra do cabeçalho do envelope zernio descreve o schema (#290) |
+| #2821 | `b82e6475f` | fix(inbox): a aba oculta não refaz a página a cada 45 s (refs #2235) |
+| #2956 | `4e0cc2a92` | fix(waha): edição e "apagar para todos" de mensagem RECEBIDA chegam ao CRM (#2939) |
+| #2376 | `53879af0b` | fix(ia): agente pausado não cala o número quando há outro no ar nele |
+| #1930 | `6d6d851e4` | feat(auth): passkey (WebAuthn) — fatia 1: config self-host, gate e transporte binário (#1164) |
+| #3122 | `96f18da0b` | perf(auth): a tela de /app pede o usuário ao GoTrue uma vez só |
+| #3211 | `12742cb0e` | fix(midia): a derivacao de video so le os formatos de video esperados |
+| #3278 | `c132deee4` | fix(inbox): o aviso de sugestão que falhou sai da tela quando a conversa anda |
+| #3763 | `e383e704e` | fix(inbox): sugestão de resposta fala na voz do atendente, não na do agente (#3757) |
+| #3871 | `515d0a37e` | docs(adr): ADR-0007 — consulta em pg com Postgres próprio (#3715) |
