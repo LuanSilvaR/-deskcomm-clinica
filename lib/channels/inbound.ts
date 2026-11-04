@@ -30,7 +30,7 @@ import {
 } from "./graph-parceiro/webhook";
 import { sincronizarSaudeDaConexao } from "./health";
 import { lerEnvelopeMeta } from "./meta/envelope";
-import { ingestMetaInbound } from "./meta/ingest";
+import { ingestMetaAppContactSync, ingestMetaEcho, ingestMetaInbound } from "./meta/ingest";
 import { parseMetaWebhook } from "./meta/webhook";
 import {
   atualizarEspelhoDoTemplate,
@@ -98,10 +98,68 @@ export function verifyInboundWebhookSignature(provider: string, raw: string, hea
   return verifyZernioSignature(raw, headers.get("x-zernio-signature"), secret);
 }
 
+/**
+ * O EVENTO É DESTA CONEXÃO?
+ *
+ * ─── O defeito, medido numa instalação real (23/09/2026) ─────────────────────
+ *
+ * Esta guarda existia só para o canal SOCIAL. Para o WhatsApp pelo provedor
+ * intermediado ela devolvia `true` sem olhar nada — e o webhook do provedor NÃO
+ * é por número: é por ESPAÇO DE TRABALHO. Um webhook recebe os eventos de TODAS
+ * as contas daquela chave. Na instalação medida eram dez contas no mesmo espaço
+ * (dois WhatsApp, e Facebook/Instagram/Meta Ads de três negócios diferentes).
+ *
+ * Resultado: a caixa de entrada de um número recebeu 33 mensagens de
+ * boas-vindas de OUTRO negócio, enviadas por OUTRO número do mesmo espaço. O
+ * dono viu na conversa clientes que não eram dele, e nada na tela explicava.
+ *
+ * O parser já lia a conta (`ZernioWebhookEvent.accountId`, com o comentário
+ * "casa com channel_sessions.zernio_account_id") — só ninguém comparava.
+ *
+ * ─── Por que evento SEM conta passa ──────────────────────────────────────────
+ *
+ * Nem todo evento do provedor carrega a conta (medido: os de saúde do número
+ * vêm sem ela). Recusar o que não traz conta faria o vigia de canal ficar cego
+ * para `account.disconnected` — trocar mensagem de outro negócio por queda
+ * silenciosa. O que se recusa é a conta DIVERGENTE, que é prova; ausência não é.
+ */
 export async function inboundPayloadBelongsToSession(admin: SupabaseClient, input: InboundWebhookInput): Promise<boolean> {
-  return input.session.provider !== CHANNEL_PROVIDER_SOCIAL || socialPayloadBelongsToSession(
-    admin, input.session.organization_id, input.session.id, input.rawBody,
-  );
+  if (input.session.provider === CHANNEL_PROVIDER_SOCIAL) {
+    return socialPayloadBelongsToSession(admin, input.session.organization_id, input.session.id, input.rawBody);
+  }
+  if (input.session.provider === CHANNEL_PROVIDER_ZERNIO) {
+    const contaDoEvento = contaDoEventoZernio(input.rawBody);
+    if (contaDoEvento === null) return true;
+    // A guarda busca a conta ELA MESMA, como a do canal social: a rota do
+    // webhook é genérica, e `lint:channels` recusa nome de coluna de provedor
+    // ali. Uma guarda que dependesse de a rota lembrar de trazer a coluna
+    // devolveria `true` sem filtrar nada no dia em que ela esquecesse.
+    const { data, error } = await admin
+      .from("channel_sessions")
+      .select("zernio_account_id")
+      .eq("organization_id", input.session.organization_id)
+      .eq("id", input.session.id)
+      .maybeSingle();
+    if (error) throw new Error("zernio_session_lookup_failed");
+    const contaDaSessao = (data as { zernio_account_id?: string | null } | null)?.zernio_account_id ?? null;
+    return contaDaSessao === null || contaDoEvento === contaDaSessao;
+  }
+  return true;
+}
+
+/** A conta que o provedor diz ter originado o evento — os mesmos três lugares que o parser lê. */
+export function contaDoEventoZernio(rawBody: string): string | null {
+  let p: unknown;
+  try {
+    p = JSON.parse(rawBody);
+  } catch {
+    return null;
+  }
+  if (!p || typeof p !== "object") return null;
+  const o = p as Record<string, unknown>;
+  const conta = o.account && typeof o.account === "object" ? (o.account as Record<string, unknown>) : null;
+  const valor = conta?.id ?? conta?.accountId ?? o.accountId;
+  return typeof valor === "string" && valor.length > 0 ? valor : null;
 }
 
 export async function handleInboundWebhook(
@@ -291,6 +349,34 @@ async function datafyInbound(
       desfechos.push(r.status);
       continue;
     }
+    if (e.kind === "outbound_echo") {
+      // Coexistência pelo parceiro: resposta dada pelo app WhatsApp Business.
+      if (e.phoneNumberId !== refs.phoneNumberId) {
+        desfechos.push("outro_numero");
+        continue;
+      }
+      const r = await ingestMetaEcho(admin, e, {
+        organizationId: orgId,
+        channelSessionId: input.session.id,
+      });
+      desfechos.push(`eco:${r.status}`);
+      continue;
+    }
+    if (e.kind === "app_contact_sync") {
+      // Coexistência pelo parceiro: contato editado no endereço do app. Mesma
+      // régua das outras entradas — o número do payload tem de ser o DESTA sessão,
+      // senão é de outro número e não vaza para cá.
+      if (e.phoneNumberId !== refs.phoneNumberId) {
+        desfechos.push("outro_numero");
+        continue;
+      }
+      const r = await ingestMetaAppContactSync(admin, e, {
+        organizationId: orgId,
+        channelSessionId: input.session.id,
+      });
+      desfechos.push(`contato:${r.status}`);
+      continue;
+    }
     if (e.kind === "message_status") {
       await admin
         .from("messages")
@@ -300,8 +386,21 @@ async function datafyInbound(
       desfechos.push("status");
       continue;
     }
-    // `template_status`: a gestão de modelos deste canal é a fatia seguinte do
-    // #1130 (`canManageTemplates: false`) — ainda não há espelho a atualizar.
+    if (e.kind === "template_status") {
+      // A revisão da plataforma decide depois da criação: sem isto a definição
+      // ficava PENDING no espelho até alguém clicar em Sincronizar, e o seletor
+      // do inbox não a oferecia. Escopo pela CONEXÃO desta entrega — a coluna
+      // `waba_id` do espelho deste canal guarda o número, não a conta.
+      const { error } = await admin
+        .from("meta_templates")
+        .update({ status: e.event, rejected_reason: e.reason, updated_at: agora })
+        .eq("organization_id", orgId)
+        .eq("channel_session_id", input.session.id)
+        .eq("name", e.templateName)
+        .eq("language", e.templateLanguage);
+      desfechos.push(error ? "modelo_nao_atualizado" : "modelo");
+      continue;
+    }
     desfechos.push("ignorado");
   }
 
