@@ -898,6 +898,8 @@ export const AUDIT_ACTIONS = [
   "clinic.profissional_salvo",
   "clinic.tipo_especialidades_atualizadas",
   "clinic.bloqueio_criado",
+  // FORK clinic (agenda S6b): encaixe sobre outro compromisso — autor, motivo e quem foi coberto.
+  "clinic.agenda.encaixe",
   "clinic.bloqueio_removido",
   // FORK clinic (migration 9002): a ficha do paciente e a chegada à clínica.
   "clinic.ficha_salva",

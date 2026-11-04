@@ -89,6 +89,8 @@ const marcarSchema = z.object({
   description: z.string().max(2000).optional(),
   location_details: z.string().max(300).optional(),
   guest_email: emailDoConvidado.optional(),
+  // FORK clinic (agenda S6b): encaixe sobre outro compromisso do profissional — motivo obrigatório.
+  encaixe: z.object({ motivo: z.string().trim().min(5).max(500) }).optional(),
 });
 
 const alterarSchema = z

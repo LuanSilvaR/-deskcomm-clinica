@@ -49,6 +49,8 @@ import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import { moverLeadParaEtapaDeAgendamento } from "@/lib/leads/appointment-stage-move";
 import { logger } from "@/lib/logger";
 import { habilitacaoNaConsulta } from "@/lib/clinic/agenda/regras-da-clinica";
+// FORK clinic (agenda S6b)
+import { conflitoEncaixavel, erroDoEncaixeNoBanco, exigeEncaixePossivel } from "@/lib/clinic/agenda/encaixe";
 import { fichaPermiteAtendimento } from "@/lib/clinic/pacientes/servidor";
 import { clinicProfissionaisLigado } from "@/lib/clinic/flags";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -68,6 +70,8 @@ const CODIGO_DA_RECUSA = {
 export interface MarcarInput {
   event_type_id: string;
   starts_at: string;
+  /** FORK clinic (agenda S6b): marcar por cima de outro compromisso, com motivo. Só pessoa. */
+  encaixe?: { motivo: string };
   owner_user_id?: string;
   contact_id?: string;
   conversation_id?: string;
@@ -245,6 +249,11 @@ export async function marcarAgendamentoHandler(
 ): Promise<Record<string, unknown>> {
   const inicio = new Date(input.starts_at);
 
+  // FORK clinic (agenda S6b): encaixe é ato de PESSOA (C11) — IA/token/webhook nunca encaixam.
+  if (input.encaixe && ctx.actor.type !== "user") {
+    throw new ApiError(403, "encaixe_so_pessoa", undefined, ctx.requestId, "Encaixe só pode ser feito por uma pessoa da equipe.");
+  }
+
   const { data: tipo, error: erroTipo } = await supabase
     .from("calendar_event_types")
     .select(
@@ -354,6 +363,7 @@ export async function marcarAgendamentoHandler(
     donoId,
     inicio,
     fim,
+    encaixe: Boolean(input.encaixe), // FORK clinic (agenda S6b)
   });
 
   const booking = tipo.location_kind === "google_meet" ? ctx.meetingBooking : undefined;
@@ -362,9 +372,7 @@ export async function marcarAgendamentoHandler(
   }
   const delivery = booking ? { state:"waiting_for_link",generation:randomUUID(),service_boundary:booking.boundary,source_operation_id:booking.sourceJobId,
     booking_claim:booking.claim,authorized_by:{kind:ctx.actor.type,id:ctx.actor.id} } : {state:"none"};
-  const { data: criado, error: erroInsert } = await supabase
-    .from("calendar_appointments")
-    .insert({
+  const linha = {
       organization_id: ctx.organization_id,
       event_type_id: tipo.id,
       title: input.title ?? tipo.name,
@@ -392,14 +400,48 @@ export async function marcarAgendamentoHandler(
       created_by_kind: autorParaCriacao(ctx.actor),
       created_by_user_id: ctx.actor.type === "user" ? ctx.actor.id : null,
       source: ctx.actor.type === "user" ? "ui" : "mcp",
-    })
-    .select("id, starts_at, ends_at, status, time_zone, revision, meeting_state, meeting_url")
-    .single();
-  if (erroInsert) {
+    };
+  // FORK clinic (agenda S6b): com `encaixe`, a MESMA linha entra pela função do banco (uma transação:
+  // confere chave/flag/motivo, grava o rastro e libera a trava só para este compromisso).
+  const colunas = "id, starts_at, ends_at, status, time_zone, revision, meeting_state, meeting_url";
+  let encaixeId: string | null = null;
+  type Criado = {
+    id: string;
+    starts_at: string;
+    ends_at: string;
+    status: string;
+    time_zone: string;
+    revision: number;
+    meeting_state: string | null;
+    meeting_url: string | null;
+  };
+  let criado: Criado | null = null;
+  let erroInsert: { code?: string; message: string } | null = null;
+  if (input.encaixe) {
+    const { data: novoId, error: erroRpc } = await supabase.rpc("fn_clinic_agenda_encaixar", {
+      p_row: linha as unknown as Json,
+      p_motivo: input.encaixe.motivo,
+    });
+    if (erroRpc) {
+      const conhecido = erroDoEncaixeNoBanco(erroRpc, ctx);
+      if (conhecido) throw conhecido;
+      erroInsert = erroRpc;
+    } else {
+      encaixeId = novoId as unknown as string;
+      const lido = await supabase.from("calendar_appointments").select(colunas).eq("id", encaixeId).eq("organization_id", ctx.organization_id).single();
+      criado = lido.data as unknown as Criado | null;
+      erroInsert = lido.error;
+    }
+  } else {
+    const inserido = await supabase.from("calendar_appointments").insert(linha).select(colunas).single();
+    criado = inserido.data as unknown as Criado | null;
+    erroInsert = inserido.error;
+  }
+  if (erroInsert || !criado) {
     // FORK clinic (9005): a trava de sobreposição do banco fecha a corrida que a
     // conferência acima não fecha (duas marcações no mesmo instante).
-    if (erroInsert.code === HORARIO_OCUPADO_NO_BANCO) throw horarioOcupadoNoBanco(ctx, erroInsert.message);
-    throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroInsert.message);
+    if (erroInsert?.code === HORARIO_OCUPADO_NO_BANCO) throw horarioOcupadoNoBanco(ctx, erroInsert.message);
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroInsert?.message);
   }
 
   const transicao: Transicao = criado.status === "pending" ? "pending" : "confirmed";
@@ -423,7 +465,20 @@ export async function marcarAgendamentoHandler(
     metadata: { event_type_id: tipo.id, owner_user_id: donoId, time_zone: criado.time_zone },
   });
 
-  return criado as Record<string, unknown>;
+  // FORK clinic (agenda S6b): o rastro do encaixe (a função do banco já gravou clinic_agenda_encaixes).
+  if (encaixeId) {
+    void audit({
+      action: "clinic.agenda.encaixe",
+      actorUserId: ctx.actor.type === "user" ? ctx.actor.id : null,
+      organizationId: ctx.organization_id,
+      resourceType: "calendar_appointment",
+      resourceId: criado.id,
+      requestId: ctx.requestId,
+      metadata: { owner_user_id: donoId, encaixe_id: encaixeId },
+    });
+    return { ...criado, encaixe: true };
+  }
+  return criado as unknown as Record<string, unknown>;
 }
 
 /**
@@ -844,6 +899,8 @@ async function exigeHorarioLivre(
      * (issue #1084).
      */
     ignorarAgendamentoId?: string;
+    /** FORK clinic (agenda S6b): marcar por cima, com autorização — troca a recusa por `exigeEncaixePossivel`. */
+    encaixe?: boolean;
   },
 ): Promise<{ fusoDaRegra: string }> {
   const consulta = await horariosLivresDaOrg(supabase, ctx.organization_id, {
@@ -870,8 +927,31 @@ async function exigeHorarioLivre(
   }
 
   const foraDaGrade = podeMarcarForaDaGrade(ctx.actor);
-  if (foraDaGrade) {
-    await exigeSemSobreposicao(supabase, ctx, args);
+  if (foraDaGrade && args.encaixe) {
+    // FORK clinic (agenda S6b)
+    await exigeEncaixePossivel(supabase, ctx, {
+      organizationId: ctx.organization_id,
+      ownerUserId: args.donoId,
+      inicio: args.inicio,
+      fim: args.fim,
+      fusoDaRegra: consulta.fusoDaRegra,
+    });
+  } else if (foraDaGrade) {
+    try {
+      await exigeSemSobreposicao(supabase, ctx, args);
+    } catch (e) {
+      // FORK clinic (agenda S6b, D2): com a flag ligada e ator pessoa, a recusa vira 409 com quem ocupa.
+      if (e instanceof ApiError && e.code === "agenda_horario_indisponivel") {
+        const conflito = await conflitoEncaixavel(supabase, ctx, {
+          organizationId: ctx.organization_id,
+          ownerUserId: args.donoId,
+          inicio: args.inicio,
+          fim: args.fim,
+        });
+        if (conflito) throw conflito;
+      }
+      throw e;
+    }
   } else if (!consulta.slots.some((s) => s.inicio.getTime() === args.inicio.getTime())) {
     throw new ApiError(
       422,
