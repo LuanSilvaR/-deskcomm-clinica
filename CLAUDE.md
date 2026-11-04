@@ -4,6 +4,7 @@ Doutrina completa do upstream: `AGENTS.md` e skill `deskcomm-doutrina` (leia só
 Guias embutidos (.claude/skills): `deskcomm-instalar`, `deskcomm-cliente-novo`, `deskcomm-metricas`, `deskcomm-prompt`,
 `deskcomm-contribuir`, `deskcomm-extensao`, `deskcomm-doutrina`.
 Mapa do código: skill `codebase-map` (Sessão 2). Backlog: docs/backlog.md. Controle do fork: UPSTREAM.md.
+Fábrica de agentes (20 papéis, `/factory-*`, gates): docs/factory/README.md — leia só ao planejar/delegar.
 Este arquivo usa `merge=ours` (.gitattributes): o CLAUDE.md do upstream NÃO entra nas sincronizações.
 
 ## Comandos (pnpm 9, Node 22)
