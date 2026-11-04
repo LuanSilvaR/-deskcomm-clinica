@@ -523,6 +523,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/anexos/[id]/route.ts (PATCH, acao divulgacao) chama com createClient da sessão; fn_acesso_exigir exige fotos.enviar (chave clínica), suporte de escrita e MFA; foto ativa da organização informada; finalidade E cada canal autorizados por termo de uso de imagem aceito, no prazo e não revogado (fn_clinic_divulgacao_autorizada). tests/invariants/clinic-revisao-conformidade.test.ts prova recusa sem canal, canal não autorizado, termo vencido e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 9046, agenda S6b).
+    fn: "fn_clinic_definir_encaixe(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, opção encaixe) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_estoque); só grava settings.clinic.encaixe. tests/invariants/clinic-agenda-encaixe.test.ts prova recusa a não-admin e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9028).
     fn: "fn_clinic_definir_estoque(uuid,boolean)",
     razao:

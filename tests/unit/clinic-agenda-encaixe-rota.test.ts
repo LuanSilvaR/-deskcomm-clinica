@@ -148,6 +148,15 @@ describe("encaixe — recusas antes de gravar", () => {
     const e = await recusa(marcar(pessoa, { motivo: "Paciente de retorno urgente" }));
     expect([e.status, e.code]).toEqual([409, "encaixe_sobre_finalizado"]);
   });
+
+  it("mesmo instante de início de outro compromisso (índice do núcleo) -> 409 encaixe_mesmo_inicio, não 500", async () => {
+    mundo.rpcEncaixe = {
+      data: null,
+      error: { code: "23505", message: 'duplicate key value violates unique constraint "calendar_appointments_sem_duplicata_idx"' },
+    };
+    const e = await recusa(marcar(pessoa, { motivo: "Paciente de retorno urgente" }));
+    expect([e.status, e.code]).toEqual([409, "encaixe_mesmo_inicio"]);
+  });
 });
 
 describe("C11 — só pessoa encaixa", () => {

@@ -143,6 +143,11 @@ describe("o encaixe", () => {
 });
 
 describe("a tabela de encaixes", () => {
+  it("a opção (9046) só o administrador liga; anon não executa", () => {
+    expect(erro(como(GER, `select public.fn_clinic_definir_encaixe('${ORG}', true);`))).toMatch(/clinic_flag_forbidden/);
+    expect(erro(`set role anon; select public.fn_clinic_definir_encaixe('${ORG}', true);`)).toMatch(/permission denied/);
+  });
+
   it("é isolada por empresa, sem escrita direta da sessão", () => {
     expect(ultima(sql(como(AGENTE_B, `select count(*) from public.clinic_agenda_encaixes where organization_id = '${ORG}';`)))).toBe("0");
     expect(ultima(sql(como(GER, `select count(*) from public.clinic_agenda_encaixes where organization_id = '${ORG}';`)))).not.toBe("0");

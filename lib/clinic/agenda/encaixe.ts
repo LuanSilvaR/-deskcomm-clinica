@@ -190,6 +190,17 @@ export async function exigeEncaixePossivel(
 /** Erros da função do banco → o mesmo vocabulário das recusas acima. `null` = erro não conhecido. */
 export function erroDoEncaixeNoBanco(erro: { code?: string; message?: string }, ctx: HandlerCtx): ApiError | null {
   const msg = erro.message ?? "";
+  // O índice do núcleo `calendar_appointments_sem_duplicata_idx` impede dois compromissos ativos do
+  // mesmo profissional começando no MESMO instante — o encaixe tem de começar em outro minuto.
+  if (erro.code === "23505" && msg.includes("calendar_appointments_sem_duplicata_idx")) {
+    return new ApiError(
+      409,
+      "encaixe_mesmo_inicio",
+      undefined,
+      ctx.requestId,
+      "Já existe um compromisso começando exatamente neste horário. Encaixe alguns minutos depois.",
+    );
+  }
   if (erro.code !== "P0001") return null;
   if (msg.includes("encaixe_desligado")) {
     return new ApiError(422, "encaixe_desligado", undefined, ctx.requestId, "O encaixe não está ligado nesta clínica.");
