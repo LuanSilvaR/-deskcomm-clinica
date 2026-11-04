@@ -182,6 +182,7 @@ export function ChatThread({ conversationId, onResponder, dono, contatoId }: Pro
      * conversa já chegou ao fim alguma vez, com conteúdo na tela?" —, em vez de
      * inferir isso da paginação de UMA das três fontes do fio.
      */
+    const primeiraAncoragem = !jaAncorou.current;
     if (jaAncorou.current) {
       const sc = scrollerRef.current;
       if (sc && sc.scrollHeight - sc.scrollTop - sc.clientHeight > 120) return;
@@ -190,7 +191,10 @@ export function ChatThread({ conversationId, onResponder, dono, contatoId }: Pro
     // da pintura em branco, que é exatamente o defeito acima.
     if (items.length > 0) jaAncorou.current = true;
 
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    bottomRef.current?.scrollIntoView({
+      behavior: primeiraAncoragem ? "auto" : "smooth",
+      block: "end",
+    });
   }, [items.length, conversationId, paginas]);
 
   /**
@@ -276,8 +280,8 @@ export function ChatThread({ conversationId, onResponder, dono, contatoId }: Pro
   }
 
   return (
-    <div {...sinalDoCanal} className="flex h-full flex-col">
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto py-2">
+    <div {...sinalDoCanal} className="flex h-full min-w-0 flex-col">
+      <div ref={scrollerRef} className="min-w-0 flex-1 overflow-y-auto py-2">
         {q.hasNextPage && (
           <div className="flex justify-center py-2">
             <Button
