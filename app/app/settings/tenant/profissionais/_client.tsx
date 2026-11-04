@@ -23,6 +23,8 @@ interface Props {
   procedimentosInicial: boolean;
   prontuarioInicial: boolean;
   estoqueInicial: boolean;
+  /** FORK clinic (agenda S6b) */
+  encaixeInicial?: boolean;
   prazoInicial: number;
   podeLigar: boolean;
   ehGerencia: boolean;
@@ -38,6 +40,7 @@ export function ProfissionaisClient({
   procedimentosInicial,
   prontuarioInicial,
   estoqueInicial,
+  encaixeInicial = false,
   prazoInicial,
   podeLigar,
   ehGerencia,
@@ -52,6 +55,7 @@ export function ProfissionaisClient({
   const [procedimentos, setProcedimentos] = useState(procedimentosInicial);
   const [prontuario, setProntuario] = useState(prontuarioInicial);
   const [estoque, setEstoque] = useState(estoqueInicial);
+  const [encaixe, setEncaixe] = useState(encaixeInicial);
   const [prazo, setPrazo] = useState(prazoInicial);
   const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
 
@@ -69,6 +73,13 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { procedimentos: boolean } }>("/api/v1/clinic/config", { procedimentos: valor }),
     onSuccess: (r) => setProcedimentos(r.data.procedimentos),
+    onError: showApiError,
+  });
+
+  const alternarEncaixe = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { encaixe: boolean } }>("/api/v1/clinic/config", { encaixe: valor }),
+    onSuccess: (r) => setEncaixe(r.data.encaixe),
     onError: showApiError,
   });
 
@@ -325,6 +336,29 @@ export function ProfissionaisClient({
             onClick={() => alternarEstoque.mutate(!estoque)}
           >
             {estoque ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${encaixe ? "" : "bg-muted"}`}
+        data-testid="clinic-encaixe"
+      >
+        <div>
+          <p className="font-medium">{encaixe ? t("Encaixe ligado") : t("Encaixe desligado")}</p>
+          <p className="text-sm text-text-muted">
+            {t("Permitir encaixe (marcar por cima de um horário ocupado, com motivo)")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-encaixe-alternar"
+            variant={encaixe ? "outline" : "default"}
+            disabled={alternarEncaixe.isPending}
+            aria-label={t("Permitir encaixe (marcar por cima de um horário ocupado, com motivo)")}
+            onClick={() => alternarEncaixe.mutate(!encaixe)}
+          >
+            {encaixe ? t("Desligar") : t("Ligar")}
           </Button>
         ) : null}
       </section>

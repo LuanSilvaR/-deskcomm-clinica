@@ -11,6 +11,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { VisitaDoPaciente } from "@/components/clinic/VisitaDoPaciente";
+import { DetalheDoEncaixe } from "@/components/clinic/agenda/DetalheDoEncaixe";
 import { HistoricoDoAgendamento } from "@/components/clinic/agenda/HistoricoDoAgendamento";
 import { rotuloDoLocal } from "@/lib/agenda/locais";
 
@@ -209,6 +210,8 @@ export function DetalheDoCompromisso({
                 podeMudar={podeEditar}
               />
             ) : null}
+            {/* FORK clinic (agenda S6b): motivo e autor do encaixe, quando houver. */}
+            <DetalheDoEncaixe appointmentId={a.id} />
             {a.contact_id ? (
               <HistoricoDoAgendamento appointmentId={a.id} />
             ) : (

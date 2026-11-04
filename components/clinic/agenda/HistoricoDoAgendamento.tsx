@@ -35,6 +35,7 @@ const ROTULO_DO_AGENDAMENTO: Record<string, string> = {
   faltou: "Faltou",
   realizado: "Realizado",
   profissional_trocado: "Profissional trocado",
+  encaixe: "Encaixe",
 };
 
 export function HistoricoDoAgendamento({ appointmentId }: { appointmentId: string }) {

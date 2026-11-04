@@ -59,6 +59,8 @@ export type Agendamento = {
   titulo: string;
   /** Quem vai ser atendido. Ausente em ocupação vinda do Google. */
   quemSeraAtendido?: string;
+  /** FORK clinic (agenda S6b): etiqueta curta no bloco (ex.: "Encaixe"). Ausente = nada. */
+  etiqueta?: string;
   /** Quem atende — é dele a cor do bloco. */
   responsavelId: string;
   /** ISO-8601. */

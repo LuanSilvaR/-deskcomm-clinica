@@ -41,7 +41,12 @@ import { algumFiltroAtivo, passaNosFiltros } from "@/lib/clinic/agenda/filtros-d
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAgendamentos } from "@/hooks/agenda/useAgendamentos";
 import { useHorariosLivres } from "@/hooks/agenda/useHorariosLivres";
-import { useMarcarAgendamento } from "@/hooks/agenda/useMarcarAgendamento";
+import { useMarcarAgendamento, type NovoAgendamento } from "@/hooks/agenda/useMarcarAgendamento";
+// FORK clinic (agenda S6b)
+import { useQuery } from "@tanstack/react-query";
+import { HorarioOcupadoEEncaixe, type HorarioOcupado } from "@/components/clinic/agenda/HorarioOcupadoEEncaixe";
+import { ApiError } from "@/lib/api/types";
+import { apiClient } from "@/lib/api/client";
 import {
   useCancelarAgendamento,
   useRegistrarDesfecho,
@@ -219,6 +224,9 @@ export function AgendaClient({
   const [enderecoEditado, setEnderecoEditado] = React.useState<string | null>(null);
   const [observacao, setObservacao] = React.useState("");
   const marcar = useMarcarAgendamento();
+  // FORK clinic (agenda S6b): o 409 de horário ocupado e o instante que o provocou.
+  const [ocupado, setOcupado] = React.useState<{ instante: string; dados: HorarioOcupado } | null>(null);
+  const [erroDoEncaixe, setErroDoEncaixe] = React.useState<string | null>(null);
   const remarcar = useRemarcarAgendamento();
   const cancelar = useCancelarAgendamento();
   const desfecho = useRegistrarDesfecho();
@@ -519,6 +527,67 @@ export function AgendaClient({
         ? `${format(startOfWeek(ancora, { weekStartsOn: 0 }), t("d 'de' MMM"), { locale: localeDaData })} — ${format(addDays(startOfWeek(ancora, { weekStartsOn: 0 }), 6), t("d 'de' MMM"), { locale: localeDaData })}`
         : format(ancora, t("EEEE, d 'de' MMMM"), { locale: localeDaData });
 
+  // FORK clinic (agenda S6b): marcar (e, com `encaixe`, encaixar) no instante. Um só
+  // lugar monta o corpo, para o "Encaixar" reenviar EXATAMENTE a marcação recusada.
+  const marcarEm = (instante: string, encaixe?: { motivo: string }) => {
+    if (!tipo) return Promise.reject(new Error(t("Escolha um tipo de agendamento.")));
+    const corpo: NovoAgendamento = {
+      event_type_id: tipo.id,
+      ...(profissionalDaMarcacao ? { owner_user_id: profissionalDaMarcacao } : {}),
+      contact_id: contactId || undefined,
+      conversation_id: conversationId || undefined,
+      starts_at: instante,
+      guest_email: emailConvidadoLimpo || undefined,
+      location_details: endereco.trim(),
+      description: observacao.trim() || undefined,
+      ...(encaixe ? { encaixe } : {}),
+    };
+    return marcar.mutateAsync(corpo).then(
+      (r) => {
+        setOcupado(null);
+        setErroDoEncaixe(null);
+        setEmailConvidado("");
+        setEnderecoEditado(null);
+        setObservacao("");
+        // Guardado para o fechamento saber para onde levar a grade.
+        setMarcadoEm(instante);
+        return r;
+      },
+      (err: unknown) => {
+        if (err instanceof ApiError && err.status === 409 && err.code === "agenda_horario_ocupado") {
+          const d = err.details as Partial<HorarioOcupado> | undefined;
+          setOcupado({
+            instante,
+            dados: { agendamentos: d?.agendamentos ?? [], pode_encaixar: d?.pode_encaixar === true },
+          });
+        } else if (encaixe) {
+          setErroDoEncaixe(
+            err instanceof ApiError && err.status >= 400 && err.status < 500 ? err.message : t("Não foi encaixado. Tente de novo."),
+          );
+        }
+        throw err;
+      },
+    );
+  };
+
+  // FORK clinic (agenda S6b): as marcas "Encaixe" da janela visível. Mesma raiz de chave
+  // (`["agenda", ...]`) da lista, então marcar/encaixar invalida as duas.
+  const { data: marcasDeEncaixe } = useQuery({
+    queryKey: ["agenda", "encaixes", recorteDaGrade.de, recorteDaGrade.ate],
+    enabled: !contexto.carregando && can("agenda.ver"),
+    retry: false,
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: { encaixes: Array<{ appointment_id: string }> } }>(
+          `/api/v1/clinic/agenda/encaixes?de=${encodeURIComponent(recorteDaGrade.de)}&ate=${encodeURIComponent(recorteDaGrade.ate)}`,
+        )
+      ).data.encaixes,
+  });
+  const etiquetasDeEncaixe = React.useMemo(
+    () => (marcasDeEncaixe?.length ? Object.fromEntries(marcasDeEncaixe.map((m) => [m.appointment_id, "Encaixe"])) : undefined),
+    [marcasDeEncaixe],
+  );
+
   return (
     <ProvedorDaInfoDaClinica valor={infoDaClinica ?? null}>
     <div
@@ -788,6 +857,8 @@ export function AgendaClient({
           if (!aberto) {
             setRemarcandoId(null);
             setHorarioEscolhido(null);
+            setOcupado(null); // FORK clinic (agenda S6b)
+            setErroDoEncaixe(null);
             // Pelo mesmo motivo das duas linhas acima: um convidado digitado e
             // não usado reapareceria na PRÓXIMA marcação, que é de outro
             // cliente — convite para a pessoa errada, sem ninguém ter pedido.
@@ -864,6 +935,24 @@ export function AgendaClient({
               {remarcandoId ? t("Remarcar agendamento") : t("Novo agendamento")}
             </SheetTitle>
           </SheetHeader>
+          {/* FORK clinic (agenda S6b): horário ocupado — quem ocupa e, com a chave, "Encaixar". */}
+          {ocupado && !remarcandoId ? (
+            <HorarioOcupadoEEncaixe
+              ocupado={ocupado.dados}
+              podeEncaixar={can("agenda.encaixe")}
+              enviando={marcar.isPending}
+              erro={erroDoEncaixe}
+              onEncaixar={(motivo) =>
+                marcarEm(ocupado.instante, { motivo }).then(
+                  () => {
+                    setAncora(startOfDay(new Date(ocupado.instante)));
+                    setMarcando(false);
+                  },
+                  () => undefined,
+                )
+              }
+            />
+          ) : null}
           <div className="grid shrink-0 gap-3 rounded-lg border p-3 lg:grid-cols-2">
             {!remarcandoId ? (
               <div className="lg:col-span-2">
@@ -1092,25 +1181,8 @@ export function AgendaClient({
                         return r;
                       });
                   }
-                  return marcar
-                    .mutateAsync({
-                      event_type_id: tipo.id,
-                      ...(profissionalDaMarcacao ? { owner_user_id: profissionalDaMarcacao } : {}),
-                      contact_id: contactId || undefined,
-                      conversation_id: conversationId || undefined,
-                      starts_at: instante,
-                      guest_email: convidado,
-                      location_details: endereco.trim(),
-                      description: observacao.trim() || undefined,
-                    })
-                    .then((r) => {
-                      setEmailConvidado("");
-                      setEnderecoEditado(null);
-                      setObservacao("");
-                      // Guardado para o fechamento saber para onde levar a grade.
-                      setMarcadoEm(instante);
-                      return r;
-                    });
+                  // FORK clinic (agenda S6b): o corpo é o mesmo do encaixe (ver `marcarEm`).
+                  return marcarEm(instante);
                 }}
                 // "VER NA AGENDA" — o botão que não fazia nada.
                 //
@@ -1237,6 +1309,8 @@ export function AgendaClient({
         melhor. A ocupação continua inteira onde ela serve.
       */}
       <HistoricoDaAgenda
+        // FORK clinic (agenda S6b): etiqueta "Encaixe".
+        etiquetas={etiquetasDeEncaixe}
         agendamentos={agendamentosAcionaveis}
         pessoas={pessoas}
         agora={new Date()}
@@ -1421,6 +1495,8 @@ export function AgendaClient({
         onAbrirAgendamento={(id) => router.push(`/app/agenda?compromisso=${id}`)}
         // FORK clinic (agenda S6a): sem `agenda.remarcar`, o card não arrasta.
         podeRemarcar={can("agenda.remarcar")}
+        // FORK clinic (agenda S6b): etiqueta "Encaixe" nos compromissos que nasceram de encaixe.
+        etiquetas={etiquetasDeEncaixe}
         className="min-h-0 flex-1"
       />
       </div>

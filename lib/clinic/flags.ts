@@ -96,3 +96,11 @@ export function estoqueLigado(settings: unknown): boolean {
   if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
   return (clinic as Record<string, unknown>).estoque === true;
 }
+
+/** `settings.clinic.encaixe` (migration 9046): marcar por cima de horário ocupado, com motivo. Só `true` liga. */
+export function encaixeLigadoNaConfig(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).encaixe === true;
+}
