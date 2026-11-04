@@ -15,6 +15,7 @@
  * faturar são coisas diferentes: alguém pode ter marcado o atendimento como
  * concluído na agenda e não ter aberto a comanda.
  */
+import { exigeChaveNoNucleo } from "@/lib/clinic/acesso/chave-no-nucleo";
 import { randomUUID } from "node:crypto";
 
 import type { NextRequest } from "next/server";
@@ -35,6 +36,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const authz = await requireRole("agent", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.lancar", requestId);
+  if (semChave) return semChave;
 
   const url = new URL(req.url);
   const agora = new Date();

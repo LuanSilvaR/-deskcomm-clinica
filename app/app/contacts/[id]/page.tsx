@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
+import { pacienteNoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { createClient } from "@/lib/supabase/server";
 import { ContactDetailClient } from "./_client";
 
@@ -28,6 +29,8 @@ export default async function ContactDetailPage({
     .eq("id", id)
     .maybeSingle();
   if (!contact) notFound();
+  // FORK clinic (agenda S5): sem `pacientes.ver_todos`, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, activeOrg.orgId, user.id, id))) notFound();
   // FORK clinic (prontuário F2): `?aba=prontuario` abre direto na aba.
   const { aba } = await searchParams;
   return <ContactDetailClient contactId={id} abaInicial={typeof aba === "string" ? aba : undefined} />;

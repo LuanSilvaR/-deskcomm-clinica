@@ -6,6 +6,7 @@
  *        clínica, do profissional, procedimento, data) e o banco congela o
  *        texto com sha256 (`documentos.emitir`).
  */
+import { pacienteNoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -47,6 +48,10 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   }
   const org = authz.org.orgId;
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
   const { data, error } = await supabase
     .from("clinic_documentos_emitidos")
     .select(
@@ -93,6 +98,10 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const d = lido.data;
 
   const supabase = await createClient();
+  // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
+  if (!(await pacienteNoEscopo(supabase, authz.org.orgId, authz.user.id, contactId))) {
+    return fail("not_found", traduzir("Paciente não encontrado.", authz.user.idioma), 404, { requestId });
+  }
   const [versao, contato, empresa, prof] = await Promise.all([
     supabase
       .from("clinic_modelos_documento_versoes")

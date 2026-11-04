@@ -128,11 +128,13 @@ describe("equivalência de acesso: o menu da clínica mostra EXATAMENTE as telas
 });
 
 describe("projeção", () => {
-  it("módulo que esvaziou para a pessoa some; 'Em breve' aparece para todos", () => {
+  it("módulo que esvaziou para a pessoa some; 'Em breve' só para quem configura (agenda S5)", () => {
     const ids = modulosVisiveis(false, "viewer", undefined, [], []).map((m) => m.modulo.id);
     expect(ids).not.toContain("financeiro");
     expect(ids).not.toContain("agente-de-ia");
-    expect(ids).toEqual(expect.arrayContaining(["contratos", "equipamentos", "comissoes", "notas-fiscais"]));
+    expect(ids).not.toContain("contratos");
+    const configura = modulosVisiveis(false, "viewer", undefined, [], ["configuracoes.ver"]).map((m) => m.modulo.id);
+    expect(configura).toEqual(expect.arrayContaining(["contratos", "equipamentos", "comissoes", "notas-fiscais"]));
   });
 
   it("financeiro some para quem não tem financeiro.ver, mesmo sendo admin no papel legado (ACL-008)", () => {

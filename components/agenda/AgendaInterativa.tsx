@@ -13,7 +13,7 @@ import { useRemarcarAgendamento } from "@/hooks/agenda/useRemarcarAgendamento";
 import type { MotivoDaGradeTravada } from "@/lib/agenda/grade-interativa";
 import { cn } from "@/lib/utils";
 
-import { GradeDaAgenda } from "./GradeDaAgenda";
+import { GradeDaAgenda, type ForaDaAgendaDoDia } from "./GradeDaAgenda";
 import type { Agendamento, Pessoa, VisaoDaAgenda } from "./tipos";
 
 /**
@@ -51,8 +51,18 @@ export function AgendaInterativa({
   onEscolherTipo,
   onMarcarEm,
   onAbrirAgendamento,
+  donoId,
+  foraDaAgenda,
   className,
 }: {
+  /**
+   * FORK clinic (agenda por profissional): de QUEM é a agenda desenhada. Os
+   * horários livres são os dele — sem isto a rota resolvia o dono padrão do
+   * tipo, e a grade oferecia a vaga de uma pessoa na agenda de outra.
+   */
+  donoId?: string | null;
+  /** FORK clinic: jornada e bloqueios de `donoId`, por dia. */
+  foraDaAgenda?: Record<string, ForaDaAgendaDoDia>;
   visao: VisaoDaAgenda;
   ancora: Date;
   /** INJETADO, como na grade: relógio lido aqui dentro daria dois relógios ao teste. */
@@ -103,7 +113,7 @@ export function AgendaInterativa({
   const localeDaData = useLocaleDeData();
   const t = useT();
   const { data: horarios, isError: horariosFalharam } = useHorariosLivres(
-    tipo ? { event_type_id: tipo.id, de: recorte.de, ate: recorte.ate } : null,
+    tipo ? { event_type_id: tipo.id, de: recorte.de, ate: recorte.ate, ...(donoId ? { owner_user_id: donoId } : {}) } : null,
   );
 
   const horariosPorDia = React.useMemo(() => {
@@ -328,6 +338,7 @@ export function AgendaInterativa({
         pessoas={pessoas}
         agendamentos={desenhados}
         onAbrirAgendamento={onAbrirAgendamento}
+        foraDaAgenda={foraDaAgenda}
         className="min-h-0 flex-1"
         interacao={
           tipo && onMarcarEm

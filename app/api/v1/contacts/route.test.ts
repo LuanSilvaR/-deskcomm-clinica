@@ -22,6 +22,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listContactsHandler } from "./_handler";
 
+// agenda S5: o escopo de pacientes é coberto em clinic-experiencia-do-profissional; aqui, sem recorte.
+vi.mock("@/lib/clinic/pacientes/escopo-de-pacientes", () => ({
+  pacienteNoEscopo: vi.fn(async () => true),
+  contatosDoEscopo: vi.fn(async () => null),
+}));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));

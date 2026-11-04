@@ -12,6 +12,8 @@ import type { ModuloOpcional } from "@/lib/instalacao/modulos";
 import type { InterfaceSettings } from "@/lib/navigation/interface";
 import { searchable, type NavDestination } from "@/lib/navigation/registry";
 
+import { mostraEmBreve, rotuloDaAgenda } from "@/lib/clinic/acesso/experiencia";
+
 import { ehEmBreve, MODULOS_CLINICA, type ModuloClinica } from "./modulos";
 
 export interface ModuloVisivel {
@@ -35,12 +37,15 @@ export function modulosVisiveis(
   );
   const resultado: ModuloVisivel[] = [];
   for (const modulo of MODULOS_CLINICA) {
-    const emBreve = ehEmBreve(modulo);
+    // FORK clinic (agenda S5): "Em breve" só para quem configura a clínica.
+    const emBreve = ehEmBreve(modulo) && mostraEmBreve(permissoes, isPlatformAdmin);
     const secoes: ModuloVisivel["secoes"] = [];
     const itens: NavDestination[] = [];
     for (const porta of modulo.portas) {
-      const destino = porHref.get(porta.href);
-      if (!destino) continue;
+      const achado = porHref.get(porta.href);
+      if (!achado) continue;
+      // FORK clinic (agenda S5): quem só vê a própria agenda lê "Minha agenda".
+      const destino = porta.href === "/app/agenda" ? { ...achado, label: rotuloDaAgenda(permissoes, achado.label) } : achado;
       itens.push(destino);
       const atual = secoes.find((s) => s.secao === porta.secao);
       if (atual) atual.itens.push(destino);

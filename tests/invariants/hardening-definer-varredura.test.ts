@@ -487,6 +487,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/pacientes/[contactId]/anexos/route.ts (GET) chama com createClient da sessão; só devolve totais (bytes usados e cota) e exige que a organização esteja em fn_user_org_ids(). tests/invariants/clinic-anexos-e-fotos.test.ts prova outra empresa recusada.",
   },
   {
+    // FORK clinic (migration 9043): passou a security definer para decidir QUEM.
+    fn: "fn_clinic_mudar_status_visita(uuid,uuid,text,text)",
+    razao:
+      "lib/clinic/visitas/mudar-status.ts (rota app/api/v1/clinic/agendamentos/[id]/visita) chama com createClient da sessão; a função exige membro agent+ da organização e suporte de escrita, e decide por transição: recepção (recepcao.mudar_status_visita / corrigir_status) até 'pronto'; em atendimento e finalizado só o dono do agendamento; sair de finalizado só o dono no mesmo dia ou atendimento.reabrir. tests/invariants/clinic-fluxo-operacional.test.ts e clinic-status-da-visita.test.ts provam as recusas, o isolamento entre empresas e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9025).
     fn: "fn_clinic_reabrir_atendimento(uuid,uuid,text)",
     razao:

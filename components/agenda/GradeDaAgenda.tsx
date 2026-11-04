@@ -1,5 +1,6 @@
 "use client";
 
+import { ROTULO_DO_TIPO_DE_BLOQUEIO, type TipoDeBloqueio } from "@/lib/clinic/agenda/conflito-do-bloqueio";
 import { StatusNoBloco, useRotuloDoStatusNaAgenda, useTituloDoBloco } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
 import * as React from "react";
 
@@ -28,10 +29,106 @@ import {
   type MotivoDaGradeTravada,
 } from "@/lib/agenda/grade-interativa";
 import { cn } from "@/lib/utils";
+import { Lock } from "@/lib/ui/icons";
 import { useT } from "@/hooks/i18n/useT";
 
 import { corDaTrilha, fundoDaTrilha } from "./paleta";
 import type { Agendamento, Pessoa, VisaoDaAgenda } from "./tipos";
+
+/**
+ * FORK clinic (agenda por profissional, S1) — o que NÃO é horário livre de UM
+ * profissional num dia, em minutos do dia local (0–1440): fora da jornada (a
+ * grade hachura) e bloqueios (bloco sólido "Bloqueado", distinto de
+ * compromisso). Ausente = a grade de sempre, sem camada nenhuma.
+ */
+export interface ForaDaAgendaDoDia {
+  jornada: { inicio_minuto: number; fim_minuto: number }[];
+  fora: { inicio_minuto: number; fim_minuto: number }[];
+  bloqueios: {
+    inicio_minuto: number;
+    fim_minuto: number;
+    motivo: string | null;
+    origem: "pessoa" | "clinica" | "indisponivel";
+    /** FORK clinic (agenda S5): almoço, reunião… — vira o rótulo do bloco. */
+    tipo?: string | null;
+  }[];
+}
+
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+/** Recorta a faixa à janela desenhada (07h–22h); fora dela, nada a pintar. */
+function naJanela(f: { inicio_minuto: number; fim_minuto: number }) {
+  const ini = Math.max(f.inicio_minuto, PRIMEIRA_HORA * 60);
+  const fim = Math.min(f.fim_minuto, (ULTIMA_HORA + 1) * 60);
+  return fim > ini ? { top: pixelsDe(ini - PRIMEIRA_HORA * 60), height: pixelsDe(fim - ini) } : null;
+}
+
+function CamadaForaDaAgenda({ chave, info }: { chave: string; info: ForaDaAgendaDoDia }) {
+  const t = useT();
+  const jornada = info.jornada.length
+    ? info.jornada.map((j) => `${hhmm(j.inicio_minuto)}–${hhmm(j.fim_minuto)}`).join(", ")
+    : null;
+  const rotuloFora = jornada
+    ? t("Fora do horário de atendimento (atende {jornada})").replace("{jornada}", jornada)
+    : t("Sem atendimento neste dia");
+  return (
+    <>
+      {info.fora.map((f) => {
+        const pos = naJanela(f);
+        if (!pos) return null;
+        return (
+          <div
+            key={`fora-${f.inicio_minuto}`}
+            data-testid={`indisponivel-${chave}-${hhmm(f.inicio_minuto)}`}
+            role="img"
+            aria-label={rotuloFora}
+            title={rotuloFora}
+            className="absolute inset-x-0"
+            style={{
+              ...pos,
+              // Listras finas sobre o fundo elevado: "ninguém atende aqui",
+              // sem parecer compromisso (que é cartão cheio) nem bloqueio (sólido).
+              background:
+                "repeating-linear-gradient(135deg, var(--color-border) 0 1px, transparent 1px 7px), var(--color-surface-elevated)",
+              opacity: 0.85,
+            }}
+          />
+        );
+      })}
+      {info.bloqueios.map((b) => {
+        const pos = naJanela(b);
+        if (!pos) return null;
+        const rotuloDoTipo = b.tipo ? ROTULO_DO_TIPO_DE_BLOQUEIO[b.tipo as TipoDeBloqueio] : undefined;
+        const origem =
+          b.origem === "clinica"
+            ? t("Clínica fechada")
+            : b.origem === "indisponivel"
+              ? t("Indisponível")
+              : rotuloDoTipo
+                ? t(rotuloDoTipo)
+                : t("Bloqueado");
+        const texto = `${origem}${b.motivo ? ` · ${b.motivo}` : ""} · ${hhmm(b.inicio_minuto)}–${hhmm(b.fim_minuto)}`;
+        return (
+          <div
+            key={`bloq-${b.inicio_minuto}-${b.fim_minuto}`}
+            data-testid={`bloqueio-${chave}-${hhmm(b.inicio_minuto)}`}
+            role="note"
+            aria-label={texto}
+            title={texto}
+            className="absolute inset-x-0.5 flex items-start gap-1 overflow-hidden rounded-sm border border-dashed border-border-strong bg-surface-elevated px-1.5 py-0.5"
+            style={pos}
+          >
+            <Lock size={12} weight="bold" aria-hidden className="mt-0.5 shrink-0 text-text-muted" />
+            <span className="truncate text-[11px] font-semibold uppercase leading-4 tracking-wide text-text-muted">
+              {origem}
+              {b.motivo ? <span className="ml-1 font-normal normal-case">{b.motivo}</span> : null}
+            </span>
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 /**
  * Altura de uma hora, em pixels. É a régua de toda a grade: posição e duração
@@ -541,9 +638,12 @@ function ColunaDeDia({
   interacao,
   proposta,
   arrasteDoCard,
+  foraDaAgenda,
 }: {
   dia: Date;
   agora: Date;
+  /** FORK clinic: jornada e bloqueios do profissional em contexto, neste dia. */
+  foraDaAgenda?: ForaDaAgendaDoDia;
   agendamentos: Agendamento[];
   pessoas: Pessoa[];
   onAbrir?: (id: string) => void;
@@ -621,6 +721,7 @@ function ColunaDeDia({
             interacao={interacao}
           />
         )}
+        {foraDaAgenda && <CamadaForaDaAgenda chave={chaveDoDia(dia)} info={foraDaAgenda} />}
         {repartirSobrepostos(doDia).map(({ agendamento, coluna, colunas }) => (
           <BlocoDeAgendamento
             key={agendamento.id}
@@ -763,8 +864,11 @@ export function GradeDaAgenda({
   agendamentos,
   onAbrirAgendamento,
   interacao,
+  foraDaAgenda,
   className,
 }: {
+  /** FORK clinic: por dia (`yyyy-MM-dd`), o que não é horário livre de quem está em contexto. */
+  foraDaAgenda?: Record<string, ForaDaAgendaDoDia>;
   visao: VisaoDaAgenda;
   /** O período que a grade mostra. */
   ancora: Date;
@@ -1015,6 +1119,7 @@ export function GradeDaAgenda({
                 interacao={interacao}
                 proposta={proposta}
                 arrasteDoCard={arrasteDoCard}
+                foraDaAgenda={foraDaAgenda?.[chaveDoDia(d)]}
               />
             ))}
           </div>

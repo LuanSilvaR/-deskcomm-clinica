@@ -36,6 +36,8 @@ export interface LinhaDeCompromisso {
   desde: string | null;
   confirmacao: string | null;
   faltas: number;
+  /** FORK clinic (agenda S4): nenhum atendimento realizado antes deste. */
+  primeira_vez: boolean;
 }
 
 export interface LinhaLivre {
@@ -103,6 +105,10 @@ export function montarAgendaDoDia(args: {
   passo?: number;
   /** Minuto local de agora, se `dia` for hoje; null para outros dias. */
   agoraMinuto?: number | null;
+  /** FORK clinic (agenda S4): compromissos que são a 1ª vez do paciente. */
+  primeiraVez?: ReadonlySet<string>;
+  /** FORK clinic (agenda S4): remarcados e ainda não confirmados de novo. */
+  remarcados?: ReadonlySet<string>;
 }): BlocoDoProfissional[] {
   const passo = Math.max(5, Math.min(240, args.passo ?? 30));
   return args.colunas.map((col) => {
@@ -114,7 +120,10 @@ export function montarAgendaDoDia(args: {
 
     const compromissos: LinhaDeCompromisso[] = col.compromissos.map((c) => {
       const visita = args.visitas.get(c.id);
-      const status = statusDeExibicao(c.status, visita?.status);
+      const status = statusDeExibicao(c.status, visita?.status, {
+        confirmacao: args.confirmacoes.get(c.id) ?? null,
+        remarcado: args.remarcados?.has(c.id) ?? false,
+      });
       return {
         tipo: "compromisso",
         id: c.id,
@@ -129,6 +138,7 @@ export function montarAgendaDoDia(args: {
         desde: visita?.desde ?? null,
         confirmacao: args.confirmacoes.get(c.id) ?? null,
         faltas: c.paciente_id ? (args.faltas.get(c.paciente_id) ?? 0) : 0,
+        primeira_vez: args.primeiraVez?.has(c.id) ?? false,
       };
     });
 

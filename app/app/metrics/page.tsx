@@ -1,3 +1,4 @@
+import { exigePermissaoNaPagina } from "@/lib/clinic/acesso/pagina";
 import type { Metadata } from "next";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -9,6 +10,9 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Desempenho" };
 
 export default async function MetricsPage() {
+  // FORK clinic (agenda S5): tela administrativa — sem a chave, "acesso não autorizado" (o menu já a esconde).
+  const negado = await exigePermissaoNaPagina("relatorios.ver");
+  if (negado) return negado;
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   // spec 13 §6.1: agent vê as próprias (RLS); a comparação por atendente é manager+.

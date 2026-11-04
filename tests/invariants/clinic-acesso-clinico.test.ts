@@ -97,13 +97,16 @@ describe("catálogo", () => {
     expect(lista(sql(`select key from public.clinic_permissions where clinica;`))).toEqual([...PERMISSOES_CLINICAS].sort());
   });
 
-  it("nenhum papel de sistema ou modelo guarda chave clínica", () => {
+  // agenda S5 (9044): a exceção é o papel "Profissional de saúde" — ele É o papel
+  // clínico explícito, dado a quem está cadastrado como profissional. Os modelos
+  // administrativos (Administrador, Gerente, Atendente, Visualizador) seguem sem.
+  it("nenhum papel de sistema ou modelo administrativo guarda chave clínica", () => {
     expect(
       ultima(
         sql(`select count(*) from public.clinic_role_permissions rp
                join public.clinic_roles r on r.id = rp.role_id
                join public.clinic_permissions c on c.key = rp.permission_key
-              where c.clinica and r.system_key is not null;`),
+              where c.clinica and r.system_key is not null and r.system_key <> 'profissional';`),
       ),
     ).toBe("0");
   });

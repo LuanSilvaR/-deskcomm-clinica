@@ -27,8 +27,10 @@ import type { BlocoDoProfissional, EstadoDoDia, LinhaDoDia } from "@/lib/clinic/
 import { horaDoMinuto } from "@/lib/clinic/agenda/dia-por-profissional";
 import type { FiltrosDaAgenda } from "@/lib/clinic/agenda/filtros-da-agenda";
 import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
-import { ROTULO_DE_EXIBICAO, periodoDoMinuto } from "@/lib/clinic/visitas/exibicao";
-import { ACAO_PARA_AVANCAR, ROTULO_DO_STATUS, ehStatusDaVisita } from "@/lib/clinic/visitas/status";
+import { ROTULO_DE_EXIBICAO, periodoDoMinuto, visitaDaExibicao } from "@/lib/clinic/visitas/exibicao";
+import { ACAO_PARA_AVANCAR, ROTULO_DO_STATUS, ehStatusDaVisita, podeAvancar } from "@/lib/clinic/visitas/status";
+import { SeloPrimeiraVez } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
+import { useUsuarioIdOpcional } from "@/hooks/auth/AuthProvider";
 import { ArrowSquareOut, Plus } from "@/lib/ui/icons";
 
 import { BarraDeOcupacao } from "./BarraDeOcupacao";
@@ -90,6 +92,7 @@ export function ListaDoDiaDaAgenda({
   const t = useT();
   const qc = useQueryClient();
   const { can } = usePermissoes();
+  const usuarioId = useUsuarioIdOpcional();
 
   const consulta = useQuery({
     queryKey: ["clinic", "agenda-do-dia", dia, filtros.q],
@@ -233,7 +236,8 @@ export function ListaDoDiaDaAgenda({
                     linha={l}
                     agora={agora}
                     ehHoje={ehHoje}
-                    podeAvancar={can("recepcao.mudar_status_visita")}
+                    podeRecepcao={can("recepcao.mudar_status_visita")}
+                    ehODono={b.profissional_id === usuarioId}
                     ocupado={avancar.isPending}
                     onAbrir={onAbrir}
                     onAvancar={(status) => avancar.mutate({ id: l.id, status, paciente: l.paciente ?? t("Paciente") })}
@@ -252,7 +256,8 @@ function LinhaDoCompromisso({
   linha: l,
   agora,
   ehHoje,
-  podeAvancar,
+  podeRecepcao,
+  ehODono,
   ocupado,
   onAbrir,
   onAvancar,
@@ -261,13 +266,18 @@ function LinhaDoCompromisso({
   agora: number;
   /** A espera ("há 12 min") só faz sentido no dia de hoje. */
   ehHoje: boolean;
-  podeAvancar: boolean;
+  /** FORK clinic (agenda S4): chegada e pronto são da recepção… */
+  podeRecepcao: boolean;
+  /** …iniciar e finalizar, só do profissional do agendamento. */
+  ehODono: boolean;
   ocupado: boolean;
   onAbrir: (id: string) => void;
   onAvancar: (status: string) => void;
 }) {
   const t = useT();
-  const proximo = ehStatusDaVisita(l.status) ? ACAO_PARA_AVANCAR[l.status] : null;
+  const visita = visitaDaExibicao(l.status);
+  const proximo = visita ? ACAO_PARA_AVANCAR[visita] : null;
+  const mostrarProximo = podeAvancar(proximo, { ehODono, podeRecepcao });
   const min = ehHoje && (l.status === "na_recepcao" || l.status === "pronto") ? minutosDesde(l.desde, agora) : null;
   const paciente = l.paciente ?? t("Sem paciente");
   return (
@@ -285,7 +295,8 @@ function LinhaDoCompromisso({
       </span>
       <span className="flex flex-wrap items-center gap-1">
         <SeloDeStatus status={l.status} complemento={min !== null ? duracao(min) : null} />
-        <SeloDaConfirmacao status={l.confirmacao} />
+        {l.primeira_vez ? <SeloPrimeiraVez /> : null}
+        {l.status !== "confirmado" ? <SeloDaConfirmacao status={l.confirmacao} /> : null}
         {l.faltas > 0 ? (
           <span className="rounded-full bg-error-bg px-2 py-0.5 text-xs text-error-fg" data-testid="selo-faltas">
             {t("faltou")} {l.faltas}×
@@ -293,7 +304,7 @@ function LinhaDoCompromisso({
         ) : null}
       </span>
       <span className="flex items-center gap-1">
-        {podeAvancar && proximo ? (
+        {mostrarProximo && proximo ? (
           <Button size="sm" data-testid="linha-avancar" disabled={ocupado} onClick={() => onAvancar(proximo.para)}>
             {t(proximo.rotulo)}
           </Button>

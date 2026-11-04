@@ -828,6 +828,7 @@ export const NAV_CATALOG = [
     // mês inteiro atendido pela equipe têm o mesmo desfecho e histórias
     // opostas — só esta tela distingue as duas.
     href: "/app/activities",
+    permissao: "tarefas.ver",
     label: "Atividades",
     description:
       "Relatório do que a equipe e os agentes fizeram no período: quanto, quem e de que tipo.",
@@ -1067,6 +1068,17 @@ export const NAV_CATALOG = [
     // `permissao` de propósito: com o menu antigo ela só aparece no ⌘K (o
     // sidebar de sempre não muda), e cada card dela já passa pelo mesmo filtro
     // de acesso do menu. No fim do array para não reordenar nenhum grupo.
+    // FORK clinic (agenda S5): a casa do profissional — o dia dele, o próximo
+    // paciente e o atendimento em andamento.
+    href: "/app/meu-dia",
+    label: "Meu dia",
+    permissao: "atendimento.iniciar",
+    description: "O seu dia: próximo paciente, quem está pronto e o atendimento em andamento.",
+    icon: "House",
+    group: "atendimento",
+    minRole: "agent",
+  },
+  {
     href: "/app/inicio",
     label: "Início",
     description: "Todos os módulos da clínica num lugar só, com o resumo do dia.",

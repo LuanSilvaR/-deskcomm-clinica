@@ -91,6 +91,9 @@ export async function listContactsHandler(
   supabase: SB,
   ctx: HandlerCtx,
   raw: ContactListQueryParams,
+  // FORK clinic (agenda S5): `null`/ausente = sem recorte; lista = só estes
+  // contatos (o profissional sem `pacientes.ver_todos` vê os da própria agenda).
+  somenteIds?: readonly string[] | null,
 ): Promise<ListContactsResult> {
   const q: ContactListQuery = contactListQuerySchema.parse(raw);
   const sortCol = q.order_by;
@@ -169,6 +172,7 @@ export async function listContactsHandler(
     }
     query = query.or(orParts.join(","));
   }
+  if (somenteIds) query = query.in("id", somenteIds.length ? [...somenteIds] : ["00000000-0000-0000-0000-000000000000"]);
   if (q.tag) query = query.contains("tags", [q.tag]);
   if (q.source) query = query.eq("source", q.source);
 

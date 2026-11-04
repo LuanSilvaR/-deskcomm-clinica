@@ -3,7 +3,8 @@
  *
  * O registro original nunca muda: o adendo fica ao lado dele, com texto, motivo,
  * autor e data. Só em atendimento finalizado e com `prontuario.adendo`
- * (`fn_clinic_adicionar_adendo`, migration 9019).
+ * (`fn_clinic_adicionar_adendo`, migration 9019). FORK clinic (agenda S5): só o
+ * profissional do atendimento, ou quem tem `prontuario.ver_outros`.
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -45,6 +46,19 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const org = authz.org.orgId;
 
   const supabase = await createClient();
+  const { data: at } = await supabase
+    .from("clinic_atendimentos")
+    .select("professional_user_id")
+    .eq("organization_id", org)
+    .eq("id", id)
+    .maybeSingle();
+  if (!at) return fail("not_found", t("Atendimento não encontrado."), 404, { requestId });
+  if (at.professional_user_id !== authz.user.id && !authz.permissoes.has("prontuario.ver_outros")) {
+    return fail("forbidden_permission", t("Só o profissional do atendimento pode registrar o adendo."), 403, {
+      requestId,
+      details: { permissao: "prontuario.ver_outros" },
+    });
+  }
   const { data, error } = await supabase.rpc("fn_clinic_adicionar_adendo", {
     p_org: org,
     p_atendimento: id,

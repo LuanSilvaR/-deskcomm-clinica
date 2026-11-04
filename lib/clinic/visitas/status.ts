@@ -14,20 +14,37 @@ export type StatusDaVisita = (typeof STATUS_DA_VISITA)[number];
 
 export const ROTULO_DO_STATUS: Record<StatusDaVisita, string> = {
   agendado: "Agendado",
-  na_recepcao: "Na recepção",
+  na_recepcao: "Em recepção",
   pronto: "Pronto para atendimento",
   em_atendimento: "Em atendimento",
   finalizado: "Finalizado",
 };
 
-/** O botão que leva ao próximo estado — o texto é a AÇÃO, não o estado. */
-export const ACAO_PARA_AVANCAR: Record<StatusDaVisita, { para: StatusDaVisita; rotulo: string } | null> = {
-  agendado: { para: "na_recepcao", rotulo: "Paciente chegou" },
-  na_recepcao: { para: "pronto", rotulo: "Pronto para atendimento" },
-  pronto: { para: "em_atendimento", rotulo: "Iniciar atendimento" },
-  em_atendimento: { para: "finalizado", rotulo: "Finalizar atendimento" },
+/**
+ * O botão que leva ao próximo estado — o texto é a AÇÃO, não o estado.
+ *
+ * FORK clinic (agenda S4, 9043): `quem` diz de quem é o passo. Chegada e pronto
+ * são da RECEPÇÃO; começar e terminar o atendimento são SÓ do profissional do
+ * agendamento — o banco recusa os outros (`visita_so_o_profissional`), e a tela
+ * nem oferece (`podeAvancar`).
+ */
+export type DonoDoPasso = "recepcao" | "profissional";
+export const ACAO_PARA_AVANCAR: Record<StatusDaVisita, { para: StatusDaVisita; rotulo: string; quem: DonoDoPasso } | null> = {
+  agendado: { para: "na_recepcao", rotulo: "Iniciar recepção", quem: "recepcao" },
+  na_recepcao: { para: "pronto", rotulo: "Pronto para atendimento", quem: "recepcao" },
+  pronto: { para: "em_atendimento", rotulo: "Iniciar atendimento", quem: "profissional" },
+  em_atendimento: { para: "finalizado", rotulo: "Finalizar atendimento", quem: "profissional" },
   finalizado: null,
 };
+
+/** Quem está na tela pode dar este passo? (O servidor confere de novo.) */
+export function podeAvancar(
+  passo: { quem: DonoDoPasso } | null,
+  quem: { ehODono: boolean; podeRecepcao: boolean },
+): boolean {
+  if (!passo) return false;
+  return passo.quem === "profissional" ? quem.ehODono : quem.podeRecepcao || quem.ehODono;
+}
 
 export function ehStatusDaVisita(v: unknown): v is StatusDaVisita {
   return typeof v === "string" && (STATUS_DA_VISITA as readonly string[]).includes(v);

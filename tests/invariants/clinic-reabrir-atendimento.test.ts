@@ -1,8 +1,9 @@
 /**
  * clinic (fork, prontuário F8) — migration 9025: reabrir atendimento.
  *
- * Prova no Postgres real: sem `atendimento.reabrir` (profissional agente)
- * recusado; sem motivo recusado; gerente com papel clínico reabre; o evento
+ * Prova no Postgres real: sem `atendimento.reabrir` (profissional agente que
+ * NÃO é o responsável) recusado — o responsável no mesmo dia pode desde a 9043,
+ * provado em `clinic-fluxo-operacional.test.ts`; sem motivo recusado; gerente com papel clínico reabre; o evento
  * guarda motivo e estado; o que já foi finalizado CONTINUA imutável; dá para
  * acrescentar um registro novo e finalizar de novo; anon não executa.
  */
@@ -41,6 +42,7 @@ const json = <T,>(out: string) => JSON.parse(ultima(out)) as T;
 const ORG = "b8e10000-0000-4000-8000-00000000000a";
 const PROF = "b8e10000-1111-4000-8000-0000000000a3";
 const GER = "b8e10000-1111-4000-8000-0000000000a4";
+const OUTRO = "b8e10000-1111-4000-8000-0000000000a5";
 const PAC = "b8e10000-2222-4000-8000-00000000000a";
 const AG = "b8e10000-3333-4000-8000-000000000001";
 
@@ -51,16 +53,16 @@ const reabrir = (ator: string, motivo: string | null) =>
 beforeAll(() => {
   sql(`
     insert into auth.users (id, email) values
-      ('${PROF}', 'rea-prof@invariant.test'), ('${GER}', 'rea-ger@invariant.test')
+      ('${PROF}', 'rea-prof@invariant.test'), ('${GER}', 'rea-ger@invariant.test'), ('${OUTRO}', 'rea-outro@invariant.test')
       on conflict (id) do nothing;
     insert into public.organizations (id, slug, legal_name, display_name, settings) values
       ('${ORG}', 'rea-inv-a', 'Reabrir Invariant A', 'Reabrir A', '{"clinic":{"prontuario":true}}'::jsonb)
       on conflict (id) do nothing;
     insert into public.user_organizations (user_id, organization_id, role, accepted_at) values
-      ('${PROF}', '${ORG}', 'agent', now()), ('${GER}', '${ORG}', 'manager', now())
+      ('${PROF}', '${ORG}', 'agent', now()), ('${GER}', '${ORG}', 'manager', now()), ('${OUTRO}', '${ORG}', 'agent', now())
       on conflict do nothing;
     insert into public.clinic_professionals (organization_id, user_id, display_name) values
-      ('${ORG}', '${PROF}', 'Profissional A'), ('${ORG}', '${GER}', 'Coordenação A')
+      ('${ORG}', '${PROF}', 'Profissional A'), ('${ORG}', '${GER}', 'Coordenação A'), ('${ORG}', '${OUTRO}', 'Outro profissional A')
       on conflict do nothing;
     insert into public.contacts (id, organization_id, name, phone_number) values
       ('${PAC}', '${ORG}', 'Paciente Reabrir A', '+5511990000901')
@@ -75,8 +77,8 @@ beforeAll(() => {
 });
 
 describe("reabrir atendimento", () => {
-  it("profissional sem atendimento.reabrir recusado; sem motivo recusado", () => {
-    expect(erro(reabrir(PROF, "Faltou o procedimento"))).toMatch(/acesso_proibido/);
+  it("profissional sem atendimento.reabrir (e que não é o responsável) recusado; sem motivo recusado", () => {
+    expect(erro(reabrir(OUTRO, "Faltou o procedimento"))).toMatch(/acesso_proibido/);
     expect(erro(reabrir(GER, null))).toMatch(/atendimento_sem_motivo/);
   });
 

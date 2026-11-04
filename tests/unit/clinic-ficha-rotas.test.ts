@@ -30,6 +30,11 @@ vi.mock("@/lib/clinic/acesso/require-permission", async () => {
   };
 });
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+// agenda S5: o escopo de pacientes é coberto em clinic-experiencia-do-profissional; aqui, no escopo.
+vi.mock("@/lib/clinic/pacientes/escopo-de-pacientes", () => ({
+  pacienteNoEscopo: vi.fn(async () => true),
+  contatosDoEscopo: vi.fn(async () => null),
+}));
 vi.mock("@/app/api/v1/agenda/agendamentos/_handler", () => ({ alterarAgendamentoHandler: vi.fn(async () => ({})) }));
 vi.mock("@/lib/impersonate/support", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/impersonate/support")>()),
@@ -203,7 +208,8 @@ describe("POST /api/v1/clinic/agendamentos/:id/visita", () => {
 
   it("finalizar grava Compareceu no núcleo antes de mudar o status", async () => {
     autorizado("agent");
-    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO } });
+    // agenda S4 (9043): finalizar é do profissional do agendamento — aqui, quem chama.
+    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO, owner_user_id: EU } });
     responder("clinic_appointment_visits:select", { data: { status: "em_atendimento" } });
     const res = await mudar({ status: "finalizado" });
     expect(res.status).toBe(200);
@@ -212,6 +218,17 @@ describe("POST /api/v1/clinic/agendamentos/:id/visita", () => {
       expect.objectContaining({ organization_id: ORG }),
       { id: AGENDAMENTO, status: "completed" },
     );
+  });
+
+  it("agenda S4: a recepção não finaliza o atendimento de outro — e o núcleo NÃO ganha 'realizado'", async () => {
+    autorizado("agent");
+    responder("calendar_appointments:select", { data: { id: AGENDAMENTO, contact_id: CONTATO, owner_user_id: "outro-profissional" } });
+    responder("clinic_appointment_visits:select", { data: { status: "em_atendimento" } });
+    vi.mocked(alterarAgendamentoHandler).mockClear();
+    const res = await mudar({ status: "finalizado" });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("visita_so_o_profissional");
+    expect(vi.mocked(alterarAgendamentoHandler)).not.toHaveBeenCalled();
   });
 
   it("status fora do vocabulário: 422", async () => {

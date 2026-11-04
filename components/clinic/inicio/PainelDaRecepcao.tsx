@@ -25,6 +25,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import { SeloDeStatus } from "@/components/clinic/agenda/SeloDeStatus";
+import { SeloPrimeiraVez } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
 import { SeloDaConfirmacao } from "@/components/clinic/SeloDaConfirmacao";
 import { NewContactDialog } from "@/components/contacts/NewContactDialog";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -38,8 +39,9 @@ import { ApiError } from "@/lib/api/types";
 import type { BlocoDoProfissional, LinhaDeCompromisso } from "@/lib/clinic/agenda/agenda-do-dia";
 import { horaDoMinuto } from "@/lib/clinic/agenda/dia-por-profissional";
 import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
-import type { StatusDeExibicao } from "@/lib/clinic/visitas/exibicao";
-import { ACAO_PARA_AVANCAR, ROTULO_DO_STATUS, ehStatusDaVisita } from "@/lib/clinic/visitas/status";
+import { ANTES_DA_CHEGADA, visitaDaExibicao, type StatusDeExibicao } from "@/lib/clinic/visitas/exibicao";
+import { ACAO_PARA_AVANCAR, ROTULO_DO_STATUS, ehStatusDaVisita, podeAvancar } from "@/lib/clinic/visitas/status";
+import { useUsuarioIdOpcional } from "@/hooks/auth/AuthProvider";
 import { ArrowSquareOut, CalendarPlus, ChatsCircle, IdentificationCard, ListChecks, MagnifyingGlass, Plus, UserPlus } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -50,11 +52,11 @@ interface DiaDaAgenda {
   blocos: BlocoDoProfissional[];
 }
 
-type Linha = LinhaDeCompromisso & { profissional: string };
+type Linha = LinhaDeCompromisso & { profissional: string; profissional_id: string };
 
 type Filtro = "proximos" | "a_chegar" | "sala" | "em_atendimento" | "finalizados" | "faltas" | "sem_confirmacao" | "todos";
 
-const A_CHEGAR: readonly StatusDeExibicao[] = ["agendado"];
+const A_CHEGAR: readonly StatusDeExibicao[] = ANTES_DA_CHEGADA;
 const NA_SALA: readonly StatusDeExibicao[] = ["na_recepcao", "pronto"];
 const ENCERRADOS: readonly StatusDeExibicao[] = ["finalizado", "faltou", "cancelado"];
 
@@ -75,13 +77,13 @@ function duracao(min: number): string {
 }
 
 function semConfirmacao(l: Linha): boolean {
-  return l.status === "agendado" && l.confirmacao !== "confirmado";
+  return A_CHEGAR.includes(l.status) && l.status !== "confirmado" && l.confirmacao !== "confirmado";
 }
 
 function linhasDoDia(d: DiaDaAgenda | undefined, nomeDe: (b: BlocoDoProfissional) => string): Linha[] {
   return (d?.blocos ?? [])
     .flatMap((b) =>
-      b.linhas.filter((l): l is LinhaDeCompromisso => l.tipo === "compromisso").map((l) => ({ ...l, profissional: nomeDe(b) })),
+      b.linhas.filter((l): l is LinhaDeCompromisso => l.tipo === "compromisso").map((l) => ({ ...l, profissional: nomeDe(b), profissional_id: b.profissional_id })),
     )
     .sort((a, b) => a.inicio.localeCompare(b.inicio));
 }
@@ -192,13 +194,16 @@ export function PainelDaRecepcao({
       showApiError(err);
     },
   });
-  const podeAvancar = can("recepcao.mudar_status_visita");
+  const podeRecepcao = can("recepcao.mudar_status_visita");
+  const usuarioId = useUsuarioIdOpcional();
   const podeMarcar = can("agenda.marcar");
   const podeVerFicha = can("pacientes.ver_ficha");
 
   const BotaoAvancar = ({ l, tamanho = "sm" }: { l: Linha; tamanho?: "sm" | "default" }) => {
-    const proximo = ehStatusDaVisita(l.status) ? ACAO_PARA_AVANCAR[l.status] : null;
-    if (!podeAvancar || !proximo) return null;
+    const visita = visitaDaExibicao(l.status);
+    const proximo = visita ? ACAO_PARA_AVANCAR[visita] : null;
+    // FORK clinic (agenda S4): iniciar/finalizar só para o profissional do agendamento.
+    if (!proximo || !podeAvancar(proximo, { ehODono: l.profissional_id === usuarioId, podeRecepcao })) return null;
     return (
       <Button
         size={tamanho}
@@ -270,7 +275,7 @@ export function PainelDaRecepcao({
           ) : (
             <ul className="max-h-[560px] divide-y overflow-y-auto" aria-label={t("Pacientes de hoje")}>
               {lista.map((l) => {
-                const atraso = l.status === "agendado" ? minutosDesde(l.inicio, agora) : null;
+                const atraso = A_CHEGAR.includes(l.status) ? minutosDesde(l.inicio, agora) : null;
                 const espera = NA_SALA.includes(l.status) ? minutosDesde(l.desde, agora) : null;
                 const paciente = l.paciente ?? t("Sem paciente");
                 return (
@@ -294,7 +299,8 @@ export function PainelDaRecepcao({
                           {t("Atrasado")} {atraso < 60 ? duracao(atraso) : "+1 h"}
                         </span>
                       ) : null}
-                      <SeloDaConfirmacao status={l.confirmacao} />
+                      {l.primeira_vez ? <SeloPrimeiraVez /> : null}
+                      {l.status !== "confirmado" ? <SeloDaConfirmacao status={l.confirmacao} /> : null}
                       {l.faltas > 0 ? (
                         <span className="rounded-full bg-error-bg px-2 py-0.5 text-xs text-error-fg">
                           {t("faltou")} {l.faltas}×

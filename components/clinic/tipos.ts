@@ -1,4 +1,5 @@
 /** Formas que as telas do módulo clinic recebem das rotas `/api/v1/clinic/*`. */
+import type { TipoDeBloqueio } from "@/lib/clinic/agenda/conflito-do-bloqueio";
 
 export interface Especialidade {
   id: string;
@@ -27,6 +28,8 @@ export interface BloqueioDeAgenda {
   end_minute: number;
   weekdays: number[] | null;
   reason: string | null;
+  /** FORK clinic (agenda S5, 9044): almoço, reunião, pessoal… */
+  tipo?: TipoDeBloqueio | null;
 }
 
 export interface TipoDeAtendimento {

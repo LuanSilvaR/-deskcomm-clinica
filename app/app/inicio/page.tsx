@@ -8,6 +8,9 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { resumoDoDia, type ResumoDoDia } from "@/lib/clinic/navegacao/resumo-do-dia";
 import { menuClinicaDaOrg, modulosDoServidor } from "@/lib/clinic/navegacao/servidor";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { redirect } from "next/navigation";
+import { permissoesNaPagina } from "@/lib/clinic/acesso/pagina";
+import { CASA_DO_PROFISSIONAL, ehExperienciaDoProfissional } from "@/lib/clinic/acesso/experiencia";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +34,8 @@ export const metadata: Metadata = { title: "Início" };
 export default async function InicioPage() {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
+  // FORK clinic (agenda S5): o profissional tem a casa dele.
+  if (activeOrg && ehExperienciaDoProfissional(await permissoesNaPagina(user, activeOrg.orgId))) redirect(CASA_DO_PROFISSIONAL);
   const idioma = user.idioma;
   const t = (texto: string) => traduzir(texto, idioma);
 

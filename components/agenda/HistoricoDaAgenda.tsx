@@ -315,15 +315,19 @@ export function HistoricoDaAgenda({
                           Se um dia o botão puder ficar cinza de novo, o motivo
                           tem de ser verdadeiro.
                         */}
+                          {/* FORK clinic (agenda S4): sem quem possa registrar (na
+                              clínica, só o profissional do agendamento), o botão não
+                              aparece — cinza sem motivo seria controle decorativo. */}
+                          {onRealizado ? (
                           <Button
                             variant="ghost"
                             size="sm"
                             data-testid={`realizado-${a.id}`}
-                            disabled={!onRealizado}
-                            onClick={() => onRealizado?.(a.id)}
+                            onClick={() => onRealizado(a.id)}
                           >
                             {t("Realizado")}
                           </Button>
+                          ) : null}
                           <Button
                             variant="ghost"
                             size="sm"

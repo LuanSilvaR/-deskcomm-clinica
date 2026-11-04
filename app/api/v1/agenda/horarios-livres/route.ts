@@ -45,6 +45,7 @@ import {
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
+import { escopoDaAgendaNoServidor } from "@/lib/clinic/agenda/escopo-no-servidor";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 const querySchema = z.object({
@@ -91,13 +92,24 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const supabase = await createClient();
 
+  // FORK clinic (agenda por profissional, 9042): sem `agenda.ver_outros`, a
+  // disponibilidade consultada é a da própria agenda — pedir a de um colega
+  // responde 403, e não pedir dono deixa de cair no dono padrão do tipo.
+  const escopo = await escopoDaAgendaNoServidor(supabase, activeOrg.orgId, authz.user.id, parsed.data.owner_user_id ?? null);
+  if (!escopo.ok) {
+    return fail("forbidden_permission", traduzir("Você só pode ver a sua própria agenda.", authz.user.idioma), 403, {
+      requestId,
+      details: { permissao: "agenda.ver_outros" },
+    });
+  }
+
   // O miolo mora em `lib/agenda/consulta.ts` porque as ferramentas MCP precisam
   // do MESMO cálculo sem ter request nem cookie. Duas coletas dariam à IA e à
   // tela respostas diferentes sobre o mesmo horário.
   const consulta = await horariosLivresDaOrg(supabase, activeOrg.orgId, {
     eventTypeId: parsed.data.event_type_id,
     eventTypeSlug: null,
-    ownerUserId: parsed.data.owner_user_id ?? null,
+    ownerUserId: escopo.dono,
     de,
     ate,
     agora: new Date(),

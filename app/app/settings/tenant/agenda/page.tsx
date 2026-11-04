@@ -1,3 +1,4 @@
+import { exigePermissaoNaPagina } from "@/lib/clinic/acesso/pagina";
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
@@ -30,6 +31,9 @@ export const dynamic = "force-dynamic";
  * que quisesse "Retorno de 15 minutos" não tinha caminho.
  */
 export default async function TiposDeAgendamentoPage() {
+  // FORK clinic (agenda S5): tela administrativa — sem a chave, "acesso não autorizado" (o menu já a esconde).
+  const negado = await exigePermissaoNaPagina("agenda.configurar");
+  if (negado) return negado;
   const user = await requireAuth();
   // `t` local em vez do hook: esta página é componente de SERVIDOR, e lá o
   // idioma vem resolvido em `user.idioma` (a cadeia pessoa → organização →

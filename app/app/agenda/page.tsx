@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { CHAVES_DOS_FILTROS } from "@/lib/clinic/agenda/filtros-da-agenda";
+import { CHAVES_DO_CONTEXTO, lerContextoDaUrl } from "@/lib/clinic/agenda/contexto-da-agenda";
+import { escopoDaAgendaNoServidor } from "@/lib/clinic/agenda/escopo-no-servidor";
 import { headers } from "next/headers";
 
 import {
@@ -12,6 +14,7 @@ import { donosDaAgenda } from "@/lib/agenda/donos-da-agenda";
 import { lerOcupacaoExterna } from "@/lib/agenda/ocupacao-externa";
 import { PROVEDOR_GOOGLE } from "@/lib/agenda/tipos";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
+import { permissoesNaPagina } from "@/lib/clinic/acesso/pagina";
 import { diaDeHojeNoFuso, semanaSemente } from "@/lib/agenda/semana-semente";
 import { fusoUtilizavel } from "@/lib/tempo/fusos";
 import { nomeDoContato, type ContatoNomeavel } from "@/lib/contacts/rotulo-do-contato";
@@ -63,6 +66,10 @@ export default async function AgendaPage({
   const filtrosDaUrl = new URLSearchParams(
     CHAVES_DOS_FILTROS.flatMap((k) => (typeof daUrl[k] === "string" ? [[k, daUrl[k] as string]] : [])),
   ).toString();
+  // FORK clinic (agenda por profissional): profissional, data e visão da URL.
+  const contextoDaUrl = lerContextoDaUrl(
+    new URLSearchParams(CHAVES_DO_CONTEXTO.flatMap((k) => (typeof daUrl[k] === "string" ? [[k, daUrl[k] as string]] : []))),
+  );
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
@@ -231,6 +238,14 @@ export default async function AgendaPage({
     donos,
   );
 
+  // FORK clinic (9042): sem `agenda.ver_outros`, a primeira pintura também é só
+  // da própria agenda — a semente não pode entregar o que a rota recusaria.
+  const escopo = await escopoDaAgendaNoServidor(supabase, activeOrg.orgId, user.id, null);
+  // FORK clinic (agenda S5): as permissões vão do servidor para a tela — o que
+  // ela mostra (rótulo, portas, marcar) nasce igual no HTML e no cliente.
+  const permissoes = await permissoesNaPagina(user, activeOrg.orgId);
+  const daSemente = (dono: string | null | undefined) => !escopo.ok || !escopo.restrito || dono === user.id;
+
   // QUAL conta está conectada — o prop existia no cartão e NUNCA era passado,
   // então o ramo "Agenda conectada" era código morto e o botão "Conectar Google"
   // não sumia depois de conectar. Segunda conexão era um clique no mesmo botão.
@@ -282,10 +297,12 @@ export default async function AgendaPage({
       // O piso da rota de marcar é `agent`; `viewer` — e o acompanhamento só de
       // leitura, que `resolveActiveOrg` resolve como `viewer` — levaria 403. A
       // tela esconder é cortesia: quem decide segue sendo a rota.
-      podeMarcar={ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent}
+      podeMarcar={ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent && permissoes.has("agenda.marcar")}
+      permissoes={[...permissoes]}
       // FORK clinic (melhorias da Agenda): filtros, status e lista do dia.
       orgId={activeOrg.orgId}
       filtrosDaUrl={filtrosDaUrl}
+      contextoDaUrl={contextoDaUrl}
       tiposIniciais={(tipos ?? []).map((t) => ({
         id: t.id,
         nome: t.name,
@@ -302,7 +319,7 @@ export default async function AgendaPage({
         localDetalhes: t.location_details ?? null,
       }))}
       agendamentosIniciais={(
-        (linhas ?? []).map((a) => ({
+        (linhas ?? []).filter((a) => daSemente(a.owner_user_id)).map((a) => ({
           id: a.id,
           revision: a.revision,
           titulo: a.title ?? "Agendamento",
@@ -338,7 +355,7 @@ export default async function AgendaPage({
          * `quemSeraAtendido` fica ausente de propósito: o tipo já documenta essa
          * ausência como o caso do Google.
          */
-        externos.map((e) => {
+        externos.filter((e) => daSemente(e.donoId)).map((e) => {
           return {
             id: e.id,
             titulo: "Ocupado",

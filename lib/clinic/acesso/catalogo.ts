@@ -87,6 +87,7 @@ const ver = (m: ModuloDePermissao) => [`${m}.ver`];
 
 export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
   p("agenda", "ver", "viewer", "Ver a agenda, os horários livres e os compromissos"),
+  p("agenda", "ver_outros", "viewer", "Ver a agenda de outros profissionais (sem ela, só a própria)", { dependeDe: ver("agenda") }),
   p("agenda", "marcar", "agent", "Marcar compromisso", { dependeDe: ver("agenda") }),
   p("agenda", "remarcar", "agent", "Remarcar compromisso", { dependeDe: ver("agenda") }),
   p("agenda", "cancelar", "agent", "Cancelar compromisso", { dependeDe: ver("agenda") }),
@@ -103,6 +104,9 @@ export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
   }),
 
   p("pacientes", "ver", "viewer", "Ver pacientes e o histórico"),
+  p("pacientes", "ver_todos", "viewer", "Ver todos os pacientes da clínica (sem ela, só os que têm agendamento com a própria pessoa)", {
+    dependeDe: ["pacientes.ver"],
+  }),
   p("pacientes", "criar", "agent", "Cadastrar paciente", { dependeDe: ver("pacientes") }),
   p("pacientes", "editar", "agent", "Editar paciente", { dependeDe: ver("pacientes") }),
   p("pacientes", "excluir", "agent", "Excluir paciente", { dependeDe: ver("pacientes") }),
@@ -207,6 +211,10 @@ export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
   }),
 
   p("prontuario", "ver", "agent", "Ver o prontuário e o histórico clínico do paciente", { clinica: true }),
+  p("prontuario", "ver_outros", "agent", "Ver o prontuário de atendimentos de outros profissionais", {
+    dependeDe: ["prontuario.ver"],
+    clinica: true,
+  }),
   p("prontuario", "adendo", "agent", "Acrescentar adendo a registro finalizado", { dependeDe: ["prontuario.ver"], clinica: true }),
   p("prontuario", "exportar", "manager", "Exportar o prontuário do paciente", { dependeDe: ["prontuario.ver"], clinica: true }),
 
@@ -316,6 +324,41 @@ export function comDependencias(chaves: readonly string[]): string[] {
 
 /** As permissões críticas que o papel Administrador nunca perde. */
 export const PERMISSOES_CRITICAS: readonly string[] = CHAVES_DE_PERMISSAO.filter((k) => CATALOGO_DE_PERMISSOES[k]!.critica);
+
+/**
+ * FORK clinic (agenda S5, migration 9044) — o papel "Profissional de saúde":
+ * só o trabalho clínico (Meu dia, a própria agenda, os próprios pacientes e
+ * prontuários, documentos do atendimento). Não sai do NÍVEL como os modelos
+ * abaixo: é uma lista fechada, e a migration provisiona a MESMA lista.
+ */
+export const PAPEL_PROFISSIONAL = {
+  systemKey: "profissional",
+  nome: "Profissional de saúde",
+  chaves: [
+    "agenda.ver",
+    "agenda.bloquear_horario",
+    "atendimento.ver_fila",
+    "atendimento.iniciar",
+    "atendimento.registrar",
+    "atendimento.finalizar",
+    "prontuario.ver",
+    "prontuario.adendo",
+    "planos.ver",
+    "planos.gerenciar",
+    "fotos.ver",
+    "fotos.enviar",
+    "anexos.ver",
+    "anexos.enviar",
+    "documentos.ver",
+    "documentos.emitir",
+    "documentos.colher_aceite",
+    "pacientes.ver",
+    "pacientes.ver_ficha",
+    "procedimentos.ver",
+    "pops.ver",
+    "pops.imprimir",
+  ],
+} as const;
 
 /** Os papéis-modelo provisionados em toda empresa (a migration 9011 usa a MESMA regra). */
 export const PAPEIS_MODELO = [

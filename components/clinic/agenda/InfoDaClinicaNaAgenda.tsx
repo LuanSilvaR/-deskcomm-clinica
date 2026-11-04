@@ -63,14 +63,34 @@ export function useInfoDaClinica(orgId: string, recorte: { de: string; ate: stri
 export function useStatusNaAgenda(a: { id: string; situacao: string; origem?: string }): StatusDeExibicao | null {
   const info = React.useContext(Contexto);
   if (!info || a.origem === "google_sync") return null;
-  return statusDeExibicao(a.situacao, info.compromissos[a.id]?.visita);
+  const c = info.compromissos[a.id];
+  return statusDeExibicao(a.situacao, c?.visita, { confirmacao: c?.confirmacao, remarcado: c?.remarcado });
 }
 
 /** O rótulo do status para o `aria-label` do bloco (", Na recepção"). Vazio sem contexto. */
 export function useRotuloDoStatusNaAgenda(a: { id: string; situacao: string; origem?: string }): string {
   const t = useT();
+  const info = React.useContext(Contexto);
   const status = useStatusNaAgenda(a);
-  return status ? `, ${t(ROTULO_DE_EXIBICAO[status])}` : "";
+  if (!status) return "";
+  return `, ${t(ROTULO_DE_EXIBICAO[status])}${info?.compromissos[a.id]?.primeira_vez ? `, ${t("1ª vez")}` : ""}`;
+}
+
+/** FORK clinic (agenda S4): o selo "1ª vez" — texto, não só cor. */
+export function SeloPrimeiraVez({ compacto = false }: { compacto?: boolean }) {
+  const t = useT();
+  return (
+    <span
+      data-testid="selo-primeira-vez"
+      className={
+        compacto
+          ? "mr-0.5 rounded-sm bg-accent px-1 text-[10px] font-bold leading-3 text-accent-foreground"
+          : "rounded-full border border-accent bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent"
+      }
+    >
+      {compacto ? t("1ª") : t("1ª vez")}
+    </span>
+  );
 }
 
 /** Na clínica, o bloco da grade abre pelo PACIENTE ("Maria · Consulta"); fora dela, o título de sempre. */
@@ -81,13 +101,21 @@ export function useTituloDoBloco(a: { titulo: string; quemSeraAtendido?: string 
 
 /** Na grade: só o ícone do status (o bloco é estreito); o texto vai no aria-label. */
 export function StatusNoBloco({ agendamento }: { agendamento: { id: string; situacao: string; origem?: string } }) {
+  const info = React.useContext(Contexto);
   const status = useStatusNaAgenda(agendamento);
   if (!status) return null;
   const Icone = ICONE_DO_STATUS[status];
   return (
-    <span aria-hidden data-testid="status-no-bloco" data-status={status} className="mr-0.5 inline-flex align-[-2px]">
-      <Icone size={11} weight="bold" />
-    </span>
+    <>
+      <span aria-hidden data-testid="status-no-bloco" data-status={status} className="mr-0.5 inline-flex align-[-2px]">
+        <Icone size={11} weight="bold" />
+      </span>
+      {info?.compromissos[agendamento.id]?.primeira_vez ? (
+        <span aria-hidden>
+          <SeloPrimeiraVez compacto />
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -101,7 +129,8 @@ export function StatusNaLinha({ agendamento }: { agendamento: { id: string; situ
   return (
     <span className="flex shrink-0 flex-wrap items-center gap-1" data-testid="status-na-linha">
       <SeloDeStatus status={status} />
-      <SeloDaConfirmacao status={c?.confirmacao} />
+      {c?.primeira_vez ? <SeloPrimeiraVez /> : null}
+      {status !== "confirmado" ? <SeloDaConfirmacao status={c?.confirmacao} /> : null}
       {c && c.faltas > 0 ? (
         <span className="rounded-full bg-error-bg px-2 py-0.5 text-xs text-error-fg" data-testid="selo-faltas">
           {t("faltou")} {c.faltas}×

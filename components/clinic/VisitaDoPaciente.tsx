@@ -12,6 +12,8 @@
  * registrada sem segundo clique.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -24,12 +26,16 @@ import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import {
   ACAO_PARA_AVANCAR,
+  podeAvancar,
   ehCorrecao,
   ROTULO_DO_STATUS,
   STATUS_DA_VISITA,
   type StatusDaVisita,
 } from "@/lib/clinic/visitas/status";
 
+import { SeloPrimeiraVez } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
+
+import { ConfirmarDadosDoPaciente } from "./ConfirmarDadosDoPaciente";
 import { FichaDoPaciente } from "./FichaDoPaciente";
 import { SeloDaConfirmacao } from "./SeloDaConfirmacao";
 
@@ -52,6 +58,12 @@ interface Visita {
   recursos?: string[];
   /** FORK clinic (E5.1): faltas do paciente nos últimos 12 meses. */
   faltas?: number;
+  /** FORK clinic (agenda S4): nenhum atendimento realizado antes deste. */
+  primeira_vez?: boolean;
+  /** FORK clinic (agenda S4): quem vê é o profissional do agendamento. */
+  eh_o_dono?: boolean;
+  /** FORK clinic (agenda S5): o atendimento (prontuário) deste agendamento. */
+  atendimento?: { id: string; status: string } | null;
 }
 
 export const COR_DO_STATUS: Record<StatusDaVisita, string> = {
@@ -99,6 +111,25 @@ export function VisitaDoPaciente({
       (await apiClient.get<{ data: Visita }>(`/api/v1/clinic/agendamentos/${appointmentId}/visita`)).data,
   });
 
+  // FORK clinic (agenda S5): "Iniciar atendimento" CRIA o atendimento e abre o
+  // prontuário nele. Sem o módulo de prontuário, cai no passo de status de antes.
+  const router = useRouter();
+  const iniciar = useMutation({
+    mutationFn: async () =>
+      (await apiClient.post<{ data: { id: string } }>(`/api/v1/clinic/agendamentos/${appointmentId}/atendimento`, {})).data,
+    onSuccess: (r) => {
+      void qc.invalidateQueries({ queryKey: chave });
+      router.push(`/app/atendimentos/${r.id}`);
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === "prontuario_desligado") {
+        mudar.mutate({ status: "em_atendimento" });
+        return;
+      }
+      showApiError(err);
+    },
+  });
+
   const mudar = useMutation({
     mutationFn: (corpo: { status: StatusDaVisita; motivo?: string }) =>
       apiClient.post(`/api/v1/clinic/agendamentos/${appointmentId}/visita`, corpo),
@@ -124,6 +155,11 @@ export function VisitaDoPaciente({
 
   const atual = consulta.data?.visita.status ?? "agendado";
   const proximo = ACAO_PARA_AVANCAR[atual];
+  // FORK clinic (agenda S4): chegada e pronto são da recepção; iniciar e
+  // finalizar, só do profissional do agendamento (o servidor confere de novo).
+  const ehODono = consulta.data?.eh_o_dono === true;
+  const mostrarProximo = podeAvancar(proximo, { ehODono, podeRecepcao: podeMudar });
+  const primeiraVez = consulta.data?.primeira_vez === true;
   const nome = (id: string | null) => pessoas.find((p) => p.id === id)?.nome ?? t("Equipe");
   const correcao = ehCorrecao(atual, paraCorrigir);
 
@@ -132,6 +168,7 @@ export function VisitaDoPaciente({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-text-muted">{t("Status da visita")}:</span>
         <SeloDaVisita status={atual} />
+        {primeiraVez ? <SeloPrimeiraVez /> : null}
         <SeloDaConfirmacao status={consulta.data?.confirmacao?.status} falha={consulta.data?.confirmacao?.falha} />
       </div>
       {consulta.data?.faltas ? (
@@ -149,18 +186,41 @@ export function VisitaDoPaciente({
         </p>
       ) : null}
 
-      {podeMudar ? (
+      {/* FORK clinic (agenda S4): EM RECEPÇÃO — 1ª vez completa o cadastro; quem já
+          veio confirma telefone e e-mail. Depois, "Pronto para atendimento". */}
+      {podeMudar && atual === "na_recepcao" && contactId ? (
+        primeiraVez ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-accent bg-accent-soft p-2" data-testid="recepcao-primeira-vez">
+            <p className="text-sm">{t("Primeira vez na clínica: complete o cadastro antes de liberar para o atendimento.")}</p>
+            <Button size="sm" variant="outline" data-testid="completar-cadastro" onClick={() => setFichaAberta(true)}>
+              {t("Completar cadastro")}
+            </Button>
+          </div>
+        ) : (
+          <ConfirmarDadosDoPaciente contactId={contactId} appointmentId={appointmentId} />
+        )
+      ) : null}
+
+      {podeMudar || ehODono ? (
         <div className="flex flex-wrap gap-2">
-          {proximo ? (
+          {consulta.data?.atendimento && ehODono ? (
+            <Button size="sm" asChild data-testid="visita-abrir-atendimento">
+              <Link href={`/app/atendimentos/${consulta.data.atendimento.id}`}>
+                {consulta.data.atendimento.status === "em_andamento" ? t("Continuar atendimento") : t("Abrir atendimento")}
+              </Link>
+            </Button>
+          ) : null}
+          {mostrarProximo && proximo && !(consulta.data?.atendimento && proximo.quem === "profissional") ? (
             <Button
               size="sm"
               data-testid={`visita-${proximo.para}`}
               disabled={mudar.isPending}
-              onClick={() => mudar.mutate({ status: proximo.para })}
+              onClick={() => (proximo.para === "em_atendimento" ? iniciar.mutate() : mudar.mutate({ status: proximo.para }))}
             >
               {t(proximo.rotulo)}
             </Button>
           ) : null}
+          {podeMudar ? (
           <Button
             size="sm"
             variant="ghost"
@@ -172,6 +232,7 @@ export function VisitaDoPaciente({
           >
             {t("Corrigir status")}
           </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -238,14 +299,17 @@ export function VisitaDoPaciente({
           <DialogHeader>
             <DialogTitle>{t("Complete a ficha do paciente")}</DialogTitle>
             <DialogDescription>
-              {t("A clínica exige a ficha cadastral completa para registrar a chegada. Ao salvar completa, a chegada é registrada.")}
+              {atual === "agendado"
+                ? t("A clínica exige a ficha cadastral completa para registrar a chegada. Ao salvar completa, a chegada é registrada.")
+                : t("Primeira vez na clínica: preencha os dados do paciente. O e-mail é opcional.")}
             </DialogDescription>
           </DialogHeader>
           <FichaDoPaciente
             contactId={contactId}
             podeEditar={podeMudar}
             onSalva={(situacao) => {
-              if (situacao.completa) mudar.mutate({ status: "na_recepcao" });
+              if (situacao.completa && atual === "agendado") mudar.mutate({ status: "na_recepcao" });
+              else if (situacao.completa) setFichaAberta(false);
             }}
           />
         </DialogContent>

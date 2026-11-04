@@ -15,6 +15,9 @@ import { primeiroInstanteDoDia } from "@/lib/agenda/google/tempo";
 import { somarDias } from "@/lib/automation/gatilho-de-data-do-funil";
 import { ok, fail } from "@/lib/api/wrappers";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
+import { PERMISSAO_VER_OUTROS } from "@/lib/clinic/agenda/escopo-da-agenda";
+import { compromissosDePrimeiraVez, compromissosRemarcados } from "@/lib/clinic/agenda/primeira-vez";
+import { statusDeExibicao } from "@/lib/clinic/visitas/exibicao";
 import { montarFila, type ItemDaFila } from "@/lib/clinic/atendimento/fila";
 import { prontuarioLigado } from "@/lib/clinic/flags";
 import { ehStatusDaVisita } from "@/lib/clinic/visitas/status";
@@ -59,11 +62,13 @@ export async function GET(req: NextRequest): Promise<Response> {
   const de = primeiroInstanteDoDia(dia, fuso) ?? primeiroInstanteDoDia(dia, FUSO_PADRAO);
   const ate = primeiroInstanteDoDia(somarDias(dia, 1), fuso) ?? primeiroInstanteDoDia(somarDias(dia, 1), FUSO_PADRAO);
   if (!de || !ate) return fail("validation_failed", "Dia inválido.", 422, { requestId });
-  const todos = lido.data.todos === "1";
+  // FORK clinic (agenda S4): a fila da clínica inteira é a agenda dos colegas —
+  // sem `agenda.ver_outros`, só a própria (antes a restrição era só da tela).
+  const todos = lido.data.todos === "1" && authz.permissoes.has(PERMISSAO_VER_OUTROS);
 
   let consulta = supabase
     .from("calendar_appointments")
-    .select("id, starts_at, ends_at, owner_user_id, contact_id, calendar_event_types(name), contacts(name, display_name)")
+    .select("id, starts_at, ends_at, status, owner_user_id, contact_id, calendar_event_types(name), contacts(name, display_name)")
     .eq("organization_id", org)
     .not("contact_id", "is", null)
     .not("status", "in", "(cancelled,no_show)")
@@ -76,7 +81,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (error) return fail("internal_error", error.message, 500, { requestId });
 
   const ids = (agendamentos ?? []).map((a) => a.id as string);
-  const [{ data: visitas, error: e2 }, { data: atendimentos }] = ids.length
+  const [{ data: visitas, error: e2 }, { data: atendimentos }, { data: confirmacoes }] = ids.length
     ? await Promise.all([
         supabase
           .from("clinic_appointment_visits")
@@ -84,13 +89,31 @@ export async function GET(req: NextRequest): Promise<Response> {
           .eq("organization_id", org)
           .in("appointment_id", ids),
         // RLS: sem `prontuario.ver` volta vazio, e a fila segue sem o link.
-        supabase.from("clinic_atendimentos").select("id, appointment_id").eq("organization_id", org).in("appointment_id", ids),
+        supabase
+          .from("clinic_atendimentos")
+          .select("id, appointment_id, started_at")
+          .eq("organization_id", org)
+          .neq("status", "anulado")
+          .in("appointment_id", ids),
+        supabase.from("clinic_confirmation_requests").select("appointment_id, status").eq("organization_id", org).in("appointment_id", ids),
       ])
-    : [{ data: [], error: null }, { data: [] }];
+    : [{ data: [], error: null }, { data: [] }, { data: [] }];
+  // FORK clinic (agenda S5): 1ª vez e remarcado, para o "Meu dia".
+  const [primeiraVez, remarcados] = await Promise.all([
+    compromissosDePrimeiraVez(
+      supabase,
+      org,
+      (agendamentos ?? []).map((a) => ({ id: a.id as string, contact_id: a.contact_id as string | null, inicio: a.starts_at as string })),
+    ),
+    compromissosRemarcados(supabase, org, ids),
+  ]);
+  const confirmacaoPor = new Map((confirmacoes ?? []).map((c) => [c.appointment_id as string, c.status as string]));
   if (e2) return fail("internal_error", e2.message, 500, { requestId });
 
   const visitaPor = new Map((visitas ?? []).map((v) => [v.appointment_id as string, v]));
-  const atendimentoPor = new Map((atendimentos ?? []).map((a) => [a.appointment_id as string, a.id as string]));
+  const atendimentoPor = new Map(
+    (atendimentos ?? []).map((a) => [a.appointment_id as string, { id: a.id as string, inicio: (a.started_at as string | null) ?? null }]),
+  );
 
   const itens: ItemDaFila[] = (agendamentos ?? []).map((a) => {
     const v = visitaPor.get(a.id as string);
@@ -107,7 +130,13 @@ export async function GET(req: NextRequest): Promise<Response> {
       status: v && ehStatusDaVisita(v.status) ? v.status : "agendado",
       chegou_em: (v?.arrived_at as string | null) ?? null,
       pronto_em: (v?.ready_at as string | null) ?? null,
-      atendimento_id: atendimentoPor.get(a.id as string) ?? null,
+      atendimento_id: atendimentoPor.get(a.id as string)?.id ?? null,
+      atendimento_inicio: atendimentoPor.get(a.id as string)?.inicio ?? null,
+      exibicao: statusDeExibicao(a.status as string, v?.status as string | undefined, {
+        confirmacao: confirmacaoPor.get(a.id as string) ?? null,
+        remarcado: remarcados.has(a.id as string),
+      }),
+      primeira_vez: primeiraVez.has(a.id as string),
     };
   });
 

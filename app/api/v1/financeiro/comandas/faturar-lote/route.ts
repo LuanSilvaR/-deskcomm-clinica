@@ -18,6 +18,7 @@
  * origem, e pelo mesmo motivo: deixar a forma variar por linha abre espaço para
  * a errada entrar sem ninguém notar, e o erro só aparece depois, no financeiro.
  */
+import { exigeChaveNoNucleo } from "@/lib/clinic/acesso/chave-no-nucleo";
 import { randomUUID } from "node:crypto";
 
 import type { NextRequest } from "next/server";
@@ -47,6 +48,12 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const authz = await requireRole("agent", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.lancar", requestId);
+
+  if (semChave) return semChave;
 
   const lido = corpoSchema.safeParse(await req.json().catch(() => ({})));
   if (!lido.success) {

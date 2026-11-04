@@ -107,11 +107,12 @@ describe("provisionamento e migração", () => {
     expect(banco).toEqual(codigo);
   });
 
-  it("empresa nova nasce com os 4 papéis; só o Administrador é de sistema", () => {
+  it("empresa nova nasce com os 5 papéis; só o Administrador é de sistema", () => {
     expect(lista(sql(`select system_key || ':' || is_system from public.clinic_roles where organization_id = '${ORG_A}';`))).toEqual([
       "administrador:true",
       "atendente:false",
       "gerente:false",
+      "profissional:false",
       "visualizador:false",
     ]);
   });

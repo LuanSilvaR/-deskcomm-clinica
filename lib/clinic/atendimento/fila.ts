@@ -12,6 +12,7 @@
  *
  * Não carrega conteúdo clínico: só horário, paciente, serviço e estado.
  */
+import type { StatusDeExibicao } from "@/lib/clinic/visitas/exibicao";
 import type { StatusDaVisita } from "@/lib/clinic/visitas/status";
 
 export const SECOES_DA_FILA = ["aguardando", "em_atendimento", "proximos", "finalizados"] as const;
@@ -37,6 +38,12 @@ export interface ItemDaFila {
   pronto_em: string | null;
   /** Só aparece para quem pode ver o prontuário (a RLS esconde dos outros). */
   atendimento_id: string | null;
+  /** FORK clinic (agenda S5): o status que a agenda mostra (confirmado, remarcado…). */
+  exibicao?: StatusDeExibicao;
+  /** FORK clinic (agenda S5): nenhum atendimento realizado antes deste. */
+  primeira_vez?: boolean;
+  /** FORK clinic (agenda S5): quando o atendimento começou ("iniciado às"). */
+  atendimento_inicio?: string | null;
 }
 
 export interface ItemNaFila extends ItemDaFila {

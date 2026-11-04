@@ -44,6 +44,13 @@ const ERROS_DO_BANCO: Record<string, { status: number; code: string; mensagem: s
     code: "validation_failed",
     mensagem: "Escolha uma especialidade que você atende.",
   },
+  // FORK clinic (agenda S4, 9043): só o profissional do agendamento inicia; só
+  // quem iniciou finaliza.
+  atendimento_so_o_profissional: {
+    status: 403,
+    code: "atendimento_so_o_profissional",
+    mensagem: "Só o profissional do agendamento inicia e finaliza este atendimento.",
+  },
   atendimento_ja_encerrado: {
     status: 409,
     code: "atendimento_ja_encerrado",

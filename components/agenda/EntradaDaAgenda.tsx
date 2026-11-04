@@ -5,8 +5,11 @@ import { useEffect } from "react";
 import { DetalheDoCompromisso } from "./DetalheDoCompromisso";
 export function EntradaDaAgenda({
   onContext,
+  onRemarcar,
 }: {
   onContext: (contact: string, conversation: string) => void;
+  /** FORK clinic (agenda S4): "Remarcar" no detalhe abre o painel da Agenda. */
+  onRemarcar?: (id: string) => void;
 }) {
   const podeEditar = usePermission("inbox.reply");
   const params = useSearchParams();
@@ -31,6 +34,14 @@ export function EntradaDaAgenda({
       podeEditar={podeEditar}
       id={params.get("compromisso")}
       onClose={() => router.replace("/app/agenda")}
+      onRemarcar={
+        onRemarcar
+          ? (id) => {
+              router.replace("/app/agenda");
+              onRemarcar(id);
+            }
+          : undefined
+      }
     />
   );
 }

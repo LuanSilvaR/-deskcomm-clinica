@@ -9,11 +9,13 @@ import type { Icon } from "@phosphor-icons/react";
 
 import { useT } from "@/hooks/i18n/useT";
 import { ROTULO_DE_EXIBICAO, type StatusDeExibicao } from "@/lib/clinic/visitas/exibicao";
-import { Bell, CalendarBlank, CheckCircle, DoorOpen, Stethoscope, UserMinus, XCircle } from "@/lib/ui/icons";
+import { ArrowsClockwise, Bell, CalendarBlank, CalendarCheck, CheckCircle, DoorOpen, Stethoscope, UserMinus, XCircle } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
 const ESTILO: Record<StatusDeExibicao, { classe: string; Icone: Icon }> = {
   agendado: { classe: "border-transparent bg-info-bg text-info-fg", Icone: CalendarBlank },
+  confirmado: { classe: "border-info bg-info-bg text-info-fg", Icone: CalendarCheck },
+  remarcado: { classe: "border-dashed border-info bg-surface text-info-fg", Icone: ArrowsClockwise },
   na_recepcao: { classe: "border-transparent bg-warning-bg text-warning-fg", Icone: DoorOpen },
   pronto: { classe: "border-warning bg-warning-bg text-warning-fg", Icone: Bell },
   em_atendimento: { classe: "border-transparent bg-accent-soft text-accent", Icone: Stethoscope },
