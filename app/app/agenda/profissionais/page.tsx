@@ -6,6 +6,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
+import { permissoesNaPagina } from "@/lib/clinic/acesso/pagina";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 import { DiaPorProfissional } from "./_client";
@@ -18,6 +19,8 @@ export default async function DiaPorProfissionalPage({ searchParams }: { searchP
   const t = (texto: string) => traduzir(texto, user.idioma);
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
+  // S6a (issue #69): sem ver a agenda dos outros, a porta leva à própria agenda — também por URL direta.
+  if (!(await permissoesNaPagina(user, activeOrg.orgId)).has("agenda.ver_outros")) redirect("/app/agenda");
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">

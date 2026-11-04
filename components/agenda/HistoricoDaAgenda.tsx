@@ -101,6 +101,7 @@ export function HistoricoDaAgenda({
   onRealizado,
   onFaltou,
   onConfirmar,
+  ocultarAcoesAusentes = false,
   className,
 }: {
   agendamentos: Agendamento[];
@@ -129,6 +130,11 @@ export function HistoricoDaAgenda({
    * menos quem deveria.
    */
   onConfirmar?: (id: string) => void;
+  /**
+   * FORK clinic (agenda S6a): sem a permissão, o botão NÃO aparece (em vez de
+   * cinza). Default `false` = comportamento do upstream inalterado.
+   */
+  ocultarAcoesAusentes?: boolean;
   className?: string;
 }) {
   const localeDaData = useLocaleDeData();
@@ -250,7 +256,7 @@ export function HistoricoDaAgenda({
                       e eu o generalizei para todas — errado: o passado tem as
                       duas ações mais importantes do histórico.
                     */}
-                    {aba === "aguardando" && (
+                    {aba === "aguardando" && (onConfirmar || !ocultarAcoesAusentes) && (
                       // PRIMEIRO na ordem, e é deliberado: confirmar é o que se
                       // faz com a maioria dos pedidos, e o que a pessoa procura
                       // ao abrir esta aba. Remarcar e cancelar são a exceção.
@@ -266,6 +272,7 @@ export function HistoricoDaAgenda({
                     )}
                     {(aba === "proximos" || aba === "aguardando") && (
                       <>
+                        {(onRemarcar || !ocultarAcoesAusentes) && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -280,6 +287,8 @@ export function HistoricoDaAgenda({
                         >
                           {t("Remarcar")}
                         </Button>
+                        )}
+                        {(onCancelar || !ocultarAcoesAusentes) && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -294,6 +303,7 @@ export function HistoricoDaAgenda({
                         >
                           {t("Cancelar")}
                         </Button>
+                        )}
                       </>
                     )}
                     {aba === "passados" &&
@@ -328,6 +338,7 @@ export function HistoricoDaAgenda({
                             {t("Realizado")}
                           </Button>
                           ) : null}
+                          {(onFaltou || !ocultarAcoesAusentes) && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -337,6 +348,7 @@ export function HistoricoDaAgenda({
                           >
                             {t("Faltou")}
                           </Button>
+                          )}
                         </>
                       )}
                   </div>

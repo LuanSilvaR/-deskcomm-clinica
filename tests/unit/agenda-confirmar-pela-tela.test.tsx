@@ -152,7 +152,8 @@ describe("a página liga o botão ao PATCH certo", () => {
     // Recorta o bloco do Confirmar até o botão seguinte: `onConfirmar` é
     // homônimo — o diálogo de marcar horário tem uma prop com o mesmo nome, que
     // recebe um INSTANTE. Casar pelo nome sozinho mede o componente errado.
-    const inicio = fonte.indexOf("onConfirmar={(id)");
+    // FORK clinic (agenda S6a): o botão só é ligado com `agenda.marcar` (`onConfirmar={!can(...) ? undefined : (id) =>`).
+    const inicio = fonte.indexOf('onConfirmar={!can("agenda.marcar") ? undefined : (id)');
     expect(inicio, "a página parou de ligar o botão — ele volta a nascer cinza").toBeGreaterThan(
       -1,
     );
@@ -169,6 +170,6 @@ describe("a página liga o botão ao PATCH certo", () => {
     expect(
       detalhe,
       "oferecer Confirmar fora de `pending` é ressuscitar cancelado e reconfirmar confirmado",
-    ).toContain('a.status === "pending" ?');
+    ).toContain('a.status === "pending" && (!acoes || acoes.marcar) ?'); // FORK clinic (agenda S6a): e com a chave
   });
 });

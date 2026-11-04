@@ -53,6 +53,7 @@ export function AgendaInterativa({
   onAbrirAgendamento,
   donoId,
   foraDaAgenda,
+  podeRemarcar = true,
   className,
 }: {
   /**
@@ -108,6 +109,11 @@ export function AgendaInterativa({
    */
   onMarcarEm?: (instante: string) => void;
   onAbrirAgendamento?: (id: string) => void;
+  /**
+   * FORK clinic (agenda S6a): `false` = sem arrastar card para remarcar (quem não
+   * tem `agenda.remarcar`). Default `true` = comportamento do upstream inalterado.
+   */
+  podeRemarcar?: boolean;
   className?: string;
 }) {
   const localeDaData = useLocaleDeData();
@@ -347,7 +353,7 @@ export function AgendaInterativa({
                 motivo,
                 duracaoMin: tipo.duracaoMin,
                 onMarcarEm,
-                onArrastarPara: ({ instante, razao, id }) => {
+                onArrastarPara: !podeRemarcar ? undefined : ({ instante, razao, id }) => {
                   if (!instante) {
                     // RECUSA EXPLÍCITA, sem tocar no servidor: o destino não
                     // está na disponibilidade publicada. Remarcar assim mesmo

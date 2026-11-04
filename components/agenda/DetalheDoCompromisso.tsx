@@ -53,10 +53,17 @@ export function DetalheDoCompromisso({
   onClose,
   podeEditar = true,
   onRemarcar,
+  acoes,
 }: {
   id: string | null;
   onClose: () => void;
   podeEditar?: boolean;
+  /**
+   * FORK clinic (agenda S6a): o que a pessoa pode fazer, chave a chave
+   * (`agenda.marcar`/`cancelar`/`registrar_desfecho`). Ausente = tudo que
+   * `podeEditar` libera, como no upstream.
+   */
+  acoes?: { marcar: boolean; cancelar: boolean; desfecho: boolean };
   /** FORK clinic (agenda S4): abre o painel de remarcar da Agenda para este compromisso. */
   onRemarcar?: (id: string) => void;
 }) {
@@ -269,8 +276,10 @@ export function DetalheDoCompromisso({
                 </Button>
               </div>
             ) : null}
-            {podeEditar && a.status !== "cancelled" ? (
+            {podeEditar && a.status !== "cancelled" && (!acoes || acoes.marcar || acoes.cancelar || acoes.desfecho || onRemarcar) ? (
               <div className="space-y-4">
+                {!acoes || acoes.desfecho ? (
+                <>
                 <label className="block">
                   {t("Mensagem do cliente usada como evidência (opcional)")}
                   <select
@@ -319,6 +328,8 @@ export function DetalheDoCompromisso({
                     </Button>
                   ))}
                 </div>
+                </>
+                ) : null}
                 {/*
                   O SIM que faltava. `pending` é pré-reserva: o horário já está
                   segurado, e só vira compromisso quando alguém aprova. A rota
@@ -327,7 +338,7 @@ export function DetalheDoCompromisso({
                   negócio com `requires_confirmation` o pedido ou é confirmado
                   pelo cliente via IA, ou expira em `agenda-expira-pendentes`.
                 */}
-                {a.status === "pending" ? (
+                {a.status === "pending" && (!acoes || acoes.marcar) ? (
                   <Button
                     data-testid="confirmar-compromisso"
                     disabled={mutation.isPending || staleDraft}
@@ -345,7 +356,7 @@ export function DetalheDoCompromisso({
                     {t("Remarcar")}
                   </Button>
                 ) : null}
-                {["pending", "confirmed"].includes(a.status) ? (
+                {["pending", "confirmed"].includes(a.status) && (!acoes || acoes.marcar) ? (
                   <Button
                     variant="outline"
                     disabled={mutation.isPending || staleDraft}
@@ -358,6 +369,8 @@ export function DetalheDoCompromisso({
                     {t("Lembrar em uma hora")}
                   </Button>
                 ) : null}
+                {!acoes || acoes.cancelar ? (
+                <>
                 <label className="block">
                   {t("Motivo do cancelamento")}
                   <input
@@ -376,6 +389,8 @@ export function DetalheDoCompromisso({
                 >
                   {t("Cancelar agendamento")}
                 </Button>
+                </>
+                ) : null}
               </div>
             ) : null}
           </div>
