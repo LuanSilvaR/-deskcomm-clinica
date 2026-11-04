@@ -25,5 +25,5 @@ Se G, nesta ordem, PARANDO para minha aprovação nos itens marcados [PARE]:
 10. Commits em Conventional Commits. NÃO faça push. Resumo final em até 10 linhas.
 
 Fechamento (todo fluxo, só com ok do dono para o push): rode o `## Verify` do CLAUDE.md; abra PR para develop
-com `Refs #N`, a saída do Verify (exit code + resumo) e a label `status: dev`; a issue vai para Dev no quadro.
-Após o merge com CI verde: issue → `status: test` e rode integração/E2E. Homologação/Concluído: docs/backlog.md.
+com `Refs #N`, a saída do Verify (exit code + resumo) e a label `status: dev`; a issue vai para Em andamento no quadro.
+Após o merge com CI verde: issue → `status: test` e rode integração/E2E. Em integração/Concluído: docs/backlog.md.

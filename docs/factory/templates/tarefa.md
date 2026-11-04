@@ -5,8 +5,8 @@
 
 - **Issue**: #N · **Prioridade**: (do dono) · **Complexidade**: LOW | MEDIUM | HIGH — motivo
 - **Status**: BACKLOG | ANALYSIS | READY | IN_PROGRESS | CODE_REVIEW | TESTING | BLOCKED | READY_FOR_RELEASE | DONE
-  (no quadro: Backlog ≈ BACKLOG/ANALYSIS/READY · Dev ≈ IN_PROGRESS/CODE_REVIEW · Teste ≈ TESTING ·
-  Homologação ≈ READY_FOR_RELEASE · Concluído = DONE, só com a palavra do dono)
+  (no quadro: Backlog ≈ BACKLOG/ANALYSIS · Pronto para iniciar ≈ READY · Em andamento ≈ IN_PROGRESS/CODE_REVIEW ·
+  Teste ≈ TESTING · Em integração ≈ READY_FOR_RELEASE · Concluído = DONE, só com a palavra do dono)
 - **Agentes**: …
 - **Dependências**: …
 
