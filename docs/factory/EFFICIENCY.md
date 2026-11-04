@@ -8,7 +8,7 @@ disponível na conta. Nunca fixe um ID de modelo no frontmatter: ele envelhece e
 | Faixa | Modelo | Agentes | Critério |
 |---|---|---|---|
 | Leitura mecânica | `haiku` | codebase-explorer, regression-guardian, change-scope-guardian, scrum-master, technical-writer, release-manager | segue roteiro fixo; erro é barato e visível |
-| Implementação e diagnóstico | `sonnet` | backend, frontend, fullstack-developer, integration, migration-guardian, qa-automation, debugger, root-cause-analyzer, code-reviewer, ux-accessibility, health-compliance, product-owner, business-analyst, devops-engineer, outsystems-specialist | raciocínio local sobre código |
+| Implementação e diagnóstico | `sonnet` | backend, frontend, fullstack-developer, integration, migration-guardian, qa-automation, debugger, root-cause-analyzer, impact-analyzer, code-reviewer, ux-accessibility, health-compliance, product-owner, business-analyst, devops-engineer, outsystems-specialist | raciocínio local sobre código |
 | Decisão crítica | `opus` | factory-orchestrator, architect, tech-lead, security-lgpd | erro é caro e silencioso — **não rebaixar para economizar** |
 | Herdado | `inherit` | gov-*, triagem-* | o loop/triagem escolhe |
 
@@ -35,7 +35,12 @@ Nenhum é obrigatório; o orquestrador decide caso a caso.
 | `codebase-explorer` (exploração e impacto) | busca com mais de ~5 frentes; M/G antes de alterar; dependentes ou contrato público em jogo | a resposta está em 1–3 Greps; o contexto já está na conversa |
 | `root-cause-analyzer` | causa desconhecida, intermitente, de tela/produção, ou correção que precisa de aprovação | erro aponta a linha; teste quebrou durante a implementação (→ `debugger`) |
 | `change-scope-guardian` | diff passou do plano, toca core/migrations, ou há trabalho local não relacionado na árvore | diff só em docs/.claude; LOW de 1 arquivo |
-| `impact-analyzer` | **não criado**: o `codebase-explorer` já entrega impacto (é o que `/impacto` e `/tarefa` M/G usam). `/factory-impact` dá a ele o roteiro estruturado | — |
+| `impact-analyzer` | **sob pedido** (`/factory-impact <id> profundo …`) ou para aprofundar um `impacto.md` que deixou contratos/dependentes em aberto | por padrão — o acionamento automático foi retirado após medição (abaixo) |
+
+Os dois analisadores não se sobrepõem: o `codebase-explorer` (haiku) localiza e faz o impacto; o
+`impact-analyzer` (sonnet) só aprofunda dependências, contratos e testes. O `/factory-impact` usa um.
+Por que não automático: na mesma troca de assinatura, rotear para ele custou US$ 0,46 contra 0,35 do
+explorer e devolveu nível M onde a régua dá HIGH ([reports/2026-11-04-medicao.md](reports/2026-11-04-medicao.md), t6).
 
 ## Skills/comandos
 

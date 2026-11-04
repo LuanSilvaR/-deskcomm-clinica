@@ -32,7 +32,8 @@ Agentes de análise (upgrade de 2026-11-04; acionamento seletivo em [EFFICIENCY.
 | Papel | Agente | Origem | Modelo | Escreve? |
 |---|---|---|---|---|
 | exploração direcionada | `codebase-explorer` | existente | haiku | não |
-| análise de impacto | `codebase-explorer` + roteiro do `/factory-impact` | existente | haiku | não (impacto.md via sessão) |
+| análise de impacto leve (MEDIUM) | `codebase-explorer` + roteiro do `/factory-impact` | existente | haiku | não |
+| análise de impacto profunda (HIGH, contrato público) | `impact-analyzer` | novo | sonnet | não |
 | causa raiz | `root-cause-analyzer` | novo | sonnet | não |
 | escopo do diff | `change-scope-guardian` | novo | haiku | não |
 

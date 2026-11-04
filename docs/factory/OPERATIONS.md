@@ -15,7 +15,7 @@
 | `/factory-refactor <id> <alvo>` | refatoração com testes de caracterização | HIGH |
 | `/factory-init` | atualiza PROJECT_CONTEXT/ARCHITECTURE daqui | docs |
 | `/factory-context <assunto>` | contexto mínimo (arquivos:linha, regra a reusar) | leitura |
-| `/factory-impact <id> <mudança>` | dependentes, contratos, testes a rodar, nível sugerido | leitura |
+| `/factory-impact <id> [profundo] <mudança>` | dependentes, contratos, testes a rodar, nível (`profundo` = impact-analyzer) | leitura |
 | `/factory-debug <id> <sintoma>` | causa raiz com evidência antes de corrigir | leitura → IMPLEMENT com ok |
 | `/factory-diff [id]` | escopo e preservação do diff antes do commit | REVIEW |
 | `/factory-optimize [cenário]` | mede custo/eficiência da fábrica com sessões reais | leitura (custa tokens) |

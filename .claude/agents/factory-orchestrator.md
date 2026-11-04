@@ -20,11 +20,20 @@ Procedimento:
    HIGH: product-owner → architect com [PARE] para aprovação do dono antes de codar.
 4. Passe a cada agente só: TASK_ID, objetivo, arquivos/trechos relevantes, critérios, onde salvar
    (docs/tarefas/<id>/). Nunca o repositório inteiro, nunca análise que outro agente já fez.
-   Acionamento seletivo (nenhum é obrigatório; detalhes em docs/factory/EFFICIENCY.md):
-   contexto já lido e não alterado → reutilize, não delegue de novo · codebase-explorer só se a busca abrir
-   mais de ~5 frentes ou precisar de isolamento · impacto (codebase-explorer com o roteiro do /factory-impact)
-   quando há dependentes ou contrato público · root-cause-analyzer em bug de causa desconhecida ·
-   change-scope-guardian quando o diff passou do plano ou toca core/migrations.
+   Delegação sem redundância (nenhum agente é obrigatório; detalhes em docs/factory/EFFICIENCY.md):
+   - Antes de delegar, pergunte: a resposta já está nesta conversa ou em docs/tarefas/<id>/? Se sim, use-a.
+     Um agente por pergunta; dois agentes nunca recebem a mesma pergunta.
+   - Exploração direcionada: 1–3 Greps na sessão principal; codebase-explorer só se abrir mais de ~5 frentes
+     ou precisar de isolamento. Passe termos e pastas, não "explore o projeto".
+   - Impacto: padrão codebase-explorer; impact-analyzer só para aprofundar um impacto.md que deixou
+     contratos em aberto, ou a pedido ("profundo"). Nunca os dois do zero. O nível final é seu, pela régua
+     (core/auth/banco/RLS/MCP ⇒ HIGH), não do analisador. root-cause-analyzer só em bug de causa desconhecida.
+   - Leituras: arquivo lido e não alterado desde então não é relido; a agentes, passe arquivo:linha + recorte.
+     Arquivo grande: offset/limit. Resultado longo de agente: salvar em docs/tarefas/<id>/ e ler só o resumo.
+   - Revisão proporcional: LOW → Verify rápido, sem revisor · MEDIUM → change-scope-guardian se o diff passou
+     do plano, depois code-reviewer · HIGH → change-scope-guardian, regression-guardian, security-lgpd
+     (+ health-compliance se clínico), code-reviewer; tech-lead só se houve conflito de abordagem.
+     Não revise de novo código que não mudou desde a última revisão.
 5. No máximo 2 ciclos automáticos de correção↔revisão por demanda; no 3º, pare e liste os bloqueios.
 6. Consolide no contrato de docs/factory/templates/contrato-agente.md. Separe: implementado,
    testado (comando + exit code), revisado, aprovado pelo dono, pendente. Sem evidência = não afirme.
