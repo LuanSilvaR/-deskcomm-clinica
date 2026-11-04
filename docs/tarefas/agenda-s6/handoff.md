@@ -26,11 +26,11 @@ ANA /app/agenda/profissionais → /app/agenda/profissionais · GET → 200
 ### Evidências de tela
 
 - Dr. Bruno (Profissional de saúde): "Minha agenda" sem Remarcar/Cancelar e sem "Dia por profissional" no menu —
-  ![Dr. Bruno sem ações](../../../evidence/agenda-s6/s6a-1-bruno-agenda-sem-acoes.png)
+  `evidence/agenda-s6/s6a-1-bruno-agenda-sem-acoes.png`
 - Dra. Ana (gerente): a lista segue com Remarcar/Cancelar —
-  ![Dra. Ana com ações](../../../evidence/agenda-s6/s6a-2-ana-agenda-com-acoes.png)
+  `evidence/agenda-s6/s6a-2-ana-agenda-com-acoes.png`
 - Dra. Ana abre o "Dia por profissional" —
-  ![Dia por profissional](../../../evidence/agenda-s6/s6a-3-ana-dia-por-profissional.png)
+  `evidence/agenda-s6/s6a-3-ana-dia-por-profissional.png`
 
 Spec formal (fora do CI, depende do seed): `DEMO_SENHA=… pnpm exec playwright test clinic-agenda-acl` contra a 3001.
 
@@ -75,11 +75,11 @@ G BRUNO com encaixe → 403 forbidden_permission agenda.marcar
 ### Evidências de tela (S6b)
 
 - Lista com a etiqueta "Encaixe" no compromisso das 09:45 —
-  ![Lista com encaixe](../../../evidence/agenda-s6/s6b-1-grade-com-encaixe.png)
+  `evidence/agenda-s6/s6b-1-grade-com-encaixe.png`
 - Detalhe com motivo e autor —
-  ![Detalhe do encaixe](../../../evidence/agenda-s6/s6b-2-detalhe-do-encaixe.png)
+  `evidence/agenda-s6/s6b-2-detalhe-do-encaixe.png`
 - Opção "Permitir encaixe" nas configurações —
-  ![Opção do encaixe](../../../evidence/agenda-s6/s6b-3-opcao-encaixe.png)
+  `evidence/agenda-s6/s6b-3-opcao-encaixe.png`
 
 ### Limitações conhecidas
 - **Mesmo início:** o índice do núcleo `calendar_appointments_sem_duplicata_idx` impede dois compromissos ativos do mesmo
