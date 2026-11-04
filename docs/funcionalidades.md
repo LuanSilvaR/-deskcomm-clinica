@@ -9,6 +9,8 @@ Convenções: **flag** = opção por organização em `organizations.settings.cl
 `fn_clinic_definir_*` (só administrador) pela tela `/app/settings/tenant/profissionais`
 (API `/api/v1/clinic/config`). "(não confirmado)" = o levantamento não conseguiu provar pelo código.
 
+Tutorial passo a passo das telas do núcleo: [`docs/curso-deskcomm/`](curso-deskcomm/README.md).
+
 Backlog e estado do trabalho: [quadro Backlog Clínica](https://github.com/users/LuanSilvaR/projects/3) e
 [`docs/backlog.md`](backlog.md).
 
