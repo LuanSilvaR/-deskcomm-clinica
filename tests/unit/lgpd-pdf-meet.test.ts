@@ -26,6 +26,7 @@ function payload(): ExportPayload {
     leads: [],
     orders: [],
     activities: [],
+    checkpoints: [],
     appointments: [],
     sales: [],
     tasks: [],

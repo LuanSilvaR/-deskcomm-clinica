@@ -175,7 +175,7 @@ describe("anonimizar redige mensagens, conversa e resumo do agente", () => {
     `);
 
     const baseline = readFileSync(join(process.cwd(), "supabase", "baseline.sql"), "utf8");
-    const inicio = baseline.indexOf("(migration 8002, fork) ----");
+    const inicio = baseline.indexOf("-- ---- clinic: o botão Anonimizar redige conversas (migration 8002, fork) ----");
     const bloco = baseline.slice(inicio, baseline.indexOf("-- ---- fim clinic (migration 8002, fork) ----"));
     const cura = bloco.slice(bloco.indexOf("insert into public.storage_redaction_queue (organization_id, bucket, object_path)" + String.fromCharCode(10) + "select distinct m.organization_id"));
     expect(inicio, "apêndice da 8002 não achado no baseline").toBeGreaterThan(0);
