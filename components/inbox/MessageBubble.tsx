@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { useT } from "@/hooks/i18n/useT";
 import { ArrowBendUpLeft, Check, Checks, Robot, WarningOctagon } from "@/lib/ui/icons";
@@ -57,6 +58,13 @@ export function MessageBubble({
 }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  // Relógio de 60 s do upstream (#2133): é ele que tira da tela o
+  // "Transcrevendo…" vencido do áudio (MediaRenderer).
+  const [agora, setAgora] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setAgora(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const isOutbound = message.direction === "outbound";
   const time = format(new Date(message.sent_at), "HH:mm", { locale: localeDaData });
   const isFailed = message.status === "failed";
@@ -226,7 +234,7 @@ export function MessageBubble({
           <>
             {hasMedia && (
               <div className={cn(message.body && "mb-1")}>
-                <MediaRenderer message={message} />
+                <MediaRenderer message={message} agora={agora} />
               </div>
             )}
 
