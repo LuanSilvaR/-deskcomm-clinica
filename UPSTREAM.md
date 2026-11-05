@@ -185,3 +185,11 @@ Universo: 1447 PRs do upstream entre `09d4da341` (2026-09-22) e `7dcd2fff5` (202
 | #3278 | `c132deee4` | fix(inbox): o aviso de sugestão que falhou sai da tela quando a conversa anda |
 | #3763 | `e383e704e` | fix(inbox): sugestão de resposta fala na voz do atendente, não na do agente (#3757) |
 | #3871 | `515d0a37e` | docs(adr): ADR-0007 — consulta em pg com Postgres próprio (#3715) |
+
+### Lote 2 — adaptação manual (épico #78)
+
+Uma funcionalidade por branch `feature/upstream-<id>`, cherry-pick `-m 1 -x` com ajuste ao fork, ou reescrita quando não aplica.
+
+| Issue | PR upstream | Commit upstream | Título | Adaptação |
+|---|---|---|---|---|
+| #95 | #1989 | `816e59a62`, `e4dc88018`, `4a2ee6030` | fix(lgpd): anonimizar apaga também a transcrição da mídia | migration 0497 reescrita como **8001** do fork, sobre o corpo atual da cascata (0379); varredura diária só com o passo da transcrição (sem os passos do #1957, que o fork não tem); teste de banco sem o caminho do gatilho 0391/0494, que o fork não tem; adaptador `pg-como-supabase` com `not(is)` igual ao upstream |
