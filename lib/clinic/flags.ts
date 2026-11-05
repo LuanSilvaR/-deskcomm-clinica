@@ -104,3 +104,11 @@ export function encaixeLigadoNaConfig(settings: unknown): boolean {
   if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
   return (clinic as Record<string, unknown>).encaixe === true;
 }
+
+/** `settings.clinic.titulo_livre` (migration 8003): título digitado no compromisso (upstream #3775). Só `true` liga. */
+export function tituloLivreLigadoNaConfig(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).titulo_livre === true;
+}

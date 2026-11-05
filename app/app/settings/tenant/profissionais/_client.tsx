@@ -25,6 +25,8 @@ interface Props {
   estoqueInicial: boolean;
   /** FORK clinic (agenda S6b) */
   encaixeInicial?: boolean;
+  /** FORK clinic (#81): `settings.clinic.titulo_livre`. */
+  tituloLivreInicial?: boolean;
   prazoInicial: number;
   podeLigar: boolean;
   ehGerencia: boolean;
@@ -41,6 +43,7 @@ export function ProfissionaisClient({
   prontuarioInicial,
   estoqueInicial,
   encaixeInicial = false,
+  tituloLivreInicial = false,
   prazoInicial,
   podeLigar,
   ehGerencia,
@@ -56,6 +59,7 @@ export function ProfissionaisClient({
   const [prontuario, setProntuario] = useState(prontuarioInicial);
   const [estoque, setEstoque] = useState(estoqueInicial);
   const [encaixe, setEncaixe] = useState(encaixeInicial);
+  const [tituloLivre, setTituloLivre] = useState(tituloLivreInicial);
   const [prazo, setPrazo] = useState(prazoInicial);
   const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
 
@@ -80,6 +84,13 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { encaixe: boolean } }>("/api/v1/clinic/config", { encaixe: valor }),
     onSuccess: (r) => setEncaixe(r.data.encaixe),
+    onError: showApiError,
+  });
+
+  const alternarTituloLivre = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { titulo_livre: boolean } }>("/api/v1/clinic/config", { titulo_livre: valor }),
+    onSuccess: (r) => setTituloLivre(r.data.titulo_livre),
     onError: showApiError,
   });
 
@@ -359,6 +370,29 @@ export function ProfissionaisClient({
             onClick={() => alternarEncaixe.mutate(!encaixe)}
           >
             {encaixe ? t("Desligar") : t("Ligar")}
+          </Button>
+        ) : null}
+      </section>
+
+      <section
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${tituloLivre ? "" : "bg-muted"}`}
+        data-testid="clinic-titulo-livre"
+      >
+        <div>
+          <p className="font-medium">{tituloLivre ? t("Título livre ligado") : t("Título livre desligado")}</p>
+          <p className="text-sm text-text-muted">
+            {t("Permitir digitar o título do compromisso ao marcar (aparece na agenda e no lembrete ao paciente)")}
+          </p>
+        </div>
+        {podeLigar ? (
+          <Button
+            data-testid="clinic-titulo-livre-alternar"
+            variant={tituloLivre ? "outline" : "default"}
+            disabled={alternarTituloLivre.isPending}
+            aria-label={t("Permitir digitar o título do compromisso ao marcar (aparece na agenda e no lembrete ao paciente)")}
+            onClick={() => alternarTituloLivre.mutate(!tituloLivre)}
+          >
+            {tituloLivre ? t("Desligar") : t("Ligar")}
           </Button>
         ) : null}
       </section>
