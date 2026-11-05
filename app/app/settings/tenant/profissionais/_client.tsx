@@ -6,6 +6,7 @@ import { useState } from "react";
 import { AtendimentosPorEspecialidade } from "@/components/clinic/AtendimentosPorEspecialidade";
 import { Bloqueios } from "@/components/clinic/Bloqueios";
 import { Especialidades } from "@/components/clinic/Especialidades";
+import { MeusDados } from "@/components/clinic/MeusDados";
 import { Profissionais } from "@/components/clinic/Profissionais";
 import { SalasEEquipamentos } from "@/components/clinic/SalasEEquipamentos";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -435,8 +436,10 @@ export function ProfissionaisClient({
         ) : null}
       </section>
 
-      <Tabs defaultValue={ehGerencia ? "profissionais" : "bloqueios"}>
+      <Tabs defaultValue={ehGerencia ? "profissionais" : "meus-dados"}>
         <TabsList>
+          {/* #97: sem a gerência, o profissional cuida só dos próprios dados. */}
+          {ehGerencia ? null : <TabsTrigger value="meus-dados">{t("Meus dados")}</TabsTrigger>}
           {ehGerencia ? <TabsTrigger value="profissionais">{t("Profissionais")}</TabsTrigger> : null}
           {ehGerencia ? <TabsTrigger value="especialidades">{t("Especialidades")}</TabsTrigger> : null}
           {ehGerencia ? <TabsTrigger value="atendimentos">{t("Atendimentos")}</TabsTrigger> : null}
@@ -458,7 +461,11 @@ export function ProfissionaisClient({
               <SalasEEquipamentos podeEditar={ehGerencia} />
             </TabsContent>
           </>
-        ) : null}
+        ) : (
+          <TabsContent value="meus-dados">
+            <MeusDados usuarioAtualId={usuarioAtualId} />
+          </TabsContent>
+        )}
         <TabsContent value="bloqueios">
           <Bloqueios usuarioAtualId={usuarioAtualId} ehGerencia={ehGerencia} />
         </TabsContent>
