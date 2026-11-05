@@ -487,6 +487,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/pacientes/[contactId]/anexos/route.ts (GET) chama com createClient da sessão; só devolve totais (bytes usados e cota) e exige que a organização esteja em fn_user_org_ids(). tests/invariants/clinic-anexos-e-fotos.test.ts prova outra empresa recusada.",
   },
   {
+    // FORK clinic (migration 9045).
+    fn: "fn_clinic_agenda_encaixar(jsonb,text)",
+    razao:
+      "POST app/api/v1/agenda/agendamentos (corpo com `encaixe`) chama com createClient da sessão: a função exige pessoa logada, a organização do corpo em fn_user_org_ids(), a chave agenda.encaixe, a flag settings.clinic.encaixe e motivo de 5 a 500 caracteres; liga o GUC clinic.encaixe_id só nessa transação. tests/invariants/clinic-agenda-encaixe.test.ts prova as recusas, o isolamento entre empresas e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9043): passou a security definer para decidir QUEM.
     fn: "fn_clinic_mudar_status_visita(uuid,uuid,text,text)",
     razao:
@@ -515,6 +521,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
     fn: "fn_clinic_anexo_divulgar(uuid,uuid,text,text[])",
     razao:
       "app/api/v1/clinic/anexos/[id]/route.ts (PATCH, acao divulgacao) chama com createClient da sessão; fn_acesso_exigir exige fotos.enviar (chave clínica), suporte de escrita e MFA; foto ativa da organização informada; finalidade E cada canal autorizados por termo de uso de imagem aceito, no prazo e não revogado (fn_clinic_divulgacao_autorizada). tests/invariants/clinic-revisao-conformidade.test.ts prova recusa sem canal, canal não autorizado, termo vencido e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9046, agenda S6b).
+    fn: "fn_clinic_definir_encaixe(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, opção encaixe) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_estoque); só grava settings.clinic.encaixe. tests/invariants/clinic-agenda-encaixe.test.ts prova recusa a não-admin e anon sem EXECUTE.",
   },
   {
     // FORK clinic (migration 9028).

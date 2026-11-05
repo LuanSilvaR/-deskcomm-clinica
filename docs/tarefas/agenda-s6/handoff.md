@@ -41,5 +41,49 @@ Registrado em `UPSTREAM.md` (linha "Agenda S6a"). Todas as props novas são opci
 - **S6c:** a ACL fica na rota HTTP; `fn_appointment_change` e escrita direta por PostgREST com sessão ainda não conferem a chave.
 - Papel personalizado sem as chaves passa a receber 403 em PATCH/DELETE (os papéis de sistema e o modo legado não perdem).
 
-## S6b — encaixe (pendente)
-Ver `plano.md`, passos 6–12 (migration 9045).
+## S6b — encaixe (issue #69)
+
+| Critério | Como ficou | Prova |
+|---|---|---|
+| C1 | Opção `settings.clinic.encaixe` nasce desligada; desligada → 422 `encaixe_desligado` | invariant + unit + tela |
+| C2 | Com a chave e a opção: `POST … { encaixe: { motivo } }` → 201 `encaixe: true` | tela (abaixo) |
+| C3 | Motivo de 5 a 500 caracteres (Zod na rota e CHECK no banco) | unit + invariant |
+| C4 | Sem `agenda.encaixe` → 403 `forbidden_permission` (`details.permissao`) | unit + invariant |
+| C5 | Horário ocupado com a opção ligada → 409 `agenda_horario_ocupado` listando quem ocupa e `pode_encaixar`; desligada → 422 de antes | unit + tela |
+| C6 | Sobre atendimento realizado → 409 `encaixe_sobre_finalizado` | invariant + unit |
+| C7 | `clinic_agenda_encaixes` (motivo, ator, sobrepostos) + evento `encaixe` no histórico | invariant |
+| C8 | Etiqueta "Encaixe" na lista/grade; motivo e autor no detalhe | tela |
+| C9 | Rotas de leitura respeitam o escopo (`agenda.ver_outros`) | rotas `GET /api/v1/clinic/agenda/encaixes` e `…/agendamentos/[id]/encaixe` |
+| C10/C12 | Advisory lock mantido; `google_sync` ignorado pela trava | invariant |
+| C11 | IA/token → 403 `encaixe_so_pessoa`; a função exige `auth.uid()` | unit (sabotado: 2 vermelhos) |
+| C16 | Chave concedida só a Administrador e Gerente; papéis existentes não perdem nada | invariant |
+
+Migrations: **9045** (chave, tabela, histórico, trava, `fn_clinic_agenda_encaixar`) e **9046** (`fn_clinic_definir_encaixe`, a opção). Aplicadas no banco local da 3001 em 2026-11-04.
+
+Medido na 3001 (2026-11-04):
+
+```
+A DONO sem encaixe (horário ocupado) → 409 agenda_horario_ocupado {agendamentos:[Eduarda Pinto 09:30–10:30 confirmed], pode_encaixar:true}
+  DONO com encaixe às 09:45 → 201 encaixe:true
+B DONO encaixe no MESMO início (09:30) → 409 encaixe_mesmo_inicio
+C detalhe do encaixe → 200 {motivo:"Paciente com dor, retorno urgente", autor:"Rafael Albuquerque", sobrepostos:[…845]}
+D etiquetas "Encaixe" na tela: 2 · E motivo no detalhe: 1
+F ANA (papel "Coordenação clínica", sem a chave) → 409 com pode_encaixar:false
+G BRUNO com encaixe → 403 forbidden_permission agenda.marcar
+```
+
+### Evidências de tela (S6b)
+
+- Lista com a etiqueta "Encaixe" no compromisso das 09:45 —
+  `evidence/agenda-s6/s6b-1-grade-com-encaixe.png`
+- Detalhe com motivo e autor —
+  `evidence/agenda-s6/s6b-2-detalhe-do-encaixe.png`
+- Opção "Permitir encaixe" nas configurações —
+  `evidence/agenda-s6/s6b-3-opcao-encaixe.png`
+
+### Limitações conhecidas
+- **Mesmo início:** o índice do núcleo `calendar_appointments_sem_duplicata_idx` impede dois compromissos ativos do mesmo
+  profissional começando no mesmo instante; o encaixe precisa começar em outro minuto (409 `encaixe_mesmo_inicio`).
+  Liberar exige mudar índice do núcleo — decisão do dono.
+- Papéis personalizados (ex.: "Coordenação clínica" do seed) não recebem a chave sozinhos: o dono concede.
+- Jornada/bloqueio do encaixe conferidos em `lib/clinic/agenda/encaixe.ts`; aviso mínimo e intervalo da grade não valem no encaixe.

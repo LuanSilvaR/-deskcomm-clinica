@@ -472,6 +472,8 @@ function BlocoDeAgendamento({
       aria-label={`${agendamento.titulo}, ${format(comeca, "HH:mm")} ${t("às")} ${format(termina, "HH:mm")}${
         agendamento.quemSeraAtendido ? `, ${t("com")} ${agendamento.quemSeraAtendido}` : ""
       }${pessoa ? `, ${t("atendido por")} ${pessoa.nome}` : ""}${rotuloDoStatus}${
+        agendamento.etiqueta ? `, ${agendamento.etiqueta}` : ""
+      }${
         doGoogle ? `, ${t("ocupado na agenda do Google")}` : ""
       }`}
       className={cn(
@@ -529,6 +531,15 @@ function BlocoDeAgendamento({
         {/* FORK clinic: o ícone do status da visita (texto no aria-label). */}
         <StatusNoBloco agendamento={agendamento} />
         {tituloDoBloco}
+        {/* FORK clinic (agenda S6b): etiqueta de encaixe. */}
+        {agendamento.etiqueta ? (
+          <span
+            data-testid="etiqueta-do-compromisso"
+            className="ml-1 rounded-sm bg-warning/20 px-1 text-[9px] font-medium uppercase text-text"
+          >
+            {agendamento.etiqueta}
+          </span>
+        ) : null}
       </span>
       {duracao >= 45 && (
         <span className="ml-1 truncate text-[10px] leading-3 tabular-nums text-text-muted">

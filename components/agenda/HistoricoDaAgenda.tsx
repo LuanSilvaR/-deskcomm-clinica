@@ -102,11 +102,14 @@ export function HistoricoDaAgenda({
   onFaltou,
   onConfirmar,
   ocultarAcoesAusentes = false,
+  etiquetas,
   className,
 }: {
   agendamentos: Agendamento[];
   pessoas: Pessoa[];
   agora: Date;
+  /** FORK clinic (agenda S6b): id -> rótulo (ex.: "Encaixe"). Ausente = nada muda. */
+  etiquetas?: Record<string, string>;
   onRemarcar?: (id: string) => void;
   onCancelar?: (id: string) => void;
   /**
@@ -245,6 +248,12 @@ export function HistoricoDaAgenda({
                   <Badge variant={variante} className="shrink-0">
                     {t(ROTULO_DA_SITUACAO[a.situacao])}
                   </Badge>
+                  {/* FORK clinic (agenda S6b): etiqueta de encaixe. */}
+                  {etiquetas?.[a.id] ? (
+                    <Badge variant="warning" className="shrink-0" data-testid="etiqueta-do-compromisso">
+                      {t(etiquetas[a.id] ?? "")}
+                    </Badge>
+                  ) : null}
                   {/* FORK clinic: status da visita, confirmação e faltas. */}
                   <StatusNaLinha agendamento={a} />
                   <div className="flex shrink-0 items-center gap-1">

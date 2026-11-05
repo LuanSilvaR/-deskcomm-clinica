@@ -12993,6 +12993,20 @@ export const DICIONARIO: Traducoes = {
   "Não foi possível conferir a agenda agora.": { es: "No fue posible verificar la agenda ahora." },
   "Bloquear horário": { es: "Bloquear horario" },
   "O horário bloqueado deixa de ser oferecido para marcar.": { es: "El horario bloqueado deja de ofrecerse para agendar." },
+  // FORK clinic (agenda S6b): encaixe.
+  "Encaixe": { es: "Sobrecupo" },
+  "Horário ocupado": { es: "Horario ocupado" },
+  "Quem ocupa este horário": { es: "Quién ocupa este horario" },
+  "Encaixar": { es: "Sobrecupo" },
+  "Motivo do encaixe": { es: "Motivo del sobrecupo" },
+  "mínimo de 5 caracteres": { es: "mínimo 5 caracteres" },
+  "Encaixando…": { es: "Agregando…" },
+  "Confirmar encaixe": { es: "Confirmar sobrecupo" },
+  "Escolha um tipo de agendamento.": { es: "Elija un tipo de cita." },
+  "Não foi encaixado. Tente de novo.": { es: "No se pudo agregar. Inténtelo de nuevo." },
+  "Encaixe ligado": { es: "Sobrecupo activado" },
+  "Encaixe desligado": { es: "Sobrecupo desactivado" },
+  "Permitir encaixe (marcar por cima de um horário ocupado, com motivo)": { es: "Permitir sobrecupo (agendar sobre un horario ocupado, con motivo)" },
 };
 
 /**

@@ -54,6 +54,7 @@ export function AgendaInterativa({
   donoId,
   foraDaAgenda,
   podeRemarcar = true,
+  etiquetas,
   className,
 }: {
   /**
@@ -114,6 +115,8 @@ export function AgendaInterativa({
    * tem `agenda.remarcar`). Default `true` = comportamento do upstream inalterado.
    */
   podeRemarcar?: boolean;
+  /** FORK clinic (agenda S6b): id -> rótulo (ex.: "Encaixe"). Ausente = nada muda. */
+  etiquetas?: Record<string, string>;
   className?: string;
 }) {
   const localeDaData = useLocaleDeData();
@@ -185,15 +188,18 @@ export function AgendaInterativa({
     }
   }, [agendamentos, otimista]);
 
-  const desenhados = React.useMemo(
-    () =>
-      otimista
-        ? agendamentos.map((a) =>
-            a.id === otimista.id ? { ...a, comeca: otimista.comeca, termina: otimista.termina } : a,
-          )
-        : agendamentos,
-    [agendamentos, otimista],
-  );
+  const desenhados = React.useMemo(() => {
+    const base = otimista
+      ? agendamentos.map((a) =>
+          a.id === otimista.id ? { ...a, comeca: otimista.comeca, termina: otimista.termina } : a,
+        )
+      : agendamentos;
+    // FORK clinic (agenda S6b): a etiqueta viaja no próprio agendamento.
+    return etiquetas ? base.map((a) => {
+      const rotulo = etiquetas[a.id];
+      return rotulo ? { ...a, etiqueta: t(rotulo) } : a;
+    }) : base;
+  }, [agendamentos, otimista, etiquetas, t]);
 
   const confirmar = React.useCallback(() => {
     if (!pendente) return;

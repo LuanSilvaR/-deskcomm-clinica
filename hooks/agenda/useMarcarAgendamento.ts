@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/types";
 
 export interface NovoAgendamento {
   event_type_id: string;
@@ -25,6 +26,8 @@ export interface NovoAgendamento {
    * Google quando existe. Vazio ou ausente não convida outra pessoa.
    */
   guest_email?: string;
+  /** FORK clinic (agenda S6b): marcar POR CIMA de horário ocupado, com motivo (5–500). */
+  encaixe?: { motivo: string };
 }
 
 /**
@@ -52,6 +55,10 @@ export function useMarcarAgendamento() {
       toast.success(t("Agendamento criado."));
       void qc.invalidateQueries({ queryKey: ["agenda"] });
     },
-    onError: (err) => showApiError(err),
+    // FORK clinic (agenda S6b): o 409 de horário ocupado é tratado pelo painel (lista + encaixe), sem toast.
+    onError: (err) => {
+      if (err instanceof ApiError && err.status === 409 && err.code === "agenda_horario_ocupado") return;
+      showApiError(err);
+    },
   });
 }
