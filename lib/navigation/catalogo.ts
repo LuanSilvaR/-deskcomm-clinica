@@ -193,7 +193,8 @@ export const NAV_CATALOG = [
     // a porta diária é o botão "Dia por profissional" no cabeçalho da Agenda.
     href: "/app/agenda/profissionais",
     label: "Dia por profissional",
-    permissao: "agenda.ver",
+    // FORK clinic (agenda S6a): a porta é ver a agenda dos OUTROS.
+    permissao: "agenda.ver_outros",
     description: "Quem atende no dia, lado a lado: jornada, bloqueios e compromissos de cada profissional.",
     icon: "CalendarBlank",
     group: "atendimento",

@@ -32,7 +32,7 @@ const DIA = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requirePermission("agenda.ver", { requestId, resource: "agenda" });
+  const authz = await requirePermission("agenda.ver_outros", { requestId, resource: "agenda" }); // S6a: a equipe lado a lado é ver os outros
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
   const org = authz.org.orgId;

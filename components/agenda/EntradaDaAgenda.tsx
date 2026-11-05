@@ -6,8 +6,11 @@ import { DetalheDoCompromisso } from "./DetalheDoCompromisso";
 export function EntradaDaAgenda({
   onContext,
   onRemarcar,
+  acoes,
 }: {
   onContext: (contact: string, conversation: string) => void;
+  /** FORK clinic (agenda S6a): repassado ao detalhe; ausente = como no upstream. */
+  acoes?: { marcar: boolean; cancelar: boolean; desfecho: boolean };
   /** FORK clinic (agenda S4): "Remarcar" no detalhe abre o painel da Agenda. */
   onRemarcar?: (id: string) => void;
 }) {
@@ -32,6 +35,7 @@ export function EntradaDaAgenda({
     <DetalheDoCompromisso
       key={params.get("compromisso")}
       podeEditar={podeEditar}
+      acoes={acoes}
       id={params.get("compromisso")}
       onClose={() => router.replace("/app/agenda")}
       onRemarcar={

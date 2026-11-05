@@ -35,6 +35,7 @@ import { ApiError } from "@/lib/api/types";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { escopoDaAgendaNoServidor } from "@/lib/clinic/agenda/escopo-no-servidor";
+import { exigeChavesDaAgenda, type VerboDaAgenda } from "@/lib/clinic/agenda/guarda-da-agenda";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 import {
@@ -311,21 +312,21 @@ export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  return despachar(req, marcarSchema, marcarAgendamentoHandler, 201);
+  return despachar(req, marcarSchema, marcarAgendamentoHandler, 201, "marcar");
 }
 
 export async function PATCH(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  return despachar(req, alterarSchema, alterarAgendamentoHandler, 200);
+  return despachar(req, alterarSchema, alterarAgendamentoHandler, 200, "alterar");
 }
 
 export async function DELETE(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  return despachar(req, cancelarSchema, cancelarAgendamentoHandler, 200);
+  return despachar(req, cancelarSchema, cancelarAgendamentoHandler, 200, "cancelar");
 }
 
 /**
@@ -344,6 +345,7 @@ async function despachar<T>(
     input: T,
   ) => Promise<Record<string, unknown>>,
   status: 200 | 201,
+  verbo: VerboDaAgenda,
 ): Promise<Response> {
   const requestId = randomUUID();
 
@@ -361,6 +363,14 @@ async function despachar<T>(
   }
 
   const supabase = await createClient();
+  // FORK clinic (agenda S6a): além do papel, a CHAVE da ação (agenda.marcar/remarcar/cancelar/registrar_desfecho).
+  const negado = await exigeChavesDaAgenda(
+    supabase,
+    { organizationId: activeOrg.orgId, userId: user.id, role: activeOrg.role, idioma: user.idioma, requestId },
+    verbo,
+    parsed.data,
+  );
+  if (negado) return negado;
   try {
     const resultado = await handler(
       supabase,

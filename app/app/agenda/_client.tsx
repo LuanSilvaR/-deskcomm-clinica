@@ -536,8 +536,10 @@ export function AgendaClient({
         <AvisoDaConexaoGoogle />
         <EntradaDaAgenda
           onContext={onContext}
+          // FORK clinic (agenda S6a): o detalhe mostra só as ações das chaves que a pessoa tem.
+          acoes={{ marcar: can("agenda.marcar"), cancelar: can("agenda.cancelar"), desfecho: can("agenda.registrar_desfecho") }}
           onRemarcar={
-            podeMarcar
+            podeMarcar && can("agenda.remarcar")
               ? (id) => {
                   setRemarcandoId(id);
                   setMarcando(true);
@@ -1239,16 +1241,18 @@ export function AgendaClient({
         pessoas={pessoas}
         agora={new Date()}
         className="max-h-[320px]"
+        // FORK clinic (agenda S6a): cada ação só com a sua chave; sem ela o botão some.
+        ocultarAcoesAusentes
         // ⚠️ ESTAS DUAS PROPS FALTAVAM, e a ausência tinha cara de permissão.
         // `HistoricoDaAgenda` usa `disabled={!onRemarcar}`; sem elas os botões
         // nasciam cinzas em toda linha, de toda organização — e o `title` dizia
         // "Disponível quando a agenda estiver conectada", que é falso: PATCH e
         // DELETE não tocam o Google. Só a IA conseguia remarcar ou cancelar.
-        onRemarcar={(id) => {
+        onRemarcar={!can("agenda.remarcar") ? undefined : (id) => {
           setRemarcandoId(id);
           setMarcando(true);
         }}
-        onCancelar={(id) => {
+        onCancelar={!can("agenda.cancelar") ? undefined : (id) => {
           setMotivo("");
           setCancelandoId(id);
         }}
@@ -1263,7 +1267,7 @@ export function AgendaClient({
         // CONFIRMAR usa o mesmo `desfecho` que realizado/faltou: os três são o
         // mesmo PATCH com outro `status`. Criar um hook próprio duplicaria a
         // invalidação de cache e o tratamento de erro por nada.
-        onConfirmar={(id) =>
+        onConfirmar={!can("agenda.marcar") ? undefined : (id) =>
           desfecho.mutate({
             id,
             revision: agendamentos.find((a) => a.id === id)?.revision,
@@ -1272,14 +1276,14 @@ export function AgendaClient({
         }
         // FORK clinic (agenda S4): na clínica, "realizado" é só do profissional
         // do agendamento (o servidor confere de novo).
-        onRealizado={regrasDeProfissionais && donoDaAgenda !== usuarioId ? undefined : (id) =>
+        onRealizado={!can("agenda.registrar_desfecho") || (regrasDeProfissionais && donoDaAgenda !== usuarioId) ? undefined : (id) =>
           desfecho.mutate({
             id,
             revision: agendamentos.find((a) => a.id === id)?.revision,
             status: "completed",
           })
         }
-        onFaltou={(id) =>
+        onFaltou={!can("agenda.registrar_desfecho") ? undefined : (id) =>
           desfecho.mutate({
             id,
             revision: agendamentos.find((a) => a.id === id)?.revision,
@@ -1415,6 +1419,8 @@ export function AgendaClient({
            não `replace`, porque é o que o Histórico faz com `<Link>` e é o que faz
            o botão voltar do celular fechar o detalhe. */
         onAbrirAgendamento={(id) => router.push(`/app/agenda?compromisso=${id}`)}
+        // FORK clinic (agenda S6a): sem `agenda.remarcar`, o card não arrasta.
+        podeRemarcar={can("agenda.remarcar")}
         className="min-h-0 flex-1"
       />
       </div>
