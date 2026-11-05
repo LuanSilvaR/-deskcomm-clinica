@@ -26,7 +26,7 @@ Fora: a rota da jornada aceitar `profissionais.gerenciar` sem nível manager (it
     salvou o número do registro; API: jornada da dra.ana 403, ficha da dra.ana 403, `/eu` com especialidades 422, com `user_id` 422.
   - dono: atalho "Profissionais e especialidades" no painel de Configurações abre a tela completa (7 cartões).
 
-![menu do profissional](../../../evidence/97-profissional/97-1-menu-do-profissional.png)
-![registro salvo](../../../evidence/97-profissional/97-3-registro-salvo.png)
-![própria jornada](../../../evidence/97-profissional/97-4-minha-jornada.png)
-![atalho em Configurações](../../../evidence/97-profissional/97-5-atalho-em-configuracoes.png)
+- menu do profissional — `evidence/97-profissional/97-1-menu-do-profissional.png`
+- registro salvo — `evidence/97-profissional/97-3-registro-salvo.png`
+- própria jornada — `evidence/97-profissional/97-4-minha-jornada.png`
+- atalho em Configurações — `evidence/97-profissional/97-5-atalho-em-configuracoes.png`
