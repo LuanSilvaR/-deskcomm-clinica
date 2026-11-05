@@ -28,8 +28,9 @@ A saída (exit code + resumo) vai no corpo do PR. Fluxo e estágios: docs/backlo
 3. Tabela nova tenant-aware = `organization_id uuid not null references organizations(id) on delete cascade`
    + RLS `tenant_isolation_<tabela>_all` via `fn_user_org_ids()` + teste de isolamento (2 orgs) em tests/invariants.
 4. Migration = TRIPLA: arquivo `supabase/migrations/<ts>_<NNNN>_clinic_<slug>.sql` + linha no MANIFEST.md
-   + apêndice idempotente no fim de `supabase/baseline.sql` (é o que a instalação aplica). NNNN do fork = faixa 9xxx
-   (maior 9xxx + 1: `ls supabase/migrations | grep -oE "_9[0-9]{3}_" | sort | tail -1`), para nunca colidir com o upstream.
+   + apêndice idempotente no fim de `supabase/baseline.sql` (é o que a instalação aplica). NNNN do fork = faixa **8xxx**
+   (maior 8xxx + 1: `ls supabase/migrations | grep -oE "_8[0-9]{3}_" | sort | tail -1`), desde 2026-11-04: o upstream
+   passou a usar 9xxx. As 9001–9046 do fork ficam como estão; migration trazida do upstream mantém o número de lá.
 5. Nunca editar migration existente. Função nova em `public`: `revoke execute ... from public, anon`.
 6. Auth: `getUser()`, nunca `getSession()`. Admin client (service role) filtra `organization_id` resolvido de
    fonte confiável (cookie/JWT/token), NUNCA do body. Zod em todo input externo. Respostas via `ok()`/`fail()`.
