@@ -15,6 +15,7 @@ import { recursosLigados } from "@/lib/clinic/agenda/recursos";
 import {
   clinicProfissionaisLigado,
   encaixeLigadoNaConfig,
+  tituloLivreLigadoNaConfig,
   estoqueLigado,
   procedimentosLigados,
   prontuarioLigado,
@@ -64,6 +65,7 @@ export default async function ProfissionaisPage() {
         prontuarioInicial={prontuarioLigado(org?.settings)}
         estoqueInicial={estoqueLigado(org?.settings)}
         encaixeInicial={encaixeLigadoNaConfig(org?.settings)}
+        tituloLivreInicial={tituloLivreLigadoNaConfig(org?.settings)}
         prazoInicial={prazoDoPacienteHoras(org?.settings)}
         podeLigar={permissoes.has("configuracoes.opcoes_da_clinica")}
         ehGerencia={ehGerencia}
