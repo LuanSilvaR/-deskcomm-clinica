@@ -185,3 +185,11 @@ Universo: 1447 PRs do upstream entre `09d4da341` (2026-09-22) e `7dcd2fff5` (202
 | #3278 | `c132deee4` | fix(inbox): o aviso de sugestão que falhou sai da tela quando a conversa anda |
 | #3763 | `e383e704e` | fix(inbox): sugestão de resposta fala na voz do atendente, não na do agente (#3757) |
 | #3871 | `515d0a37e` | docs(adr): ADR-0007 — consulta em pg com Postgres próprio (#3715) |
+
+### Lote 2 — adaptação manual (épico #78)
+
+Uma funcionalidade por branch `feature/upstream-<id>`, cherry-pick `-m 1 -x` com ajuste ao fork, ou reescrita quando não aplica.
+
+| Issue | PR upstream | Commit upstream | Título | Adaptação |
+|---|---|---|---|---|
+| #86 | #3670 | — (não aplicado) | feat(contatos): endereço da pessoa física | **não absorvido**: o fork já guarda o endereço do paciente em `clinic_patient_profiles` (9002), com tela e anonimização; as colunas do upstream em `contacts` duplicariam a fonte. Do PR só se aproveitou a ideia que faltava no fork: a ficha (endereço, RG mascarado no PDF, emergência, responsável) entra no pedido de acesso LGPD (`lib/lgpd/export-collector.ts`, `pdf-renderer.tsx`) |
