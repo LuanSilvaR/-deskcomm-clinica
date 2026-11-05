@@ -32,9 +32,21 @@
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AgendaClient } from "@/app/app/agenda/_client";
+
+// FORK: a agenda do fork mostra os horários no fuso LOCAL do processo (sem o
+// `fusoDaAgenda` do upstream). Fixa São Paulo para o "10:00" não depender da
+// máquina — o CI roda em UTC.
+const TZ_ORIGINAL = process.env.TZ;
+beforeAll(() => {
+  process.env.TZ = "America/Sao_Paulo";
+});
+afterAll(() => {
+  if (TZ_ORIGINAL === undefined) delete process.env.TZ;
+  else process.env.TZ = TZ_ORIGINAL;
+});
 
 // A tela pergunta a largura da janela num efeito (no celular a visão padrão é a
 // do dia) e o ambiente de teste não traz `matchMedia`.
