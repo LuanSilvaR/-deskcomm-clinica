@@ -11697,6 +11697,14 @@ export const DICIONARIO: Traducoes = {
   "Órgão emissor (opcional)": { es: "Órgano emisor (opcional)" },
   "UF do RG (opcional)": { es: "Estado del documento (opcional)" },
   "CEP": { es: "Código postal" },
+  "Buscando endereço…": { es: "Buscando dirección…" },
+  "CEP com 8 números.": { es: "Código postal con 8 números." },
+  "CEP não encontrado. Confira o número ou preencha o endereço à mão.": {
+    es: "Código postal no encontrado. Revise el número o complete la dirección a mano.",
+  },
+  "Não foi possível consultar o CEP agora. Preencha o endereço à mão.": {
+    es: "No fue posible consultar el código postal ahora. Complete la dirección a mano.",
+  },
   "Logradouro": { es: "Calle" },
   "Complemento (opcional)": { es: "Complemento (opcional)" },
   "Bairro": { es: "Barrio" },

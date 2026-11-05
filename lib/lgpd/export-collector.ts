@@ -16,6 +16,39 @@ import type { Json } from "@/lib/database.types";
 // Public types
 // ---------------------------------------------------------------------------
 
+/**
+ * FORK clinic (#86): a ficha cadastral do paciente (`clinic_patient_profiles`) —
+ * endereço, documento de identidade, contato de emergência e responsável.
+ *
+ * Entra porque a anonimização APAGA a ficha (`trg_contacts_anonimizado_limpa_ficha_clinic`,
+ * migration 9002), e o que se apaga a pedido do titular é o que se entrega a
+ * pedido dele. O CPF do responsável fica de fora: é cifrado e é dado de terceiro.
+ */
+export interface FichaClinicaSnapshot {
+  social_name: string | null;
+  sex: string | null;
+  rg: string | null;
+  rg_issuer: string | null;
+  rg_uf: string | null;
+  profession: string | null;
+  marital_status: string | null;
+  referral_source: string | null;
+  cep: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  district: string | null;
+  city: string | null;
+  uf: string | null;
+  emergency_name: string | null;
+  emergency_relationship: string | null;
+  emergency_phone: string | null;
+  guardian_name: string | null;
+  guardian_relationship: string | null;
+  completed_at: string | null;
+  updated_at: string | null;
+}
+
 export interface ContactSnapshot {
   id: string;
   name: string | null;
@@ -455,6 +488,8 @@ export interface ExportPayload {
   generated_at: string;
   no_local_footprint: boolean;
   contact: ContactSnapshot | null;
+  /** FORK clinic (#86): ausente/`null` quando o paciente não tem ficha clínica. */
+  ficha_clinica?: FichaClinicaSnapshot | null;
   consents: ConsentRow[];
   conversations: ConversationRow[];
   messages_count_total: number;
@@ -709,6 +744,27 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
           granted_at: null,
         });
       }
+    }
+  }
+
+  // FORK clinic (#86): a ficha cadastral do paciente.
+  let ficha_clinica: FichaClinicaSnapshot | null = null;
+  if (contactId) {
+    const { data, error } = await admin
+      .from("clinic_patient_profiles")
+      .select(
+        "social_name, sex, rg, rg_issuer, rg_uf, profession, marital_status, referral_source, cep, street, number, complement, district, city, uf, emergency_name, emergency_relationship, emergency_phone, guardian_name, guardian_relationship, completed_at, updated_at",
+      )
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .maybeSingle();
+    if (error) {
+      logger.warn("[lgpd-export-worker] ficha clínica load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    } else if (data) {
+      ficha_clinica = data as FichaClinicaSnapshot;
     }
   }
 
@@ -1397,6 +1453,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       orders.length === 0 &&
       prospecting_candidates.length === 0,
     contact,
+    ficha_clinica,
     consents,
     conversations,
     messages_count_total,

@@ -230,6 +230,19 @@ export function LgpdExportPdf({ data, unsignedWarning }: Props): React.ReactElem
           </View>
         ) : null}
 
+        {/* FORK clinic (#86): a ficha cadastral do paciente, só quando existe. */}
+        {data.ficha_clinica ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Ficha do paciente</Text>
+            {linhasDaFicha(data.ficha_clinica).map(([rotulo, valor]) => (
+              <View key={rotulo} style={styles.row}>
+                <Text style={styles.label}>{rotulo}:</Text>
+                <Text style={styles.value}>{valor}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {/* Consents */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Consentimentos</Text>
@@ -469,4 +482,24 @@ export async function renderLgpdPdf(
   const element = <LgpdExportPdf data={data} unsignedWarning={options.unsignedWarning} />;
   const buf = await renderToBuffer(element);
   return buf as Buffer;
+}
+
+/** FORK clinic (#86): as linhas preenchidas da ficha, na ordem da tela. O RG sai mascarado, como o CPF. */
+export function linhasDaFicha(f: NonNullable<ExportPayload["ficha_clinica"]>): Array<[string, string]> {
+  const endereco = [f.street, f.number, f.complement, f.district, f.city, f.uf, f.cep].filter(Boolean).join(", ");
+  const rg = f.rg ? `***${f.rg.slice(-3)}${f.rg_issuer ? ` (${f.rg_issuer}${f.rg_uf ? `/${f.rg_uf}` : ""})` : ""}` : "";
+  const emergencia = [f.emergency_name, f.emergency_relationship, f.emergency_phone].filter(Boolean).join(" · ");
+  const responsavel = [f.guardian_name, f.guardian_relationship].filter(Boolean).join(" · ");
+  const linhas: Array<[string, string | null]> = [
+    ["Nome social", f.social_name],
+    ["Sexo", f.sex],
+    ["RG", rg],
+    ["Profissão", f.profession],
+    ["Estado civil", f.marital_status],
+    ["Como conheceu", f.referral_source],
+    ["Endereço", endereco],
+    ["Contato de emergência", emergencia],
+    ["Responsável", responsavel],
+  ];
+  return linhas.filter((l): l is [string, string] => Boolean(l[1]));
 }

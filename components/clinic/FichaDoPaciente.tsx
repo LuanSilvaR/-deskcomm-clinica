@@ -12,12 +12,13 @@
  * pede o número de novo para TROCAR.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { normalizarCep, type ResultadoDoCep } from "@/lib/clinic/pacientes/cep";
 import { idadeEm } from "@/lib/clinic/pacientes/ficha";
 import { hojeNaClinica } from "@/lib/clinic/pacientes/servidor";
 
@@ -133,6 +134,11 @@ export function FichaDoPaciente({
   // copiando estado — o que vem do banco é derivado a cada render).
   const [editados, setCampos] = useState<Campos | null>(null);
   const campos = editados ?? (query.data ? camposDe(query.data) : null);
+  // #86: o CEP completo busca o endereço. `ultimoCep` evita repetir a consulta
+  // do mesmo número e descarta a resposta de um CEP que já foi trocado.
+  const ultimoCep = useRef<string | null>(null);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [avisoDoCep, setAvisoDoCep] = useState<string | null>(null);
 
   const salvar = useMutation({
     mutationFn: (c: Campos) => {
@@ -164,6 +170,57 @@ export function FichaDoPaciente({
     : ficha.situacao.menorDeIdade;
   const muda = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setCampos({ ...campos, [k]: e.target.value });
+
+  const aoMudarCep = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digitado = e.target.value;
+    const base: Campos = { ...(campos ?? {}), cep: digitado };
+    setCampos(base);
+    const cep = normalizarCep(digitado);
+    if (!cep) {
+      ultimoCep.current = null;
+      setAvisoDoCep(null);
+      return;
+    }
+    if (cep === ultimoCep.current) return;
+    ultimoCep.current = cep;
+    setBuscandoCep(true);
+    setAvisoDoCep(null);
+    apiClient
+      .get<{ data: ResultadoDoCep }>(`/api/v1/clinic/cep/${cep}`)
+      .then((r) => {
+        if (ultimoCep.current !== cep) return;
+        const resultado = r.data;
+        if (resultado.tipo === "encontrado") {
+          const achado = resultado.endereco;
+          // Só o que o serviço trouxe substitui; CEP de cidade única vem sem
+          // logradouro, e o que a recepção já digitou fica.
+          setCampos((antes) => {
+            const atual = antes ?? base;
+            return {
+              ...atual,
+              logradouro: achado.logradouro || atual.logradouro || "",
+              bairro: achado.bairro || atual.bairro || "",
+              cidade: achado.cidade || atual.cidade || "",
+              uf: achado.uf || atual.uf || "",
+              codigo_ibge: achado.codigo_ibge || atual.codigo_ibge || "",
+            };
+          });
+          document.getElementById("ficha-numero")?.focus();
+        } else if (resultado.tipo === "nao_encontrado") {
+          setAvisoDoCep(t("CEP não encontrado. Confira o número ou preencha o endereço à mão."));
+        } else {
+          setAvisoDoCep(t("Não foi possível consultar o CEP agora. Preencha o endereço à mão."));
+        }
+      })
+      .catch(() => {
+        if (ultimoCep.current === cep) {
+          setAvisoDoCep(t("Não foi possível consultar o CEP agora. Preencha o endereço à mão."));
+        }
+      })
+      .finally(() => {
+        if (ultimoCep.current === cep) setBuscandoCep(false);
+      });
+  };
 
   const campo = (k: string, rotulo: string, extra: Partial<React.InputHTMLAttributes<HTMLInputElement>> = {}) => (
     <label className="block">
@@ -264,9 +321,30 @@ export function FichaDoPaciente({
       {secao(
         t("Endereço"),
         <>
-          {campo("cep", t("CEP"), { inputMode: "numeric", placeholder: "00000-000" })}
+          <div>
+            <label className="block">
+              <span className="block text-sm">{t("CEP")}</span>
+              <input
+                aria-label={t("CEP")}
+                className="mt-1 w-full rounded-md border bg-surface p-2"
+                disabled={!podeEditar}
+                inputMode="numeric"
+                placeholder="00000-000"
+                maxLength={9}
+                value={campos.cep ?? ""}
+                onChange={aoMudarCep}
+              />
+            </label>
+            <p className="mt-1 min-h-5 text-sm" aria-live="polite" data-testid="ficha-cep-aviso">
+              {buscandoCep ? (
+                <span className="text-text-muted">{t("Buscando endereço…")}</span>
+              ) : avisoDoCep ? (
+                <span className="text-warning">{avisoDoCep}</span>
+              ) : null}
+            </p>
+          </div>
           {campo("logradouro", t("Logradouro"))}
-          {campo("numero", t("Número"))}
+          {campo("numero", t("Número"), { id: "ficha-numero" })}
           {campo("complemento", t("Complemento (opcional)"))}
           {campo("bairro", t("Bairro"))}
           {campo("cidade", t("Cidade"))}

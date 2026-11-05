@@ -810,6 +810,17 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "endpoint da plataforma que roda o crawler do Google Places (`lib/prospecting/provider.ts`). É o destino do request, com a chave da PRÓPRIA organização — trocar pelo domínio do revendedor quebraria a chamada, e esconder o nome não esconde para onde o dado vai.",
   },
+  // ── FORK clinic (#86): consulta de CEP da ficha do paciente ──
+  "viacep.com.br": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "serviço público de CEP que preenche o endereço da ficha do paciente (`lib/clinic/pacientes/cep.ts`), chamado pelo SERVIDOR com só o CEP. É o destino do request — trocar pelo domínio do revendedor faria a consulta não chegar a lugar nenhum.",
+  },
+  "brasilapi.com.br": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "fonte de reserva da mesma consulta de CEP (`lib/clinic/pacientes/cep.ts`), usada quando a ViaCEP falha ou demora. Mesmo motivo: é o destino da chamada, não texto de tela.",
+  },
   // ── identificador de fio: NÃO é destino de chamada nem texto de tela ──────
   "s.whatsapp.net": {
     categoria: "PROTOCOLO",
