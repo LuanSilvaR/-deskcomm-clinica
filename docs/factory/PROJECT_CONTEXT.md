@@ -33,7 +33,7 @@ Vitest 4 (unit, db, cercas) · Playwright · pnpm 9 / Node 22 · Docker (app, wo
 ## Convenções que mais pesam
 
 Todas estão no [CLAUDE.md](../../CLAUDE.md) (regras invioláveis 1–9). As que mais derrubam PR:
-código novo em `clinic`/`clinic_*`; migration TRIPLA na faixa 9xxx; `getUser()` e nunca `getSession()`;
+código novo em `clinic`/`clinic_*`; migration TRIPLA na faixa 8xxx (desde 2026-11-04); `getUser()` e nunca `getSession()`;
 `organization_id` de fonte confiável; feature nasce desligada por organização; prontuário assinado é
 imutável; sem dados reais de paciente; Conventional Commits em pt-BR.
 

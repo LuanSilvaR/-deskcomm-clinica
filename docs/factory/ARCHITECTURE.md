@@ -21,7 +21,7 @@ Navegador ──▶ proxy.ts (borda) ──▶ app/ (Server Components + Route H
    service role filtra `organization_id` resolvido de cookie/JWT/token, nunca do body.
 2. **Fork isolado do core**: o que é clínico vive em `lib/clinic`, `components/clinic`, tabelas `clinic_*`.
    Tocar o core = aprovação + linha no UPSTREAM.md (o hook `.claude/hooks/proteger.sh` bloqueia as áreas sensíveis).
-3. **Banco evolui só para a frente**: migration nova (faixa 9xxx) + MANIFEST + apêndice idempotente no baseline;
+3. **Banco evolui só para a frente**: migration nova (faixa 8xxx do fork; 9001–9046 são as antigas) + MANIFEST + apêndice idempotente no baseline;
    nunca editar migration existente; expand/contract para renomear ou remover.
 4. **Assíncrono por fila**: trigger escreve em `event_log`; worker faz o efeito externo.
 5. **Feature por flag de organização**, desligada por padrão.
