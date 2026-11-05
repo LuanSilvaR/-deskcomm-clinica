@@ -115,7 +115,7 @@ describe("LGPD: anonimizar apaga a transcrição da mídia (8001)", () => {
 
   it("⭐ a cura do apêndice alcança quem já era anonimizado e poupa quem voltou", async () => {
     const baseline = readFileSync(join(process.cwd(), "supabase", "baseline.sql"), "utf8");
-    const bloco = baseline.slice(baseline.indexOf("(migration 8001, fork) ----"));
+    const bloco = baseline.slice(baseline.indexOf("-- ---- clinic: anonimizar apaga a transcrição da mídia (migration 8001, fork) ----"));
     const cura = /update public\.messages set\s+media_derived_text = null,[\s\S]*?where body = '\[mensagem anonimizada\]'[\s\S]*?;/.exec(
       bloco.slice(0, bloco.indexOf("\n-- ---- fim clinic (migration 8001")),
     )?.[0];
