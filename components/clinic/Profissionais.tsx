@@ -255,12 +255,15 @@ export function Profissionais({ podeEditar }: { podeEditar: boolean }) {
           open={!!jornadaDe}
           onOpenChange={(o) => !o && setJornadaDe(null)}
           isPending={atualizarJornada.isPending}
-          onSave={(windows, timezone) =>
-            atualizarJornada.mutate(
-              { userId: jornadaDe.userId, patch: { schedule: { timezone, windows } } },
-              { onSuccess: () => setJornadaDe(null) },
-            )
-          }
+          onSave={async (windows, timezone) => {
+            // Igual ao /app/team (upstream #2460): o diálogo fica aberto e mostra o
+            // resumo do que o servidor gravou; fecha quando a pessoa pede.
+            const resposta = await atualizarJornada.mutateAsync({
+              userId: jornadaDe.userId,
+              patch: { schedule: { timezone, windows } },
+            });
+            return resposta?.data?.schedule?.windows ?? [];
+          }}
         />
       ) : null}
     </section>

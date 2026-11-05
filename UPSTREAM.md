@@ -192,4 +192,5 @@ Uma funcionalidade por branch `feature/upstream-<id>`, cherry-pick `-m 1 -x` com
 
 | Issue | PR upstream | Commit upstream | Título | Adaptação |
 |---|---|---|---|---|
+| #82 | #2460 | `69b062547` | feat(agenda): copiar os horários da jornada para os outros dias + resumo do que foi gravado | sem `organizationTimezone` (o fork não tem o fuso da organização como padrão); `components/clinic/Profissionais.tsx` passa a usar o mesmo `onSave` assíncrono |
 | #88 | #2060, #2154 | `8a159f592`, `744de28a7` | fix(inbox): transcrição do áudio no balão, com "Transcrevendo…" enquanto é gerada | select de `/api/v1/messages` sem `sent_on_behalf_of_user_id` (o fork não tem); relógio de 60 s do `MessageBubble` trazido do upstream; chave "Imagem da nota interna" fora (feature que o fork não tem). Anonimizar ainda NÃO apaga a transcrição: falta a migration 0497 do upstream |
