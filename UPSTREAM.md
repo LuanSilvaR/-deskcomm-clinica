@@ -193,3 +193,4 @@ Uma funcionalidade por branch `feature/upstream-<id>`, cherry-pick `-m 1 -x` com
 | Issue | PR upstream | Commit upstream | Título | Adaptação |
 |---|---|---|---|---|
 | #95 | #1989 | `816e59a62`, `e4dc88018`, `4a2ee6030` | fix(lgpd): anonimizar apaga também a transcrição da mídia | migration 0497 reescrita como **8001** do fork, sobre o corpo atual da cascata (0379); varredura diária só com o passo da transcrição (sem os passos do #1957, que o fork não tem); teste de banco sem o caminho do gatilho 0391/0494, que o fork não tem; adaptador `pg-como-supabase` com `not(is)` igual ao upstream |
+| #96 | — (migration 0391) | `802ea6dfc` | fix(lgpd): anonimizar pela tela redige mensagens, conversa e resumo do agente | migration 0391 reescrita como **8002** do fork, já com `media_derived_text = null` (gatilho e cura); sem o braço de grupo/notas (0494) e sem a mudança do coletor de exportação; teste de banco com dados fictícios e caso da cura |
