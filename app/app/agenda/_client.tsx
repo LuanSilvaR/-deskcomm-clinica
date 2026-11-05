@@ -40,6 +40,7 @@ import { tiposDoProfissional, type ContextoDaUrl } from "@/lib/clinic/agenda/con
 import { algumFiltroAtivo, passaNosFiltros } from "@/lib/clinic/agenda/filtros-da-agenda";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAgendamentos } from "@/hooks/agenda/useAgendamentos";
+import { useFechamentosDaGrade } from "@/hooks/agenda/useFechamentosDaGrade";
 import { useHorariosLivres } from "@/hooks/agenda/useHorariosLivres";
 import { useMarcarAgendamento, type NovoAgendamento } from "@/hooks/agenda/useMarcarAgendamento";
 // FORK clinic (agenda S6b)
@@ -512,6 +513,19 @@ export function AgendaClient({
   const agendamentosDaGrade = React.useMemo(
     () => agendamentos.filter((a) => a.situacao !== "cancelled"),
     [agendamentos],
+  );
+
+  // As faixas FECHADAS em "Dias fora da rotina" — e pela MESMA pessoa isolada que
+  // os agendamentos: isolar a Ana e ver o fechamento do Bruno faria a grade dela
+  // parecer fechada sem estar.
+  // FORK: a grade do fork desenha no horário do navegador, então o recorte de dias
+  // da consulta usa o mesmo fuso; a pessoa isolada é o `donoDaAgenda` do fork.
+  const fusoDoNavegador = React.useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  const { data: fechamentosVivos } = useFechamentosDaGrade(recorteDaGrade, fusoDoNavegador);
+  const fechamentosDaGrade = React.useMemo(
+    () =>
+      (fechamentosVivos ?? []).filter((f) => !donoDaAgenda || f.responsavelId === donoDaAgenda),
+    [fechamentosVivos, donoDaAgenda],
   );
 
   /**
@@ -1515,6 +1529,7 @@ export function AgendaClient({
         agora={new Date()}
         pessoas={pessoas}
         agendamentos={agendamentosDaGrade}
+        fechamentos={fechamentosDaGrade}
         recorte={recorteDaGrade}
         tipos={tiposDoContexto.map((t) => ({ id: t.id, nome: t.nome, duracaoMin: t.duracaoMin }))}
         tipo={tipo ? { id: tipo.id, duracaoMin: tipo.duracaoMin } : null}
