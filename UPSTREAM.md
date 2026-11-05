@@ -185,3 +185,11 @@ Universo: 1447 PRs do upstream entre `09d4da341` (2026-09-22) e `7dcd2fff5` (202
 | #3278 | `c132deee4` | fix(inbox): o aviso de sugestão que falhou sai da tela quando a conversa anda |
 | #3763 | `e383e704e` | fix(inbox): sugestão de resposta fala na voz do atendente, não na do agente (#3757) |
 | #3871 | `515d0a37e` | docs(adr): ADR-0007 — consulta em pg com Postgres próprio (#3715) |
+
+### Lote 2 — adaptação manual (épico #78)
+
+Uma funcionalidade por branch `feature/upstream-<id>`, cherry-pick `-m 1 -x` com ajuste ao fork, ou reescrita quando não aplica.
+
+| Issue | PR upstream | Commit upstream | Título | Adaptação |
+|---|---|---|---|---|
+| #88 | #2060, #2154 | `8a159f592`, `744de28a7` | fix(inbox): transcrição do áudio no balão, com "Transcrevendo…" enquanto é gerada | select de `/api/v1/messages` sem `sent_on_behalf_of_user_id` (o fork não tem); relógio de 60 s do `MessageBubble` trazido do upstream; chave "Imagem da nota interna" fora (feature que o fork não tem). Anonimizar ainda NÃO apaga a transcrição: falta a migration 0497 do upstream |
