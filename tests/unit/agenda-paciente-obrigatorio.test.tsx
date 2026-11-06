@@ -18,7 +18,7 @@ const RESPONSAVEL: Pessoa = { id: "p1", nome: "Ana", trilha: 1 };
 const HORARIO: HorarioLivre = { instante: "2026-09-16T13:00:00.000Z", rotulo: "10:00" };
 
 function montar(pendencia?: string) {
-  const onConfirmar = vi.fn(async () => undefined);
+  const onConfirmar = vi.fn(async (_instante: string, _duracaoMin?: number) => undefined);
   render(
     <PainelDeMarcacao
       ancora={AGORA}
@@ -48,6 +48,6 @@ describe("o paciente é obrigatório para confirmar", () => {
     const { onConfirmar } = montar(undefined);
     expect(screen.queryByTestId("pendencia-da-marcacao")).toBeNull();
     fireEvent.click(screen.getByTestId("confirmar-marcacao"));
-    expect(onConfirmar).toHaveBeenCalledWith(HORARIO.instante);
+    expect(onConfirmar.mock.calls[0]?.[0]).toBe(HORARIO.instante);
   });
 });
