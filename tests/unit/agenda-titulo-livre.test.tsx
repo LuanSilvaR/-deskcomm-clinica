@@ -160,7 +160,7 @@ vi.mock("@/hooks/agenda/usePessoasDaAgenda", () => ({
 
 vi.mock("@/lib/agenda/vinculo-da-marcacao", () => ({
   useVinculoDaMarcacao: () => ({
-    vinculo: { contact: null, conversation: null },
+    vinculo: { contact: "contato-1", conversation: null },
     registrarRota: vi.fn(() => false),
     reiniciar: vi.fn(),
     escolher: vi.fn(),

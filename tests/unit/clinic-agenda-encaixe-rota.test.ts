@@ -30,6 +30,7 @@ const ORG = "22222222-2222-4222-8222-222222222222";
 const BRUNO = "11111111-1111-4111-8111-111111111111";
 const TIPO = "44444444-4444-4444-8444-444444444444";
 const OCUPANTE = "55555555-5555-4555-8555-555555555555";
+const PACIENTE = "66666666-6666-4666-8666-666666666666";
 const INICIO = "2026-11-09T10:00:00-03:00"; // segunda-feira
 
 interface Mundo {
@@ -62,6 +63,7 @@ function banco() {
       };
     }
     if (tabela === "organizations") return { settings: { clinic: { encaixe: mundo.flag } } };
+    if (tabela === "contacts") return { id: PACIENTE };
     return null;
   };
   return {
@@ -94,7 +96,7 @@ async function marcar(actor: HandlerCtx["actor"], encaixe?: { motivo: string }) 
   return marcarAgendamentoHandler(
     banco() as never,
     ctx(actor),
-    { event_type_id: TIPO, starts_at: INICIO, owner_user_id: BRUNO, ...(encaixe ? { encaixe } : {}) } as never,
+    { event_type_id: TIPO, contact_id: PACIENTE, starts_at: INICIO, owner_user_id: BRUNO, ...(encaixe ? { encaixe } : {}) } as never,
   );
 }
 async function recusa(p: Promise<unknown>): Promise<ApiError> {

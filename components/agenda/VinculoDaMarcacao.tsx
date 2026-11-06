@@ -58,10 +58,10 @@ export function VinculoDaMarcacao({
   // vira o nome, e o contato volta selecionado.
   const buscou = termo.length > 0 && !contactId;
   const nadaEncontrado = buscou && !lista.isLoading && contatos.length === 0;
-  const opcoes: Array<{ id: string; name: string; detalhe?: string | null }> = [
-    { id: "", name: t("Compromisso pessoal, sem cliente") },
-    ...contatos,
-  ];
+  // FORK clinic: sem a opção "Compromisso pessoal, sem cliente" — todo
+  // agendamento é de um paciente (a rota recusa com `agenda_sem_paciente`).
+  // Tempo do profissional sem paciente é "Bloquear horário".
+  const opcoes: Array<{ id: string; name: string; detalhe?: string | null }> = contatos;
 
   function abrir() {
     setAberto(true);
@@ -106,13 +106,16 @@ export function VinculoDaMarcacao({
     <div className="space-y-3">
       <div>
         <label className="block">
-          {t("Quem será atendido")}
+          {t("Quem será atendido")}{" "}
+          {/* FORK clinic: o paciente é obrigatório (`agenda_sem_paciente`). */}
+          <span className="font-normal opacity-70">({t("obrigatório")})</span>
           <div className="relative">
           <input
             id="quem-sera-atendido"
             data-testid="quem-sera-atendido"
             data-contact-id={contactId}
             role="combobox"
+            aria-required="true"
             aria-expanded={aberto}
             aria-controls={listaId}
             aria-autocomplete="list"
@@ -135,7 +138,7 @@ export function VinculoDaMarcacao({
             >
               {opcoes.map((opcao, i) => (
                 <li
-                  key={opcao.id || "pessoal"}
+                  key={opcao.id}
                   id={`${listaId}-${i}`}
                   role="option"
                   aria-selected={opcao.id === contactId}
