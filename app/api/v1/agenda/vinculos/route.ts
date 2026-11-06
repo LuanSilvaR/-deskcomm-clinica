@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { detalheDoPaciente } from "@/lib/clinic/pacientes/busca";
-import { filtrarContatosPelaBusca } from "@/lib/clinic/pacientes/busca-no-banco";
+import { filtrarContatosPelaBusca, idsPorTelefoneExtra } from "@/lib/clinic/pacientes/busca-no-banco";
 import { contarFaltas } from "@/lib/clinic/agenda/faltas";
 import { contatosDoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
     // FORK clinic (E1): nome, telefone, CPF (hash exato, nunca em claro) ou data
     // de nascimento num campo só — ver lib/clinic/pacientes/busca.ts. Vírgulas e
     // parênteses delimitam o DSL do PostgREST; a função já os tira do nome.
-    contacts = filtrarContatosPelaBusca(contacts, input.data.q);
+    contacts = filtrarContatosPelaBusca(contacts, input.data.q, await idsPorTelefoneExtra(db, auth.org.orgId, input.data.q));
   }
   const result = await contacts;
   if (result.error)

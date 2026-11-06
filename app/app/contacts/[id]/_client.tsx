@@ -35,11 +35,14 @@ import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
 import { HistoricoDeAtendimentos } from "@/components/clinic/HistoricoDeAtendimentos";
 import { DialButton } from "@/components/voice/DialButton";
 import type { Contact } from "@/lib/types/contacts";
+import { NovoTelefoneExtra, RemoverTelefoneExtra } from "@/components/clinic/TelefonesExtras";
 
 interface Props {
   contactId: string;
   /** FORK clinic (prontuário F2): `?aba=` da URL, lido pela página (servidor). */
   abaInicial?: string;
+  /** FORK clinic (#85): `settings.clinic.varios_telefones` — adicionar/remover telefones extras. */
+  variosTelefones?: boolean;
 }
 
 /**
@@ -88,7 +91,16 @@ function textoDoWhatsappDoTelefone(
  * Editar é a próxima entrega (B2). Só aparece com extra; sem extra a ficha segue
  * como hoje, com o tipo ao lado do número.
  */
-function BlocoDeTelefones({ contato, t }: { contato: Contact; t: (texto: string) => string }) {
+function BlocoDeTelefones({
+  contato,
+  t,
+  editavel = false,
+}: {
+  contato: Contact;
+  t: (texto: string) => string;
+  /** FORK clinic (#85): com a opção ligada, remover cada extra e adicionar um novo. */
+  editavel?: boolean;
+}) {
   const extras = contato.additional_phones ?? [];
   return (
     <div className="md:col-span-2">
@@ -128,15 +140,17 @@ function BlocoDeTelefones({ contato, t }: { contato: Contact; t: (texto: string)
               {extra.origin === "fusao" && (
                 <span className="text-xs text-muted-foreground">{t("Veio da junção de fichas")}</span>
               )}
+              {editavel && <RemoverTelefoneExtra contactId={contato.id} telefone={extra.phone_number} />}
             </li>
           ))}
         </ul>
+        {editavel && <NovoTelefoneExtra contactId={contato.id} />}
       </dd>
     </div>
   );
 }
 
-export function ContactDetailClient({ contactId, abaInicial }: Props) {
+export function ContactDetailClient({ contactId, abaInicial, variosTelefones = false }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
   // FORK clinic (prontuário F2): a aba Prontuário só existe para quem tem
@@ -320,8 +334,8 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
                 Com telefone extra, o bloco lista o principal e os extras (Spec 31,
                 B1). Sem extra, a linha segue como hoje; o tipo do número vai ao lado.
               */}
-              {contact.additional_phones && contact.additional_phones.length > 0 ? (
-                <BlocoDeTelefones contato={contact} t={t} />
+              {variosTelefones || (contact.additional_phones && contact.additional_phones.length > 0) ? (
+                <BlocoDeTelefones contato={contact} t={t} editavel={variosTelefones} />
               ) : (
                 <div>
                   <dt className="text-xs uppercase text-muted-foreground">{t("Telefone")}</dt>

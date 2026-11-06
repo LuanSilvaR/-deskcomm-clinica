@@ -41,6 +41,7 @@ import {
   encaixeLigadoNaConfig,
   tituloLivreLigadoNaConfig,
   duracaoNaMarcacaoLigadaNaConfig,
+  variosTelefonesLigadoNaConfig,
   estoqueLigado,
   menuClinicaLigado,
   procedimentosLigados,
@@ -76,6 +77,8 @@ async function lerOpcoes(orgId: string) {
     titulo_livre: tituloLivreLigadoNaConfig(settings),
     // FORK clinic (#80)
     duracao_na_marcacao: duracaoNaMarcacaoLigadaNaConfig(settings),
+    // FORK clinic (#85)
+    varios_telefones: variosTelefonesLigadoNaConfig(settings),
   };
 }
 
@@ -102,6 +105,7 @@ const patchSchema = z
     encaixe: z.boolean().optional(),
     titulo_livre: z.boolean().optional(),
     duracao_na_marcacao: z.boolean().optional(),
+    varios_telefones: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "Informe se o módulo fica ligado.",
@@ -120,6 +124,7 @@ const FUNCAO_DA_OPCAO = {
   encaixe: "fn_clinic_definir_encaixe",
   titulo_livre: "fn_clinic_definir_titulo_livre",
   duracao_na_marcacao: "fn_clinic_definir_duracao_na_marcacao",
+  varios_telefones: "fn_clinic_definir_varios_telefones",
 } as const;
 
 export async function PATCH(req: NextRequest): Promise<Response> {
@@ -184,7 +189,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao", "varios_telefones"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });

@@ -17,6 +17,7 @@ import {
   encaixeLigadoNaConfig,
   tituloLivreLigadoNaConfig,
   duracaoNaMarcacaoLigadaNaConfig,
+  variosTelefonesLigadoNaConfig,
   estoqueLigado,
   procedimentosLigados,
   prontuarioLigado,
@@ -68,6 +69,7 @@ export default async function ProfissionaisPage() {
         encaixeInicial={encaixeLigadoNaConfig(org?.settings)}
         tituloLivreInicial={tituloLivreLigadoNaConfig(org?.settings)}
         duracaoNaMarcacaoInicial={duracaoNaMarcacaoLigadaNaConfig(org?.settings)}
+        variosTelefonesInicial={variosTelefonesLigadoNaConfig(org?.settings)}
         prazoInicial={prazoDoPacienteHoras(org?.settings)}
         podeLigar={permissoes.has("configuracoes.opcoes_da_clinica")}
         ehGerencia={ehGerencia}

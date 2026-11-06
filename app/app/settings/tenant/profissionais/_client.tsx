@@ -28,6 +28,8 @@ interface Props {
   encaixeInicial?: boolean;
   /** FORK clinic (#81): `settings.clinic.titulo_livre`. */
   tituloLivreInicial?: boolean;
+  /** FORK clinic (#85): `settings.clinic.varios_telefones`. */
+  variosTelefonesInicial?: boolean;
   /** FORK clinic (#80): `settings.clinic.duracao_na_marcacao`. */
   duracaoNaMarcacaoInicial?: boolean;
   prazoInicial: number;
@@ -47,6 +49,7 @@ export function ProfissionaisClient({
   estoqueInicial,
   encaixeInicial = false,
   tituloLivreInicial = false,
+  variosTelefonesInicial = false,
   duracaoNaMarcacaoInicial = false,
   prazoInicial,
   podeLigar,
@@ -64,6 +67,7 @@ export function ProfissionaisClient({
   const [estoque, setEstoque] = useState(estoqueInicial);
   const [encaixe, setEncaixe] = useState(encaixeInicial);
   const [tituloLivre, setTituloLivre] = useState(tituloLivreInicial);
+  const [variosTelefones, setVariosTelefones] = useState(variosTelefonesInicial);
   const [duracaoNaMarcacao, setDuracaoNaMarcacao] = useState(duracaoNaMarcacaoInicial);
   const [prazo, setPrazo] = useState(prazoInicial);
   const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
@@ -96,6 +100,13 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { titulo_livre: boolean } }>("/api/v1/clinic/config", { titulo_livre: valor }),
     onSuccess: (r) => setTituloLivre(r.data.titulo_livre),
+    onError: showApiError,
+  });
+
+  const alternarVariosTelefones = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { varios_telefones: boolean } }>("/api/v1/clinic/config", { varios_telefones: valor }),
+    onSuccess: (r) => setVariosTelefones(r.data.varios_telefones),
     onError: showApiError,
   });
 
@@ -408,6 +419,29 @@ export function ProfissionaisClient({
               onClick={() => alternarTituloLivre.mutate(!tituloLivre)}
             >
               {tituloLivre ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${variosTelefones ? "" : "bg-muted"}`}
+          data-testid="clinic-varios-telefones"
+        >
+          <div>
+            <p className="font-medium">{variosTelefones ? t("Vários telefones na ficha ligados") : t("Vários telefones na ficha desligados")}</p>
+            <p className="text-sm text-text-muted">
+              {t("Permitir guardar mais de um telefone na ficha do paciente (a mensagem de qualquer um deles cai na mesma ficha)")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-varios-telefones-alternar"
+              variant={variosTelefones ? "outline" : "default"}
+              disabled={alternarVariosTelefones.isPending}
+              aria-label={t("Permitir guardar mais de um telefone na ficha do paciente (a mensagem de qualquer um deles cai na mesma ficha)")}
+              onClick={() => alternarVariosTelefones.mutate(!variosTelefones)}
+            >
+              {variosTelefones ? t("Desligar") : t("Ligar")}
             </Button>
           ) : null}
         </section>
