@@ -151,7 +151,7 @@ describe("contatos da Agenda pelo nome exibido", () => {
       </QueryClientProvider>,
     );
     const espera = { timeout: 5000 };
-    const campo = screen.getByLabelText("Quem será atendido");
+    const campo = screen.getByLabelText(/Quem será atendido/);
     expect(campo).toHaveAttribute("data-contact-id", "");
     fireEvent.focus(campo);
     fireEvent.change(campo, { target: { value: "Cíntia" } });

@@ -106,13 +106,16 @@ export function VinculoDaMarcacao({
     <div className="space-y-3">
       <div>
         <label className="block">
-          {t("Quem será atendido")}
+          {t("Quem será atendido")}{" "}
+          {/* FORK clinic: o paciente é obrigatório (`agenda_sem_paciente`). */}
+          <span className="font-normal opacity-70">({t("obrigatório")})</span>
           <div className="relative">
           <input
             id="quem-sera-atendido"
             data-testid="quem-sera-atendido"
             data-contact-id={contactId}
             role="combobox"
+            aria-required="true"
             aria-expanded={aberto}
             aria-controls={listaId}
             aria-autocomplete="list"
