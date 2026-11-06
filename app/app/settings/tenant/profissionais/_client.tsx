@@ -28,6 +28,8 @@ interface Props {
   encaixeInicial?: boolean;
   /** FORK clinic (#81): `settings.clinic.titulo_livre`. */
   tituloLivreInicial?: boolean;
+  /** FORK clinic (#80): `settings.clinic.duracao_na_marcacao`. */
+  duracaoNaMarcacaoInicial?: boolean;
   prazoInicial: number;
   podeLigar: boolean;
   ehGerencia: boolean;
@@ -45,6 +47,7 @@ export function ProfissionaisClient({
   estoqueInicial,
   encaixeInicial = false,
   tituloLivreInicial = false,
+  duracaoNaMarcacaoInicial = false,
   prazoInicial,
   podeLigar,
   ehGerencia,
@@ -61,6 +64,7 @@ export function ProfissionaisClient({
   const [estoque, setEstoque] = useState(estoqueInicial);
   const [encaixe, setEncaixe] = useState(encaixeInicial);
   const [tituloLivre, setTituloLivre] = useState(tituloLivreInicial);
+  const [duracaoNaMarcacao, setDuracaoNaMarcacao] = useState(duracaoNaMarcacaoInicial);
   const [prazo, setPrazo] = useState(prazoInicial);
   const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
 
@@ -92,6 +96,13 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { titulo_livre: boolean } }>("/api/v1/clinic/config", { titulo_livre: valor }),
     onSuccess: (r) => setTituloLivre(r.data.titulo_livre),
+    onError: showApiError,
+  });
+
+  const alternarDuracaoNaMarcacao = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { duracao_na_marcacao: boolean } }>("/api/v1/clinic/config", { duracao_na_marcacao: valor }),
+    onSuccess: (r) => setDuracaoNaMarcacao(r.data.duracao_na_marcacao),
     onError: showApiError,
   });
 
@@ -397,6 +408,29 @@ export function ProfissionaisClient({
               onClick={() => alternarTituloLivre.mutate(!tituloLivre)}
             >
               {tituloLivre ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${duracaoNaMarcacao ? "" : "bg-muted"}`}
+          data-testid="clinic-duracao-na-marcacao"
+        >
+          <div>
+            <p className="font-medium">{duracaoNaMarcacao ? t("Duração na marcação ligada") : t("Duração na marcação desligada")}</p>
+            <p className="text-sm text-text-muted">
+              {t("Permitir ajustar a duração do atendimento ao marcar (o padrão continua sendo a do tipo)")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-duracao-na-marcacao-alternar"
+              variant={duracaoNaMarcacao ? "outline" : "default"}
+              disabled={alternarDuracaoNaMarcacao.isPending}
+              aria-label={t("Permitir ajustar a duração do atendimento ao marcar (o padrão continua sendo a do tipo)")}
+              onClick={() => alternarDuracaoNaMarcacao.mutate(!duracaoNaMarcacao)}
+            >
+              {duracaoNaMarcacao ? t("Desligar") : t("Ligar")}
             </Button>
           ) : null}
         </section>
