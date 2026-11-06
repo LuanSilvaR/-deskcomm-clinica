@@ -268,6 +268,13 @@ export async function marcarAgendamentoHandler(
 ): Promise<Record<string, unknown>> {
   const inicio = new Date(input.starts_at);
 
+  // FORK clinic: todo agendamento é de um paciente. Sem `contact_id` não
+  // há para quem lembrar, cobrar nem registrar o atendimento — recusa nomeada,
+  // antes de qualquer outra (é o primeiro campo da tela).
+  if (!input.contact_id) {
+    throw new ApiError(422, "agenda_sem_paciente", undefined, ctx.requestId, "Escolha o paciente que será atendido.");
+  }
+
   // FORK clinic (agenda S6b): encaixe é ato de PESSOA (C11) — IA/token/webhook nunca encaixam.
   if (input.encaixe && ctx.actor.type !== "user") {
     throw new ApiError(403, "encaixe_so_pessoa", undefined, ctx.requestId, "Encaixe só pode ser feito por uma pessoa da equipe.");

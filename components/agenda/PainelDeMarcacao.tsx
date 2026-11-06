@@ -88,6 +88,7 @@ export function PainelDeMarcacao({
   quemSeraAtendido,
   horarioInicial,
   permiteEncaixe = false,
+  pendencia,
   onConfirmar,
   onVerNaAgenda,
   className,
@@ -236,6 +237,12 @@ export function PainelDeMarcacao({
    * argumento; o painel nunca marcou por conta própria e continua não marcando.
    */
   onConfirmar?: (instante: string, duracaoMin: number) => void | Promise<unknown>;
+  /**
+   * FORK clinic: o que ainda falta para poder confirmar (ex.: "Escolha o
+   * paciente"). Presente, o "Confirmar" fica desabilitado e a frase aparece
+   * acima dele — a rota recusa do mesmo jeito (`agenda_sem_paciente`).
+   */
+  pendencia?: string;
   className?: string;
 }) {
   const localeDaData = useLocaleDeData();
@@ -983,6 +990,11 @@ export function PainelDeMarcacao({
                 </p>
               </div>
             )}
+            {pendencia ? (
+              <p data-testid="pendencia-da-marcacao" role="status" className="mt-3 text-xs font-medium text-destructive">
+                {pendencia}
+              </p>
+            ) : null}
             <div className="mt-3 flex items-center justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setHorario(null)}>
                 {t("Voltar")}
@@ -991,8 +1003,9 @@ export function PainelDeMarcacao({
                 size="sm"
                 data-testid="confirmar-marcacao"
                 // Sem duração válida não há o que confirmar: os horários em tela
-                // foram calculados para OUTRA régua (ver `mudarDuracao`).
-                disabled={!duracaoOk}
+                // foram calculados para OUTRA régua (ver `mudarDuracao`). Sem
+                // paciente também não (FORK clinic, `pendencia`).
+                disabled={!duracaoOk || Boolean(pendencia)}
                 onClick={async () => {
                   // ⚠️ ERA `setMarcado(horario); onConfirmar?.(...)` — nesta ordem
                   // e sem esperar. A vista de sucesso aparecia por estado local do

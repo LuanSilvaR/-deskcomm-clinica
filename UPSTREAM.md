@@ -84,6 +84,7 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Espanhol da trava; spec clinic-trava-de-sobreposicao | 15fcc4dc9 |
 | lib/audit/actions.ts (de novo), lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Ação clinic.confirmacao_sem_resposta, espanhol da confirmação, spec clinic-confirmacao-de-consulta | 4170bf147 |
 | app/api/v1/agenda/agendamentos/_handler.ts (de novo) | Compareceu recusa ficha incompleta (flag clinic.ficha_obrigatoria) | ff7f769e9 |
+| app/api/v1/agenda/agendamentos/_handler.ts (de novo), components/agenda/PainelDeMarcacao.tsx, app/app/agenda/_client.tsx (de novo) | Agendamento exige paciente: 422 agenda_sem_paciente e "Confirmar" travado no painel (prop `pendencia`) | e8d86b484 |
 | app/app/contacts/**, components/contacts/*, components/inbox/CRMSidePanel.tsx, components/inbox/ConversationHeader.tsx, lib/ai/inbox-destino.ts | Textos "Contato" → "Paciente" (só texto de tela) | 6ac024745 |
 | components/contacts/ContactsTable.tsx, app/app/contacts/[id]/_client.tsx, components/agenda/DetalheDoCompromisso.tsx | Selo da ficha, aba Ficha do paciente, botão Paciente chegou | f9fe73593 |
 | tests/e2e/* (vários), tests/sonda-inbox-cabe-na-tela.ts, tests/unit/rotulo-tags-do-contato.test.tsx, tests/unit/inbox-header-nao-trava.test.tsx | Seletores acompanham o renome para Paciente | 6ac024745 |
