@@ -13036,6 +13036,8 @@ export const DICIONARIO: Traducoes = {
   "Encaixando…": { es: "Agregando…" },
   "Confirmar encaixe": { es: "Confirmar sobrecupo" },
   "Escolha um tipo de agendamento.": { es: "Elija un tipo de cita." },
+  "Escolha o paciente antes de confirmar.": { es: "Elija el paciente antes de confirmar." },
+  "Escolha o paciente que será atendido.": { es: "Elija el paciente que será atendido." },
   "Não foi encaixado. Tente de novo.": { es: "No se pudo agregar. Inténtelo de nuevo." },
   "Encaixe ligado": { es: "Sobrecupo activado" },
   "Encaixe desligado": { es: "Sobrecupo desactivado" },

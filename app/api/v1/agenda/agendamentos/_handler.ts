@@ -342,6 +342,11 @@ export async function marcarAgendamentoHandler(
   //
   // O molde é o de `app/api/v1/messages/_handler.ts:333` — resolver contra a org
   // e recusar com 404, sem dizer se o id existe noutro lugar.
+  // FORK clinic: todo agendamento é de um paciente. Sem `contact_id` não
+  // há para quem lembrar, cobrar nem registrar o atendimento — recusa nomeada.
+  if (!input.contact_id) {
+    throw new ApiError(422, "agenda_sem_paciente", undefined, ctx.requestId, "Escolha o paciente que será atendido.");
+  }
   if (input.contact_id) {
     const { data: contato, error: erroContato } = await supabase
       .from("contacts")

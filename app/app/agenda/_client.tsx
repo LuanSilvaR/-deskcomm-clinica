@@ -561,6 +561,8 @@ export function AgendaClient({
   // lugar monta o corpo, para o "Encaixar" reenviar EXATAMENTE a marcação recusada.
   const marcarEm = (instante: string, encaixe?: { motivo: string }) => {
     if (!tipo) return Promise.reject(new Error(t("Escolha um tipo de agendamento.")));
+    // FORK clinic: agendamento sem paciente não existe — a rota recusa também.
+    if (!contactId) return Promise.reject(new Error(t("Escolha o paciente antes de confirmar.")));
     const corpo: NovoAgendamento = {
       event_type_id: tipo.id,
       ...(profissionalDaMarcacao ? { owner_user_id: profissionalDaMarcacao } : {}),
@@ -1209,6 +1211,8 @@ export function AgendaClient({
                 // rota permite sair da grade. Vale também para REMARCAR, que é
                 // este mesmo painel com PATCH — e a rota aplica a mesma regra lá.
                 permiteEncaixe={podeMarcar}
+                // FORK clinic: sem paciente o "Confirmar" fica travado (remarcar mantém o do compromisso).
+                pendencia={!remarcandoId && !contactId ? t("Escolha o paciente antes de confirmar.") : undefined}
                 // ESTE é o fio que faltava. Sem ele o "Marcado ✓" era estado
                 // local do React e nenhuma linha nascia no banco.
                 onConfirmar={(instante) => {

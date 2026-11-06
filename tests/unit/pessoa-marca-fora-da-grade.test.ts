@@ -60,6 +60,8 @@ const ORG = "aaaaaaaa-0000-4000-8000-00000000000a";
 const DONO = "bbbbbbbb-0000-4000-8000-00000000000b";
 const OUTRO_DONO = "bbbbbbbb-0000-4000-8000-0000000000bb";
 const TIPO = "cccccccc-0000-4000-8000-00000000000c";
+/** Paciente fictício: todo agendamento tem paciente (FORK clinic, `agenda_sem_paciente`). */
+const PACIENTE = "dddddddd-0000-4000-8000-00000000000d";
 const CONEXAO = "eeeeeeee-0000-4000-8000-00000000000e";
 const MEU_COMPROMISSO = "ffffffff-0000-4000-8000-00000000000f";
 
@@ -111,6 +113,7 @@ type Olhar = "tudo" | "atendente";
 const ESCONDIDAS_DO_ATENDENTE = new Set(["calendar_connections", "calendar_selected_external_events"]);
 
 function bancoEmMemoria(tabelas: Record<string, Linha[]>, olhar: Olhar = "tudo"): Banco {
+  tabelas.contacts ??= [{ id: PACIENTE, organization_id: ORG }];
   const leitura = (tabela: string) => {
     const filtros: Array<(linha: Linha) => boolean> = [];
     const visiveis = () => (olhar === "atendente" && ESCONDIDAS_DO_ATENDENTE.has(tabela) ? [] : (tabelas[tabela] ?? []));
@@ -321,14 +324,14 @@ describe("marcar — a regra no ponto de uso", () => {
     // Sem este caso, a recusa do próximo poderia vir de jornada mal lida, fuso
     // errado ou dublê quebrado — e pareceria a regra funcionando.
     const banco = agenda();
-    await marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NA_GRADE });
+    await marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NA_GRADE });
     expect(criados(banco), "a IA não conseguiu marcar nem o horário que a grade oferece").toHaveLength(1);
   });
 
   it("a IA fora da grade é RECUSADA — mesmo com a agenda livre", async () => {
     const banco = agenda();
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: FORA_DA_GRADE }),
+      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: FORA_DA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
     expect(criados(banco), "a IA marcou num horário que a agenda nunca ofereceu").toHaveLength(0);
   });
@@ -336,14 +339,14 @@ describe("marcar — a regra no ponto de uso", () => {
   it("o token de servidor fora da grade é RECUSADO — integração não escolhe encaixe", async () => {
     const banco = agenda();
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(TOKEN), { event_type_id: TIPO, starts_at: FORA_DA_GRADE }),
+      marcarAgendamentoHandler(banco.client, ctx(TOKEN), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: FORA_DA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
     expect(criados(banco)).toHaveLength(0);
   });
 
   it("a pessoa fora da grade, em horário livre, MARCA", async () => {
     const banco = agenda();
-    await marcarAgendamentoHandler(banco.client, ctx(PESSOA), { event_type_id: TIPO, starts_at: FORA_DA_GRADE });
+    await marcarAgendamentoHandler(banco.client, ctx(PESSOA), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: FORA_DA_GRADE });
     expect(criados(banco), "a pessoa não conseguiu marcar o encaixe").toHaveLength(1);
     expect(criados(banco)[0]).toMatchObject({ starts_at: FORA_DA_GRADE, ends_at: FIM_DO_ENCAIXE });
   });
@@ -352,7 +355,7 @@ describe("marcar — a regra no ponto de uso", () => {
     // Quarta 20:00 em São Paulo; a jornada termina às 18:00.
     const banco = agenda();
     await marcarAgendamentoHandler(banco.client, ctx(PESSOA), {
-      event_type_id: TIPO,
+      event_type_id: TIPO, contact_id: PACIENTE,
       starts_at: "2026-10-07T23:00:00.000Z",
     });
     expect(criados(banco), "o encaixe ainda respeita o expediente — a pessoa não consegue marcar depois do horário").toHaveLength(1);
@@ -368,7 +371,7 @@ describe("marcar — a regra no ponto de uso", () => {
         agendamento(FORA_DA_GRADE, FIM_DO_ENCAIXE, { owner_user_id: OUTRO_DONO }),
       ],
     });
-    await marcarAgendamentoHandler(banco.client, ctx(PESSOA), { event_type_id: TIPO, starts_at: FORA_DA_GRADE });
+    await marcarAgendamentoHandler(banco.client, ctx(PESSOA), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: FORA_DA_GRADE });
     expect(
       criados(banco),
       "o encaixe foi recusado por algo que não ocupa o horário — cancelado/falta liberam, e a agenda de outra pessoa não é a deste dono",
@@ -378,7 +381,7 @@ describe("marcar — a regra no ponto de uso", () => {
   it("a pessoa fora da grade em cima de OUTRO AGENDAMENTO é RECUSADA", async () => {
     const banco = agenda({ agendamentos: [agendamento(NA_GRADE, "2026-10-07T14:00:00.000Z")] });
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(PESSOA), { event_type_id: TIPO, starts_at: FORA_DA_GRADE }),
+      marcarAgendamentoHandler(banco.client, ctx(PESSOA), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: FORA_DA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
     expect(criados(banco), "duas pessoas na mesma cadeira: o encaixe passou por cima de um compromisso").toHaveLength(0);
   });
@@ -388,7 +391,7 @@ describe("marcar — a regra no ponto de uso", () => {
     // horário (ela lê o Google), e o encaixe marcava nele (lia só o CRM).
     const banco = agenda({ eventosDoGoogle: [eventoDoGoogle(NA_GRADE, "2026-10-07T14:00:00.000Z")] });
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(PESSOA), { event_type_id: TIPO, starts_at: FORA_DA_GRADE }),
+      marcarAgendamentoHandler(banco.client, ctx(PESSOA), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: FORA_DA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
     expect(
       criados(banco),
@@ -405,7 +408,7 @@ describe("a grade (IA) — a mesma coleta que o encaixe lê", () => {
   it("a IA NA grade em cima de um evento do GOOGLE do mesmo responsável é RECUSADA", async () => {
     const banco = agenda({ eventosDoGoogle: [eventoDoGoogle(NA_GRADE, "2026-10-07T14:00:00.000Z")] });
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NA_GRADE }),
+      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
     expect(
       criados(banco),
@@ -417,7 +420,7 @@ describe("a grade (IA) — a mesma coleta que o encaixe lê", () => {
     const banco = agenda({
       eventosDoGoogle: [eventoDoGoogle(NA_GRADE, "2026-10-07T14:00:00.000Z", OUTRO_DONO)],
     });
-    await marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NA_GRADE });
+    await marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NA_GRADE });
     expect(
       criados(banco),
       "o Google de outra pessoa ocupou a agenda deste responsável — a coleta perdeu o filtro de dono",
@@ -427,7 +430,7 @@ describe("a grade (IA) — a mesma coleta que o encaixe lê", () => {
   it("a IA NA grade em cima de OUTRO AGENDAMENTO é RECUSADA", async () => {
     const banco = agenda({ agendamentos: [agendamento(NA_GRADE, "2026-10-07T14:00:00.000Z")] });
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NA_GRADE }),
+      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
     expect(criados(banco), "a IA marcou em cima de um compromisso que já existe").toHaveLength(0);
   });
@@ -441,7 +444,7 @@ describe("o Google do DONO vale para quem não enxerga a conexão dele (issue #8
 
   it("CONTROLE: com o olhar do atendente e sem Google, o encaixe MARCA — o olhar sozinho não barra", async () => {
     const banco = agenda({ olhar: "atendente" });
-    await marcarAgendamentoHandler(banco.client, ctx(ATENDENTE), { event_type_id: TIPO, starts_at: FORA_DA_GRADE });
+    await marcarAgendamentoHandler(banco.client, ctx(ATENDENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: FORA_DA_GRADE });
     expect(criados(banco)).toHaveLength(1);
   });
 
@@ -451,7 +454,7 @@ describe("o Google do DONO vale para quem não enxerga a conexão dele (issue #8
       eventosDoGoogle: [eventoDoGoogle(NA_GRADE, "2026-10-07T14:00:00.000Z")],
     });
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(ATENDENTE), { event_type_id: TIPO, starts_at: FORA_DA_GRADE }),
+      marcarAgendamentoHandler(banco.client, ctx(ATENDENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: FORA_DA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
     expect(
       criados(banco),
@@ -465,7 +468,7 @@ describe("o Google do DONO vale para quem não enxerga a conexão dele (issue #8
       eventosDoGoogle: [eventoDoGoogle(NA_GRADE, "2026-10-07T14:00:00.000Z")],
     });
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NA_GRADE }),
+      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
     expect(criados(banco), "a grade ofereceu o horário do Google do dono a quem não enxerga a conexão").toHaveLength(0);
   });
@@ -478,21 +481,21 @@ describe("a exceção de data é do dia LOCAL — a noite em fuso negativo (issu
 
   it("CONTROLE: sem bloqueio, a IA marca às 21:00 da quarta", async () => {
     const banco = agenda({ fimDaJornada: "23:00" });
-    await marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NOITE });
+    await marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NOITE });
     expect(criados(banco), "a grade não oferece 21:00 nem sem bloqueio — o caso abaixo não provaria nada").toHaveLength(1);
   });
 
   it("a IA às 21:00 de um dia BLOQUEADO é RECUSADA — a exceção é buscada no dia local, não no UTC", async () => {
     const banco = agenda({ fimDaJornada: "23:00", diasBloqueados: ["2026-10-07"] });
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NOITE }),
+      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NOITE }),
     ).rejects.toMatchObject(RECUSA);
     expect(criados(banco), "a IA marcou às 21:00 de um dia bloqueado: a coleta procurou a exceção no dia UTC").toHaveLength(0);
   });
 
   it("a PESSOA às 21:00 do dia bloqueado MARCA — o encaixe dispensa a exceção de data, de propósito", async () => {
     const banco = agenda({ fimDaJornada: "23:00", diasBloqueados: ["2026-10-07"] });
-    await marcarAgendamentoHandler(banco.client, ctx(PESSOA), { event_type_id: TIPO, starts_at: NOITE });
+    await marcarAgendamentoHandler(banco.client, ctx(PESSOA), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NOITE });
     expect(criados(banco)).toHaveLength(1);
   });
 });
@@ -604,7 +607,7 @@ describe("o intervalo antes do atendimento vale na ESCRITA, não só na leitura 
 
   it("CONTROLE: sem intervalo configurado, a IA marca colada no compromisso anterior", async () => {
     const banco = agenda({ agendamentos: [agendamento(VIZINHO_INICIO, VIZINHO_FIM)] });
-    await marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NA_GRADE });
+    await marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NA_GRADE });
     expect(criados(banco), "sem intervalo, colar no vizinho é o comportamento de sempre").toHaveLength(1);
   });
 
@@ -613,14 +616,14 @@ describe("o intervalo antes do atendimento vale na ESCRITA, não só na leitura 
       agendamentos: [agendamento("2026-10-07T12:00:00.000Z", "2026-10-07T12:30:00.000Z")],
       bufferAntesMin: 30,
     });
-    await marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NA_GRADE });
+    await marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NA_GRADE });
     expect(criados(banco), "o intervalo barrou um vizinho que respeita o intervalo pedido").toHaveLength(1);
   });
 
   it("a IA marcar DENTRO do intervalo antes do atendimento é RECUSADA", async () => {
     const banco = agenda({ agendamentos: [agendamento(VIZINHO_INICIO, VIZINHO_FIM)], bufferAntesMin: 30 });
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NA_GRADE }),
+      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
     expect(criados(banco), "a escrita aceitou o horário que a leitura esconde: a coleta ignorou o intervalo").toHaveLength(0);
   });
@@ -631,7 +634,7 @@ describe("o intervalo antes do atendimento vale na ESCRITA, não só na leitura 
       bufferAntesMin: 30,
     });
     await expect(
-      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, starts_at: NA_GRADE }),
+      marcarAgendamentoHandler(banco.client, ctx(AGENTE), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: NA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
     expect(criados(banco)).toHaveLength(0);
   });
@@ -662,7 +665,7 @@ describe("FORK clinic (migration 9005): a trava do banco sai como a MESMA recusa
   it("marcar: o 23P01 do INSERT vira 422 agenda_horario_indisponivel, não 500", async () => {
     const banco = agenda();
     await expect(
-      marcarAgendamentoHandler(comTrava(banco), ctx(PESSOA), { event_type_id: TIPO, starts_at: FORA_DA_GRADE }),
+      marcarAgendamentoHandler(comTrava(banco), ctx(PESSOA), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: FORA_DA_GRADE }),
     ).rejects.toMatchObject(RECUSA);
   });
 
@@ -690,7 +693,7 @@ describe("FORK clinic (migration 9007): falta de sala ou equipamento", () => {
       rpc: (fn: string, args: Linha) => banco.client.rpc(fn, args),
     } as unknown as SupabaseClient;
     await expect(
-      marcarAgendamentoHandler(client, ctx(PESSOA), { event_type_id: TIPO, starts_at: FORA_DA_GRADE }),
+      marcarAgendamentoHandler(client, ctx(PESSOA), { event_type_id: TIPO, contact_id: PACIENTE, starts_at: FORA_DA_GRADE }),
     ).rejects.toMatchObject({ ...RECUSA, message: expect.stringMatching(/sala ou equipamento/) });
   });
 });
