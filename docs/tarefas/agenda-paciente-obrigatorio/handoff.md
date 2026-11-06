@@ -19,9 +19,9 @@ Pedido do dono do produto (06/11/2026): não pode existir agendamento sem pacien
   não grava). Testes que marcavam sem paciente passaram a usar paciente fictício.
 - Tela na 3001, como recepção:
   - sem paciente → Confirmar desabilitado e aviso:
-    ![sem paciente](../../../evidence/agenda-paciente-obrigatorio/pac-1-sem-paciente.png)
+    `evidence/agenda-paciente-obrigatorio/pac-1-sem-paciente.png`
   - com paciente → Confirmar ativo:
-    ![com paciente](../../../evidence/agenda-paciente-obrigatorio/pac-2-com-paciente.png)
+    `evidence/agenda-paciente-obrigatorio/pac-2-com-paciente.png`
   - rótulo com "(obrigatório)":
-    ![rótulo](../../../evidence/agenda-paciente-obrigatorio/pac-3-rotulo.png)
+    `evidence/agenda-paciente-obrigatorio/pac-3-rotulo.png`
   - POST direto sem paciente → `422 agenda_sem_paciente`.
