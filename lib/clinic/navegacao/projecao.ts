@@ -22,6 +22,8 @@ export interface ModuloVisivel {
   itens: NavDestination[];
   /** As mesmas telas agrupadas por seção, na ordem de primeira aparição. */
   secoes: Array<{ secao: string; itens: NavDestination[] }>;
+  /** FORK clinic (#97): portas de outros módulos que esta pessoa vê, mostradas aqui como atalho. */
+  atalhos: Array<{ secao: string; destino: NavDestination }>;
   emBreve: boolean;
 }
 
@@ -54,7 +56,12 @@ export function modulosVisiveis(
     // Módulo construído que esvaziou para esta pessoa some — o mesmo que o menu
     // antigo faz com um grupo sem porta visível. "Em breve" não abre nada, então
     // não há o que esconder: aparece para todos.
-    if (itens.length > 0 || emBreve) resultado.push({ modulo, itens, secoes, emBreve });
+    // O atalho só aparece para quem já vê a porta; ele não faz o módulo aparecer.
+    const atalhos = (modulo.atalhos ?? []).flatMap((a) => {
+      const destino = porHref.get(a.href);
+      return destino ? [{ secao: a.secao, destino }] : [];
+    });
+    if (itens.length > 0 || emBreve) resultado.push({ modulo, itens, secoes, atalhos, emBreve });
   }
   return resultado;
 }

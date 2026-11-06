@@ -896,6 +896,8 @@ export const AUDIT_ACTIONS = [
   "clinic.especialidade_criada",
   "clinic.especialidade_alterada",
   "clinic.profissional_salvo",
+  // FORK clinic (#97): o profissional grava o próprio registro no conselho.
+  "clinic.profissional.proprios_dados",
   "clinic.tipo_especialidades_atualizadas",
   "clinic.bloqueio_criado",
   // FORK clinic (agenda S6b): encaixe sobre outro compromisso — autor, motivo e quem foi coberto.

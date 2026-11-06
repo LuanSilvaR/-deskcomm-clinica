@@ -13,6 +13,17 @@ describe("menu por permissão (ACL-008)", () => {
       .filter((d) => d.permissao !== undefined && !ehPermissao(d.permissao))
       .map((d) => `${d.href} → ${d.permissao}`);
     expect(invalidas).toEqual([]);
+    const alternativasInvalidas = (NAV_CATALOG as readonly { href: string; permissaoAlternativa?: string }[])
+      .filter((d) => d.permissaoAlternativa !== undefined && !ehPermissao(d.permissaoAlternativa))
+      .map((d) => `${d.href} → ${d.permissaoAlternativa}`);
+    expect(alternativasInvalidas).toEqual([]);
+  });
+
+  it("Profissionais aparece para quem cuida da própria agenda, como a página aceita (#97)", () => {
+    const profissional = hrefs(permitidos(false, "agent", undefined, ["agenda.ver", "agenda.bloquear_horario"]));
+    expect(profissional).toContain("/app/settings/tenant/profissionais");
+    const recepcao = hrefs(permitidos(false, "agent", undefined, ["agenda.ver"]));
+    expect(recepcao).not.toContain("/app/settings/tenant/profissionais");
   });
 
   it("modo desligado (sem permissões): o menu é o de sempre, pelo papel", () => {

@@ -80,7 +80,11 @@ export function permitidos(
     (d) =>
       canSee(d, platform, role) &&
       (!modulos || !d.modulo || modulos.includes(d.modulo)) &&
-      (platform || !permissoes || !d.permissao || permissoes.includes(d.permissao)),
+      (platform ||
+        !permissoes ||
+        !d.permissao ||
+        permissoes.includes(d.permissao) ||
+        (!!d.permissaoAlternativa && permissoes.includes(d.permissaoAlternativa))),
   );
 }
 /** Leitura tolera versões antigas/removidas sem lançar no layout. */
