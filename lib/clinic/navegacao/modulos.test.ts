@@ -153,6 +153,33 @@ describe("projeção", () => {
   });
 });
 
+describe("atalhos (#97)", () => {
+  it("atalho aponta para porta do catálogo que mora em OUTRO módulo", () => {
+    for (const m of MODULOS_CLINICA) {
+      for (const a of m.atalhos ?? []) {
+        expect(HREFS_DO_CATALOGO, `${m.id} → ${a.href}`).toContain(a.href);
+        const casa = moduloDaPorta(a.href);
+        expect(casa?.id, `${m.id} → ${a.href}`).toBeDefined();
+        expect(casa?.id, `${m.id} → ${a.href} já mora aqui`).not.toBe(m.id);
+      }
+    }
+  });
+
+  it("Configurações leva a Profissionais para quem vê a tela", () => {
+    const config = modulosVisiveis(false, "admin", undefined, []).find((m) => m.modulo.id === "configuracoes")!;
+    expect(config.atalhos.map((a) => a.destino.href)).toContain("/app/settings/tenant/profissionais");
+  });
+
+  it("atalho some para quem não vê a tela, e não faz o módulo aparecer", () => {
+    const semProfissionais = modulosVisiveis(false, "admin", undefined, [], ["configuracoes.ver"]);
+    const config = semProfissionais.find((m) => m.modulo.id === "configuracoes");
+    expect(config?.atalhos ?? []).toEqual([]);
+    const soAgenda = modulosVisiveis(false, "agent", undefined, [], ["agenda.ver", "agenda.bloquear_horario"]);
+    expect(soAgenda.map((m) => m.modulo.id)).not.toContain("configuracoes");
+    expect(soAgenda.flatMap((m) => m.itens.map((d) => d.href))).toContain("/app/settings/tenant/profissionais");
+  });
+});
+
 describe("módulo da tela aberta", () => {
   it.each([
     ["/app/agenda", "agenda"],

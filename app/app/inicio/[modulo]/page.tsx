@@ -88,6 +88,36 @@ export default async function PainelDoModuloPage({ params }: { params: Promise<{
         </section>
       ))}
 
+      {/* FORK clinic (#97): telas de outro módulo que também se procuram aqui. */}
+      {[...new Set((visivel?.atalhos ?? []).map((a) => a.secao))].map((secao, i) => (
+        <section key={secao} aria-labelledby={`modulo-atalho-${i}`} className="space-y-3" data-testid="modulo-atalhos">
+          <h2
+            id={`modulo-atalho-${i}`}
+            className="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+          >
+            {t(secao)}
+          </h2>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {visivel!.atalhos
+              .filter((a) => a.secao === secao)
+              .map(({ destino }) => {
+                const ItemIcon = destino.icon;
+                return (
+                  <Link key={destino.href} href={destino.href} className="block">
+                    <Card className="flex h-full gap-3 p-4 transition-colors hover:border-border-strong">
+                      <ItemIcon size={20} aria-hidden className="mt-0.5 shrink-0 text-muted-foreground" />
+                      <div>
+                        <h3 className="text-sm font-semibold">{t(destino.label)}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">{t(destino.description)}</p>
+                      </div>
+                    </Card>
+                  </Link>
+                );
+              })}
+          </div>
+        </section>
+      ))}
+
       {modulo.emBreve && modulo.emBreve.length > 0 ? (
         <section aria-labelledby="modulo-em-breve" className="space-y-3">
           <h2 id="modulo-em-breve" className="text-xs font-medium tracking-wider text-muted-foreground uppercase">

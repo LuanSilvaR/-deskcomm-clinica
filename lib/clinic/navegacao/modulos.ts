@@ -91,6 +91,12 @@ export interface ModuloClinica {
   rodape?: boolean;
   /** Telas existentes, na ordem em que aparecem. Vazio = módulo "Em breve". */
   portas: readonly PortaDoModulo[];
+  /**
+   * FORK clinic (#97): porta que MORA em outro módulo e também é procurada
+   * aqui. Aparece só no painel deste módulo, como cartão, para quem já a vê
+   * no menu; não conta como morada (a regra de um módulo por porta continua).
+   */
+  atalhos?: readonly PortaDoModulo[];
   emBreve?: readonly EmBreve[];
 }
 
@@ -320,6 +326,8 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
       { href: "/app/integracao-dados", secao: "Dados e integrações" },
       { href: "/app/extensions", secao: "Dados e integrações" },
     ],
+    // #97: quem procura os profissionais em Configurações acha a mesma tela.
+    atalhos: [{ href: "/app/settings/tenant/profissionais", secao: "Equipe clínica" }],
   },
 ];
 

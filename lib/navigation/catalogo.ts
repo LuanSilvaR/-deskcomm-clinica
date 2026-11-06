@@ -49,6 +49,12 @@ export interface NavMetadata {
    * manda o `minRole` de sempre.
    */
   permissao?: string;
+  /**
+   * FORK clinic (#97): outra permissão que TAMBÉM abre esta porta — quando a
+   * tela recebe dois públicos (ex.: Profissionais, onde a gerência cadastra e o
+   * profissional cuida só dos próprios dados). Tem de casar com a regra da página.
+   */
+  permissaoAlternativa?: string;
   healthDot?: boolean;
   /**
    * A porta de um MÓDULO OPCIONAL da instalação (`lib/instalacao/modulos.ts`).
@@ -425,6 +431,8 @@ export const NAV_CATALOG = [
     href: "/app/settings/tenant/profissionais",
     label: "Profissionais e especialidades",
     permissao: "profissionais.ver",
+    // #97: o profissional entra para os próprios dados (a página aceita a mesma chave).
+    permissaoAlternativa: "agenda.bloquear_horario",
     description: "Quem atende, o que cada um faz, quando atende e quando a agenda fica fechada.",
     icon: "UsersThree",
     group: "organizacao",

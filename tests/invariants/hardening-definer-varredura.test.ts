@@ -535,6 +535,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/config/route.ts (PATCH, opção titulo_livre) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_encaixe); só grava settings.clinic.titulo_livre. tests/invariants/clinic-titulo-livre-opcao.test.ts prova recusa a não-admin e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 8004, profissionais #97).
+    fn: "fn_clinic_salvar_meu_registro(uuid,text,text,text)",
+    razao:
+      "app/api/v1/clinic/profissionais/eu/route.ts (PATCH) chama com createClient da sessão; fn_acesso_exigir exige agenda.bloquear_horario, suporte de escrita e MFA; só altera conselho, número e UF da ficha de auth.uid() na organização informada e não cria ficha. tests/invariants/clinic-profissional-proprio-registro.test.ts prova que a ficha de outro não muda, especialidades e ativo ficam, sem ficha recusa e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9028).
     fn: "fn_clinic_definir_estoque(uuid,boolean)",
     razao:
