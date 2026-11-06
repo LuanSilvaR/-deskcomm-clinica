@@ -36,6 +36,15 @@
 - 11 suítes de banco do fork que tocam as mesmas funções (juntar fichas, LGPD/cascata/8001/8002, `telefone-do-lid`): 65/65 verdes.
 - Varredura de definers: só acusa funções de outras branches presentes no banco local (#87, #90, financeiro) — nenhuma da #85.
 - Unit: `contato-por-telefone-extras`, `ficha-mostra-os-telefones-extras`, `lgpd-export-telefones-extras`, `mcp-ficha-com-telefones-extras`, `ultima-recebida`, `clinic-telefones-extras-rota` (8), `busca-no-banco` (5); typecheck 0 erros.
+- Suíte unit inteira: 14098 verdes, 40 falhas em 19 arquivos — nenhuma da #85:
+  - 16 arquivos falham igual num checkout limpo de `origin/develop` (release, PDF LGPD, tema, varreduras, timeouts);
+  - os 3 de cron falhavam por uma pasta vazia `app/api/v1/cron/task-reminder/` que sobrou de outra branch; apagada a pasta, 49/49 verdes.
+- Tela (3001, recepção da clínica demo, paciente fictícia):
+  - opção desligada: a ficha não oferece "Adicionar telefone" — `evidence/85-varios-telefones/tel-1-desligada.png`;
+  - ligada: o extra entra com tipo e rótulo, ao lado do principal — `evidence/85-varios-telefones/tel-2-extra-adicionado.png`;
+  - o próprio principal como extra é recusado com o recado — `evidence/85-varios-telefones/tel-3-principal-recusado.png`;
+  - "Quem será atendido" acha a paciente pelo número extra — `evidence/85-varios-telefones/tel-4-agenda-acha-pelo-extra.png`;
+  - "Remover" tira o extra (0 linhas em `contact_phones`) — `evidence/85-varios-telefones/tel-5-removido.png`.
 
 ## Pendências
 - O #3700 (pessoa relacionada acha o negócio no funil) fica para uma entrega separada.
