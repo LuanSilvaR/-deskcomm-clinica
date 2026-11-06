@@ -11,7 +11,8 @@ Pedido do dono do produto (06/11/2026): não pode existir agendamento sem pacien
 - **Agenda** (`app/app/agenda/_client.tsx`): passa `pendencia` quando não há paciente; o "Encaixar" também
   não envia sem paciente.
 - **Seletor** (`components/agenda/VinculoDaMarcacao.tsx`): saiu a opção "Compromisso pessoal, sem cliente".
-  Tempo do profissional sem paciente continua sendo "Bloquear horário".
+  Tempo do profissional sem paciente continua sendo "Bloquear horário". O rótulo diz
+  "Quem será atendido (obrigatório)" e o campo tem `aria-required`.
 
 ## Prova
 - Unit: `tests/unit/agenda-paciente-obrigatorio.test.tsx` (painel) e `agenda-emite-atividade` (rota recusa e
@@ -21,4 +22,6 @@ Pedido do dono do produto (06/11/2026): não pode existir agendamento sem pacien
     ![sem paciente](../../../evidence/agenda-paciente-obrigatorio/pac-1-sem-paciente.png)
   - com paciente → Confirmar ativo:
     ![com paciente](../../../evidence/agenda-paciente-obrigatorio/pac-2-com-paciente.png)
+  - rótulo com "(obrigatório)":
+    ![rótulo](../../../evidence/agenda-paciente-obrigatorio/pac-3-rotulo.png)
   - POST direto sem paciente → `422 agenda_sem_paciente`.
