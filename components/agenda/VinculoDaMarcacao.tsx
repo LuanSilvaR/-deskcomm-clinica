@@ -58,10 +58,10 @@ export function VinculoDaMarcacao({
   // vira o nome, e o contato volta selecionado.
   const buscou = termo.length > 0 && !contactId;
   const nadaEncontrado = buscou && !lista.isLoading && contatos.length === 0;
-  const opcoes: Array<{ id: string; name: string; detalhe?: string | null }> = [
-    { id: "", name: t("Compromisso pessoal, sem cliente") },
-    ...contatos,
-  ];
+  // FORK clinic: sem a opção "Compromisso pessoal, sem cliente" — todo
+  // agendamento é de um paciente (a rota recusa com `agenda_sem_paciente`).
+  // Tempo do profissional sem paciente é "Bloquear horário".
+  const opcoes: Array<{ id: string; name: string; detalhe?: string | null }> = contatos;
 
   function abrir() {
     setAberto(true);
@@ -135,7 +135,7 @@ export function VinculoDaMarcacao({
             >
               {opcoes.map((opcao, i) => (
                 <li
-                  key={opcao.id || "pessoal"}
+                  key={opcao.id}
                   id={`${listaId}-${i}`}
                   role="option"
                   aria-selected={opcao.id === contactId}
