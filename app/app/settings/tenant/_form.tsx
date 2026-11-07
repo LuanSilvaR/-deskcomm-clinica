@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { updateTenant } from "@/app/actions/settings/updateTenant";
+import { useEnderecoPeloCep } from "@/hooks/clinic/useEnderecoPeloCep";
 import { useT } from "@/hooks/i18n/useT";
+import type { EnderecoDoCep } from "@/lib/clinic/pacientes/cep";
 import { IDIOMAS_VISIVEIS } from "@/lib/i18n/registro";
 import { MOEDAS_SERVIDAS, simboloDaMoeda, type MoedaServida } from "@/lib/money";
 import { paisesOferecidos } from "@/lib/legal/perfil-do-pais";
@@ -44,11 +46,42 @@ export function TenantForm({ initial }: Props) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  // FORK clinic (8011) — o CEP completo preenche o endereço, com o mesmo hook
+  // da ficha do paciente: só o que o serviço trouxe substitui o digitado.
+  const aoEncontrarCep = useCallback((achado: EnderecoDoCep) => {
+    setForm((f) => ({
+      ...f,
+      address_street: achado.logradouro || f.address_street || null,
+      address_district: achado.bairro || f.address_district || null,
+      address_city: achado.cidade || f.address_city || null,
+      address_uf: achado.uf || f.address_uf || null,
+      address_city_ibge_code: achado.codigo_ibge || f.address_city_ibge_code || null,
+    }));
+  }, []);
+  const cep = useEnderecoPeloCep(aoEncontrarCep, { focarAoEncontrar: "address_number" });
+
+  function texto(key: keyof TenantInput, rotulo: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) {
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={key}>{rotulo}</Label>
+        <Input
+          id={key}
+          value={(form[key] as string | null | undefined) ?? ""}
+          onChange={(e) => set(key, (e.target.value || null) as TenantInput[typeof key])}
+          {...extra}
+        />
+      </div>
+    );
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const parsed = tenantSchema.safeParse(form);
     if (!parsed.success) {
-      toast.error(t("Dados inválidos."));
+      // Os campos de contato e endereço têm mensagem própria ("Telefone com
+      // DDD."); os demais seguem no aviso genérico de sempre.
+      const proprio = parsed.error.issues.find((i) => String(i.path[0] ?? "").match(/^(contact_|address_)/));
+      toast.error(proprio ? t(proprio.message) : t("Dados inválidos."));
       return;
     }
     startTransition(async () => {
@@ -190,6 +223,50 @@ export function TenantForm({ initial }: Props) {
               value={form.privacy_policy_url ?? ""}
               onChange={(e) => set("privacy_policy_url", e.target.value || null)}
             />
+          </div>
+        </div>
+
+        <div className="space-y-4 border-t pt-4" data-testid="org-contato-endereco">
+          <div>
+            <h2 className="text-base font-medium">{t("Contato e endereço")}</h2>
+            <p className="text-xs text-muted-foreground">
+              {t("Digite o CEP e o endereço se completa sozinho. Confira e preencha o número.")}
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {texto("contact_phone", t("Telefone de contato"), {
+              type: "tel",
+              inputMode: "tel",
+              placeholder: "(11) 3333-4444",
+              maxLength: 20,
+            })}
+            <div className="space-y-2">
+              <Label htmlFor="address_cep">{t("CEP")}</Label>
+              <Input
+                id="address_cep"
+                inputMode="numeric"
+                placeholder="00000-000"
+                maxLength={9}
+                value={form.address_cep ?? ""}
+                onChange={(e) => {
+                  set("address_cep", e.target.value || null);
+                  cep.consultar(e.target.value);
+                }}
+              />
+              <p className="min-h-5 text-xs" aria-live="polite" data-testid="org-cep-aviso">
+                {cep.buscando ? (
+                  <span className="text-muted-foreground">{t("Buscando endereço…")}</span>
+                ) : cep.aviso ? (
+                  <span className="text-warning">{cep.aviso}</span>
+                ) : null}
+              </p>
+            </div>
+            <div className="sm:col-span-2">{texto("address_street", t("Logradouro"), { maxLength: 200 })}</div>
+            {texto("address_number", t("Número"), { maxLength: 20 })}
+            {texto("address_complement", t("Complemento (opcional)"), { maxLength: 120 })}
+            {texto("address_district", t("Bairro"), { maxLength: 120 })}
+            {texto("address_city", t("Cidade"), { maxLength: 120 })}
+            {texto("address_uf", t("UF"), { maxLength: 2 })}
           </div>
         </div>
 

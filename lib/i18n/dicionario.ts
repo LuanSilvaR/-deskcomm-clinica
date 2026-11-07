@@ -11726,6 +11726,14 @@ export const DICIONARIO: Traducoes = {
   "Bairro": { es: "Barrio" },
   "Cidade": { es: "Ciudad" },
   "Código IBGE do município (opcional)": { es: "Código IBGE del municipio (opcional)" },
+  // FORK clinic (8011) — contato e endereço da empresa em Configurações › Organização
+  "Contato e endereço": { es: "Contacto y dirección" },
+  "Digite o CEP e o endereço se completa sozinho. Confira e preencha o número.": {
+    es: "Escribe el código postal y la dirección se completa sola. Revisa y completa el número.",
+  },
+  "Telefone de contato": { es: "Teléfono de contacto" },
+  "Telefone com DDD.": { es: "Teléfono con código de área." },
+  "UF com 2 letras.": { es: "Estado con 2 letras." },
   "Contato de emergência": { es: "Contacto de emergencia" },
   "Parentesco": { es: "Parentesco" },
   "Responsável legal (paciente menor de idade)": { es: "Responsable legal (paciente menor de edad)" },
