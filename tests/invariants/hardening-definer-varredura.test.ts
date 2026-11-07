@@ -583,6 +583,24 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/config/route.ts (PATCH, orcamentos_desconto_max_pct) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_orcamentos); só grava settings.clinic.orcamentos_desconto_max_pct entre 0 e 100. tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa ao gerente e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 8008, orçamento O3).
+    fn: "fn_clinic_orcamento_enviar(uuid,uuid,uuid,text,text)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/enviar/route.ts (POST) chama com createClient da sessão, com o texto montado no servidor a partir do orçamento gravado; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; só envia rascunho da organização informada, sem desconto pendente e na validade; o modelo tem de ser contrato da mesma organização; emite por fn_clinic_documento_emitir (documentos.emitir, prontuário ligado). tests/invariants/clinic-orcamentos-contrato.test.ts prova recusa a outra empresa, desconto pendente, vencido, modelo errado, prontuário desligado e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8008, orçamento O3).
+    fn: "fn_clinic_orcamento_recusar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/recusar/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; motivo obrigatório; só recusa orçamento ENVIADO da organização informada e cancela o contrato não respondido. tests/invariants/clinic-orcamentos-contrato.test.ts prova sem motivo e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8008, orçamento O3).
+    fn: "fn_clinic_orcamento_nova_versao(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/nova-versao/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; só de enviado/recusado/expirado da organização informada; uma versão aberta por número; o enviado vira substituído e o contrato não respondido é cancelado. tests/invariants/clinic-orcamentos-contrato.test.ts prova a versão aberta única e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9028).
     fn: "fn_clinic_definir_estoque(uuid,boolean)",
     razao:
