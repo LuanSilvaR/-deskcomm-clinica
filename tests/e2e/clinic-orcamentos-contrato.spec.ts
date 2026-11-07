@@ -6,7 +6,8 @@
  *   3. o paciente abre o link SEM login e vê os itens e a FORMA DE PAGAMENTO;
  *   4. aceita → o orçamento fica "Aprovado";
  *   5. o PDF do contrato baixa;
- *   6. (O4) o aceite gerou o plano de tratamento e a comanda aberta.
+ *   6. (O4) o aceite gerou o plano de tratamento e a comanda aberta;
+ *   7. (O5) o painel /app/orcamentos conta o aprovado e lista o paciente.
  * Dados fictícios. Volta as opções ao que estavam.
  */
 import * as fs from "node:fs";
@@ -114,6 +115,14 @@ test("orçamento → contrato: envio, aceite pelo link com a forma de pagamento,
     const pdf = await page.request.get(href!);
     expect(pdf.status()).toBe(200);
     expect(pdf.headers()["content-type"]).toBe("application/pdf");
+
+    // ── 7. (O5) o painel de orçamentos: conta o aprovado do mês e lista o paciente ──
+    await page.goto("/app/orcamentos");
+    const painel = page.getByTestId("painel-orcamentos");
+    await expect(painel).toBeVisible({ timeout: 20_000 });
+    await expect(painel.getByTestId("indicador-valor")).not.toContainText(/R\$\s0,00/);
+    await expect(painel.getByTestId("painel-orcamento").filter({ hasText: `Paciente Ctr${sufixo}` })).toContainText("Aprovado");
+    await foto(page, "o5-painel");
   } finally {
     await page.request.patch("/api/v1/clinic/config", {
       data: { prontuario: antes.prontuario, orcamentos: antes.orcamentos },

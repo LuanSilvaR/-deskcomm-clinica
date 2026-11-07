@@ -79,7 +79,10 @@ const novoOrcamento = (dados: object = {}) =>
     ) as { id: string }
   ).id;
 const enviar = (user: string, id: string, versao = VER) =>
-  sql(como(user, `select public.fn_clinic_orcamento_enviar('${ORG}', '${id}', '${versao}', 'Contrato — Orçamento', 'Texto do contrato com itens e pagamento.');`));
+  sql(como(user, `select public.fn_clinic_orcamento_enviar('${ORG}', '${id}', '${versao}', 'Contrato — Orçamento', ${textoDe(id)});`));
+// O texto que a rota monta traz o total e cada item (8010 confere).
+const textoDe = (id: string) =>
+  `(select 'Contrato ' || translate(to_char(o.total_cents / 100.0, 'FM999,999,990.00'), ',.', '.,') || ' ' || string_agg(i.descricao, '; ') from public.clinic_orcamentos o join public.clinic_orcamento_itens i on i.orcamento_id = o.id where o.id = '${id}' group by o.total_cents)`;
 const status = (id: string) => ultima(sql(`select status from public.clinic_orcamentos where id = '${id}';`));
 const docDe = (id: string) => ultima(sql(`select documento_id from public.clinic_orcamentos where id = '${id}';`));
 const statusDoDoc = (doc: string) => ultima(sql(`select status from public.clinic_documentos_emitidos where id = '${doc}';`));
@@ -152,7 +155,7 @@ describe("o envio gera o contrato (8008)", () => {
 
   it("não envia: desconto pendente, validade vencida, modelo que não é contrato, prontuário desligado", () => {
     const enviarErro = (id: string, versao = VER) =>
-      erro(como(ATE, `select public.fn_clinic_orcamento_enviar('${ORG}', '${id}', '${versao}', 't', 'c');`));
+      erro(como(ATE, `select public.fn_clinic_orcamento_enviar('${ORG}', '${id}', '${versao}', 't', ${textoDe(id)});`));
     const pend = novoOrcamento({ desconto_cents: 9000 }); // 30% > 10%
     expect(enviarErro(pend)).toMatch(/orcamento_desconto_pendente/);
     const vencido = novoOrcamento();

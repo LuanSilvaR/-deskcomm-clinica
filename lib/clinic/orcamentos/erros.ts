@@ -85,6 +85,11 @@ const ERROS_DO_ORCAMENTO: Record<string, { status: number; code: string; mensage
     code: "validation_failed",
     mensagem: "O orçamento tem sessões demais para um plano (máximo 500).",
   },
+  orcamento_texto_divergente: {
+    status: 409,
+    code: "conflict",
+    mensagem: "O texto do contrato não confere com o orçamento. Recarregue e envie de novo.",
+  },
   preco_imutavel: {
     status: 409,
     code: "conflict",

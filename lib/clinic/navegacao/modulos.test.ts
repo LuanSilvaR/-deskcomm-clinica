@@ -72,9 +72,9 @@ describe("cobertura do catálogo", () => {
     expect(ordem).toEqual(pedidos);
   });
 
-  it("Contratos, Equipamentos, Comissões e Notas fiscais nascem 'Em breve', com o que virá descrito", () => {
+  it("Equipamentos, Comissões e Notas fiscais nascem 'Em breve', com o que virá descrito (Contratos ganhou Orçamentos na O5)", () => {
     const emBreve = MODULOS_CLINICA.filter(ehEmBreve);
-    expect(emBreve.map((m) => m.id)).toEqual(["contratos", "equipamentos", "comissoes", "notas-fiscais"]);
+    expect(emBreve.map((m) => m.id)).toEqual(["equipamentos", "comissoes", "notas-fiscais"]);
     for (const m of emBreve) expect(m.emBreve?.length, m.id).toBeGreaterThan(0);
   });
 });
@@ -134,7 +134,8 @@ describe("projeção", () => {
     expect(ids).not.toContain("agente-de-ia");
     expect(ids).not.toContain("contratos");
     const configura = modulosVisiveis(false, "viewer", undefined, [], ["configuracoes.ver"]).map((m) => m.modulo.id);
-    expect(configura).toEqual(expect.arrayContaining(["contratos", "equipamentos", "comissoes", "notas-fiscais"]));
+    // Contratos deixou de ser "Em breve" na O5 (porta /app/orcamentos, orcamentos.ver): o viewer sem a chave não o vê.
+    expect(configura).toEqual(expect.arrayContaining(["equipamentos", "comissoes", "notas-fiscais"]));
   });
 
   it("financeiro some para quem não tem financeiro.ver, mesmo sendo admin no papel legado (ACL-008)", () => {

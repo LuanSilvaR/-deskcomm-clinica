@@ -71,6 +71,9 @@ function ContratoPdf({ d }: { d: DadosDoContratoPdf }) {
           ) : (
             <Text style={styles.paragrafo}>Situação: {d.status}.</Text>
           )}
+          <Text style={styles.miudo}>
+            Assinatura eletrônica simples (Lei 14.063/2020, art. 4º, I): nome digitado pelo paciente no aceite.
+          </Text>
           <Text style={styles.miudo}>Integridade do texto (sha256): {d.sha256}</Text>
         </View>
         <Text
