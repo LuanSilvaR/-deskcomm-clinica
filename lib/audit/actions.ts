@@ -870,6 +870,12 @@ export const AUDIT_ACTIONS = [
   "clinic.orcamento_salvo",
   "clinic.orcamento_desconto_aprovado",
   "clinic.orcamento_cancelado",
+  // FORK clinic (8008): envio/contrato — ids, sha256 e contagens; nunca o texto nem o motivo.
+  "clinic.orcamento_enviado",
+  "clinic.orcamento_recusado",
+  "clinic.orcamento_nova_versao",
+  "clinic.orcamento_contrato_baixado",
+  "clinic.orcamentos_expirados",
   // FORK clinic (9028): estoque — ids e o tipo da ação, nunca dado de paciente.
   "clinic.estoque_produto_configurado",
   "clinic.estoque_local_salvo",

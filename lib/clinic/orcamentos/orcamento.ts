@@ -148,7 +148,7 @@ export const cancelarOrcamentoSchema = z
   .strict();
 
 export const COLUNAS_DO_ORCAMENTO =
-  "id, contact_id, atendimento_id, profissional_user_id, numero, versao, status, subtotal_cents, desconto_cents, total_cents, desconto_pendente, desconto_aprovado_em, condicao_pagamento, validade_ate, observacao, cancelado_em, motivo_cancelamento, created_at, updated_at, clinic_orcamento_itens(id, preco_id, procedure_id, event_type_id, descricao, sessoes, quantidade, preco_unit_cents, total_cents, posicao)";
+  "id, contact_id, atendimento_id, profissional_user_id, numero, versao, status, subtotal_cents, desconto_cents, total_cents, desconto_pendente, desconto_aprovado_em, condicao_pagamento, validade_ate, observacao, cancelado_em, motivo_cancelamento, enviado_em, documento_id, aprovado_em, recusado_em, expirado_em, motivo_recusa, substitui_id, created_at, updated_at, clinic_orcamento_itens(id, preco_id, procedure_id, event_type_id, descricao, sessoes, quantidade, preco_unit_cents, total_cents, posicao)";
 
 export interface ItemDoOrcamento {
   id: string;
@@ -181,6 +181,14 @@ export interface Orcamento {
   observacao: string | null;
   cancelado_em: string | null;
   motivo_cancelamento: string | null;
+  /** O3 (8008): o contrato emitido e o que aconteceu com ele. */
+  enviado_em?: string | null;
+  documento_id?: string | null;
+  aprovado_em?: string | null;
+  recusado_em?: string | null;
+  expirado_em?: string | null;
+  motivo_recusa?: string | null;
+  substitui_id?: string | null;
   created_at: string;
   updated_at: string;
   clinic_orcamento_itens: ItemDoOrcamento[] | null;
@@ -190,3 +198,9 @@ export interface Orcamento {
 export function rotuloDoNumero(o: Pick<Orcamento, "numero" | "versao">): string {
   return o.versao > 1 ? `Nº ${o.numero} v${o.versao}` : `Nº ${o.numero}`;
 }
+
+/** POST /api/v1/clinic/orcamentos/[id]/enviar — só escolhe o modelo; o texto o servidor monta. */
+export const enviarOrcamentoSchema = z.object({ modelo_versao_id: z.string().uuid().optional() }).strict();
+
+/** POST /api/v1/clinic/orcamentos/[id]/recusar. */
+export const recusarOrcamentoSchema = cancelarOrcamentoSchema;

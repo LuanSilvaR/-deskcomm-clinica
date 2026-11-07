@@ -766,6 +766,7 @@ jobs:
         clinic-estoque-revisao.spec.ts
         clinic-orcamentos-precos.spec.ts
         clinic-orcamentos-rascunho.spec.ts
+        clinic-orcamentos-contrato.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts
