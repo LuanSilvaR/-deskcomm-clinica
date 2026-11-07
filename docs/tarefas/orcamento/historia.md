@@ -43,6 +43,11 @@ Classificação: **G** (épico com sub-issues; banco, RLS, documentos jurídicos
    - **Dado** um rascunho,
    - **quando** escolho à vista ou parcelado (forma, nº de parcelas, entrada),
    - **então** a condição aparece no orçamento e no contrato.
+   - **E** o contrato mostra, por extenso: a **forma de pagamento** (Pix, dinheiro, cartão de débito, cartão de crédito,
+     boleto ou transferência), a **entrada** (valor e forma, se houver), o **nº de parcelas**, uma **tabela de parcelas**
+     (nº, vencimento e valor) e o **total**.
+   - **E** a soma da entrada com as parcelas é igual ao total do orçamento; o centavo que sobra do rateio vai na 1ª parcela.
+   - **E** cartão de crédito parcelado mostra o nº de vezes na maquininha, sem vencimentos (quem cobra é a operadora).
 6. **Enviar gera o contrato.**
    - **Dado** um rascunho válido,
    - **quando** clico "Enviar",
