@@ -22,6 +22,7 @@ import { SecaoEvolucao } from "@/components/clinic/atendimento/SecaoEvolucao";
 import { SecaoProcedimentos } from "@/components/clinic/atendimento/SecaoProcedimentos";
 import { AnexosDoPaciente } from "@/components/clinic/anexos/AnexosDoPaciente";
 import { DocumentosDoPaciente } from "@/components/clinic/documentos/DocumentosDoPaciente";
+import { OrcamentosDoPaciente } from "@/components/clinic/orcamentos/OrcamentosDoPaciente";
 import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
 import { SecaoFormulario } from "@/components/clinic/atendimento/SecaoFormulario";
 import { CabecalhoClinico } from "@/components/clinic/prontuario/CabecalhoClinico";
@@ -72,6 +73,7 @@ type SecaoAtiva =
   | "conduta"
   | "plano"
   | "procedimentos"
+  | "orcamento"
   | "documentos"
   | "anexos"
   | "evolucao";
@@ -81,6 +83,8 @@ const SECOES: Array<{ id: SecaoAtiva; rotulo: string }> = [
   { id: "conduta", rotulo: "Conduta" },
   { id: "plano", rotulo: "Plano de tratamento" },
   { id: "procedimentos", rotulo: "Procedimentos" },
+  // FORK clinic (orçamento O2): entre o que foi feito e os documentos.
+  { id: "orcamento", rotulo: "Orçamento" },
   { id: "documentos", rotulo: "Documentos" },
   { id: "anexos", rotulo: "Fotos e anexos" },
   { id: "evolucao", rotulo: "Evolução" },
@@ -192,7 +196,7 @@ export function AtendimentoDoDia({ id }: { id: string }) {
           ? false
           : s === "procedimentos"
             ? (r?.procedimentos ?? []).some((p) => p.status !== "anulado")
-            : s === "documentos" || s === "anexos"
+            : s === "documentos" || s === "anexos" || s === "orcamento"
               ? false
               : !!r?.formularios[s];
   // A pendência "procedimento" (banco) marca a seção "procedimentos" (tela).
@@ -202,7 +206,9 @@ export function AtendimentoDoDia({ id }: { id: string }) {
     (id === "documentos" && faltando.includes("documento"));
   const secoesVisiveis = SECOES.filter(
     (s) =>
-      (s.id !== "plano" || can("planos.ver")) && (s.id !== "documentos" || can("documentos.ver")),
+      (s.id !== "plano" || can("planos.ver")) &&
+      (s.id !== "documentos" || can("documentos.ver")) &&
+      (s.id !== "orcamento" || can("orcamentos.ver")),
   );
 
   return (
@@ -391,6 +397,14 @@ export function AtendimentoDoDia({ id }: { id: string }) {
                   chaveParaRecarregar={chaveRegistros}
                 />
               </div>
+              {can("orcamentos.ver") ? (
+                <div hidden={ativa !== "orcamento"}>
+                  <section className="space-y-3" data-testid="secao-orcamento">
+                    <h2 className="text-lg font-semibold">{t("Orçamento")}</h2>
+                    <OrcamentosDoPaciente contactId={a.paciente.id} atendimentoId={id} />
+                  </section>
+                </div>
+              ) : null}
               {can("documentos.ver") ? (
                 <div hidden={ativa !== "documentos"}>
                   <section className="space-y-3" data-testid="secao-documentos">

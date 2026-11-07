@@ -559,6 +559,30 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/precos/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.precos, suporte de escrita, MFA e a opção ligada; só INSERE em clinic_precos da organização informada, com item (procedimento ou tipo de serviço) da mesma organização. tests/invariants/clinic-orcamentos-precos.test.ts prova recusa a atendente/visualizador, item de outra empresa, outra empresa e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_orcamento_salvar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/orcamentos/route.ts (POST) e [id]/route.ts (PATCH) chamam com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção ligada; paciente, atendimento e preço conferidos na organização informada; preço e descrição vêm da vigência atual de clinic_precos; só edita rascunho. tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa a visualizador, outra empresa, preço desatualizado, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_orcamento_aprovar_desconto(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/aprovar-desconto/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.aprovar_desconto, suporte de escrita, MFA e a opção; só marca o desconto pendente de um rascunho da organização informada. tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa ao atendente e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_orcamento_cancelar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/cancelar/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.cancelar, suporte de escrita, MFA e a opção; motivo obrigatório; só cancela rascunho da organização informada (nada se apaga). tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa ao atendente, sem motivo, cancelado de novo e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_definir_orcamentos_desconto_max(uuid,numeric)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, orcamentos_desconto_max_pct) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_orcamentos); só grava settings.clinic.orcamentos_desconto_max_pct entre 0 e 100. tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa ao gerente e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9028).
     fn: "fn_clinic_definir_estoque(uuid,boolean)",
     razao:
