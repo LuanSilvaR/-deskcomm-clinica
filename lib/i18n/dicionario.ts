@@ -4888,8 +4888,8 @@ export const DICIONARIO: Traducoes = {
     es: "Tal como está, este color no se mostraría en pantalla: el sistema seguiría usando el color que ya tiene.",
   },
   "O que isto ainda não muda": { es: "Lo que esto todavía no cambia" },
-  "O título da aba do navegador continua com o nome do sistema, e não com o da sua empresa.": {
-    es: "El título de la pestaña del navegador sigue mostrando el nombre del sistema, no el de tu empresa.",
+  "O título da aba do navegador continua com o nome do sistema, e não com o da sua empresa. O ícone da aba (favicon), esse você troca aqui em cima.": {
+    es: "El título de la pestaña del navegador sigue mostrando el nombre del sistema, no el de tu empresa. El ícono de la pestaña (favicon) sí lo cambias aquí arriba.",
   },
   "A tela de entrada é sempre a do sistema: quando alguém digita a senha, ainda não dá para saber de qual empresa ele é.": {
     es: "La pantalla de inicio de sesión siempre es la del sistema: cuando alguien escribe su contraseña, todavía no se sabe a qué empresa pertenece.",
@@ -4903,9 +4903,46 @@ export const DICIONARIO: Traducoes = {
   "O logo que você subir aqui aparece no menu lateral, para quem trabalha nesta empresa. A tela de entrada continua com o logo de quem instalou o sistema: ali ainda não dá para saber de qual empresa a pessoa é.": {
     es: "El logo que subas aquí aparece en el menú lateral para quien trabaja en esta empresa. La pantalla de inicio de sesión mantiene el logo de quien instaló el sistema, porque ahí todavía no se sabe a qué empresa pertenece la persona.",
   },
-  "O nome e a cor que a sua empresa mostra para quem trabalha aqui dentro.": {
-    es: "El nombre y el color que tu empresa muestra a quienes trabajan aquí dentro.",
+  "O nome, a cor, o logo e o favicon que a sua empresa mostra para quem trabalha aqui dentro.": {
+    es: "El nombre, el color, el logo y el favicon que tu empresa muestra a quienes trabajan aquí dentro.",
   },
+  // FORK clinic (8012) — tamanho ideal do logo e favicon da empresa
+  "Tamanho ideal:": { es: "Tamaño ideal:" },
+  "(horizontal), PNG com fundo transparente.": { es: "(horizontal), PNG con fondo transparente." },
+  "No menu lateral o logo aparece com": { es: "En el menú lateral el logo aparece con" },
+  "de altura e até": { es: "de alto y hasta" },
+  "de largura. Um arquivo 4 vezes maior fica nítido em telas de alta definição.": {
+    es: "de ancho. Un archivo 4 veces más grande se ve nítido en pantallas de alta definición.",
+  },
+  "Tamanho real no menu lateral": { es: "Tamaño real en el menú lateral" },
+  "seu arquivo:": { es: "tu archivo:" },
+  "no menu:": { es: "en el menú:" },
+  "Ícone da aba (favicon)": { es: "Ícono de la pestaña (favicon)" },
+  "Favicon (ícone da aba do navegador)": { es: "Favicon (ícono de la pestaña del navegador)" },
+  "(quadrado), PNG com fundo transparente.": { es: "(cuadrado), PNG con fondo transparente." },
+  "Aceita de": { es: "Acepta de" },
+  "sempre quadrado, até": { es: "siempre cuadrado, hasta" },
+  "O navegador desenha o ícone bem pequeno: use só o símbolo da marca, sem o nome escrito.": {
+    es: "El navegador dibuja el ícono muy pequeño: usa solo el símbolo de la marca, sin el nombre escrito.",
+  },
+  "Aparece na aba do navegador em todas as telas do sistema da sua empresa.": {
+    es: "Aparece en la pestaña del navegador en todas las pantallas del sistema de tu empresa.",
+  },
+  "Como o favicon aparece na aba do navegador:": { es: "Así aparece el favicon en la pestaña del navegador:" },
+  "Sem favicon próprio, a aba mostra o ícone padrão do sistema:": {
+    es: "Sin favicon propio, la pestaña muestra el ícono predeterminado del sistema:",
+  },
+  "Navegador claro": { es: "Navegador claro" },
+  "Navegador escuro": { es: "Navegador oscuro" },
+  "Ampliado": { es: "Ampliado" },
+  "Favicon": { es: "Favicon" },
+  "Favicon atualizado.": { es: "Favicon actualizado." },
+  "Favicon removido.": { es: "Favicon eliminado." },
+  "Não consegui trocar o favicon agora.": { es: "No pude cambiar el favicon ahora." },
+  "Sua sessão expirou. Entre de novo para trocar o favicon.": {
+    es: "Tu sesión expiró. Inicia sesión de nuevo para cambiar el favicon.",
+  },
+  "Só quem administra esta empresa pode trocar o favicon.": { es: "Solo quien administra esta empresa puede cambiar el favicon." },
   // ─── Configurações: Notificações ───
   "Canais e categorias.": { es: "Canales y categorías." },
   "Preferências de notificação em breve. Por enquanto, alertas críticos são enviados por email.": {

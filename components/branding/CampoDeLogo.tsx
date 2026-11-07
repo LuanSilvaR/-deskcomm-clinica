@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { melhorFrenteSobre } from "@/lib/branding/contraste";
+import { ALTURA_NO_MENU, avaliarLogo, LARGURA_MAXIMA_NO_MENU, LOGO_IDEAL } from "@/lib/clinic/marca/logo-ideal";
 import { TAMANHO_MAXIMO_DO_LOGO } from "@/lib/branding/logo";
 import { REGUA_DO_PRODUTO } from "@/lib/branding/regua-do-produto";
 import { useT } from "@/hooks/i18n/useT";
@@ -178,6 +179,19 @@ export function CampoDeLogo({
 
   const emVigor = logoGravado ?? logoHerdado;
 
+  // FORK clinic — as dimensões REAIS do arquivo em vigor, lidas pelo navegador
+  // quando a prévia carrega. Guardadas junto da URL: trocar o logo invalida a
+  // medida antiga sem efeito nenhum (a medida só vale se a URL bater).
+  const [medida, setMedida] = useState<{ src: string; largura: number; altura: number } | null>(null);
+  const medidaAtual = medida && medida.src === emVigor ? medida : null;
+  const avaliacao = medidaAtual ? avaliarLogo(medidaAtual.largura, medidaAtual.altura) : null;
+  const aoCarregarPrevia = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (emVigor && img.naturalWidth > 0) {
+      setMedida({ src: emVigor, largura: img.naturalWidth, altura: img.naturalHeight });
+    }
+  };
+
   /**
    * O `logo_url` que a rota acabou de gravar para ESTA camada.
    *
@@ -280,12 +294,22 @@ export function CampoDeLogo({
             </Button>
           ) : null}
         </div>
-        <p className="text-xs text-text-muted">
-          {t("PNG ou JPG, até")} {Math.round(TAMANHO_MAXIMO_DO_LOGO / 1024)}{" "}
-          {t(
-            "KB. Prefira fundo transparente. SVG não é aceito: ele pode executar código quando aberto direto pelo endereço da imagem.",
-          )}
-        </p>
+        {/* FORK clinic — o tamanho ideal, medido onde o logo aparece (ver lib/clinic/marca/logo-ideal.ts). */}
+        <div className="space-y-1 rounded-sm border border-border bg-surface-elevated p-3 text-xs text-text-muted" data-logo-tamanho-ideal>
+          <p className="font-medium text-text">
+            {t("Tamanho ideal:")} {LOGO_IDEAL.largura} × {LOGO_IDEAL.altura} px {t("(horizontal), PNG com fundo transparente.")}
+          </p>
+          <p>
+            {t("No menu lateral o logo aparece com")} {ALTURA_NO_MENU} px {t("de altura e até")} {LARGURA_MAXIMA_NO_MENU} px{" "}
+            {t("de largura. Um arquivo 4 vezes maior fica nítido em telas de alta definição.")}
+          </p>
+          <p>
+            {t("PNG ou JPG, até")} {Math.round(TAMANHO_MAXIMO_DO_LOGO / 1024)}{" "}
+            {t(
+              "KB. Prefira fundo transparente. SVG não é aceito: ele pode executar código quando aberto direto pelo endereço da imagem.",
+            )}
+          </p>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -340,6 +364,7 @@ export function CampoDeLogo({
                       src={emVigor}
                       alt={nomeEmVigor}
                       className="max-h-12 w-auto max-w-full object-contain"
+                      onLoad={aoCarregarPrevia}
                     />
                   </span>
                 ) : (
@@ -360,6 +385,32 @@ export function CampoDeLogo({
             </div>
           ))}
         </div>
+        {emVigor ? (
+          <div className="space-y-1" data-logo-tamanho-real>
+            <div
+              className="flex h-12 items-center rounded-sm border border-border px-3"
+              style={{ backgroundColor: SUPERFICIE_CLARA }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={emVigor} alt="" aria-hidden className="h-7 w-auto max-w-[10rem] object-contain" />
+            </div>
+            <p className="text-xs text-text-muted">
+              {t("Tamanho real no menu lateral")}
+              {medidaAtual && avaliacao
+                ? ` — ${t("seu arquivo:")} ${medidaAtual.largura} × ${medidaAtual.altura} px; ${t("no menu:")} ${avaliacao.noMenu.largura} × ${avaliacao.noMenu.altura} px`
+                : null}
+            </p>
+            {avaliacao && avaliacao.avisos.length > 0 ? (
+              <ul className="space-y-1" data-logo-avisos>
+                {avaliacao.avisos.map((aviso) => (
+                  <li key={aviso} className="text-xs text-warning-fg">
+                    {t(aviso)}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

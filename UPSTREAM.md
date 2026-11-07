@@ -88,6 +88,7 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | app/app/contacts/**, components/contacts/*, components/inbox/CRMSidePanel.tsx, components/inbox/ConversationHeader.tsx, lib/ai/inbox-destino.ts | Textos "Contato" → "Paciente" (só texto de tela) | 6ac024745 |
 | components/contacts/ContactsTable.tsx, app/app/contacts/[id]/_client.tsx, components/agenda/DetalheDoCompromisso.tsx | Selo da ficha, aba Ficha do paciente, botão Paciente chegou | f9fe73593 |
 | tests/e2e/* (vários), tests/sonda-inbox-cabe-na-tela.ts, tests/unit/rotulo-tags-do-contato.test.tsx, tests/unit/inbox-header-nao-trava.test.tsx | Seletores acompanham o renome para Paciente | 6ac024745 |
+| supabase/baseline.sql (8012), components/branding/CampoDeLogo.tsx, app/app/settings/marca/page.tsx, app/app/settings/marca/_form.tsx, app/app/layout.tsx (generateMetadata), lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Marca: caixa do tamanho ideal do logo (640 × 112, medido na barra lateral) com prévia em tamanho real e avisos pelo tamanho do arquivo; favicon da empresa (`settings.clinic.favicon_path`, rota `/api/v1/clinic/marca/favicon`, função `fn_clinic_definir_favicon`) aplicado ao `<head>` de /app | feature/marca-favicon |
 
 ## Skills de terceiros
 As skills `supabase` e `supabase-postgres-best-practices` (supabase/agent-skills) ficam no perfil do usuário

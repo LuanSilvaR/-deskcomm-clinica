@@ -27,6 +27,17 @@ import { listarConexoesCaidas, type ConexaoCaida } from "@/lib/channels/health";
 import { VoiceCallProvider } from "@/components/voice/VoiceCallContext";
 import { ProvedorDaOcupacaoDoRodape } from "@/lib/ui/rodape-ocupado";
 import { acessoFoiRevogado } from "@/lib/auth/vinculo-revogado";
+import { faviconDaOrganizacaoAtiva } from "@/lib/clinic/marca/favicon-servidor";
+import type { Metadata } from "next";
+
+/**
+ * FORK clinic (8012) — o favicon da EMPRESA na aba, dentro de /app. Sem favicon
+ * próprio devolve vazio e vale o `/icon` da raiz (`app/layout.tsx`).
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const favicon = await faviconDaOrganizacaoAtiva();
+  return favicon ? { icons: { icon: favicon } } : {};
+}
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await loadAuthUser();
