@@ -235,7 +235,11 @@ function CartaoDoDocumento({
     expira_em: string;
     telefone: string | null;
   } | null>(null);
-  const recarregar = () => void qc.invalidateQueries({ queryKey: chave });
+  const recarregar = () => {
+    void qc.invalidateQueries({ queryKey: chave });
+    // FORK clinic (orçamento O3): o aceite/cancelamento do contrato muda o orçamento.
+    void qc.invalidateQueries({ queryKey: ["clinic", "orcamentos"] });
+  };
   const whatsapp = link
     ? linkDoWhatsApp(
         link.telefone,

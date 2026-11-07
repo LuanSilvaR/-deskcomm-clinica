@@ -547,6 +547,66 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/config/route.ts (PATCH, opção duracao_na_marcacao) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_titulo_livre); só grava settings.clinic.duracao_na_marcacao. tests/invariants/clinic-duracao-na-marcacao-opcao.test.ts prova recusa a não-admin e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 8006, orçamento O1).
+    fn: "fn_clinic_definir_orcamentos(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, opção orcamentos) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_duracao_na_marcacao); só grava settings.clinic.orcamentos. tests/invariants/clinic-orcamentos-precos.test.ts prova recusa a não-admin e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8006, orçamento O1).
+    fn: "fn_clinic_preco_publicar(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/precos/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.precos, suporte de escrita, MFA e a opção ligada; só INSERE em clinic_precos da organização informada, com item (procedimento ou tipo de serviço) da mesma organização. tests/invariants/clinic-orcamentos-precos.test.ts prova recusa a atendente/visualizador, item de outra empresa, outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_orcamento_salvar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/orcamentos/route.ts (POST) e [id]/route.ts (PATCH) chamam com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção ligada; paciente, atendimento e preço conferidos na organização informada; preço e descrição vêm da vigência atual de clinic_precos; só edita rascunho. tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa a visualizador, outra empresa, preço desatualizado, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_orcamento_aprovar_desconto(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/aprovar-desconto/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.aprovar_desconto, suporte de escrita, MFA e a opção; só marca o desconto pendente de um rascunho da organização informada. tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa ao atendente e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_orcamento_cancelar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/cancelar/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.cancelar, suporte de escrita, MFA e a opção; motivo obrigatório; só cancela rascunho da organização informada (nada se apaga). tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa ao atendente, sem motivo, cancelado de novo e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_definir_orcamentos_desconto_max(uuid,numeric)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, orcamentos_desconto_max_pct) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_orcamentos); só grava settings.clinic.orcamentos_desconto_max_pct entre 0 e 100. tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa ao gerente e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8008, orçamento O3).
+    fn: "fn_clinic_orcamento_enviar(uuid,uuid,uuid,text,text)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/enviar/route.ts (POST) chama com createClient da sessão, com o texto montado no servidor a partir do orçamento gravado; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; só envia rascunho da organização informada, sem desconto pendente e na validade; o modelo tem de ser contrato da mesma organização; emite por fn_clinic_documento_emitir (documentos.emitir, prontuário ligado). tests/invariants/clinic-orcamentos-contrato.test.ts prova recusa a outra empresa, desconto pendente, vencido, modelo errado, prontuário desligado e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8008, orçamento O3).
+    fn: "fn_clinic_orcamento_recusar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/recusar/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; motivo obrigatório; só recusa orçamento ENVIADO da organização informada e cancela o contrato não respondido. tests/invariants/clinic-orcamentos-contrato.test.ts prova sem motivo e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8008, orçamento O3).
+    fn: "fn_clinic_orcamento_nova_versao(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/nova-versao/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; só de enviado/recusado/expirado da organização informada; uma versão aberta por número; o enviado vira substituído e o contrato não respondido é cancelado. tests/invariants/clinic-orcamentos-contrato.test.ts prova a versão aberta única e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8009, orçamento O4).
+    fn: "fn_clinic_orcamento_reprocessar(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/reprocessar/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; só age em orçamento APROVADO da organização informada e é idempotente (não duplica plano nem comanda). tests/invariants/clinic-orcamentos-pos-aceite.test.ts prova a idempotência, outra empresa e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9028).
     fn: "fn_clinic_definir_estoque(uuid,boolean)",
     razao:

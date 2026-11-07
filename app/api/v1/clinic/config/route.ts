@@ -18,6 +18,8 @@
  * (migration 9014). Só apresentação — não muda quem vê o quê.
  * `prontuario`: o módulo de atendimento clínico e prontuário (migration 9016).
  * `estoque`: o módulo de estoque por lotes, locais e movimentos (migration 9028).
+ * `orcamentos`: orçamento → contrato, a começar pela tabela de preços (migration 8006).
+ * `orcamentos_desconto_max_pct`: desconto que dispensa aprovação, em % (migration 8007).
  *
  * GET: qualquer membro lê (as telas precisam saber). PATCH: só admin, pelas
  * funções `fn_clinic_definir_*`, que também exigem MFA provado quando a sessão
@@ -43,6 +45,8 @@ import {
   duracaoNaMarcacaoLigadaNaConfig,
   estoqueLigado,
   menuClinicaLigado,
+  orcamentosLigado,
+  descontoMaxDaConfig,
   procedimentosLigados,
   prontuarioLigado,
   travaSobreposicaoLigada,
@@ -76,6 +80,9 @@ async function lerOpcoes(orgId: string) {
     titulo_livre: tituloLivreLigadoNaConfig(settings),
     // FORK clinic (#80)
     duracao_na_marcacao: duracaoNaMarcacaoLigadaNaConfig(settings),
+    // FORK clinic (orçamento O1)
+    orcamentos: orcamentosLigado(settings),
+    orcamentos_desconto_max_pct: descontoMaxDaConfig(settings),
   };
 }
 
@@ -102,6 +109,8 @@ const patchSchema = z
     encaixe: z.boolean().optional(),
     titulo_livre: z.boolean().optional(),
     duracao_na_marcacao: z.boolean().optional(),
+    orcamentos: z.boolean().optional(),
+    orcamentos_desconto_max_pct: z.number().min(0).max(100).optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "Informe se o módulo fica ligado.",
@@ -120,6 +129,7 @@ const FUNCAO_DA_OPCAO = {
   encaixe: "fn_clinic_definir_encaixe",
   titulo_livre: "fn_clinic_definir_titulo_livre",
   duracao_na_marcacao: "fn_clinic_definir_duracao_na_marcacao",
+  orcamentos: "fn_clinic_definir_orcamentos",
 } as const;
 
 export async function PATCH(req: NextRequest): Promise<Response> {
@@ -158,6 +168,33 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
+  if (lido.data.orcamentos_desconto_max_pct !== undefined) {
+    // FORK clinic (orçamento O2, 8007): o desconto que dispensa aprovação.
+    const { data, error } = await supabase.rpc("fn_clinic_definir_orcamentos_desconto_max", {
+      p_org: authz.org.orgId,
+      p_pct: lido.data.orcamentos_desconto_max_pct,
+    });
+    if (error) {
+      if (error.message.includes("mfa_required")) {
+        return fail("mfa_required", t("Confirme a verificação em duas etapas para mudar esta opção."), 403, { requestId });
+      }
+      if (error.code === "42501") {
+        return fail("forbidden", t("Só quem administra a empresa pode mudar esta opção."), 403, { requestId });
+      }
+      return fail("internal_error", error.message, 500, { requestId });
+    }
+    if ((data as { mudou: boolean }).mudou) {
+      void audit({
+        action: "clinic.flag_alterada",
+        actorUserId: authz.user.id,
+        organizationId: authz.org.orgId,
+        resourceType: "organization",
+        resourceId: authz.org.orgId,
+        requestId,
+        metadata: { orcamentos_desconto_max_pct: lido.data.orcamentos_desconto_max_pct },
+      });
+    }
+  }
   if (lido.data.prazo_paciente_horas !== undefined) {
     const { data, error } = await supabase.rpc("fn_clinic_definir_prazo_do_paciente", {
       p_org: authz.org.orgId,
@@ -184,7 +221,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao", "orcamentos"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });

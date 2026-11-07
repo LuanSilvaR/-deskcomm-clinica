@@ -864,6 +864,20 @@ export const AUDIT_ACTIONS = [
   "clinic.flag_alterada",
   // FORK clinic (9015): procedimentos e POP.
   "clinic.procedimento_criado",
+  // FORK clinic (8006): tabela de preços — id, sessões e valores; sem paciente.
+  "clinic.preco_publicado",
+  // FORK clinic (8007): orçamento — ids, número e valores; nunca texto clínico.
+  "clinic.orcamento_salvo",
+  "clinic.orcamento_desconto_aprovado",
+  "clinic.orcamento_cancelado",
+  // FORK clinic (8008): envio/contrato — ids, sha256 e contagens; nunca o texto nem o motivo.
+  "clinic.orcamento_enviado",
+  "clinic.orcamento_recusado",
+  "clinic.orcamento_nova_versao",
+  "clinic.orcamento_contrato_baixado",
+  "clinic.orcamentos_expirados",
+  // FORK clinic (8009): pós-aceite reprocessado — ids apenas.
+  "clinic.orcamento_pos_aceite_reprocessado",
   // FORK clinic (9028): estoque — ids e o tipo da ação, nunca dado de paciente.
   "clinic.estoque_produto_configurado",
   "clinic.estoque_local_salvo",

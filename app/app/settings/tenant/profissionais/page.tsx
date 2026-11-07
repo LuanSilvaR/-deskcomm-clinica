@@ -18,6 +18,7 @@ import {
   tituloLivreLigadoNaConfig,
   duracaoNaMarcacaoLigadaNaConfig,
   estoqueLigado,
+  orcamentosLigado,
   procedimentosLigados,
   prontuarioLigado,
   travaSobreposicaoLigada,
@@ -68,6 +69,7 @@ export default async function ProfissionaisPage() {
         encaixeInicial={encaixeLigadoNaConfig(org?.settings)}
         tituloLivreInicial={tituloLivreLigadoNaConfig(org?.settings)}
         duracaoNaMarcacaoInicial={duracaoNaMarcacaoLigadaNaConfig(org?.settings)}
+        orcamentosInicial={orcamentosLigado(org?.settings)}
         prazoInicial={prazoDoPacienteHoras(org?.settings)}
         podeLigar={permissoes.has("configuracoes.opcoes_da_clinica")}
         ehGerencia={ehGerencia}

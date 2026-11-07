@@ -158,9 +158,9 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     label: "Contratos",
     description: "Contratos e termos dos tratamentos, assinados pelo paciente.",
     icon: "FileText",
-    portas: [],
+    // Orçamento O5: orçamento → contrato (aceite presencial ou pelo link).
+    portas: [{ href: "/app/orcamentos", secao: "Orçamentos e contratos" }],
     emBreve: [
-      { label: "Contratos e termos", description: "Modelos de contrato por procedimento e pacote." },
       { label: "Assinatura digital", description: "O paciente assina pelo celular, com validade jurídica." },
     ],
   },
@@ -222,6 +222,8 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
       { href: "/app/products", secao: "Catálogo" },
       { href: "/app/faturamento", secao: "Indicadores" },
       { href: "/app/settings/tenant/financeiro", secao: "Ajustes do financeiro" },
+      // Orçamento O1 (8006): a tabela de preços, base do orçamento → contrato.
+      { href: "/app/settings/tenant/precos", secao: "Ajustes do financeiro" },
     ],
     emBreve: [{ label: "Contas a pagar e a receber", description: "Vencimentos, baixas e fluxo de caixa." }],
   },
