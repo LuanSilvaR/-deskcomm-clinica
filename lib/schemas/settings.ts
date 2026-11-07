@@ -81,6 +81,20 @@ export type ProfileInput = z.infer<typeof profileSchema>;
  */
 const MOEDAS = MOEDAS_SERVIDAS;
 
+/**
+ * Campo de texto opcional da organização: apara, normaliza e trata vazio como
+ * `null` (o mesmo "vazio é ausência" do `cnpj`). A regra roda DEPOIS da
+ * normalização — "(11) 3333-4444" vira "1133334444" e então é conferido.
+ */
+function textoOpcional(normalizar: (v: string) => string, regra: z.ZodString) {
+  return z.preprocess((v) => {
+    if (v === undefined || v === null) return v;
+    if (typeof v !== "string") return v;
+    const limpo = normalizar(v.trim());
+    return limpo === "" ? null : limpo;
+  }, regra.nullable().optional());
+}
+
 export const tenantSchema = z.object({
   display_name: z.string().min(1).max(120),
   legal_name: z.string().min(1).max(200),
@@ -124,6 +138,17 @@ export const tenantSchema = z.object({
     .nullable()
     .optional()
     .or(z.literal("").transform(() => null)),
+  // FORK clinic (8011) — telefone e endereço da empresa. Mesma régua dos
+  // CHECKs da migration: a tela não pode aceitar o que o banco recusa.
+  contact_phone: textoOpcional((v) => v.replace(/\D/g, ""), z.string().regex(/^\d{10,13}$/, "Telefone com DDD.")),
+  address_cep: textoOpcional((v) => v.replace(/\D/g, ""), z.string().regex(/^\d{8}$/, "CEP com 8 números.")),
+  address_street: textoOpcional((v) => v, z.string().max(200)),
+  address_number: textoOpcional((v) => v, z.string().max(20)),
+  address_complement: textoOpcional((v) => v, z.string().max(120)),
+  address_district: textoOpcional((v) => v, z.string().max(120)),
+  address_city: textoOpcional((v) => v, z.string().max(120)),
+  address_uf: textoOpcional((v) => v.toUpperCase(), z.string().regex(/^[A-Z]{2}$/, "UF com 2 letras.")),
+  address_city_ibge_code: textoOpcional((v) => v.replace(/\D/g, ""), z.string().regex(/^\d{7}$/)),
 });
 export type TenantInput = z.infer<typeof tenantSchema>;
 

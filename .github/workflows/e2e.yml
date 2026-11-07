@@ -1011,6 +1011,7 @@ jobs:
         organizacoes-criacao-convite-e-cache.spec.ts
         inbox-abas-espelham-o-comando.spec.ts
         moeda-da-organizacao.spec.ts
+        settings-organizacao-endereco.spec.ts
         zona-de-perigo-apaga-dados-de-teste.spec.ts
         email-da-instalacao-pela-tela.spec.ts
         central-avisos-resolver-em-lote.spec.ts

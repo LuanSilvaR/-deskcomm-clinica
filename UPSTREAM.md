@@ -88,6 +88,7 @@ Base DeskcommCRM: v1.42.0 (commit 09d4da341) — data: 2026-09-22
 | app/app/contacts/**, components/contacts/*, components/inbox/CRMSidePanel.tsx, components/inbox/ConversationHeader.tsx, lib/ai/inbox-destino.ts | Textos "Contato" → "Paciente" (só texto de tela) | 6ac024745 |
 | components/contacts/ContactsTable.tsx, app/app/contacts/[id]/_client.tsx, components/agenda/DetalheDoCompromisso.tsx | Selo da ficha, aba Ficha do paciente, botão Paciente chegou | f9fe73593 |
 | tests/e2e/* (vários), tests/sonda-inbox-cabe-na-tela.ts, tests/unit/rotulo-tags-do-contato.test.tsx, tests/unit/inbox-header-nao-trava.test.tsx | Seletores acompanham o renome para Paciente | 6ac024745 |
+| supabase/baseline.sql (8011), app/app/settings/tenant/page.tsx, app/app/settings/tenant/_form.tsx, app/actions/settings/updateTenant.ts, lib/schemas/settings.ts, lib/i18n/dicionario.ts (de novo), .github/workflows/e2e.yml (de novo) | Telefone e endereço da empresa em Configurações › Organização: 9 colunas aditivas e anuláveis em `organizations` (migration 8011) e seção "Contato e endereço" com o CEP preenchendo o resto pelo hook `useEnderecoPeloCep` (o mesmo da ficha do paciente) | feature/empresa-endereco |
 
 ## Skills de terceiros
 As skills `supabase` e `supabase-postgres-best-practices` (supabase/agent-skills) ficam no perfil do usuário
