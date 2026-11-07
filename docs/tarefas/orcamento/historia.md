@@ -48,6 +48,9 @@ Classificação: **G** (épico com sub-issues; banco, RLS, documentos jurídicos
      **valor de cada uma** e o **total**.
    - **E** a soma da entrada com as parcelas é igual ao total do orçamento; o centavo que sobra do rateio vai na 1ª parcela.
    - **E** nenhuma outra forma (boleto, transferência, crediário) pode ser escolhida.
+   - **E**, com as taxas cadastradas em Configurações › Maquininhas (débito, crédito à vista e crédito por nº de parcelas),
+     a tela mostra **só para a clínica** a taxa %, o valor da taxa e o líquido estimado de cada forma; a taxa não aparece no
+     contrato, a não ser que a clínica ligue o repasse ao paciente.
 6. **Enviar gera o contrato.**
    - **Dado** um rascunho válido,
    - **quando** clico "Enviar",

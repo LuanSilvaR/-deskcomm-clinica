@@ -14,6 +14,7 @@ Levantado na `develop` em adfb40f (2026-11-07).
 | Plano de tratamento e sessões | migration 9021; `fn_clinic_plano_salvar`, `fn_clinic_plano_adicionar_sessoes` | O pós-aceite cria o plano com as sessões contratadas |
 | Comanda | `sales`/`sale_items` (0351); `app/app/comandas/` | O pós-aceite abre a comanda "Contrato #N" |
 | Parcelas e contas a receber | financeiro FN2, PR #58 (**ainda sem merge**) | O parcelamento combinado vira contas a receber |
+| Taxas da maquininha (débito, crédito, parcelado por faixa) | FN1, PR #57 (**ainda sem merge**): `clinic_fin_taxas`, `lib/clinic/financeiro/taxas.ts` | Taxa e líquido estimado de cada forma no orçamento; repasse opcional |
 | Vigência imutável de preços | padrão das taxas da FN1 (PR #57) | Mesmo desenho para `clinic_precos` |
 | PDF | `@react-pdf/renderer` (já dependência); `lib/clinic/prontuario/pdf.tsx` | PDF do contrato aceito |
 | ACL e opção por empresa | `lib/clinic/acesso/catalogo.ts`; `fn_clinic_definir_*`; `lib/clinic/flags.ts` | Permissões `orcamentos.*` e opção `orcamentos` |
@@ -36,6 +37,7 @@ Levantado na `develop` em adfb40f (2026-11-07).
 **Núcleo:** nenhuma mudança obrigatória. A ligação com a comanda fica numa tabela 1:1 do fork, e não em coluna nova em `sales`.
 
 ## Riscos
+- **Taxas dependem do #57 (FN1).** Sem ele, o orçamento sai sem taxa nem líquido (só o aviso).
 - **O4 depende do #58 (FN2).** Sem ele, gera a comanda simples e o caixa parcela depois.
 - **Ordem das migrations:** as 9039–9041 dos PRs financeiros têm timestamp anterior às 9042+ já mescladas (alerta em
   `docs/funcionalidades.md`). As do orçamento seguem a faixa 8xxx do fork (`CLAUDE.md`, regra 4).

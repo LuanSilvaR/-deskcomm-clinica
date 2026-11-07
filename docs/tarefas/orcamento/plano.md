@@ -95,9 +95,44 @@ e o CHECK do banco espelha a mesma lista; acrescentar uma forma no futuro é mig
   parcelado no cartão.
 - **Valor da parcela é calculado no envio e congelado** junto da condição (`valor_parcela_cents`). Rateio:
   `(total − entrada) / parcelas`, resto na 1ª. A função `enviar` confere que `entrada + Σ parcelas = total_cents`.
-- **Sem vencimentos:** o parcelado é na maquininha, quem cobra as parcelas é a operadora. Juros e taxa da maquininha são custo
-  da clínica (FN1) e **não** aparecem para o paciente.
+- **Sem vencimentos:** o parcelado é na maquininha, quem cobra as parcelas é a operadora.
 - Mudar a forma de pagamento depois do envio = **nova versão** do orçamento (o contrato aceito nunca muda).
+
+### Taxas da maquininha
+**Não há cadastro novo.** As taxas ficam em **Configurações › Maquininhas**, da FN1 ([#57](https://github.com/LuanSilvaR/-deskcomm-clinica/pull/57), migration 9039):
+`clinic_fin_adquirentes` + `clinic_fin_tabelas` (vigência imutável) + `clinic_fin_taxas` (modalidade × faixa de parcelas ×
+bandeira → MDR %). Exemplo de cadastro da clínica:
+
+| Modalidade | Parcelas | MDR |
+|---|---|---|
+| Débito | 1 | 1,00% |
+| Crédito à vista | 1 | 3,00% |
+| Crédito parcelado | 2–6 | 4,50% |
+| Crédito parcelado | 7–12 | 5,90% |
+
+**Como a forma do orçamento acha a taxa** (função `encontrarTaxa` de `lib/clinic/financeiro/taxas.ts`, na vigência do dia):
+| Forma do orçamento | Linha da tabela |
+|---|---|
+| `dinheiro` | sem taxa |
+| `pix` | `pix` se a clínica cadastrou (Pix pela maquininha); senão sem taxa |
+| `debito` | `debito`, 1 parcela |
+| `credito` | `credito`, 1 parcela |
+| `parcelado` | `credito`, faixa que contém o nº de parcelas |
+
+- Bandeira não é escolhida no orçamento: usa a linha "todas"; se a clínica só cadastrou por bandeira, usa a **maior** taxa
+  (estimativa conservadora). A taxa real é a do pagamento na comanda (FN2).
+- **Na tela do orçamento (só para a clínica):** ao escolher a forma, mostra taxa %, valor da taxa e **líquido estimado**
+  (`calcularRecebimento`), e o comparativo entre as formas ("à vista no Pix você recebe R$ X; em 10× recebe R$ Y").
+  O alerta de margem da FN1 (RF-07) vale aqui.
+- **No envio:** congela na condição `taxa_pct`, `taxa_cents`, `tabela_id` (vigência) e `liquido_cents`, para o relatório de
+  conversão mostrar o líquido aprovado. Mudar a tabela depois não altera orçamentos enviados.
+- **Para o paciente:** a taxa **não aparece** no contrato nem na página pública (RF-10: parcelado sem juros é custo da clínica).
+- **Repasse ao paciente (opção `settings.clinic.orcamentos.repassar_taxa`, nasce desligada):** quando ligada, a forma
+  `parcelado` (e, se marcado, `credito`) recebe o acréscimo que mantém o líquido (`precoParaLiquido`). Aí o contrato mostra o
+  total à vista e o total no cartão ("R$ 1.500,00 à vista ou 10× de R$ 159,40 = R$ 1.594,00 no cartão"). A decisão é da clínica.
+- **Sem maquininha cadastrada** (FN1 desligada ou sem merge): o orçamento funciona, mas sem taxa nem líquido; a tela avisa
+  "cadastre suas taxas em Configurações › Maquininhas".
+
 
 **Marcadores:**
 | Marcador | Sai no contrato |
