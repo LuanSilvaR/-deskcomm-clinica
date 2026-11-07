@@ -601,6 +601,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/orcamentos/[id]/nova-versao/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; só de enviado/recusado/expirado da organização informada; uma versão aberta por número; o enviado vira substituído e o contrato não respondido é cancelado. tests/invariants/clinic-orcamentos-contrato.test.ts prova a versão aberta única e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 8009, orçamento O4).
+    fn: "fn_clinic_orcamento_reprocessar(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/reprocessar/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; só age em orçamento APROVADO da organização informada e é idempotente (não duplica plano nem comanda). tests/invariants/clinic-orcamentos-pos-aceite.test.ts prova a idempotência, outra empresa e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9028).
     fn: "fn_clinic_definir_estoque(uuid,boolean)",
     razao:

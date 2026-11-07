@@ -148,7 +148,7 @@ export const cancelarOrcamentoSchema = z
   .strict();
 
 export const COLUNAS_DO_ORCAMENTO =
-  "id, contact_id, atendimento_id, profissional_user_id, numero, versao, status, subtotal_cents, desconto_cents, total_cents, desconto_pendente, desconto_aprovado_em, condicao_pagamento, validade_ate, observacao, cancelado_em, motivo_cancelamento, enviado_em, documento_id, aprovado_em, recusado_em, expirado_em, motivo_recusa, substitui_id, created_at, updated_at, clinic_orcamento_itens(id, preco_id, procedure_id, event_type_id, descricao, sessoes, quantidade, preco_unit_cents, total_cents, posicao)";
+  "id, contact_id, atendimento_id, profissional_user_id, numero, versao, status, subtotal_cents, desconto_cents, total_cents, desconto_pendente, desconto_aprovado_em, condicao_pagamento, validade_ate, observacao, cancelado_em, motivo_cancelamento, enviado_em, documento_id, aprovado_em, recusado_em, expirado_em, motivo_recusa, substitui_id, plano_id, pos_aceite_em, pos_aceite_erro, clinic_orcamento_vendas(sale_id), created_at, updated_at, clinic_orcamento_itens(id, preco_id, procedure_id, event_type_id, descricao, sessoes, quantidade, preco_unit_cents, total_cents, posicao)";
 
 export interface ItemDoOrcamento {
   id: string;
@@ -189,6 +189,11 @@ export interface Orcamento {
   expirado_em?: string | null;
   motivo_recusa?: string | null;
   substitui_id?: string | null;
+  /** O4 (8009): o que o aceite gerou. */
+  plano_id?: string | null;
+  pos_aceite_em?: string | null;
+  pos_aceite_erro?: string | null;
+  clinic_orcamento_vendas?: { sale_id: string }[] | { sale_id: string } | null;
   created_at: string;
   updated_at: string;
   clinic_orcamento_itens: ItemDoOrcamento[] | null;
