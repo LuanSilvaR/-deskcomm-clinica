@@ -71,6 +71,7 @@ export const MODULOS_DE_PERMISSAO = {
   documentos: "Documentos e termos",
   modelos_clinicos: "Modelos clínicos",
   estoque: "Estoque",
+  orcamentos: "Orçamentos e contratos",
 } as const;
 
 export type ModuloDePermissao = keyof typeof MODULOS_DE_PERMISSAO;
@@ -255,6 +256,10 @@ export const CATALOGO_DE_PERMISSOES = Object.fromEntries([
     dependeDe: ["estoque.ver", "prontuario.ver"],
     clinica: true,
   }),
+
+  // ── FORK clinic (8006): orçamentos. Preço não é conteúdo clínico. ──
+  p("orcamentos", "ver", "agent", "Ver a tabela de preços e os orçamentos dos pacientes"),
+  p("orcamentos", "precos", "manager", "Cadastrar e mudar os preços da tabela", { dependeDe: ver("orcamentos") }),
 ]) as Readonly<Record<string, DefinicaoDePermissao>>;
 
 export type ChaveDePermissao = keyof typeof CATALOGO_DE_PERMISSOES & string;

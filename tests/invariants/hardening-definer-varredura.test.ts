@@ -547,6 +547,18 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "app/api/v1/clinic/config/route.ts (PATCH, opção duracao_na_marcacao) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_titulo_livre); só grava settings.clinic.duracao_na_marcacao. tests/invariants/clinic-duracao-na-marcacao-opcao.test.ts prova recusa a não-admin e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 8006, orçamento O1).
+    fn: "fn_clinic_definir_orcamentos(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, opção orcamentos) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_duracao_na_marcacao); só grava settings.clinic.orcamentos. tests/invariants/clinic-orcamentos-precos.test.ts prova recusa a não-admin e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8006, orçamento O1).
+    fn: "fn_clinic_preco_publicar(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/precos/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.precos, suporte de escrita, MFA e a opção ligada; só INSERE em clinic_precos da organização informada, com item (procedimento ou tipo de serviço) da mesma organização. tests/invariants/clinic-orcamentos-precos.test.ts prova recusa a atendente/visualizador, item de outra empresa, outra empresa e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9028).
     fn: "fn_clinic_definir_estoque(uuid,boolean)",
     razao:
