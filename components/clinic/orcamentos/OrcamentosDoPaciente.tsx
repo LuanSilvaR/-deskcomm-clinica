@@ -156,6 +156,15 @@ export function OrcamentosDoPaciente({ contactId, atendimentoId }: { contactId: 
     onSuccess: recarregarComDocumentos,
     onError: showApiError,
   });
+  // FORK clinic (orçamento O4, 8009): o aceite gera plano e comanda; se falhou, reprocessa.
+  const reprocessar = useMutation({
+    mutationFn: (id: string) => apiClient.post(`/api/v1/clinic/orcamentos/${id}/reprocessar`, {}),
+    onSuccess: () => {
+      recarregar();
+      void qc.invalidateQueries({ queryKey: ["clinic", "planos"] });
+    },
+    onError: showApiError,
+  });
   const pedirMotivo = (pergunta: string): string | null => {
     const motivo = window.prompt(pergunta);
     return motivo && motivo.trim().length >= 3 ? motivo.trim() : null;
@@ -268,6 +277,36 @@ export function OrcamentosDoPaciente({ contactId, atendimentoId }: { contactId: 
                 <p className="text-xs" data-testid="orcamento-aprovado-em">
                   {t("Contrato aceito em")} {new Date(o.aprovado_em).toLocaleString(tag)}
                 </p>
+              ) : null}
+              {o.status === "aprovado" ? (
+                <div className="flex flex-wrap items-center gap-3 text-xs" data-testid="orcamento-pos-aceite">
+                  {o.plano_id ? (
+                    <Link className="underline" href={`/app/contacts/${contactId}?aba=planos`} data-testid="orcamento-ver-plano">
+                      {t("Ver plano de tratamento")}
+                    </Link>
+                  ) : null}
+                  {o.clinic_orcamento_vendas && (Array.isArray(o.clinic_orcamento_vendas) ? o.clinic_orcamento_vendas.length > 0 : true) ? (
+                    <Link className="underline" href="/app/comandas" data-testid="orcamento-ver-comanda">
+                      {t("Comanda aberta — abrir comandas")}
+                    </Link>
+                  ) : null}
+                  {o.pos_aceite_erro ? (
+                    <span className="text-danger" data-testid="orcamento-pos-aceite-erro">
+                      {t("O plano e a comanda não foram gerados.")}
+                    </span>
+                  ) : null}
+                  {o.pos_aceite_erro && can("orcamentos.criar") ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid="orcamento-reprocessar"
+                      disabled={reprocessar.isPending}
+                      onClick={() => reprocessar.mutate(o.id)}
+                    >
+                      {t("Gerar plano e comanda")}
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
               {o.documento_id && ["enviado", "aprovado"].includes(o.status) ? (
                 <a
