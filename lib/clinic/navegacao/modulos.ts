@@ -222,6 +222,8 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
       { href: "/app/products", secao: "Catálogo" },
       { href: "/app/faturamento", secao: "Indicadores" },
       { href: "/app/settings/tenant/financeiro", secao: "Ajustes do financeiro" },
+      // Orçamento O1 (8006): a tabela de preços, base do orçamento → contrato.
+      { href: "/app/settings/tenant/precos", secao: "Ajustes do financeiro" },
     ],
     emBreve: [{ label: "Contas a pagar e a receber", description: "Vencimentos, baixas e fluxo de caixa." }],
   },
