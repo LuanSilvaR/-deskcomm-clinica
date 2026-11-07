@@ -13178,6 +13178,20 @@ export const DICIONARIO: Traducoes = {
   "Até este percentual, quem monta o orçamento dá o desconto sozinho. Acima, um gerente precisa aprovar.": { es: "Hasta este porcentaje, quien arma el presupuesto da el descuento solo. Por encima, un gerente debe aprobar." },
   "Desconto sem aprovação (%)": { es: "Descuento sin aprobación (%)" },
   "Salvar limite": { es: "Guardar límite" },
+  // FORK clinic (orçamento O3, 8008): envio e contrato.
+  "Contrato emitido. Colha o aceite do paciente (no tablet ou pelo link) em Documentos — o aceite aprova o orçamento.": { es: "Contrato emitido. Recoja la aceptación del paciente (en la tablet o por el enlace) en Documentos — la aceptación aprueba el presupuesto." },
+  "Abrir Documentos": { es: "Abrir Documentos" },
+  "Contrato aceito em": { es: "Contrato aceptado el" },
+  "Baixar contrato (PDF)": { es: "Descargar contrato (PDF)" },
+  "Por que o paciente recusou?": { es: "¿Por qué el paciente rechazó?" },
+  "Paciente recusou": { es: "El paciente rechazó" },
+  "O desconto ainda espera a aprovação de um gerente.": { es: "El descuento aún espera la aprobación de un gerente." },
+  "Enviar e gerar contrato": { es: "Enviar y generar contrato" },
+  "A validade do orçamento já passou. Ajuste a data antes de enviar.": { es: "La validez del presupuesto ya pasó. Ajuste la fecha antes de enviar." },
+  "Escolha um modelo de contrato ativo em Configurações › Modelos clínicos.": { es: "Elija un modelo de contrato activo en Configuración › Modelos clínicos." },
+  "Já existe uma versão em aberto deste orçamento.": { es: "Ya existe una versión abierta de este presupuesto." },
+  "Para gerar o contrato, ligue o prontuário em Configurações › Profissionais.": { es: "Para generar el contrato, active la historia clínica en Configuración › Profesionales." },
+  "Este orçamento ainda não tem contrato.": { es: "Este presupuesto aún no tiene contrato." },
 };
 
 /**

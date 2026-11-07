@@ -50,6 +50,31 @@ const ERROS_DO_ORCAMENTO: Record<string, { status: number; code: string; mensage
     mensagem: "Condição de pagamento inválida.",
   },
   orcamento_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo." },
+  orcamento_desconto_pendente: {
+    status: 409,
+    code: "conflict",
+    mensagem: "O desconto ainda espera a aprovação de um gerente.",
+  },
+  orcamento_vencido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "A validade do orçamento já passou. Ajuste a data antes de enviar.",
+  },
+  orcamento_modelo_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Escolha um modelo de contrato ativo em Configurações › Modelos clínicos.",
+  },
+  orcamento_versao_aberta: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Já existe uma versão em aberto deste orçamento.",
+  },
+  prontuario_desligado: {
+    status: 409,
+    code: "module_disabled",
+    mensagem: "Para gerar o contrato, ligue o prontuário em Configurações › Profissionais.",
+  },
   preco_imutavel: {
     status: 409,
     code: "conflict",

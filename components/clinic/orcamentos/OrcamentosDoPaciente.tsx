@@ -10,6 +10,7 @@
  * tudo ao salvar — a prévia é só espelho. Envio e contrato chegam na O3.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -134,6 +135,31 @@ export function OrcamentosDoPaciente({ contactId, atendimentoId }: { contactId: 
     onSuccess: recarregar,
     onError: showApiError,
   });
+  // FORK clinic (orçamento O3, 8008): o envio gera o contrato.
+  const recarregarComDocumentos = () => {
+    recarregar();
+    void qc.invalidateQueries({ queryKey: ["clinic", "documentos"] });
+  };
+  const enviar = useMutation({
+    mutationFn: (id: string) => apiClient.post(`/api/v1/clinic/orcamentos/${id}/enviar`, {}),
+    onSuccess: recarregarComDocumentos,
+    onError: showApiError,
+  });
+  const recusar = useMutation({
+    mutationFn: (args: { id: string; motivo: string }) =>
+      apiClient.post(`/api/v1/clinic/orcamentos/${args.id}/recusar`, { motivo: args.motivo }),
+    onSuccess: recarregarComDocumentos,
+    onError: showApiError,
+  });
+  const novaVersao = useMutation({
+    mutationFn: (id: string) => apiClient.post(`/api/v1/clinic/orcamentos/${id}/nova-versao`, {}),
+    onSuccess: recarregarComDocumentos,
+    onError: showApiError,
+  });
+  const pedirMotivo = (pergunta: string): string | null => {
+    const motivo = window.prompt(pergunta);
+    return motivo && motivo.trim().length >= 3 ? motivo.trim() : null;
+  };
 
   if (lista.isLoading || tabela.isLoading) return <p className="text-sm text-text-muted">{t("Carregando...")}</p>;
   if (lista.isError || !lista.data) {
@@ -228,12 +254,86 @@ export function OrcamentosDoPaciente({ contactId, atendimentoId }: { contactId: 
               <p className="text-xs text-text-muted">
                 {t("Válido até")} {dataCurta(o.validade_ate)}
                 {o.motivo_cancelamento ? ` · ${t("Motivo")}: ${o.motivo_cancelamento}` : ""}
+                {o.motivo_recusa ? ` · ${t("Motivo")}: ${o.motivo_recusa}` : ""}
               </p>
+              {o.status === "enviado" ? (
+                <p className="text-xs" data-testid="orcamento-contrato-emitido">
+                  {t("Contrato emitido. Colha o aceite do paciente (no tablet ou pelo link) em Documentos — o aceite aprova o orçamento.")}{" "}
+                  <Link className="underline" href={`/app/contacts/${contactId}?aba=documentos`}>
+                    {t("Abrir Documentos")}
+                  </Link>
+                </p>
+              ) : null}
+              {o.status === "aprovado" && o.aprovado_em ? (
+                <p className="text-xs" data-testid="orcamento-aprovado-em">
+                  {t("Contrato aceito em")} {new Date(o.aprovado_em).toLocaleString(tag)}
+                </p>
+              ) : null}
+              {o.documento_id && ["enviado", "aprovado"].includes(o.status) ? (
+                <a
+                  className="text-xs underline"
+                  data-testid="orcamento-baixar-contrato"
+                  href={`/api/v1/clinic/orcamentos/${o.id}/contrato`}
+                >
+                  {t("Baixar contrato (PDF)")}
+                </a>
+              ) : null}
+              {["enviado", "recusado", "expirado"].includes(o.status) && can("orcamentos.criar") ? (
+                <div className="flex flex-wrap gap-2">
+                  {o.status === "enviado" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid="orcamento-recusar"
+                      disabled={recusar.isPending}
+                      onClick={() => {
+                        const motivo = pedirMotivo(t("Por que o paciente recusou?"));
+                        if (motivo) recusar.mutate({ id: o.id, motivo });
+                      }}
+                    >
+                      {t("Paciente recusou")}
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    data-testid="orcamento-nova-versao"
+                    disabled={novaVersao.isPending}
+                    onClick={() => novaVersao.mutate(o.id)}
+                  >
+                    {t("Nova versão")}
+                  </Button>
+                  {o.status === "enviado" && can("orcamentos.cancelar") ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={cancelar.isPending}
+                      onClick={() => {
+                        const motivo = pedirMotivo(t("Motivo do cancelamento"));
+                        if (motivo) cancelar.mutate({ id: o.id, motivo });
+                      }}
+                    >
+                      {t("Cancelar orçamento")}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
               {o.status === "rascunho" ? (
                 <div className="flex flex-wrap gap-2">
                   {can("orcamentos.criar") ? (
                     <Button size="sm" variant="outline" onClick={() => setEditor(editorDe(o))}>
                       {t("Editar")}
+                    </Button>
+                  ) : null}
+                  {can("orcamentos.criar") ? (
+                    <Button
+                      size="sm"
+                      data-testid="orcamento-enviar"
+                      disabled={enviar.isPending || o.desconto_pendente}
+                      title={o.desconto_pendente ? t("O desconto ainda espera a aprovação de um gerente.") : undefined}
+                      onClick={() => enviar.mutate(o.id)}
+                    >
+                      {t("Enviar e gerar contrato")}
                     </Button>
                   ) : null}
                   {o.desconto_pendente && can("orcamentos.aprovar_desconto") ? (
@@ -252,8 +352,8 @@ export function OrcamentosDoPaciente({ contactId, atendimentoId }: { contactId: 
                       variant="outline"
                       disabled={cancelar.isPending}
                       onClick={() => {
-                        const motivo = window.prompt(t("Motivo do cancelamento"));
-                        if (motivo && motivo.trim().length >= 3) cancelar.mutate({ id: o.id, motivo: motivo.trim() });
+                        const motivo = pedirMotivo(t("Motivo do cancelamento"));
+                        if (motivo) cancelar.mutate({ id: o.id, motivo });
                       }}
                     >
                       {t("Cancelar orçamento")}
