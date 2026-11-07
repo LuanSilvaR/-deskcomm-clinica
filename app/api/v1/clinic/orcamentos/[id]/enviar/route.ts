@@ -51,7 +51,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     .eq("id", id)
     .maybeSingle();
   if (!orc) return fail("not_found", t("Orçamento não encontrado."), 404, { requestId });
-  const o = orc as unknown as OrcamentoDoContrato & { contact_id: string; status: string };
+  const o = orc as unknown as OrcamentoDoContrato & { contact_id: string; status: string; profissional_user_id: string | null };
   // FORK clinic (agenda S5): sem pacientes.ver_todos, só os pacientes da própria agenda.
   if (!(await pacienteNoEscopo(supabase, org, authz.user.id, o.contact_id))) {
     return fail("not_found", t("Paciente não encontrado."), 404, { requestId });
@@ -87,7 +87,13 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
       .maybeSingle(),
     supabase.from("contacts").select("name, display_name, phone_number").eq("organization_id", org).eq("id", o.contact_id).maybeSingle(),
     supabase.from("organizations").select("display_name").eq("id", org).maybeSingle(),
-    supabase.from("clinic_professionals").select("nome:display_name").eq("organization_id", org).eq("user_id", authz.user.id).maybeSingle(),
+    // O profissional do ORÇAMENTO (quem atende), não quem envia (pode ser a recepção).
+    supabase
+      .from("clinic_professionals")
+      .select("nome:display_name")
+      .eq("organization_id", org)
+      .eq("user_id", o.profissional_user_id ?? authz.user.id)
+      .maybeSingle(),
   ]);
   if (!versao.data || !contato.data) {
     return fail("validation_failed", t("Escolha um modelo de contrato ativo em Configurações › Modelos clínicos."), 422, { requestId });

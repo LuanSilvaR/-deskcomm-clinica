@@ -17,6 +17,7 @@ import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { descontoMaxDaConfig, orcamentosLigado } from "@/lib/clinic/flags";
 import { erroDoOrcamento } from "@/lib/clinic/orcamentos/erros";
 import { COLUNAS_DO_ORCAMENTO, criarOrcamentoSchema } from "@/lib/clinic/orcamentos/orcamento";
+import { pacienteNoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -35,6 +36,10 @@ export async function GET(req: NextRequest): Promise<Response> {
   const org = authz.org.orgId;
 
   const supabase = await createClient();
+  // FORK clinic (O5, revisão security-lgpd): só pacientes do escopo de quem pede.
+  if (!(await pacienteNoEscopo(supabase, org, authz.user.id, filtro.data.contact_id))) {
+    return fail("not_found", t("Paciente não encontrado."), 404, { requestId });
+  }
   const [config, lista] = await Promise.all([
     supabase.from("organizations").select("settings").eq("id", org).maybeSingle(),
     supabase
@@ -45,7 +50,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       .order("created_at", { ascending: false })
       .limit(200),
   ]);
-  if (lista.error) return fail("internal_error", lista.error.message, 500, { requestId });
+  if (lista.error) return fail("internal_error", t("Não foi possível carregar os orçamentos."), 500, { requestId });
   const settings = (config.data as { settings?: unknown } | null)?.settings;
   return ok(
     {
@@ -71,6 +76,9 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
   const org = authz.org.orgId;
   const supabase = await createClient();
+  if (!(await pacienteNoEscopo(supabase, org, authz.user.id, lido.data.contact_id))) {
+    return fail("not_found", t("Paciente não encontrado."), 404, { requestId });
+  }
   const { data, error } = await supabase.rpc("fn_clinic_orcamento_salvar", { p_org: org, p_id: null, p_dados: lido.data });
   if (error) {
     const e = erroDoOrcamento(error, requestId);

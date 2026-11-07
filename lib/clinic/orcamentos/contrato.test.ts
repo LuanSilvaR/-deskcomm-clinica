@@ -97,5 +97,13 @@ describe("renderizarContrato", () => {
     expect(t).toContain("Forma de pagamento: Cartão de crédito parcelado");
     expect(t).toContain("Parcelas: 3 × R$ 400,00 no cartão de crédito");
     expect(t).toContain("Proposta válida até 22 de novembro de 2026.");
+    expect(t).not.toContain("Observação do pagamento");
+    const comObs = nb(
+      renderizarContrato("Contrato.", termo, {
+        ...base,
+        condicao_pagamento: { ...base.condicao_pagamento, observacao: "Primeira parcela em 30 dias" },
+      }),
+    );
+    expect(comObs).toContain("Observação do pagamento: Primeira parcela em 30 dias");
   });
 });

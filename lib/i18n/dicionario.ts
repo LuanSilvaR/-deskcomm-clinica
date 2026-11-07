@@ -13199,6 +13199,17 @@ export const DICIONARIO: Traducoes = {
   "Gerar plano e comanda": { es: "Generar plan y comanda" },
   "Só orçamento aprovado gera plano e comanda.": { es: "Solo un presupuesto aprobado genera plan y comanda." },
   "O orçamento tem sessões demais para um plano (máximo 500).": { es: "El presupuesto tiene demasiadas sesiones para un plan (máximo 500)." },
+  // FORK clinic (orçamento O5): painel de orçamentos.
+  "Os orçamentos da clínica e quanto deles virou contrato no mês.": { es: "Los presupuestos de la clínica y cuántos se convirtieron en contrato en el mes." },
+  "Enviados no mês": { es: "Enviados en el mes" },
+  "enviados viraram contrato": { es: "enviados se convirtieron en contrato" },
+  "Valor aprovado no mês": { es: "Valor aprobado en el mes" },
+  "aprovados": { es: "aprobados" },
+  "Recusados / expirados no mês": { es: "Rechazados / vencidos en el mes" },
+  "Conversão = dos orçamentos enviados no mês, quantos estão aprovados. Valor e ticket médio contam os aprovados no mês.": { es: "Conversión = de los presupuestos enviados en el mes, cuántos están aprobados. Valor y ticket promedio cuentan los aprobados en el mes." },
+  "Nenhum orçamento neste período.": { es: "Ningún presupuesto en este período." },
+  "Orçamentos da clínica, contratos aceitos e a conversão do mês.": { es: "Presupuestos de la clínica, contratos aceptados y la conversión del mes." },
+  "O texto do contrato não confere com o orçamento. Recarregue e envie de novo.": { es: "El texto del contrato no coincide con el presupuesto. Recargue y envíe de nuevo." },
 };
 
 /**

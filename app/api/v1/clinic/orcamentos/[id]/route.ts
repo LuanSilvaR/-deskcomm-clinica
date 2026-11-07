@@ -11,6 +11,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { erroDoOrcamento } from "@/lib/clinic/orcamentos/erros";
+import { orcamentoNoEscopo } from "@/lib/clinic/orcamentos/escopo";
 import { editarOrcamentoSchema } from "@/lib/clinic/orcamentos/orcamento";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -34,6 +35,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
   const org = authz.org.orgId;
   const supabase = await createClient();
+  // FORK clinic (O5, revisão security-lgpd): só pacientes do escopo de quem pede.
+  if (!(await orcamentoNoEscopo(supabase, org, authz.user.id, id))) {
+    return fail("not_found", t("Orçamento não encontrado."), 404, { requestId });
+  }
   const { data, error } = await supabase.rpc("fn_clinic_orcamento_salvar", { p_org: org, p_id: id, p_dados: lido.data });
   if (error) {
     const e = erroDoOrcamento(error, requestId);

@@ -12,6 +12,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { erroDoOrcamento } from "@/lib/clinic/orcamentos/erros";
+import { orcamentoNoEscopo } from "@/lib/clinic/orcamentos/escopo";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -30,6 +31,10 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!z.string().uuid().safeParse(id).success) return fail("not_found", t("Orçamento não encontrado."), 404, { requestId });
   const org = authz.org.orgId;
   const supabase = await createClient();
+  // FORK clinic (O5, revisão security-lgpd): só pacientes do escopo de quem pede.
+  if (!(await orcamentoNoEscopo(supabase, org, authz.user.id, id))) {
+    return fail("not_found", t("Orçamento não encontrado."), 404, { requestId });
+  }
   const { data, error } = await supabase.rpc("fn_clinic_orcamento_nova_versao", { p_org: org, p_id: id });
   if (error) {
     const e = erroDoOrcamento(error, requestId);

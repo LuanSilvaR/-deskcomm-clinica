@@ -75,7 +75,13 @@ export function marcadoresDoOrcamento(o: OrcamentoDoContrato): DadosDoTermo {
     "orcamento.parcelas": parcelas,
     "orcamento.pagamento": pagamento,
     "orcamento.validade": dataPorExtenso(o.validade_ate),
+    "orcamento.observacao_pagamento": c.observacao ?? null,
   };
+}
+
+function observacaoDoPagamento(m: DadosDoTermo): string | null {
+  const v = m["orcamento.observacao_pagamento"];
+  return v && v.trim() ? v.trim() : null;
 }
 
 /** O anexo que entra quando o modelo não traz itens nem pagamento. */
@@ -95,6 +101,7 @@ export function anexoDoOrcamento(m: DadosDoTermo): string {
     `Parcelas: ${m["orcamento.parcelas"]}`,
     "",
     String(m["orcamento.pagamento"]),
+    ...(observacaoDoPagamento(m) ? ["", `Observação do pagamento: ${observacaoDoPagamento(m)}`] : []),
     "",
     `Proposta válida até ${m["orcamento.validade"]}.`,
   ].join("\n");
