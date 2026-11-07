@@ -65,45 +65,55 @@ O gancho do aceite fica dentro das funções de aceite. Trigger sem HTTP, confor
   `{{orcamento.pagamento}}`, `{{orcamento.forma_pagamento}}`, `{{orcamento.entrada}}`, `{{orcamento.parcelas}}` e
   `{{orcamento.validade}}` (detalhe em "Forma de pagamento no contrato").
 - **Modelo padrão:** ganha uma versão nova que usa esses marcadores. As versões antigas continuam valendo para o que já foi emitido.
-- **PDF do contrato aceito** (`@react-pdf/renderer`): texto, itens, forma de pagamento, tabela de parcelas, sha256 e aceite
+- **PDF do contrato aceito** (`@react-pdf/renderer`): texto, itens, forma de pagamento, parcelas, sha256 e aceite
   (data, nome, canal, IP).
 
 ## Forma de pagamento no contrato
+**Formas aceitas (decisão do dono, 2026-11-07):** só cinco.
+| Código | Rótulo no contrato | Parcelas |
+|---|---|---|
+| `dinheiro` | Dinheiro | 1 |
+| `pix` | Pix | 1 |
+| `debito` | Cartão de débito | 1 |
+| `credito` | Cartão de crédito (à vista) | 1 |
+| `parcelado` | Cartão de crédito parcelado | 2 a N× (limite configurável, padrão 12×) |
+
+Boleto, transferência e crediário próprio da clínica ficam **fora**. O enum fica num só lugar (`lib/clinic/orcamentos/pagamento.ts`)
+e o CHECK do banco espelha a mesma lista; acrescentar uma forma no futuro é migration aditiva.
+
 **Estrutura de `clinic_orcamentos.condicao_pagamento`** (validada por Zod na rota e por CHECK na função `salvar`):
 ```json
 {
-  "tipo": "a_vista | parcelado",
-  "forma": "pix | dinheiro | debito | credito | boleto | transferencia",
-  "entrada": { "valor_cents": 30000, "forma": "pix" },
-  "parcelas": 5,
-  "primeiro_vencimento": "2026-12-10",
-  "intervalo_dias": 30,
+  "forma": "dinheiro | pix | debito | credito | parcelado",
+  "parcelas": 6,
+  "entrada": { "valor_cents": 30000, "forma": "dinheiro | pix | debito" },
   "observacao": "texto livre curto, sem dado clínico"
 }
 ```
-- `entrada` é opcional. `parcelas` = 1 quando `tipo` é `a_vista`.
-- **As parcelas são calculadas no envio e congeladas** num array `cronograma` dentro do próprio jsonb
-  (`[{ "n": 1, "vencimento": "2026-12-10", "valor_cents": 24000 }, …]`). Rateio: `(total − entrada) / parcelas`, resto na 1ª.
-  A função `enviar` confere que `entrada + Σ parcelas = total_cents`; se não bater, recusa.
-- **Crédito parcelado:** o cronograma não tem vencimento; o contrato diz "em N vezes no cartão de crédito". Taxa da maquininha
-  é custo da clínica (FN1) e **não** aparece para o paciente.
+- `parcelas` = 1 em todas as formas, menos `parcelado` (mínimo 2).
+- `entrada` é opcional e só existe com `parcelado`; a entrada é paga à vista em dinheiro, Pix ou débito, e o restante vai
+  parcelado no cartão.
+- **Valor da parcela é calculado no envio e congelado** junto da condição (`valor_parcela_cents`). Rateio:
+  `(total − entrada) / parcelas`, resto na 1ª. A função `enviar` confere que `entrada + Σ parcelas = total_cents`.
+- **Sem vencimentos:** o parcelado é na maquininha, quem cobra as parcelas é a operadora. Juros e taxa da maquininha são custo
+  da clínica (FN1) e **não** aparecem para o paciente.
 - Mudar a forma de pagamento depois do envio = **nova versão** do orçamento (o contrato aceito nunca muda).
 
 **Marcadores:**
 | Marcador | Sai no contrato |
 |---|---|
-| `{{orcamento.pagamento}}` | Parágrafo completo: "Total de R$ 1.500,00, com entrada de R$ 300,00 via Pix e 5 parcelas de R$ 240,00 via boleto, vencendo todo dia 10 a partir de 10/12/2026." |
-| `{{orcamento.forma_pagamento}}` | "Boleto" (rótulo da forma) |
-| `{{orcamento.entrada}}` | "R$ 300,00 via Pix" ou "sem entrada" |
-| `{{orcamento.parcelas}}` | Tabela nº / vencimento / valor (no crédito: "5× no cartão de crédito") |
+| `{{orcamento.pagamento}}` | Parágrafo completo. À vista: "Total de R$ 1.500,00, pago à vista via Pix." Parcelado: "Total de R$ 1.500,00, com entrada de R$ 300,00 em dinheiro e o restante em 6× de R$ 200,00 no cartão de crédito." |
+| `{{orcamento.forma_pagamento}}` | Rótulo da forma ("Cartão de crédito parcelado") |
+| `{{orcamento.entrada}}` | "R$ 300,00 em dinheiro" ou "sem entrada" |
+| `{{orcamento.parcelas}}` | "6× de R$ 200,00" ou "à vista" |
 | `{{orcamento.total}}` | "R$ 1.500,00" |
 
-- O modelo padrão de contrato ganha a cláusula "Do preço e da forma de pagamento" usando `{{orcamento.pagamento}}` e
-  `{{orcamento.parcelas}}`. A clínica pode usar só os granulares no seu modelo.
+- O modelo padrão de contrato ganha a cláusula "Do preço e da forma de pagamento" usando `{{orcamento.pagamento}}`.
+  A clínica pode usar só os granulares no seu modelo.
 - **Onde aparece:** no resumo da seção Orçamento (antes de enviar), no texto congelado do contrato (sha256 cobre o pagamento),
   na página pública `/termo/[token]`, no aceite presencial e no PDF.
-- **Pós-aceite (O4):** a comanda herda a forma e o cronograma congelados; com a FN2 (#58) cada parcela vira conta a receber
-  com o vencimento do contrato. Sem a FN2, a comanda nasce com a forma e o caixa registra as parcelas.
+- **Pós-aceite (O4):** a comanda nasce com a forma e o nº de parcelas do contrato já preenchidos (e a entrada como pagamento
+  separado). Com a FN2 (#58), o parcelado no cartão segue a regra de recebíveis da maquininha (FN1/FN2). O caixa só confirma.
 
 ## Telas
 - **Configurações › Tabela de preços:** por procedimento, avulso e pacotes, com vigências e limite de desconto por papel.
@@ -118,7 +128,7 @@ O gancho do aceite fica dentro das funções de aceite. Trigger sem HTTP, confor
 | O1 | 8006 | Tabela de preços + opção + permissões + tela | 1, 15, 16 |
 | O2 | 8007 | Orçamento em rascunho, itens, desconto com limite, condição de pagamento, versão; seção e aba | 2–5, 10, 14 |
 | O3 | 8008 | Enviar = contrato; aceite presencial e por link aprova; recusa; validade (cron); PDF | 6–9, 13, 18 |
-| O4 | 8009 | Pós-aceite: plano + comanda (parcelas pela FN2 se o #58 estiver mesclado) | 11–12 |
+| O4 | 8009 | Pós-aceite: plano + comanda (recebíveis do parcelado pela FN2 se o #58 estiver mesclado) | 11–12 |
 | O5 | — | Lista e indicadores; revisões `security-lgpd` e `health-compliance`; e2e de ponta a ponta | 17 |
 
 ## Testes
