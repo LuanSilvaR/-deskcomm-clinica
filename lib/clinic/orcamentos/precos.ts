@@ -25,6 +25,8 @@ export interface LinhaDePreco {
 export interface ItemDaTabela {
   /** procedimento ou tipo de serviço + sessões: a identidade do item. */
   chave: string;
+  /** A linha da vigência atual — o que o orçamento referencia (8007). */
+  preco_id: string;
   tipo: "procedimento" | "servico";
   item_id: string;
   sessoes: number;
@@ -69,6 +71,7 @@ export function tabelaVigente(linhas: readonly LinhaDePreco[], agora: string): I
     if (!atual || !atual.ativo) continue;
     itens.push({
       chave,
+      preco_id: atual.id,
       tipo: atual.procedure_id ? "procedimento" : "servico",
       item_id: (atual.procedure_id ?? atual.event_type_id) as string,
       sessoes: atual.sessoes,

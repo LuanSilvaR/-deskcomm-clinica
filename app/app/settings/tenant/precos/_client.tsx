@@ -17,11 +17,16 @@ import { apiClient } from "@/lib/api/client";
 import { formatarReais, precoPorSessao, reaisParaCentavos, type ItemDaTabela } from "@/lib/clinic/orcamentos/precos";
 
 type Opcao = { id: string; name: string; is_active: boolean; default_price_cents?: number | null };
-type Dados = { ligado: boolean; itens: ItemDaTabela[]; procedimentos: Opcao[]; servicos: Opcao[] };
+type Dados = { ligado: boolean; desconto_max_pct: number; itens: ItemDaTabela[]; procedimentos: Opcao[]; servicos: Opcao[] };
 
 const CHAVE = ["clinic", "precos"] as const;
 
-export function TabelaDePrecosClient({ podeEditar }: { podeEditar: boolean }) {
+function limiteValido(texto: string): boolean {
+  const n = Number(texto.replace(",", "."));
+  return texto.trim() !== "" && Number.isFinite(n) && n >= 0 && n <= 100;
+}
+
+export function TabelaDePrecosClient({ podeEditar, podeConfigurar = false }: { podeEditar: boolean; podeConfigurar?: boolean }) {
   const t = useT();
   const tag = useTagDeIdioma();
   const dataCurta = (iso: string) => new Date(iso).toLocaleDateString(tag);
@@ -38,6 +43,16 @@ export function TabelaDePrecosClient({ podeEditar }: { podeEditar: boolean }) {
   const [editando, setEditando] = useState<string | null>(null);
   const [novoValor, setNovoValor] = useState("");
   const [aberto, setAberto] = useState<string | null>(null);
+  const [limite, setLimite] = useState<string | null>(null);
+
+  // FORK clinic (orçamento O2, 8007): o desconto que dispensa aprovação.
+  const salvarLimite = useMutation({
+    mutationFn: (pct: number) => apiClient.patch("/api/v1/clinic/config", { orcamentos_desconto_max_pct: pct }),
+    onSuccess: () => {
+      setLimite(null);
+      void qc.invalidateQueries({ queryKey: CHAVE });
+    },
+  });
 
   const publicar = useMutation({
     mutationFn: (corpo: Record<string, unknown>) => apiClient.post("/api/v1/clinic/precos", corpo),
@@ -80,6 +95,32 @@ export function TabelaDePrecosClient({ podeEditar }: { podeEditar: boolean }) {
         <p className="rounded-xl border bg-muted p-4 text-sm" data-testid="precos-desligado">
           {t("Os orçamentos estão desligados nesta clínica. Ligue em Configurações › Profissionais.")}
         </p>
+      ) : null}
+
+      {podeConfigurar && dados.ligado ? (
+        <section className="space-y-2 rounded-xl border p-4" data-testid="precos-limite-desconto">
+          <h2 className="font-semibold">{t("Desconto sem aprovação")}</h2>
+          <p className="text-sm text-text-muted">
+            {t("Até este percentual, quem monta o orçamento dá o desconto sozinho. Acima, um gerente precisa aprovar.")}
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <input
+              aria-label={t("Desconto sem aprovação (%)")}
+              className="min-h-11 w-24 rounded-md border p-2"
+              inputMode="decimal"
+              value={limite ?? String(dados.desconto_max_pct).replace(".", ",")}
+              onChange={(e) => setLimite(e.target.value)}
+            />
+            <Button
+              className="min-h-11"
+              disabled={limite === null || salvarLimite.isPending || !limiteValido(limite)}
+              onClick={() => limite !== null && salvarLimite.mutate(Number(limite.replace(",", ".")))}
+            >
+              {t("Salvar limite")}
+            </Button>
+          </div>
+          {salvarLimite.isError ? <p className="text-xs text-danger">{(salvarLimite.error as Error).message}</p> : null}
+        </section>
       ) : null}
 
       {podeEditar && dados.ligado ? (

@@ -14,7 +14,7 @@ import type { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
-import { orcamentosLigado } from "@/lib/clinic/flags";
+import { descontoMaxDaConfig, orcamentosLigado } from "@/lib/clinic/flags";
 import { erroDoOrcamento } from "@/lib/clinic/orcamentos/erros";
 import { COLUNAS_DO_PRECO, publicarPrecoSchema, tabelaVigente, type LinhaDePreco } from "@/lib/clinic/orcamentos/precos";
 import { requireSupportWrite } from "@/lib/impersonate/support";
@@ -56,6 +56,7 @@ export async function GET(): Promise<Response> {
   return ok(
     {
       ligado: orcamentosLigado((config.data as { settings?: unknown } | null)?.settings),
+      desconto_max_pct: descontoMaxDaConfig((config.data as { settings?: unknown } | null)?.settings),
       itens: tabelaVigente((precos.data ?? []) as unknown as LinhaDePreco[], new Date().toISOString()),
       // Sem permissão de ver procedimentos, a lista vem vazia (RLS) — a tabela continua.
       procedimentos: (procedimentos.data ?? []) as { id: string; name: string; is_active: boolean }[],
