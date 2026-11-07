@@ -24,6 +24,7 @@ import { toast } from "sonner";
 
 import { updateMarcaDaOrganizacao } from "@/app/actions/settings/updateMarcaDaOrganizacao";
 import { CampoDeLogo } from "@/components/branding/CampoDeLogo";
+import { CampoDeFavicon } from "@/components/clinic/marca/CampoDeFavicon";
 import { TiraDeTons, type ItemDaLegenda } from "@/components/branding/TiraDeTons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -66,6 +67,8 @@ interface Props {
     readonly APP_LOGO_URL?: string;
     readonly APP_ACCENT_HEX?: string;
   };
+  /** FORK clinic (8012) — o favicon gravado desta empresa, já como URL pública. */
+  readonly faviconUrl?: string | null;
 }
 
 /** Mensagem por código de recusa da server action. */
@@ -120,7 +123,7 @@ function LinhaDeOrigem({ campo, valor }: { campo: string; valor: string }) {
   );
 }
 
-export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente }: Props) {
+export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente, faviconUrl = null }: Props) {
   const t = useT();
   const router = useRouter();
   const [nome, setNome] = useState(gravada.app_name ?? "");
@@ -358,6 +361,12 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente }
         />
       </Card>
 
+      {/* FORK clinic (8012) — o ícone da aba. Sobe na hora, como o logo. */}
+      <Card className="space-y-4 p-6">
+        <h2 className="text-base font-semibold tracking-tight text-text">{t("Ícone da aba (favicon)")}</h2>
+        <CampoDeFavicon faviconDaEmpresa={{ url: faviconUrl }} nomeEmVigor={resolvida.name} />
+      </Card>
+
       {/*
         O LAÇO DE RETORNO desta feature (invariante 7 do Sistema Vivo).
 
@@ -386,6 +395,10 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente }
           <LinhaDeOrigem
             campo={t("Logo")}
             valor={origemEmPortugues(resolvida.origens.logoUrl, t)}
+          />
+          <LinhaDeOrigem
+            campo={t("Favicon")}
+            valor={faviconUrl ? origemEmPortugues("organizacao", t) : origemEmPortugues("padrao", t)}
           />
         </div>
 
@@ -420,7 +433,7 @@ export function FormularioDaMarcaDaOrganizacao({ gravada, instalacao, ambiente }
         <ul className="list-disc space-y-1 pl-5 text-sm text-text-muted">
           <li>
             {t(
-              "O título da aba do navegador continua com o nome do sistema, e não com o da sua empresa.",
+              "O título da aba do navegador continua com o nome do sistema, e não com o da sua empresa. O ícone da aba (favicon), esse você troca aqui em cima.",
             )}
           </li>
           <li>
