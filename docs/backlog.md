@@ -52,9 +52,14 @@ Atenção: o `gh` deste clone aponta por padrão para o upstream — use sempre 
 - Épico [#63 Agenda por profissional](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/63) —
   S1 #64, S4 #65, S5 #66 em Teste (PR #71 mergeado em 2026-11-04); S2 #67, S3 #68, S6 #69, S7 #70 no Backlog.
 - [#77 Fábrica de agentes](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/77) — Em andamento (PR #76).
+- Épico [#115 Orçamento → Contrato](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/115) —
+  O1 #116, O2 #117, O3 #118, O4 #119, O5 #120 em Teste (PRs #106–#111 mergeados em 2026-11-08).
+  Pendente do dono: cláusulas jurídicas no modelo de contrato (CNPJ e responsável técnico, cancelamento e
+  reembolso, arrependimento de 7 dias, "sem juros" ou CET). Parcelas e taxa da maquininha entram com o #58.
+- [#121 Organização: telefone e endereço com CEP](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/121) —
+  Teste (PRs #112 e #113 mergeados em 2026-11-08; migration 8011).
+- [#122 Marca: tamanho ideal do logo e favicon](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/122) —
+  Teste (PR #114; migration 8012).
 
 ## Backlog (a refinar)
 
-- **Orçamento → Contrato** (G, épico a criar): orçamento por paciente a partir do atendimento; aprovado = contrato
-  aceito (presencial ou link); gera plano de tratamento e comanda. Spec: `docs/tarefas/orcamento/`
-  (`historia.md` com os critérios 1–18 e o texto das issues O1–O5; `impacto.md`; `plano.md`).
