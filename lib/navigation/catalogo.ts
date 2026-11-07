@@ -217,6 +217,17 @@ export const NAV_CATALOG = [
     group: "atendimento",
   },
   {
+    // FORK clinic (orçamento O5): a lista de orçamentos e a conversão do mês.
+    // Sem `sidebar` (o menu lateral está no teto); porta pelo módulo Contratos
+    // do menu da clínica e pelo ⌘K. Não é conteúdo clínico.
+    href: "/app/orcamentos",
+    label: "Orçamentos",
+    permissao: "orcamentos.ver",
+    description: "Orçamentos da clínica, contratos aceitos e a conversão do mês.",
+    icon: "FileText",
+    group: "atendimento",
+  },
+  {
     // FORK clinic (estoque E0, migration 9028): saldo por lote, validade e local,
     // e o histórico de movimentos. Sem `sidebar`; porta pelo módulo Estoque do
     // menu da clínica e pelo ⌘K. A tela diz como ligar quando está desligado.
@@ -435,6 +446,18 @@ export const NAV_CATALOG = [
     permissaoAlternativa: "agenda.bloquear_horario",
     description: "Quem atende, o que cada um faz, quando atende e quando a agenda fica fechada.",
     icon: "UsersThree",
+    group: "organizacao",
+    section: "Sua empresa",
+  },
+  {
+    // FORK clinic (orçamento O1, migration 8006): a tabela de preços dos
+    // procedimentos e pacotes. Não é conteúdo clínico: `orcamentos.ver` lê,
+    // `orcamentos.precos` publica.
+    href: "/app/settings/tenant/precos",
+    label: "Tabela de preços",
+    permissao: "orcamentos.ver",
+    description: "O preço de cada procedimento e pacote que entra nos orçamentos, com histórico.",
+    icon: "Tag",
     group: "organizacao",
     section: "Sua empresa",
   },

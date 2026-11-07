@@ -95,6 +95,9 @@ CRONS="
 # FORK clinic (estoque E7, 9035): alertas do estoque (mínimo, validade, frasco
 # vencido, pendências). De hora em hora; resolve sozinho o que deixou de valer.
 37 * * * *|60|api/v1/cron/estoque-alertas
+# FORK clinic (orçamento O3, 8008): orçamento enviado com a validade vencida vira
+# "expirado" e o contrato ainda não respondido é cancelado. A validade é por dia.
+41 * * * *|60|api/v1/cron/orcamentos-expirar
 */15 * * * *|60|api/v1/cron/risk-watcher
 # O CASO PARADO. De hora em hora, e não a cada 5 minutos: o prazo é de 24h, e
 # uma varredura mais frequente só gastaria consulta para descobrir o mesmo nada.

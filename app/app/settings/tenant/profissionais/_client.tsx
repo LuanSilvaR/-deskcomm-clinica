@@ -30,6 +30,8 @@ interface Props {
   tituloLivreInicial?: boolean;
   /** FORK clinic (#80): `settings.clinic.duracao_na_marcacao`. */
   duracaoNaMarcacaoInicial?: boolean;
+  /** FORK clinic (orçamento O1): `settings.clinic.orcamentos`. */
+  orcamentosInicial?: boolean;
   prazoInicial: number;
   podeLigar: boolean;
   ehGerencia: boolean;
@@ -48,6 +50,7 @@ export function ProfissionaisClient({
   encaixeInicial = false,
   tituloLivreInicial = false,
   duracaoNaMarcacaoInicial = false,
+  orcamentosInicial = false,
   prazoInicial,
   podeLigar,
   ehGerencia,
@@ -62,6 +65,7 @@ export function ProfissionaisClient({
   const [procedimentos, setProcedimentos] = useState(procedimentosInicial);
   const [prontuario, setProntuario] = useState(prontuarioInicial);
   const [estoque, setEstoque] = useState(estoqueInicial);
+  const [orcamentos, setOrcamentos] = useState(orcamentosInicial);
   const [encaixe, setEncaixe] = useState(encaixeInicial);
   const [tituloLivre, setTituloLivre] = useState(tituloLivreInicial);
   const [duracaoNaMarcacao, setDuracaoNaMarcacao] = useState(duracaoNaMarcacaoInicial);
@@ -103,6 +107,13 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { duracao_na_marcacao: boolean } }>("/api/v1/clinic/config", { duracao_na_marcacao: valor }),
     onSuccess: (r) => setDuracaoNaMarcacao(r.data.duracao_na_marcacao),
+    onError: showApiError,
+  });
+
+  const alternarOrcamentos = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { orcamentos: boolean } }>("/api/v1/clinic/config", { orcamentos: valor }),
+    onSuccess: (r) => setOrcamentos(r.data.orcamentos),
     onError: showApiError,
   });
 
@@ -362,6 +373,30 @@ export function ProfissionaisClient({
               onClick={() => alternarEstoque.mutate(!estoque)}
             >
               {estoque ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${orcamentos ? "" : "bg-muted"}`}
+          data-testid="clinic-orcamentos"
+        >
+          <div>
+            <p className="font-medium">{orcamentos ? t("Orçamentos ligados") : t("Orçamentos desligados")}</p>
+            <p className="text-sm text-text-muted">
+              {orcamentos
+                ? t("A tabela de preços está em Configurações › Tabela de preços. Mudar um preço não altera orçamentos já enviados.")
+                : t("Ligue para montar a tabela de preços dos procedimentos e pacotes, base dos orçamentos e contratos.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-orcamentos-alternar"
+              variant={orcamentos ? "outline" : "default"}
+              disabled={alternarOrcamentos.isPending}
+              onClick={() => alternarOrcamentos.mutate(!orcamentos)}
+            >
+              {orcamentos ? t("Desligar") : t("Ligar")}
             </Button>
           ) : null}
         </section>

@@ -120,3 +120,26 @@ export function duracaoNaMarcacaoLigadaNaConfig(settings: unknown): boolean {
   if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
   return (clinic as Record<string, unknown>).duracao_na_marcacao === true;
 }
+
+/**
+ * `settings.clinic.orcamentos` (migration 8006): orçamento → contrato, a começar
+ * pela tabela de preços. Nasce desligado; só o booleano `true` liga.
+ */
+export function orcamentosLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).orcamentos === true;
+}
+
+/**
+ * `settings.clinic.orcamentos_desconto_max_pct` (migration 8007): o desconto
+ * que dispensa aprovação, em %. Ausente ou inválido = 10 (o padrão do banco).
+ */
+export function descontoMaxDaConfig(settings: unknown): number {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return 10;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return 10;
+  const v = (clinic as Record<string, unknown>).orcamentos_desconto_max_pct;
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100 ? v : 10;
+}
