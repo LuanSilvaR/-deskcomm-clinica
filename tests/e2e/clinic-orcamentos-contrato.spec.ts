@@ -5,7 +5,8 @@
  *   2. o contrato aparece em Documentos, ligado ao orçamento;
  *   3. o paciente abre o link SEM login e vê os itens e a FORMA DE PAGAMENTO;
  *   4. aceita → o orçamento fica "Aprovado";
- *   5. o PDF do contrato baixa.
+ *   5. o PDF do contrato baixa;
+ *   6. (O4) o aceite gerou o plano de tratamento e a comanda aberta.
  * Dados fictícios. Volta as opções ao que estavam.
  */
 import * as fs from "node:fs";
@@ -102,6 +103,10 @@ test("orçamento → contrato: envio, aceite pelo link com a forma de pagamento,
     const aprovado = page.getByRole("main").getByTestId("orcamento").first();
     await expect(aprovado.getByTestId("orcamento-status")).toHaveText("Aprovado", { timeout: 20_000 });
     await expect(aprovado.getByTestId("orcamento-aprovado-em")).toBeVisible();
+    // O4 (8009): o aceite gerou o plano de tratamento e a comanda aberta.
+    await expect(aprovado.getByTestId("orcamento-ver-plano")).toBeVisible();
+    await expect(aprovado.getByTestId("orcamento-ver-comanda")).toBeVisible();
+    await expect(aprovado.getByTestId("orcamento-pos-aceite-erro")).toHaveCount(0);
     await foto(page, "o3-3-aprovado");
 
     // ── 5. o PDF do contrato ─────────────────────────────────────────────

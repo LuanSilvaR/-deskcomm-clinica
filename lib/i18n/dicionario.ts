@@ -13192,6 +13192,13 @@ export const DICIONARIO: Traducoes = {
   "Já existe uma versão em aberto deste orçamento.": { es: "Ya existe una versión abierta de este presupuesto." },
   "Para gerar o contrato, ligue o prontuário em Configurações › Profissionais.": { es: "Para generar el contrato, active la historia clínica en Configuración › Profesionales." },
   "Este orçamento ainda não tem contrato.": { es: "Este presupuesto aún no tiene contrato." },
+  // FORK clinic (orçamento O4, 8009): pós-aceite.
+  "Ver plano de tratamento": { es: "Ver plan de tratamiento" },
+  "Comanda aberta — abrir comandas": { es: "Comanda abierta — abrir comandas" },
+  "O plano e a comanda não foram gerados.": { es: "El plan y la comanda no se generaron." },
+  "Gerar plano e comanda": { es: "Generar plan y comanda" },
+  "Só orçamento aprovado gera plano e comanda.": { es: "Solo un presupuesto aprobado genera plan y comanda." },
+  "O orçamento tem sessões demais para um plano (máximo 500).": { es: "El presupuesto tiene demasiadas sesiones para un plan (máximo 500)." },
 };
 
 /**

@@ -876,6 +876,8 @@ export const AUDIT_ACTIONS = [
   "clinic.orcamento_nova_versao",
   "clinic.orcamento_contrato_baixado",
   "clinic.orcamentos_expirados",
+  // FORK clinic (8009): pós-aceite reprocessado — ids apenas.
+  "clinic.orcamento_pos_aceite_reprocessado",
   // FORK clinic (9028): estoque — ids e o tipo da ação, nunca dado de paciente.
   "clinic.estoque_produto_configurado",
   "clinic.estoque_local_salvo",

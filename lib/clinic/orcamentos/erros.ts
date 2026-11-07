@@ -75,6 +75,16 @@ const ERROS_DO_ORCAMENTO: Record<string, { status: number; code: string; mensage
     code: "module_disabled",
     mensagem: "Para gerar o contrato, ligue o prontuário em Configurações › Profissionais.",
   },
+  orcamento_nao_aprovado: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Só orçamento aprovado gera plano e comanda.",
+  },
+  orcamento_sessoes_demais: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "O orçamento tem sessões demais para um plano (máximo 500).",
+  },
   preco_imutavel: {
     status: 409,
     code: "conflict",
