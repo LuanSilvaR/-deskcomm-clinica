@@ -27,6 +27,7 @@ export const MARCADORES = [
   "orcamento.parcelas",
   "orcamento.pagamento",
   "orcamento.validade",
+  "orcamento.observacao_pagamento",
 ] as const;
 export type Marcador = (typeof MARCADORES)[number];
 export type DadosDoTermo = Partial<Record<Marcador, string | null>>;

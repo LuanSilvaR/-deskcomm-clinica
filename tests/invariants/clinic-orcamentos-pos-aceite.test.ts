@@ -79,7 +79,12 @@ function aprovarPeloLink(itens: object[], extra: object = {}): string {
       ),
     ) as { id: string }
   ).id;
-  sql(como(ATE, `select public.fn_clinic_orcamento_enviar('${ORG}', '${id}', '${VER}', 'Contrato', 'Texto congelado.');`));
+  sql(
+    como(
+      ATE,
+      `select public.fn_clinic_orcamento_enviar('${ORG}', '${id}', '${VER}', 'Contrato', (select 'Contrato ' || translate(to_char(o.total_cents / 100.0, 'FM999,999,990.00'), ',.', '.,') || ' ' || string_agg(i.descricao, '; ') from public.clinic_orcamentos o join public.clinic_orcamento_itens i on i.orcamento_id = o.id where o.id = '${id}' group by o.total_cents));`,
+    ),
+  );
   const doc = ultima(sql(`select documento_id from public.clinic_orcamentos where id = '${id}';`));
   link += 1;
   const hash = `${"a".repeat(60)}${String(link).padStart(4, "0")}`;
@@ -128,7 +133,8 @@ describe("pós-aceite (8009)", () => {
       "aprovado|true|true|-",
     );
     const plano = campo(id, "plano_id");
-    expect(ultima(sql(`select status || '|' || contact_id from public.clinic_planos_tratamento where id = '${plano}';`))).toBe(`ativo|${PAC}`);
+    // 8010: nasce rascunho — sessão contratada não é indicação clínica; o profissional confirma.
+    expect(ultima(sql(`select status || '|' || contact_id from public.clinic_planos_tratamento where id = '${plano}';`))).toBe(`rascunho|${PAC}`);
     // 3 sessões × 2 + 1 = 7 sessões planejadas, numeradas
     expect(ultima(sql(`select count(*) || '|' || max(numero) || '|' || count(*) filter (where status = 'planejada') from public.clinic_plano_sessoes where plano_id = '${plano}';`))).toBe(
       "7|7|7",

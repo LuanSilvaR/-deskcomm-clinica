@@ -158,9 +158,9 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
     label: "Contratos",
     description: "Contratos e termos dos tratamentos, assinados pelo paciente.",
     icon: "FileText",
-    portas: [],
+    // Orçamento O5: orçamento → contrato (aceite presencial ou pelo link).
+    portas: [{ href: "/app/orcamentos", secao: "Orçamentos e contratos" }],
     emBreve: [
-      { label: "Contratos e termos", description: "Modelos de contrato por procedimento e pacote." },
       { label: "Assinatura digital", description: "O paciente assina pelo celular, com validade jurídica." },
     ],
   },
