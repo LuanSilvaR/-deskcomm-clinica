@@ -1,0 +1,222 @@
+/**
+ * FORK clinic — o CONTEXTO DA MARCA: o único contrato entre Configurações
+ * (› Organização e › Marca) e qualquer documento. Nenhum template lê o banco.
+ *
+ * `montarContextoDaMarca` é PURA (testável): recebe os campos crus e os bytes
+ * do logo/favicon e devolve tudo já formatado, com vazios descartados.
+ * `resolverContextoDaMarca` é a leitura do servidor: organização da SESSÃO (ou
+ * a que o chamador já resolveu de fonte confiável), logo e favicon do bucket
+ * `brand-logos` — só sob o prefixo da própria organização.
+ *
+ * Sem cache entre requisições: mudar a Organização ou a Marca vale no próximo
+ * documento. (Dentro de uma requisição, o chamador resolve uma vez e reusa.)
+ */
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { baseDoStorage, caminhoBateComPrefixo, prefixoDaOrganizacao, urlPublicaDoLogo } from "@/lib/branding/logo";
+import { marcaDaOrganizacaoDeSettings } from "@/lib/branding/organizacao";
+import { faviconDeSettings } from "@/lib/clinic/marca/favicon";
+
+import {
+  cidadeUf,
+  cidadeUfCep,
+  formatarCnpj,
+  formatarSite,
+  linhaDoEndereco,
+  linhaDoResponsavel,
+  linhasDeContato,
+  textoLimpo,
+} from "./formatar";
+import { tratarFavicon, tratarLogo, type ImagemDoDocumento } from "./imagens";
+import { resolverPaleta, type Papeis } from "./paleta";
+
+/** O que as duas telas de Configurações guardam — cru, como vem do banco. */
+export interface EntradaDoContexto {
+  nomeDaMarca?: string | null;
+  nomeDeExibicao?: string | null;
+  razaoSocial?: string | null;
+  cnpj?: string | null;
+  site?: string | null;
+  telefone?: string | null;
+  whatsapp?: string | null;
+  descritor?: string | null;
+  responsavelNome?: string | null;
+  responsavelRegistro?: string | null;
+  endereco?: {
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string | null;
+    uf?: string | null;
+    cep?: string | null;
+  };
+  corDaMarca?: string | null;
+  corDosFiletes?: string | null;
+  logo?: Buffer | null;
+  favicon?: Buffer | null;
+}
+
+export interface ContextoDaMarca {
+  /** Wordmark e cabeçalho compacto. Nunca vazio (cai no nome de exibição, na razão social e, por fim, em "Documento"). */
+  nomeDaMarca: string;
+  /** Rodapé, em negrito. */
+  razaoSocial: string;
+  descritor: string | null;
+  site: { exibir: string; url: string } | null;
+  contatos: string[];
+  cidadeUf: string | null;
+  enderecoLinha: string | null;
+  cidadeUfCep: string | null;
+  cnpj: string | null;
+  responsavel: string | null;
+  logo: ImagemDoDocumento | null;
+  /** Largura em px do logo original — decide a marca d'água (≥ 600). */
+  larguraDoLogoOriginal: number;
+  favicon: ImagemDoDocumento | null;
+  /**
+   * O SÍMBOLO da marca — coluna do logo no cabeçalho e marca d'água. É o logo
+   * quando ele é compacto (proporção até 1,6:1); quando o logo é horizontal (já
+   * traz o nome escrito, que o wordmark repetiria), é o favicon. Sem nenhum
+   * dos dois, `null`: o cabeçalho fica só com o wordmark em texto.
+   */
+  simbolo: ImagemDoDocumento | null;
+  /** Largura em px do arquivo de onde o símbolo veio. */
+  larguraDoSimboloOriginal: number;
+  /** Marca d'água permitida: símbolo do logo com ≥ 600 px, ou do favicon com ≥ 512 px. */
+  marcaDaguaPermitida: boolean;
+  cores: Papeis;
+  /** O que não saiu como cadastrado (CNPJ inválido, logo opaco, cor ajustada) — para a tela e o log. */
+  avisos: string[];
+}
+
+/** Logo mais largo que isto é "horizontal" (traz o nome) e não serve de símbolo. */
+const PROPORCAO_MAXIMA_DO_SIMBOLO = 1.6;
+
+export async function montarContextoDaMarca(e: EntradaDoContexto): Promise<ContextoDaMarca> {
+  const avisos: string[] = [];
+  const nomeDaMarca =
+    textoLimpo(e.nomeDaMarca) ?? textoLimpo(e.nomeDeExibicao) ?? textoLimpo(e.razaoSocial) ?? "Documento";
+  const razaoSocial = textoLimpo(e.razaoSocial) ?? nomeDaMarca;
+
+  const cnpj = formatarCnpj(e.cnpj);
+  if (textoLimpo(e.cnpj) && !cnpj) avisos.push("O CNPJ cadastrado não confere (dígitos verificadores) e foi omitido dos documentos.");
+
+  const logo = await tratarLogo(e.logo ?? null);
+  if (logo.aviso) avisos.push(logo.aviso);
+
+  const favicon = tratarFavicon(e.favicon ?? null);
+  const logoCompacto = logo.imagem && logo.imagem.largura / logo.imagem.altura <= PROPORCAO_MAXIMA_DO_SIMBOLO ? logo.imagem : null;
+  const simbolo = logoCompacto ?? favicon ?? null;
+  const larguraDoSimboloOriginal = logoCompacto ? logo.larguraOriginal : (favicon?.largura ?? 0);
+
+  const paleta = resolverPaleta({ semente: e.corDaMarca, corDosFiletes: e.corDosFiletes });
+  avisos.push(...paleta.avisos);
+
+  const end = e.endereco ?? {};
+  return {
+    nomeDaMarca,
+    razaoSocial,
+    descritor: textoLimpo(e.descritor),
+    site: formatarSite(e.site),
+    contatos: linhasDeContato(e.telefone, e.whatsapp),
+    cidadeUf: cidadeUf(end),
+    enderecoLinha: linhaDoEndereco(end),
+    cidadeUfCep: cidadeUfCep(end),
+    cnpj,
+    responsavel: linhaDoResponsavel(e.responsavelNome, e.responsavelRegistro),
+    logo: logo.imagem,
+    larguraDoLogoOriginal: logo.larguraOriginal,
+    favicon,
+    simbolo,
+    larguraDoSimboloOriginal,
+    marcaDaguaPermitida: logoCompacto ? logo.larguraOriginal >= 600 : (favicon?.largura ?? 0) >= 512,
+    cores: paleta.papeis,
+    avisos,
+  };
+}
+
+// ── servidor ────────────────────────────────────────────────────────────────
+
+const LIMITE_DE_BYTES = 512 * 1024;
+
+/** Baixa um arquivo do bucket de marcas, só sob o prefixo da organização. Nunca lança. */
+async function baixarDaMarca(caminho: string | null | undefined, orgId: string): Promise<Buffer | null> {
+  if (!caminho || !caminhoBateComPrefixo(caminho, prefixoDaOrganizacao(orgId))) return null;
+  const base = baseDoStorage();
+  if (!base) return null;
+  try {
+    const r = await fetch(urlPublicaDoLogo(caminho, base), { signal: AbortSignal.timeout(5000), cache: "no-store" });
+    if (!r.ok) return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    return buf.length > 0 && buf.length <= LIMITE_DE_BYTES ? buf : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Colunas lidas de `organizations`. As de contato/endereço vêm da 8011. */
+const COLUNAS =
+  "display_name, legal_name, cnpj, settings, contact_phone, address_street, address_number, address_complement, address_district, address_city, address_uf, address_cep";
+
+interface LinhaDaOrganizacao {
+  display_name: string | null;
+  legal_name: string | null;
+  cnpj: string | null;
+  settings: unknown;
+  contact_phone: string | null;
+  address_street: string | null;
+  address_number: string | null;
+  address_complement: string | null;
+  address_district: string | null;
+  address_city: string | null;
+  address_uf: string | null;
+  address_cep: string | null;
+}
+
+/** Cliente do Supabase da leitura: sessão, ou service role já filtrado pela organização. */
+type LeitorDeOrganizacao = SupabaseClient;
+
+/** Os campos crus da organização (sem baixar arquivos). `null` se não achou. */
+export async function lerEntradaDoContexto(
+  leitor: LeitorDeOrganizacao,
+  orgId: string,
+): Promise<(EntradaDoContexto & { logoPath: string | null; faviconPath: string | null }) | null> {
+  const { data } = await leitor.from("organizations").select(COLUNAS).eq("id", orgId).maybeSingle();
+  if (!data) return null;
+  const o = data as LinhaDaOrganizacao;
+  const marca = marcaDaOrganizacaoDeSettings(o.settings);
+  const clinic = (o.settings as { clinic?: Record<string, unknown> } | null)?.clinic ?? {};
+  const texto = (v: unknown) => (typeof v === "string" ? v : null);
+  return {
+    nomeDaMarca: marca?.app_name ?? null,
+    nomeDeExibicao: o.display_name,
+    razaoSocial: o.legal_name,
+    cnpj: o.cnpj,
+    telefone: o.contact_phone,
+    corDaMarca: marca?.accent_hex ?? null,
+    corDosFiletes: texto(clinic.cor_filetes),
+    endereco: {
+      logradouro: o.address_street,
+      numero: o.address_number,
+      complemento: o.address_complement,
+      bairro: o.address_district,
+      cidade: o.address_city,
+      uf: o.address_uf,
+      cep: o.address_cep,
+    },
+    logoPath: marca?.logo_path ?? null,
+    faviconPath: faviconDeSettings(o.settings),
+  };
+}
+
+/**
+ * O contexto completo de uma organização. `orgId` vem SEMPRE de fonte
+ * confiável (sessão, token de link) — nunca do corpo de uma requisição.
+ */
+export async function resolverContextoDaMarca(leitor: LeitorDeOrganizacao, orgId: string): Promise<ContextoDaMarca | null> {
+  const entrada = await lerEntradaDoContexto(leitor, orgId);
+  if (!entrada) return null;
+  const [logo, favicon] = await Promise.all([baixarDaMarca(entrada.logoPath, orgId), baixarDaMarca(entrada.faviconPath, orgId)]);
+  return montarContextoDaMarca({ ...entrada, logo, favicon });
+}

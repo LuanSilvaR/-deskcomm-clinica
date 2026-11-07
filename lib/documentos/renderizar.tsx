@@ -1,244 +1,328 @@
 /**
- * FORK clinic (9015) — o RENDERIZADOR DE DOCUMENTO: dados + JSON do editor → PDF A4.
+ * FORK clinic — o MOTOR ÚNICO de documentos: o papel timbrado travado.
  *
- * Genérico de propósito: o POP é o primeiro, e contratos, consentimentos e
- * orientações podem usar o mesmo molde (marca, bloco documental na 1ª página,
- * cabeçalho compacto nas seguintes, rodapé paginado, faixa de aviso).
+ * Todo documento do sistema (POP, termos, contrato, prontuário, LGPD) passa
+ * por aqui. Cada tipo entrega SÓ: tipo, número, título, metadados, avisos,
+ * corpo (blocos semânticos) e assinatura. Cabeçalho, rodapé, tipografia, cores
+ * e espaçamentos são deste arquivo + `tema.ts` + `paleta.ts`, alimentados pelo
+ * `ContextoDaMarca` (Configurações › Organização e › Marca).
  *
- * O conteúdo é a árvore já VALIDADA (lib/clinic/pops/documento.ts) — lista
- * fechada de nós, sem HTML — renderizada nó a nó em componentes do react-pdf.
- * Nada é interpretado como marcação: texto é sempre texto.
+ * Referência visual: `Farias_Rocha_Papel_Timbrado_v2.pdf`. Regras, contrato e
+ * divergências: `docs/padrao-documentos.md`.
  *
- * Fonte: Helvetica padrão do PDF (WinAnsi) cobre português e espanhol; caracteres
- * fora dela viram "?" em vez de quebrar o arquivo. Cor: só hex (o react-pdf
- * descarta `var()`/`oklch()` em silêncio — ver lib/lgpd/pdf-renderer.tsx).
+ * Determinístico: as datas do PDF (criação/modificação) vêm de `emitidoEm`,
+ * nunca do relógio daqui — mesmo conteúdo + mesmo contexto = mesmo arquivo.
  */
 import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
-import React from "react";
 
 import type { NoDoDocumento } from "@/lib/clinic/pops/documento";
 
-export interface MarcaDoDocumento {
-  nome: string;
-  razaoSocial?: string | null;
-  cnpj?: string | null;
-  endereco?: string | null;
-  /** PNG/JPG já baixado (o react-pdf não busca URL do jeito que precisamos). */
-  logo?: { data: Buffer; format: "png" | "jpg" } | null;
-  /** #RRGGBB; inválido cai no neutro. */
-  cor?: string | null;
+import { Bloco, CaixaDeAviso, estilosDoCorpo } from "./blocos";
+import type { ContextoDaMarca } from "./contexto-da-marca";
+import { registrarFontes } from "./fontes";
+import { ESTADOS, paraPretoEBranco, type Estado, type Papeis } from "./paleta";
+import { ABERTURA, ASSINATURA, CABECALHO, COMPACTO, FAIXA, FAMILIA, MARCA_DAGUA, PAGINA, RODAPE, TIPO, VERSAO_DO_LAYOUT } from "./tema";
+
+export { VERSAO_DO_LAYOUT };
+
+export interface AvisoDoDocumento {
+  estado: Estado;
+  texto: string;
+  /** Repete numa linha discreta acima do rodapé de TODAS as páginas (ex.: "NÃO VIGENTE"). */
+  emTodasAsPaginas?: boolean;
 }
 
-export interface DadosDoDocumento {
-  marca: MarcaDoDocumento;
-  /** "PROCEDIMENTO OPERACIONAL PADRÃO — POP". */
+export interface DocumentoTimbrado {
+  /** Eyebrow: "PROCEDIMENTO OPERACIONAL PADRÃO", "CONTRATO"… */
+  tipo: string;
+  /** Depois de "Nº " no eyebrow: "007/2026", "POP-007 · v2.0". */
+  numero?: string | null;
   titulo: string;
-  /** Linha em destaque sob o título (ex.: o nome do procedimento). */
-  subtitulo: string;
-  /** Pares da 1ª página (código, versão, status…). */
-  identificacao: [string, string][];
-  /** Pares de controle (criado, atualizado, aprovado…). */
-  controle: [string, string][];
-  /** Cabeçalho compacto das páginas seguintes (linhas). */
-  cabecalhoCompacto: string[];
-  /** Rodapé: recebe a página e o total. */
-  rodape: (pagina: number, total: number) => string;
-  /** Faixa de aviso no topo e no rodapé (ex.: "VERSÃO 1.0 — SUBSTITUÍDA — NÃO VIGENTE"). */
-  faixa?: string | null;
-  conteudo: NoDoDocumento;
+  /** Linhas da tabela de abertura. Valor vazio some (sem rótulo órfão). */
+  metadados?: [string, string | null | undefined][];
+  avisos?: AvisoDoDocumento[];
+  corpo: NoDoDocumento;
+  /** Fechamento "Atenciosamente," + linha + nome + cargo/registro. */
+  assinatura?: { nome: string; cargo?: string | null; fecho?: string | null } | null;
+  /** Datas do PDF (determinismo). */
+  emitidoEm: Date;
+  /** Desligar só com motivo (fax, P&B). */
+  semMarcaDagua?: boolean;
+  /** Variante monocromática para impressão em P&B. */
+  pretoEBranco?: boolean;
 }
 
-const HEX = /^#[0-9a-fA-F]{6}$/;
-const NEUTRO = "#1f2937";
-
-/** Só o que a Helvetica padrão (WinAnsi) desenha; o resto vira "?". */
-export function paraWinAnsi(texto: string): string {
-  const extras = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
-  let saida = "";
-  for (const ch of texto.normalize("NFC")) {
-    const c = ch.codePointAt(0) ?? 0;
-    saida += c === 10 || c === 9 || (c >= 32 && c <= 126) || (c >= 160 && c <= 255) || extras.includes(ch) ? ch : "?";
-  }
-  return saida;
-}
-
-function estilos(cor: string) {
+function estilos(c: Papeis) {
   return StyleSheet.create({
-    pagina: { paddingTop: 64, paddingBottom: 56, paddingHorizontal: 44, fontSize: 10, fontFamily: "Helvetica", color: NEUTRO },
-    compacto: { position: "absolute", top: 22, left: 44, right: 44, borderBottom: `1pt solid ${cor}`, paddingBottom: 4, fontSize: 8, color: "#4b5563" },
-    faixaTopo: { position: "absolute", top: 8, left: 44, right: 44, textAlign: "center", fontSize: 8, color: "#991b1b", fontFamily: "Helvetica-Bold" },
-    rodapeLinha: { position: "absolute", bottom: 36, left: 44, right: 44, borderTop: "0.5pt solid #d1d5db" },
-    rodape: { position: "absolute", bottom: 22, left: 44, right: 44, fontSize: 8, color: "#4b5563" },
-    bloco: { border: `1pt solid ${cor}`, borderRadius: 4, marginBottom: 16 },
-    blocoTopo: { flexDirection: "row", alignItems: "center", padding: 10, borderBottom: `1pt solid ${cor}` },
-    logo: { width: 90, height: 45, objectFit: "contain", marginRight: 12 },
-    clinica: { fontSize: 13, fontFamily: "Helvetica-Bold" },
-    clinicaDetalhe: { fontSize: 8, color: "#4b5563" },
-    titulo: { fontSize: 11, fontFamily: "Helvetica-Bold", textAlign: "center", padding: 6, color: cor, borderBottom: `1pt solid ${cor}` },
-    subtitulo: { fontSize: 12, fontFamily: "Helvetica-Bold", paddingHorizontal: 10, paddingTop: 8 },
-    grade: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 10, paddingVertical: 6 },
-    par: { width: "50%", paddingVertical: 2 },
-    rotulo: { fontSize: 7, color: "#6b7280", textTransform: "uppercase" },
-    valor: { fontSize: 9.5 },
-    separador: { borderTop: `0.5pt solid ${cor}`, marginHorizontal: 10 },
-    faixaNoBloco: { margin: 10, marginBottom: 0, padding: 6, backgroundColor: "#fef2f2", color: "#991b1b", fontFamily: "Helvetica-Bold", textAlign: "center", fontSize: 10 },
-    h1: { fontSize: 15, fontFamily: "Helvetica-Bold", marginTop: 12, marginBottom: 4, color: cor },
-    h2: { fontSize: 12.5, fontFamily: "Helvetica-Bold", marginTop: 10, marginBottom: 3, color: cor },
-    h3: { fontSize: 11, fontFamily: "Helvetica-Bold", marginTop: 8, marginBottom: 2 },
-    // lineHeight fica no CONTEÚDO, não na página: na página, o react-pdf descarta
-    // o texto dinâmico com posição absoluta (o rodapé "Página X de Y" sumia).
-    p: { marginVertical: 2, lineHeight: 1.45 },
-    lista: { marginVertical: 2 },
-    item: { flexDirection: "row", marginVertical: 1, lineHeight: 1.45 },
-    marcador: { width: 16 },
-    itemCorpo: { flex: 1 },
-    hr: { borderTop: "0.5pt solid #9ca3af", marginVertical: 8 },
-    tabela: { borderTop: "0.5pt solid #9ca3af", borderLeft: "0.5pt solid #9ca3af", marginVertical: 6 },
-    linha: { flexDirection: "row" },
-    celula: { flex: 1, borderRight: "0.5pt solid #9ca3af", borderBottom: "0.5pt solid #9ca3af", padding: 3 },
-    celulaCabecalho: { flex: 1, borderRight: "0.5pt solid #9ca3af", borderBottom: "0.5pt solid #9ca3af", padding: 3, backgroundColor: "#f3f4f6" },
+    pagina: {
+      paddingTop: PAGINA.margemTopo,
+      paddingBottom: PAGINA.margemBase,
+      paddingHorizontal: PAGINA.margemLateral,
+      backgroundColor: c.paper,
+      fontFamily: FAMILIA.texto,
+      fontSize: TIPO.corpo.tamanho,
+      color: c.ink,
+    },
+    faixa: { position: "absolute", top: 0, left: 0, right: 0 },
+    faixaPrimary: { height: FAIXA.primary, backgroundColor: c.primary },
+    faixaAccent: { height: FAIXA.accent, marginTop: FAIXA.vao, backgroundColor: c.accent },
+    cabecalho: {
+      position: "absolute",
+      top: PAGINA.cabecalhoTopo,
+      left: PAGINA.margemLateral,
+      right: PAGINA.margemLateral,
+    },
+    cabecalhoInterno: {},
+    linhaDoCabecalho: { flexDirection: "row", alignItems: "center", minHeight: CABECALHO.alturaDoLogo },
+    colunaDoLogo: { width: CABECALHO.colunaDoLogo, height: CABECALHO.alturaDoLogo, justifyContent: "center" },
+    wordmark: { flex: 1, paddingLeft: 6 },
+    nomeDaMarca: { fontFamily: FAMILIA.titulo, fontWeight: CABECALHO.wordmark.peso, fontSize: CABECALHO.wordmark.tamanho, lineHeight: 1, color: c.primary },
+    descritor: { fontFamily: FAMILIA.texto, fontWeight: CABECALHO.descritor.peso, fontSize: CABECALHO.descritor.tamanho, letterSpacing: CABECALHO.descritor.espacamento, color: c.muted, marginTop: 2 },
+    contatos: { width: PAGINA.larguraUtil * 0.36, alignItems: "flex-end" },
+    contatoForte: { fontFamily: FAMILIA.texto, fontWeight: 700, fontSize: CABECALHO.contatos.tamanho, lineHeight: CABECALHO.contatos.entrelinha, color: c.ink, textAlign: "right" },
+    contato: { fontFamily: FAMILIA.texto, fontSize: CABECALHO.contatos.tamanho, lineHeight: CABECALHO.contatos.entrelinha, color: c.muted, textAlign: "right" },
+    filete: { borderBottomWidth: CABECALHO.filete, borderBottomColor: c.accent, marginTop: CABECALHO.distanciaDoFilete },
+    linhaCompacta: { flexDirection: "row", alignItems: "center" },
+    favicon: { width: COMPACTO.favicon, height: COMPACTO.favicon, objectFit: "contain", marginRight: 6 },
+    nomeCompacto: { flex: 1, fontFamily: FAMILIA.titulo, fontWeight: COMPACTO.nome.peso, fontSize: COMPACTO.nome.tamanho, color: c.primary },
+    descritorCompacto: { fontFamily: FAMILIA.texto, fontWeight: COMPACTO.descritor.peso, fontSize: COMPACTO.descritor.tamanho, letterSpacing: COMPACTO.descritor.espacamento, color: c.muted },
+    fileteCompacto: { borderBottomWidth: COMPACTO.filete, borderBottomColor: c.accent, marginTop: COMPACTO.distanciaDoFilete },
+    rodape: {
+      position: "absolute",
+      bottom: PAGINA.rodapeBase,
+      left: PAGINA.margemLateral,
+      right: PAGINA.margemLateral,
+      borderTopWidth: RODAPE.filete,
+      borderTopColor: c.accent,
+      paddingTop: RODAPE.distanciaDoFilete,
+      height: RODAPE.distanciaDoFilete + 3 * RODAPE.tamanho * RODAPE.entrelinha + 2,
+      flexDirection: "row",
+    },
+    rodapeEsq: { width: RODAPE.colunaEsquerda },
+    rodapeDir: { width: RODAPE.colunaDireita, alignItems: "flex-end" },
+    rodapeForte: { marginBottom: 2, fontFamily: FAMILIA.texto, fontWeight: 700, fontSize: RODAPE.tamanho, color: c.ink },
+    rodapeTexto: { marginBottom: 2, fontFamily: FAMILIA.texto, fontSize: RODAPE.tamanho, color: c.muted },
+    rodapeTextoDir: { marginBottom: 2, fontFamily: FAMILIA.texto, fontSize: RODAPE.tamanho, color: c.muted, textAlign: "right" },
+    avisoFixo: {
+      position: "absolute",
+      bottom: PAGINA.margemBase - 14,
+      left: PAGINA.margemLateral,
+      right: PAGINA.margemLateral,
+      fontFamily: FAMILIA.texto,
+      fontWeight: 700,
+      fontSize: TIPO.auxiliar.tamanho,
+      textAlign: "center",
+    },
+    marcaDagua: { position: "absolute", left: MARCA_DAGUA.x, top: MARCA_DAGUA.y, width: MARCA_DAGUA.largura, opacity: MARCA_DAGUA.opacidade },
+    eyebrow: {
+      marginTop: TIPO.eyebrow.antes,
+      fontFamily: FAMILIA.texto,
+      fontWeight: TIPO.eyebrow.peso,
+      fontSize: TIPO.eyebrow.tamanho,
+      letterSpacing: TIPO.eyebrow.espacamento,
+      color: c.primary,
+    },
+    titulo: {
+      fontFamily: FAMILIA.titulo,
+      fontWeight: TIPO.titulo.peso,
+      fontSize: TIPO.titulo.tamanho,
+      lineHeight: TIPO.titulo.entrelinha,
+      color: c.ink,
+      marginTop: 4,
+      marginBottom: TIPO.titulo.depois,
+    },
+    meta: { backgroundColor: c.surface, marginBottom: ABERTURA.depoisDaTabela },
+    metaLinha: { flexDirection: "row" },
+    metaDivisoria: { borderBottomWidth: ABERTURA.divisoria, borderBottomColor: c.border },
+    metaRotulo: {
+      width: ABERTURA.colunaDoRotulo,
+      paddingVertical: ABERTURA.paddingVertical,
+      paddingHorizontal: ABERTURA.paddingHorizontal,
+      fontFamily: FAMILIA.texto,
+      fontWeight: ABERTURA.rotulo.peso,
+      fontSize: ABERTURA.rotulo.tamanho,
+      letterSpacing: ABERTURA.rotulo.espacamento,
+      color: c.muted,
+    },
+    metaValor: {
+      flex: 1,
+      paddingVertical: ABERTURA.paddingVertical,
+      paddingHorizontal: ABERTURA.paddingHorizontal,
+      fontFamily: FAMILIA.texto,
+      fontSize: ABERTURA.valor.tamanho,
+      color: c.ink,
+    },
+    assinatura: { marginTop: ASSINATURA.antesDoFecho },
+    fecho: { fontFamily: FAMILIA.texto, fontSize: TIPO.corpo.tamanho, color: c.ink },
+    linhaDaAssinatura: { width: ASSINATURA.larguraDaLinha, borderTopWidth: ASSINATURA.espessura, borderTopColor: c.ink, marginTop: ASSINATURA.antesDaLinha, marginBottom: 6 },
+    nomeDaAssinatura: { fontFamily: FAMILIA.texto, fontWeight: 700, fontSize: TIPO.corpo.tamanho, color: c.ink },
+    cargo: { fontFamily: FAMILIA.texto, fontSize: ASSINATURA.cargo.tamanho, color: c.muted, marginTop: 2 },
   });
 }
-
 type Estilos = ReturnType<typeof estilos>;
 
-function fonteDasMarcas(marks: { type: string }[] | undefined): string {
-  const b = marks?.some((m) => m.type === "bold");
-  const i = marks?.some((m) => m.type === "italic");
-  return b && i ? "Helvetica-BoldOblique" : b ? "Helvetica-Bold" : i ? "Helvetica-Oblique" : "Helvetica";
-}
-
-/** Os filhos em linha de um parágrafo/título: texto com marcas e quebras. */
-function emLinha(nos: NoDoDocumento[] | undefined, chave: string): React.ReactNode[] {
-  return (nos ?? []).map((n, i) => {
-    if (n.type === "hardBreak") return "\n";
-    if (n.type !== "text" || !n.text) return null;
-    const sublinhado = n.marks?.some((m) => m.type === "underline");
-    return (
-      <Text key={`${chave}-${i}`} style={{ fontFamily: fonteDasMarcas(n.marks), textDecoration: sublinhado ? "underline" : "none" }}>
-        {paraWinAnsi(n.text)}
-      </Text>
-    );
-  });
-}
-
-function bloco(n: NoDoDocumento, s: Estilos, chave: string, ordem?: number): React.ReactNode {
-  const filhos = n.content ?? [];
-  switch (n.type) {
-    case "heading": {
-      const nivel = (n.attrs?.level as number | undefined) ?? 2;
-      return (
-        <Text key={chave} style={nivel === 1 ? s.h1 : nivel === 2 ? s.h2 : s.h3} minPresenceAhead={40}>
-          {emLinha(filhos, chave)}
-        </Text>
-      );
-    }
-    case "paragraph":
-      return (
-        <Text key={chave} style={s.p}>
-          {filhos.length ? emLinha(filhos, chave) : " "}
-        </Text>
-      );
-    case "bulletList":
-    case "orderedList": {
-      const inicio = (n.attrs?.start as number | undefined) ?? 1;
-      return (
-        <View key={chave} style={s.lista}>
-          {filhos.map((f, i) => bloco(f, s, `${chave}-${i}`, n.type === "orderedList" ? inicio + i : undefined))}
-        </View>
-      );
-    }
-    case "listItem":
-      return (
-        <View key={chave} style={s.item} wrap={false}>
-          <Text style={s.marcador}>{ordem !== undefined ? `${ordem}.` : "•"}</Text>
-          <View style={s.itemCorpo}>{filhos.map((f, i) => bloco(f, s, `${chave}-${i}`))}</View>
-        </View>
-      );
-    case "table":
-      return (
-        <View key={chave} style={s.tabela}>
-          {filhos.map((linha, i) => (
-            <View key={`${chave}-${i}`} style={s.linha} wrap={false}>
-              {(linha.content ?? []).map((cel, j) => (
-                <View key={`${chave}-${i}-${j}`} style={cel.type === "tableHeader" ? s.celulaCabecalho : s.celula}>
-                  {(cel.content ?? []).map((f, k) => bloco(f, s, `${chave}-${i}-${j}-${k}`))}
-                </View>
-              ))}
-            </View>
-          ))}
-        </View>
-      );
-    case "horizontalRule":
-      return <View key={chave} style={s.hr} />;
-    case "quebraDePagina":
-      return <View key={chave} break />;
-    default:
-      return null;
-  }
-}
-
-function Par({ rotulo, valor, s }: { rotulo: string; valor: string; s: Estilos }) {
+function Faixa({ s }: { s: Estilos }) {
   return (
-    <View style={s.par}>
-      <Text style={s.rotulo}>{paraWinAnsi(rotulo)}</Text>
-      <Text style={s.valor}>{paraWinAnsi(valor)}</Text>
+    <View fixed style={s.faixa}>
+      <View style={s.faixaPrimary} />
+      <View style={s.faixaAccent} />
     </View>
   );
 }
 
-export function DocumentoPdf({ dados }: { dados: DadosDoDocumento }) {
-  const cor = dados.marca.cor && HEX.test(dados.marca.cor) ? dados.marca.cor : NEUTRO;
-  const s = estilos(cor);
-  const m = dados.marca;
-  const detalhes = [m.razaoSocial && m.razaoSocial !== m.nome ? m.razaoSocial : null, m.cnpj ? `CNPJ ${m.cnpj}` : null, m.endereco ?? null].filter(Boolean) as string[];
+/** O símbolo cabe em 25 × 19 mm, com a proporção preservada (react-pdf exige tamanho explícito). */
+function tamanhoDoSimbolo(img: { largura: number; altura: number }) {
+  const proporcao = img.largura / img.altura;
+  const altura = Math.min(CABECALHO.alturaDoLogo, CABECALHO.colunaDoLogo / proporcao);
+  return { width: altura * proporcao, height: altura };
+}
+
+function CabecalhoCompleto({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
+  const linhasDireita = [...ctx.contatos, ctx.cidadeUf].filter((x): x is string => Boolean(x));
   return (
-    <Document title={paraWinAnsi(`${dados.titulo} — ${dados.subtitulo}`)} author={paraWinAnsi(m.nome)} language="pt-BR">
-      <Page size="A4" style={s.pagina}>
-        {dados.faixa ? <Text fixed style={s.faixaTopo}>{paraWinAnsi(dados.faixa)}</Text> : null}
-        <View fixed style={s.compacto} render={({ pageNumber }) => (pageNumber > 1 ? <Text>{paraWinAnsi(dados.cabecalhoCompacto.join("  ·  "))}</Text> : null)} />
-
-        <View style={s.bloco}>
-          <View style={s.blocoTopo}>
-            {m.logo ? <Image style={s.logo} src={{ data: m.logo.data, format: m.logo.format }} /> : null}
-            <View>
-              <Text style={s.clinica}>{paraWinAnsi(m.nome)}</Text>
-              {detalhes.map((d) => (
-                <Text key={d} style={s.clinicaDetalhe}>
-                  {paraWinAnsi(d)}
-                </Text>
-              ))}
-            </View>
+    <View style={s.cabecalhoInterno}>
+      <View style={s.linhaDoCabecalho}>
+        {ctx.simbolo ? (
+          <View style={s.colunaDoLogo}>
+            <Image style={tamanhoDoSimbolo(ctx.simbolo)} src={{ data: ctx.simbolo.data, format: ctx.simbolo.format }} />
           </View>
-          <Text style={s.titulo}>{paraWinAnsi(dados.titulo)}</Text>
-          {dados.faixa ? <Text style={s.faixaNoBloco}>{paraWinAnsi(dados.faixa)}</Text> : null}
-          <Text style={s.subtitulo}>{paraWinAnsi(dados.subtitulo)}</Text>
-          <View style={s.grade}>
-            {dados.identificacao.map(([r, v]) => (
-              <Par key={r} rotulo={r} valor={v} s={s} />
-            ))}
-          </View>
-          <View style={s.separador} />
-          <View style={s.grade}>
-            {dados.controle.map(([r, v]) => (
-              <Par key={r} rotulo={r} valor={v} s={s} />
-            ))}
-          </View>
+        ) : null}
+        <View style={s.wordmark}>
+          <Text style={s.nomeDaMarca}>{ctx.nomeDaMarca}</Text>
+          {ctx.descritor ? <Text style={s.descritor}>{ctx.descritor.toUpperCase()}</Text> : null}
         </View>
+        <View style={s.contatos}>
+          {ctx.site ? <Text style={s.contatoForte}>{ctx.site.exibir}</Text> : null}
+          {linhasDireita.map((l) => (
+            <Text key={l} style={s.contato}>
+              {l}
+            </Text>
+          ))}
+        </View>
+      </View>
+      <View style={s.filete} />
+    </View>
+  );
+}
 
-        {(dados.conteudo.content ?? []).map((n, i) => bloco(n, s, `b${i}`))}
+function CabecalhoCompacto({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
+  const icone = ctx.favicon ?? ctx.simbolo;
+  return (
+    <View style={s.cabecalhoInterno}>
+      <View style={s.linhaCompacta}>
+        {icone ? <Image style={s.favicon} src={{ data: icone.data, format: icone.format }} /> : null}
+        <Text style={s.nomeCompacto}>{ctx.nomeDaMarca}</Text>
+        {ctx.descritor ? <Text style={s.descritorCompacto}>{ctx.descritor.toUpperCase()}</Text> : null}
+      </View>
+      <View style={s.fileteCompacto} />
+    </View>
+  );
+}
 
-        <View fixed style={s.rodapeLinha} />
-        <Text
+function Rodape({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
+  const esquerda = [ctx.cnpj ? `CNPJ ${ctx.cnpj}` : null, ctx.responsavel].filter((x): x is string => Boolean(x));
+  const direita = [ctx.enderecoLinha, ctx.cidadeUfCep].filter((x): x is string => Boolean(x));
+  return (
+    <View fixed style={s.rodape}>
+      <View style={s.rodapeEsq}>
+        <Text style={s.rodapeForte}>{ctx.razaoSocial}</Text>
+        {esquerda.map((l) => (
+          <Text key={l} style={s.rodapeTexto}>
+            {l}
+          </Text>
+        ))}
+      </View>
+      <View style={s.rodapeDir}>
+        {direita.map((l) => (
+          <Text key={l} style={s.rodapeTextoDir}>
+            {l}
+          </Text>
+        ))}
+        <Text style={s.rodapeTextoDir} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Espaço reservado na página 1 para o cabeçalho completo (que é absoluto):
+ * da margem de 30 mm até logo abaixo do filete.
+ */
+const ESPACO_DO_CABECALHO_COMPLETO = PAGINA.cabecalhoTopo + CABECALHO.alturaDoLogo + CABECALHO.distanciaDoFilete + CABECALHO.filete - PAGINA.margemTopo;
+
+export function DocumentoPdf({ doc, contexto }: { doc: DocumentoTimbrado; contexto: ContextoDaMarca }) {
+  registrarFontes();
+  const cores = doc.pretoEBranco ? paraPretoEBranco(contexto.cores) : contexto.cores;
+  const s = estilos(cores);
+  const corpo = estilosDoCorpo(cores);
+  const metadados = (doc.metadados ?? []).filter((m): m is [string, string] => Boolean(m[1] && m[1].trim()));
+  const fixos = (doc.avisos ?? []).filter((a) => a.emTodasAsPaginas);
+  const marcaDagua = !doc.semMarcaDagua && !doc.pretoEBranco && contexto.marcaDaguaPermitida ? contexto.simbolo : null;
+  const eyebrow = `${doc.tipo}${doc.numero ? ` · Nº ${doc.numero}` : ""}`.toUpperCase();
+
+  return (
+    <Document
+      title={`${doc.titulo} — ${contexto.nomeDaMarca}`}
+      author={contexto.razaoSocial}
+      subject={doc.tipo}
+      creator={contexto.nomeDaMarca}
+      producer={`${contexto.nomeDaMarca} · layout ${VERSAO_DO_LAYOUT}`}
+      language="pt-BR"
+      creationDate={doc.emitidoEm}
+      modificationDate={doc.emitidoEm}
+    >
+      <Page size={PAGINA.tamanho} style={s.pagina}>
+        {/* Marca d'água primeiro: desenhada por trás do texto, só na página 1 (não é `fixed`). */}
+        {marcaDagua ? <Image style={s.marcaDagua} src={{ data: marcaDagua.data, format: marcaDagua.format }} /> : null}
+        <Faixa s={s} />
+        <View
           fixed
-          style={s.rodape}
-          render={({ pageNumber, totalPages }) => paraWinAnsi(`${dados.faixa ? `${dados.faixa}  ·  ` : ""}${dados.rodape(pageNumber, totalPages)}`)}
+          style={s.cabecalho}
+          render={({ pageNumber }) => (pageNumber === 1 ? <CabecalhoCompleto ctx={contexto} s={s} /> : <CabecalhoCompacto ctx={contexto} s={s} />)}
         />
+
+        <View style={{ height: ESPACO_DO_CABECALHO_COMPLETO }} />
+        <Text style={s.eyebrow}>{eyebrow}</Text>
+        <Text style={s.titulo}>{doc.titulo}</Text>
+        {metadados.length ? (
+          <View style={s.meta} wrap={false}>
+            {metadados.map(([rotulo, valor], i) => (
+              <View key={rotulo} style={i < metadados.length - 1 ? [s.metaLinha, s.metaDivisoria] : s.metaLinha}>
+                <Text style={s.metaRotulo}>{rotulo.toUpperCase()}</Text>
+                <Text style={s.metaValor}>{valor}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {(doc.avisos ?? []).map((a) => (
+          <CaixaDeAviso key={a.texto} estado={a.estado} texto={a.texto} />
+        ))}
+
+        {(doc.corpo.content ?? []).map((n, i) => (
+          <Bloco key={`b${i}`} no={n} s={corpo} chave={`b${i}`} />
+        ))}
+
+        {doc.assinatura ? (
+          <View style={s.assinatura} wrap={false}>
+            <Text style={s.fecho}>{doc.assinatura.fecho ?? "Atenciosamente,"}</Text>
+            <View style={s.linhaDaAssinatura} />
+            <Text style={s.nomeDaAssinatura}>{doc.assinatura.nome}</Text>
+            {doc.assinatura.cargo ? <Text style={s.cargo}>{doc.assinatura.cargo}</Text> : null}
+          </View>
+        ) : null}
+
+        {fixos.map((a) => (
+          <Text key={`fixo-${a.texto}`} fixed style={[s.avisoFixo, { color: ESTADOS[a.estado].texto }]}>
+            {a.texto}
+          </Text>
+        ))}
+        <Rodape ctx={contexto} s={s} />
       </Page>
     </Document>
   );
 }
 
-export async function renderizarDocumento(dados: DadosDoDocumento): Promise<Buffer> {
-  return renderToBuffer(<DocumentoPdf dados={dados} />);
+export async function renderizarDocumento(doc: DocumentoTimbrado, contexto: ContextoDaMarca): Promise<Buffer> {
+  return renderToBuffer(<DocumentoPdf doc={doc} contexto={contexto} />);
 }
