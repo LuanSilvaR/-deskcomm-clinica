@@ -32,7 +32,10 @@ export default async function TabelaDePrecosPage() {
           {t("O preço de cada procedimento e pacote que entra nos orçamentos. Mudar um preço não altera orçamentos já enviados.")}
         </p>
       </header>
-      <TabelaDePrecosClient podeEditar={permissoes.has("orcamentos.precos")} />
+      <TabelaDePrecosClient
+        podeEditar={permissoes.has("orcamentos.precos")}
+        podeConfigurar={permissoes.has("configuracoes.opcoes_da_clinica")}
+      />
     </div>
   );
 }

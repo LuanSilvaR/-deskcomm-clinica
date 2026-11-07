@@ -433,6 +433,16 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); configuração do produto.",
   },
   {
+    tabela: "clinic_orcamentos",
+    razao:
+      "tests/invariants/clinic-orcamentos-rascunho.test.ts (FORK clinic, migration 8007): 2 orgs, quem é da outra empresa lê 0 linhas e não grava; sem orcamentos.ver lê 0; ninguém escreve direto (só fn_clinic_orcamento_*); não se apaga fora da cascata.",
+  },
+  {
+    tabela: "clinic_orcamento_itens",
+    razao:
+      "tests/invariants/clinic-orcamentos-rascunho.test.ts (FORK clinic, migration 8007): 2 orgs, quem é da outra empresa lê 0 linhas e não grava; sem orcamentos.ver lê 0; ninguém escreve direto (só fn_clinic_orcamento_*); itens só mudam em rascunho.",
+  },
+  {
     tabela: "clinic_precos",
     razao:
       "tests/invariants/clinic-orcamentos-precos.test.ts (FORK clinic, migration 8006): 2 orgs, quem é da outra empresa lê 0 linhas e não publica; sem orcamentos.ver lê 0; ninguém escreve direto (só fn_clinic_preco_publicar); só acrescenta.",

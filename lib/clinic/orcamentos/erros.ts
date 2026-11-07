@@ -20,6 +20,36 @@ const ERROS_DO_ORCAMENTO: Record<string, { status: number; code: string; mensage
     code: "validation_failed",
     mensagem: "Procedimento ou tipo de serviço não encontrado nesta clínica.",
   },
+  orcamento_dados_invalidos: { status: 422, code: "validation_failed", mensagem: "Dados inválidos." },
+  orcamento_invalido: { status: 404, code: "not_found", mensagem: "Orçamento não encontrado." },
+  orcamento_nao_editavel: {
+    status: 409,
+    code: "conflict",
+    mensagem: "Este orçamento não pode mais ser alterado.",
+  },
+  orcamento_imutavel: { status: 409, code: "conflict", mensagem: "Orçamento não se apaga; cancele." },
+  orcamento_paciente_invalido: { status: 422, code: "validation_failed", mensagem: "Paciente não encontrado." },
+  orcamento_atendimento_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Atendimento inválido para este paciente.",
+  },
+  orcamento_preco_desatualizado: {
+    status: 409,
+    code: "conflict",
+    mensagem: "A tabela de preços mudou. Recarregue e escolha os itens de novo.",
+  },
+  orcamento_desconto_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "O desconto não pode passar do subtotal.",
+  },
+  orcamento_pagamento_invalido: {
+    status: 422,
+    code: "validation_failed",
+    mensagem: "Condição de pagamento inválida.",
+  },
+  orcamento_sem_motivo: { status: 422, code: "validation_failed", mensagem: "Informe o motivo." },
   preco_imutavel: {
     status: 409,
     code: "conflict",
