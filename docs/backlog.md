@@ -52,3 +52,9 @@ Atenção: o `gh` deste clone aponta por padrão para o upstream — use sempre 
 - Épico [#63 Agenda por profissional](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/63) —
   S1 #64, S4 #65, S5 #66 em Teste (PR #71 mergeado em 2026-11-04); S2 #67, S3 #68, S6 #69, S7 #70 no Backlog.
 - [#77 Fábrica de agentes](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/77) — Em andamento (PR #76).
+
+## Backlog (a refinar)
+
+- **Orçamento → Contrato** (G, épico a criar): orçamento por paciente a partir do atendimento; aprovado = contrato
+  aceito (presencial ou link); gera plano de tratamento e comanda. Spec: `docs/tarefas/orcamento/`
+  (`historia.md` com os critérios 1–18 e o texto das issues O1–O5; `impacto.md`; `plano.md`).
