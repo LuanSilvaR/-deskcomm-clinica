@@ -439,6 +439,18 @@ export const NAV_CATALOG = [
     section: "Sua empresa",
   },
   {
+    // FORK clinic (orçamento O1, migration 8006): a tabela de preços dos
+    // procedimentos e pacotes. Não é conteúdo clínico: `orcamentos.ver` lê,
+    // `orcamentos.precos` publica.
+    href: "/app/settings/tenant/precos",
+    label: "Tabela de preços",
+    permissao: "orcamentos.ver",
+    description: "O preço de cada procedimento e pacote que entra nos orçamentos, com histórico.",
+    icon: "Tag",
+    group: "organizacao",
+    section: "Sua empresa",
+  },
+  {
     // FORK clinic (prontuário F3, migration 9020): modelos de anamnese e
     // avaliação e o que é obrigatório para finalizar. Configuração, sem
     // paciente: `modelos_clinicos.gerenciar`.
