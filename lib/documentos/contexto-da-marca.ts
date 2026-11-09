@@ -258,3 +258,29 @@ export async function resolverContextoDaMarca(leitor: LeitorDeOrganizacao, orgId
   const [logo, favicon] = await Promise.all([baixarDaMarca(entrada.logoPath, orgId), baixarDaMarca(entrada.faviconPath, orgId)]);
   return montarContextoDaMarca({ ...entrada, logo, favicon });
 }
+
+/**
+ * O que fica guardado no documento EMITIDO (`clinic_documentos_emitidos.
+ * marca_snapshot`, migration 8014): os campos CRUS das Configurações no dia
+ * da primeira geração, mais os caminhos do logo e do favicon. Reimprimir
+ * remonta o contexto a partir daqui — mudar a marca depois não muda o documento.
+ */
+export type SnapshotDaMarca = Omit<EntradaDoContexto, "logo" | "favicon" | "modeloEmBranco"> & {
+  logoPath: string | null;
+  faviconPath: string | null;
+};
+
+/** Valida o formato mínimo de um snapshot lido do banco. */
+export function ehSnapshotDaMarca(x: unknown): x is SnapshotDaMarca {
+  return typeof x === "object" && x !== null && !Array.isArray(x) && "logoPath" in x && "faviconPath" in x;
+}
+
+/**
+ * O contexto de um snapshot. Logo e favicon são baixados pelos caminhos
+ * guardados — se o arquivo já não existir (a marca trocou o logo e o antigo
+ * foi apagado), o documento sai com o wordmark em texto, nunca com o logo novo.
+ */
+export async function contextoDoSnapshot(snapshot: SnapshotDaMarca, orgId: string): Promise<ContextoDaMarca> {
+  const [logo, favicon] = await Promise.all([baixarDaMarca(snapshot.logoPath, orgId), baixarDaMarca(snapshot.faviconPath, orgId)]);
+  return montarContextoDaMarca({ ...snapshot, logo, favicon });
+}

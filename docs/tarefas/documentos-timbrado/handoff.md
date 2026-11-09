@@ -25,3 +25,12 @@ Padrão completo: [`docs/padrao-documentos.md`](../../padrao-documentos.md). Esp
 
 ## Próximo
 D2 (campos novos), D3 (termos e contrato com snapshot) e D4 (prontuário e LGPD). Ver as fases no padrão.
+
+## D3 — termos e contrato
+- **Migration 8014:** `clinic_documentos_emitidos.marca_snapshot` e `layout_versao`. `fn_clinic_documento_fixar_marca` grava uma vez; `trg_clinic_documento_marca_fixa` recusa mudar.
+- **`lib/clinic/documentos/timbrado.ts`** (puro): texto congelado em blocos; situação, validade, aceite e integridade nos metadados; aviso em todas as páginas quando o documento foi revogado ou cancelado.
+- **`lib/clinic/documentos/pdf-servidor.ts`:** lê o documento (filtrado pela organização), fixa o snapshot na 1ª geração e gera o PDF com ele.
+- **Rota `GET /api/v1/clinic/documentos/[id]/pdf`** (`documentos.ver` + escopo de paciente) e botão **Baixar PDF** na aba Documentos.
+- **O contrato do orçamento** usa o mesmo gerador, com o número do orçamento. Saiu `lib/clinic/orcamentos/pdf.tsx`.
+- **Limite:** se o logo ou o favicon forem trocados, o arquivo antigo é apagado pelas rotas de marca, e a reimpressão de um documento antigo sai com o wordmark em texto. Os textos e as cores continuam os do snapshot.
+- **Evidência:** `evidence/documentos-timbrado/contrato-orcamento-demo.pdf` (contrato real da demo, aceito).

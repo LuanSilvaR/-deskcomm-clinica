@@ -16,8 +16,7 @@ import { fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { orcamentoNoEscopo } from "@/lib/clinic/orcamentos/escopo";
-import { gerarPdfDoContrato } from "@/lib/clinic/orcamentos/pdf";
-import { tagDeIdioma } from "@/lib/i18n/datas";
+import { gerarPdfDoDocumentoEmitido } from "@/lib/clinic/documentos/pdf-servidor";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -41,41 +40,28 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   }
   const { data: orc } = await supabase
     .from("clinic_orcamentos")
-    .select("id, documento_id")
+    .select("id, documento_id, numero, versao")
     .eq("organization_id", org)
     .eq("id", id)
     .maybeSingle();
   const documentoId = (orc as { documento_id: string | null } | null)?.documento_id;
   if (!documentoId) return fail("not_found", t("Este orçamento ainda não tem contrato."), 404, { requestId });
 
-  const { data: doc } = await createAdminClient()
-    .from("clinic_documentos_emitidos")
-    .select("titulo, conteudo, sha256, status, created_at, clinic_documento_aceites(tipo, canal, nome_digitado, created_at)")
-    .eq("organization_id", org)
-    .eq("id", documentoId)
-    .eq("orcamento_id", id)
-    .maybeSingle();
-  if (!doc) return fail("not_found", t("Este orçamento ainda não tem contrato."), 404, { requestId });
-
-  const d = doc as {
-    titulo: string;
-    conteudo: string;
-    sha256: string;
-    status: string;
-    created_at: string;
-    clinic_documento_aceites: { tipo: string; canal: string; nome_digitado: string | null; created_at: string }[] | null;
-  };
-  const aceite = (d.clinic_documento_aceites ?? []).find((a) => a.tipo === "aceite") ?? null;
-  const pdf = await gerarPdfDoContrato({
-    titulo: d.titulo,
-    conteudo: d.conteudo,
-    sha256: d.sha256,
-    status: d.status,
-    emitidoEm: d.created_at,
-    aceite: aceite ? { nome: aceite.nome_digitado, canal: aceite.canal, em: aceite.created_at } : null,
-    data: (iso) =>
-      new Date(iso).toLocaleString(tagDeIdioma("pt-BR"), { dateStyle: "long", timeStyle: "short", timeZone: "America/Sao_Paulo" }),
+  // Papel timbrado único (D3): o mesmo PDF dos demais documentos emitidos, com
+  // o número do orçamento no eyebrow e a marca do snapshot do contrato.
+  const numero = (orc as { numero?: number | null; versao?: number | null } | null)?.numero ?? null;
+  const versao = (orc as { versao?: number | null } | null)?.versao ?? 1;
+  const r = await gerarPdfDoDocumentoEmitido({
+    sessao: supabase,
+    admin: createAdminClient(),
+    orgId: org,
+    documentoId,
+    orcamentoId: id,
+    numero: numero ? `${String(numero).padStart(3, "0")}${versao > 1 ? ` v${versao}` : ""}` : null,
   });
+  if (!r) return fail("not_found", t("Este orçamento ainda não tem contrato."), 404, { requestId });
+  const pdf = r.pdf;
+  const d = { status: r.status };
 
   void audit({
     action: "clinic.orcamento_contrato_baixado",
