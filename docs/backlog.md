@@ -12,8 +12,8 @@ Especificação de cada item: `docs/tarefas/<id>/` (`historia.md`, `impacto.md`,
 | Pronto para iniciar | — | critérios de aceite numerados e aprovados; pode começar | dono do produto |
 | Em andamento | `status: dev` | PR aberto para `develop` com a evidência do Verify | `/tarefa` ao abrir o PR |
 | Teste | `status: test` | PR mergeado na `develop` e CI verde; rodar integração/E2E | Claude, após o merge |
-| Em integração | `status: integracao` | validado na **3001** (homologação) com a palavra do dono; promoção develop → main → VPS iniciada | Claude, com o ok do dono |
-| Concluído | `status: done` | validado na 3001 e publicado na **VPS (Hostinger KVM2)**; issue fechada | dono do produto |
+| Em integração | `status: integracao` | validado na **3002** (homologação) com a palavra do dono; promoção develop → main → VPS iniciada | Claude, com o ok do dono |
+| Concluído | `status: done` | validado na 3002 e publicado na **VPS (Hostinger KVM2)**; issue fechada | dono do produto |
 
 A label `status: dev` mantém o nome antigo para não quebrar filtros e histórico;
 a coluna do quadro é o nome que vale.
