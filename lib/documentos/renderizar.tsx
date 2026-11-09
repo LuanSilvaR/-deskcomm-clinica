@@ -31,6 +31,11 @@ export interface AvisoDoDocumento {
   texto: string;
   /** Repete numa linha discreta acima do rodapé de TODAS as páginas (ex.: "NÃO VIGENTE"). */
   emTodasAsPaginas?: boolean;
+  /**
+   * Só a linha fixa de cada página, sem a caixa na abertura — para o que tem de
+   * aparecer UMA vez por página (ex.: a linha do controlador do relatório LGPD).
+   */
+  soNaLinhaFixa?: boolean;
 }
 
 export interface DocumentoTimbrado {
@@ -328,9 +333,11 @@ export function DocumentoPdf({ doc, contexto }: { doc: DocumentoTimbrado; contex
           </View>
         ) : null}
 
-        {(doc.avisos ?? []).map((a) => (
-          <CaixaDeAviso key={a.texto} estado={a.estado} texto={a.texto} />
-        ))}
+        {(doc.avisos ?? [])
+          .filter((a) => !a.soNaLinhaFixa)
+          .map((a) => (
+            <CaixaDeAviso key={a.texto} estado={a.estado} texto={a.texto} />
+          ))}
 
         {(doc.corpo.content ?? []).map((n, i) => (
           <Bloco key={`b${i}`} no={n} s={corpo} chave={`b${i}`} />

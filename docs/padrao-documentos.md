@@ -83,4 +83,8 @@ Exemplo de referência: `lib/clinic/pops/impressao.ts` + `app/api/v1/clinic/pops
 | D1 | Motor, fontes, testes; POP migrado | PR #125 |
 | D2 | Campos novos: site, WhatsApp, descritor, responsável técnico e registro (Organização, migration 8013); cor dos filetes e "Baixar modelo do papel timbrado" (Marca) | PR do D2 |
 | D3 | PDF dos termos emitidos (`GET /api/v1/clinic/documentos/[id]/pdf` + "Baixar PDF" na aba Documentos) e do contrato do orçamento; snapshot da marca fixado na 1ª geração (migration 8014) | PR do D3 |
-| D4 | Prontuário e exportação LGPD no motor | a seguir |
+| D4 | Prontuário no motor (a página `/imprimir/prontuario` vira o PDF) e relatório LGPD no papel timbrado, com a linha do controlador em todas as páginas | PR do D4 |
+
+## Situação final
+
+Todos os geradores de PDF passam pelo motor: POP, termos emitidos, contrato do orçamento, prontuário e relatório LGPD. A lista `A_MIGRAR` da cerca está vazia. A partir daqui, qualquer arquivo novo que importe `@react-pdf/renderer` fora de `lib/documentos/` reprova o teste.

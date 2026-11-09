@@ -34,3 +34,9 @@ D2 (campos novos), D3 (termos e contrato com snapshot) e D4 (prontuário e LGPD)
 - **O contrato do orçamento** usa o mesmo gerador, com o número do orçamento. Saiu `lib/clinic/orcamentos/pdf.tsx`.
 - **Limite:** se o logo ou o favicon forem trocados, o arquivo antigo é apagado pelas rotas de marca, e a reimpressão de um documento antigo sai com o wordmark em texto. Os textos e as cores continuam os do snapshot.
 - **Evidência:** `evidence/documentos-timbrado/contrato-orcamento-demo.pdf` (contrato real da demo, aceito).
+
+## D4 — prontuário e LGPD
+- **Prontuário:** `lib/clinic/prontuario/pdf.ts` só monta o conteúdo. O aviso de dados de saúde vai em todas as páginas e os alertas clínicos em caixa de perigo. A página `/imprimir/prontuario/:id` passou a só redirecionar para o PDF, que já faz o escopo de paciente (a página antiga não fazia), o limite e a auditoria. Saiu `components/clinic/prontuario/ProntuarioImpressao.tsx`.
+- **LGPD:** `lgpdParaTimbrado` preserva as frases e a ordem das seções. A linha do CONTROLADOR (razão social) e o encarregado vão no corpo e fixos em todas as páginas. O worker passa o contexto da marca da organização do pedido.
+- **Testes no Windows:** `lgpd-pdf-meet` e `lgpd-pdf-replies` falham neste Windows também na develop limpa (`Invalid factory url … standard_fonts`, caminho com barra invertida no pdfjs). Não é regressão; a prova é o CI (Linux).
+- **Evidência:** `evidence/documentos-timbrado/prontuario-timbrado.pdf` e `lgpd-timbrado.pdf` (dados fictícios).

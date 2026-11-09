@@ -21,9 +21,7 @@ const RAIZ = path.resolve(__dirname, "../..");
 /** Lê o PDF (não gera): extrai texto para a base de conhecimento da IA. */
 const LEITORES = ["lib/ai/rag/extractors/pdf.ts"];
 
-const A_MIGRAR = [
-  "lib/clinic/prontuario/pdf.tsx", // D4 — prontuário
-  "lib/lgpd/pdf-renderer.tsx", // D4 — exportação LGPD (núcleo)
+const A_MIGRAR: string[] = [
 ];
 
 function arquivosQueImportamReactPdf(): string[] {

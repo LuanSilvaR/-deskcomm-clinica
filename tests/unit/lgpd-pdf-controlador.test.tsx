@@ -7,26 +7,33 @@
  * documento jurídico. "Completar o white-label" aqui PIORA o defeito, e é
  * exatamente o conserto que a próxima pessoa vai querer fazer.
  *
- * A asserção olha a ÁRVORE do componente, não o PDF renderizado, e isso é
+ * A asserção olha o CONTEÚDO montado, não o PDF renderizado, e isso é
  * deliberado: `renderToBuffer` devolve bytes válidos mesmo quando o @react-pdf
  * descarta silenciosamente o que não entende (medido no plano da fase: 1514
  * bytes com `var(--x)` contra 1538 com hex, sem erro). Uma prova do tipo "gerei
  * o PDF e ele abriu" passaria com o texto errado dentro.
+ *
+ * FORK clinic (papel timbrado D4): o relatório passou a sair no papel timbrado
+ * da clínica (que é o controlador no fork). A linha do controlador — o que este
+ * gate protege — continua no corpo e fixa em todas as páginas; o conteúdo vem
+ * de `lgpdParaTimbrado`, e é dele que os textos são lidos.
  */
 import { describe, expect, it } from "vitest";
-import type { ReactElement, ReactNode } from "react";
 
 import type { ExportPayload } from "@/lib/lgpd/export-collector";
-import { LgpdExportPdf } from "@/lib/lgpd/pdf-renderer";
+import { lgpdParaTimbrado } from "@/lib/lgpd/pdf-renderer";
 
-/** Todo texto da árvore, achatado — inclusive o que está dentro de `fixed`. */
-function textos(no: ReactNode): string[] {
+/** O documento timbrado do relatório (mesmo nome do antigo componente, para as asserções ficarem iguais). */
+const LgpdExportPdf = ({ data, unsignedWarning }: { data: ExportPayload; unsignedWarning?: boolean }) =>
+  lgpdParaTimbrado(data, unsignedWarning);
+
+/** Todo texto do documento, achatado — títulos, metadados, avisos fixos e corpo. */
+function textos(no: unknown): string[] {
   if (no === null || no === undefined || typeof no === "boolean") return [];
   if (typeof no === "string") return [no];
   if (typeof no === "number") return [String(no)];
   if (Array.isArray(no)) return no.flatMap(textos);
-  const elemento = no as ReactElement<{ children?: ReactNode }>;
-  if (elemento.props && "children" in elemento.props) return textos(elemento.props.children);
+  if (typeof no === "object") return Object.values(no as Record<string, unknown>).flatMap(textos);
   return [];
 }
 
@@ -36,7 +43,7 @@ function textos(no: ReactNode): string[] {
  * imprimir a marca continuaria "contendo" o nome certo em algum lugar da
  * página — e o teste passaria pelo motivo errado.
  */
-function rodape(elemento: ReactElement): string {
+function rodape(elemento: unknown): string {
   // Espaços colapsados: cada interpolação do JSX vira um filho de texto próprio,
   // então o `join` produz espaço duplo em volta de todo `{...}`. Prender o teste
   // a essa espaçagem seria prender o gate a um detalhe do parser.
