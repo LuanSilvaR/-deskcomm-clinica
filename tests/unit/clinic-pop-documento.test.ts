@@ -30,12 +30,33 @@ describe("documento do POP", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("recusa link, imagem, HTML cru e atributos livres", () => {
+  it("recusa link, imagem e HTML cru; atributo livre é DESCARTADO (nunca gravado)", () => {
     expect(validarDocumento(doc([{ type: "paragraph", content: [{ type: "text", text: "x", marks: [{ type: "link", attrs: { href: "javascript:alert(1)" } }] }] }])).ok).toBe(false);
     expect(validarDocumento(doc([{ type: "image", attrs: { src: "http://x" } }])).ok).toBe(false);
-    expect(validarDocumento(doc([{ type: "paragraph", attrs: { style: "color:red" } }])).ok).toBe(false);
+    const comStyle = validarDocumento(doc([{ type: "paragraph", attrs: { style: "color:red" } }]));
+    expect(comStyle.ok).toBe(true);
+    if (comStyle.ok) expect(JSON.stringify(comStyle.documento)).not.toContain("color:red");
     expect(validarDocumento({ type: "doc", content: [], html: "<script>" }).ok).toBe(false);
     expect(validarDocumento(doc([{ type: "heading", attrs: { level: 6 }, content: [] }])).ok).toBe(false);
+  });
+
+  it("#124: tabela do Tiptap 3.31 (célula com align) salva — o align é descartado", () => {
+    const celula = (texto: string) => ({ type: "tableCell", attrs: { colspan: 1, rowspan: 1, colwidth: null, align: null }, content: [{ type: "paragraph", content: [{ type: "text", text: texto }] }] });
+    const r = validarDocumento(doc([{ type: "table", content: [{ type: "tableRow", content: [celula("PLLA"), celula("Ácido poli-L-láctico")] }] }]));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(JSON.stringify(r.documento)).not.toContain("align");
+      expect(textoPuro(r.documento)).toContain("Ácido poli-L-láctico");
+    }
+  });
+
+  it("POP grande (60 seções de 1.000 caracteres, com tabelas) cabe com folga", () => {
+    const secoes = Array.from({ length: 60 }, (_, i) => [
+      { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: `${i + 1}. SEÇÃO` }] },
+      { type: "paragraph", content: [{ type: "text", text: "x".repeat(1000) }] },
+      { type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", attrs: { align: "left" }, content: [{ type: "paragraph" }] }] }] },
+    ]).flat();
+    expect(validarDocumento(doc(secoes)).ok).toBe(true);
   });
 
   it("<script> digitado é só TEXTO (não vira HTML em lugar nenhum)", () => {
@@ -44,8 +65,8 @@ describe("documento do POP", () => {
     if (r.ok) expect(textoPuro(r.documento)).toBe("<script>alert(1)</script>");
   });
 
-  it("recusa documento acima de 1 MB e profundo demais", () => {
-    expect(validarDocumento(doc([{ type: "paragraph", content: [{ type: "text", text: "a".repeat(20_000) }] }].concat(Array(60).fill({ type: "paragraph", content: [{ type: "text", text: "b".repeat(20_000) }] })))).ok).toBe(false);
+  it("recusa documento acima de 5 MB e profundo demais", () => {
+    expect(validarDocumento(doc(Array(60).fill({ type: "paragraph", content: [{ type: "text", text: "b".repeat(100_000) }] }))).ok).toBe(false);
     let fundo: Record<string, unknown> = { type: "paragraph" };
     for (let i = 0; i < 20; i++) fundo = { type: "bulletList", content: [{ type: "listItem", content: [fundo] }] };
     expect(validarDocumento(doc([fundo])).ok).toBe(false);

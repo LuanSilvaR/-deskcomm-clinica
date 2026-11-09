@@ -152,7 +152,12 @@ export function CabecalhoDoPop({
   );
 }
 
-type EstadoDoSalvamento = { tipo: "ocioso" } | { tipo: "salvando" } | { tipo: "salvo"; as: string } | { tipo: "erro" } | { tipo: "conflito"; quem: string | null };
+type EstadoDoSalvamento =
+  | { tipo: "ocioso" }
+  | { tipo: "salvando" }
+  | { tipo: "salvo"; as: string }
+  | { tipo: "erro"; motivo: string | null }
+  | { tipo: "conflito"; quem: string | null };
 
 const chaveLocal = (id: string) => `pop-rascunho-${id}`;
 function lerLocal(id: string): Documento | null {
@@ -178,11 +183,14 @@ function RascunhoEditavel({
   conteudo,
   onSalvo,
   onConflito,
+  onPendencia,
 }: {
   versao: VersaoDoPop;
   conteudo: Documento;
   onSalvo: (v: VersaoDoPop) => void;
   onConflito: () => void;
+  /** #124: avisa o pai quando há texto que ainda NÃO está no servidor — o Aprovar fica travado. */
+  onPendencia?: (pendente: boolean) => void;
 }) {
   const t = useT();
   const tag = useTagDeIdioma();
@@ -211,6 +219,7 @@ function RascunhoEditavel({
       if (pendente.current === doc) {
         pendente.current = null;
         gravarLocal(versao.id, null);
+        onPendencia?.(false);
       }
       setEstado({ tipo: "salvo", as: new Intl.DateTimeFormat(tag, { timeStyle: "short" }).format(new Date()) });
       onSalvo(r.data);
@@ -220,19 +229,22 @@ function RascunhoEditavel({
         onConflito();
         return;
       }
-      setEstado({ tipo: "erro" });
+      // #124: o motivo da recusa aparece na tela — "Erro ao salvar" sozinho deixava
+      // o texto se perder sem ninguém notar.
+      setEstado({ tipo: "erro", motivo: e instanceof ApiError ? e.message : null });
     }
-  }, [versao.id, onSalvo, onConflito, tag]);
+  }, [versao.id, onSalvo, onConflito, onPendencia, tag]);
 
   const temporizador = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const aoMudar = React.useCallback(
     (doc: Documento) => {
       pendente.current = doc;
       gravarLocal(versao.id, doc);
+      onPendencia?.(true);
       if (temporizador.current) clearTimeout(temporizador.current);
       temporizador.current = setTimeout(() => void salvar(), 2000);
     },
-    [versao.id, salvar],
+    [versao.id, salvar, onPendencia],
   );
   React.useEffect(() => () => {
     if (temporizador.current) clearTimeout(temporizador.current);
@@ -280,6 +292,12 @@ function RascunhoEditavel({
           </Button>
         </div>
       ) : null}
+      {estado.tipo === "erro" ? (
+        <div className="rounded-lg border border-error bg-error-bg px-3 py-2 text-sm text-error-fg" role="alert" data-testid="pop-erro-ao-salvar">
+          {t("O rascunho NÃO foi salvo")}
+          {estado.motivo ? `: ${estado.motivo}` : "."} {t("O texto continua guardado neste navegador. Corrija e clique em Salvar antes de aprovar.")}
+        </div>
+      ) : null}
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-text-muted" aria-live="polite" data-testid="pop-salvamento">
           {estado.tipo === "salvando"
@@ -316,6 +334,8 @@ export function AbaDoPop({ procedimento }: { procedimento: Procedimento }) {
   const [maior, setMaior] = React.useState(false);
   const [motivo, setMotivo] = React.useState("");
   const [lockAtual, setLockAtual] = React.useState<number | null>(null);
+  // #124: há texto no editor que ainda não chegou ao servidor? Aprovar fica travado.
+  const [naoSalvo, setNaoSalvo] = React.useState(false);
 
   const recarregar = React.useCallback(() => {
     void qc.invalidateQueries({ queryKey: ["clinic", "procedimentos"] });
@@ -396,7 +416,8 @@ export function AbaDoPop({ procedimento }: { procedimento: Procedimento }) {
         {v.status === "draft" && podeAprovar ? (
           <Button
             data-testid="pop-aprovar"
-            disabled={aprovar.isPending}
+            disabled={aprovar.isPending || naoSalvo}
+            title={naoSalvo ? t("Salve o rascunho antes de aprovar.") : undefined}
             onClick={() => {
               if (window.confirm(t("Aprovar esta versão? Depois de aprovada, ela não pode mais ser editada — só por uma nova versão."))) aprovar.mutate(v);
             }}
@@ -464,6 +485,7 @@ export function AbaDoPop({ procedimento }: { procedimento: Procedimento }) {
             );
           }}
           onConflito={() => undefined}
+          onPendencia={setNaoSalvo}
         />
       ) : (
         <EditorDoPop key={v.id} conteudo={doc.data.versao.content} editavel={false} rotulo={t("Conteúdo do POP")} />
