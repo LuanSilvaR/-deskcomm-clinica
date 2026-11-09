@@ -13,6 +13,8 @@
  * Docker, e o documento não pode cair por isso. Sem ele, o logo vai sem recorte
  * e a transparência é decidida pelo cabeçalho do PNG (tipo de cor com alfa).
  */
+import type sharpTipo from "sharp";
+
 export interface ImagemDoDocumento {
   data: Buffer;
   format: "png" | "jpg";
@@ -42,7 +44,7 @@ function cabecalhoPng(b: Buffer): { largura: number; altura: number; alfa: boole
   return { largura: b.readUInt32BE(16), altura: b.readUInt32BE(20), alfa: tipo === 4 || tipo === 6 };
 }
 
-type Sharp = (typeof import("sharp"))["default"];
+type Sharp = typeof sharpTipo;
 async function carregarSharp(): Promise<Sharp | null> {
   try {
     const m = (await import("sharp")) as unknown as { default?: Sharp };
