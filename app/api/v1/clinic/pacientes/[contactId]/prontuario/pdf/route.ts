@@ -14,6 +14,7 @@ import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { lerLinhaDoTempo } from "@/lib/clinic/prontuario/linha-do-tempo";
 import { gerarPdfDoProntuario } from "@/lib/clinic/prontuario/pdf";
+import { resolverContextoDaMarca } from "@/lib/documentos/contexto-da-marca";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -77,8 +78,10 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
   // Horários no fuso da CLÍNICA (o servidor roda em UTC).
   const fuso = ((empresa as { timezone?: string | null } | null)?.timezone ||
     "America/Sao_Paulo") as string;
+  // Papel timbrado único (D4): a marca vem de Configurações, pelo contexto da marca.
+  const contexto = await resolverContextoDaMarca(supabase, org);
+  if (!contexto) return fail("not_found", t("Paciente não encontrado."), 404, { requestId });
   const pdf = await gerarPdfDoProntuario({
-    clinica: (empresa?.display_name as string | null) ?? null,
     paciente: nomeDoContato(
       contato as { name: string | null; display_name: string | null; phone_number: string | null },
     ),
@@ -97,7 +100,7 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
     t,
     data: (iso) =>
       new Date(iso).toLocaleString(tag, { dateStyle: "short", timeStyle: "short", timeZone: fuso }),
-  });
+  }, contexto);
 
   void audit({
     action: "clinic.prontuario_exportado",

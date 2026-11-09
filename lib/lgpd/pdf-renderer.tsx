@@ -1,99 +1,23 @@
 /**
- * LGPD export PDF renderer (PT-BR).
+ * LGPD export PDF renderer (PT-BR) — Art. 18, II (direito de acesso aos dados).
  *
- * Template para Art. 18, II — direito de acesso aos dados. Renderizado para
- * Buffer via @react-pdf/renderer e entregue ao titular via Resend.
+ * FORK clinic (papel timbrado D4, docs/padrao-documentos.md): o relatório sai
+ * no PAPEL TIMBRADO único — cabeçalho e rodapé da clínica, que É o controlador
+ * dos dados no fork (decisão do dono do produto, 2026-11-08). O que o arquivo
+ * original protegia continua: a linha "Controlador: <RAZÃO SOCIAL> · … ·
+ * Encarregado (DPO)" vai no corpo E numa linha fixa em TODAS as páginas, e
+ * nomeia o CONTROLADOR (`organizations.legal_name`), nunca o nome fantasia nem
+ * o do software. Registrado no UPSTREAM.md.
  *
- * ── ESTE DOCUMENTO NÃO LEVA MARCA. É decisão, não esquecimento ──────────────
- *
- * O rodapé imprime o CONTROLADOR (`organizations.legal_name`) e o Encarregado
- * resolvido. Não imprime a marca do revendedor, não imprime a nossa, não leva
- * logo e não leva cor.
- *
- * O motivo: o relatório do Art. 18 II responde a um DIREITO LEGAL do titular.
- * Nomear ali o revendedor — que é OPERADOR, não controlador — inverteria os
- * papéis num documento jurídico. Trocar `DeskcommCRM` por `Vendas Turbo CRM`
- * no rodapé não é "completar o white-label": é piorar o defeito, porque hoje o
- * nome é obviamente o do software, e depois passaria a parecer a declaração de
- * quem responde pelos dados.
- *
- * Consequência boa e deliberada: a armadilha do @react-pdf não nos alcança.
- * `var(--x)` e `oklch()` renderizam PDF VÁLIDO e descartam a cor em silêncio
- * (medido: 1514 bytes contra 1538 do hex), então qualquer prova do tipo "gerei
- * o PDF e ele abriu" passaria com a marca perdida. Como o documento não recebe
- * cor de marca nenhuma, o `styles` de módulo abaixo pode continuar de módulo:
- * zero risco assumido. Não parametrize, não mova para dentro do componente.
- *
- * A tela que resolve o outro lado disto é `/app/settings/tenant` (campo "Razão
- * social"): `legal_name` nasce IGUAL a `display_name` no bootstrap
- * (`scripts/bootstrap-owner.ts`, os dois recebem `ORG_NAME`), então o caso ruim
- * aqui não é o campo vazio — é o nome fantasia impresso como razão social. Uma
- * guarda "se vazio, use X" nunca dispararia; o que resolve é preencher a tela.
+ * Este arquivo só monta CONTEÚDO (`lgpdParaTimbrado`); marca, cores e fontes
+ * são do motor (lib/documentos). As frases e a ordem das seções são as de antes.
  */
 
-import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
-import React from "react";
-
-import { env } from "@/lib/env";
+import type { NoDoDocumento } from "@/lib/clinic/pops/documento";
+import { montarContextoDaMarca, type ContextoDaMarca } from "@/lib/documentos/contexto-da-marca";
+import { renderizarDocumento, type DocumentoTimbrado } from "@/lib/documentos/renderizar";
 
 import type { ExportPayload } from "./export-collector";
-
-const styles = StyleSheet.create({
-  page: {
-    padding: 36,
-    fontSize: 10,
-    fontFamily: "Helvetica",
-    color: "#1f2937",
-  },
-  header: {
-    borderBottom: "1pt solid #d1d5db",
-    paddingBottom: 8,
-    marginBottom: 16,
-  },
-  title: { fontSize: 16, fontWeight: "bold", marginBottom: 4 },
-  subtitle: { fontSize: 10, color: "#6b7280" },
-  section: { marginTop: 14 },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "bold",
-    backgroundColor: "#f3f4f6",
-    padding: 4,
-    marginBottom: 6,
-  },
-  row: { flexDirection: "row", marginBottom: 2 },
-  label: { width: 110, color: "#6b7280" },
-  value: { flex: 1 },
-  small: { fontSize: 8, color: "#9ca3af" },
-  itemBlock: {
-    marginBottom: 4,
-    paddingBottom: 4,
-    borderBottom: "0.5pt dashed #e5e7eb",
-  },
-  warningBanner: {
-    marginTop: 14,
-    padding: 6,
-    border: "1pt solid #f59e0b",
-    backgroundColor: "#fffbeb",
-    fontSize: 9,
-    color: "#92400e",
-  },
-  footer: {
-    position: "absolute",
-    bottom: 24,
-    left: 36,
-    right: 36,
-    fontSize: 8,
-    color: "#9ca3af",
-    borderTop: "0.5pt solid #e5e7eb",
-    paddingTop: 4,
-  },
-});
-
-interface Props {
-  data: ExportPayload;
-  /** When true, appends an unsigned-PADES warning banner. */
-  unsignedWarning?: boolean;
-}
 
 function fmtDate(s: string | null | undefined): string {
   if (!s) return "—";
@@ -142,346 +66,188 @@ const noticeStatus: Record<string, string> = {
   dismissed: "Dispensado",
 };
 
-export function LgpdExportPdf({ data, unsignedWarning }: Props): React.ReactElement {
+const t = (texto: string, negrito = false): NoDoDocumento => ({ type: "text", text: texto, ...(negrito ? { marks: [{ type: "bold" }] } : {}) });
+const p = (texto: string): NoDoDocumento => ({ type: "paragraph", content: [t(texto)] });
+const secao = (titulo: string): NoDoDocumento => ({ type: "heading", attrs: { level: 2 }, content: [t(titulo)] });
+const linha = (rotulo: string, valor: string): NoDoDocumento => ({ type: "paragraph", content: [t(`${rotulo}: `, true), t(valor)] });
+
+/** A linha do CONTROLADOR — no corpo e fixa em todas as páginas (era o rodapé). */
+export function linhaDoControlador(data: ExportPayload): string {
+  return `Controlador: ${data.organization_legal_name || "—"} · Relatório de Acesso aos Dados${data.lei_citada ? ` — ${data.lei_citada}` : ""} · Encarregado (DPO): ${encarregado(data)} · Validade do link de download conforme e-mail recebido`;
+}
+
+export function lgpdParaTimbrado(data: ExportPayload, unsignedWarning = false): DocumentoTimbrado {
   const shortId = data.request_id.slice(0, 8);
+  const c: NoDoDocumento[] = [];
+  const add = (...nos: NoDoDocumento[]) => c.push(...nos);
 
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Relatório de Acesso aos Dados</Text>
-          <Text style={styles.subtitle}>
-            {/* A lei vem do PERFIL do país da organização (issue #1033): país
-                sem citação revisada não cita lei nenhuma — citar a errada é
-                pior do que não citar artigo nenhum. */}
-            Base legal: {data.lei_citada ?? "não declarada (país sem citação revisada)"} ·
-            Solicitação #{shortId}
-          </Text>
-        </View>
+  add(p(`Base legal: ${data.lei_citada ?? "não declarada (país sem citação revisada)"} · Solicitação #${shortId}`));
 
-        {/* Metadata */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Metadados da Solicitação</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>ID:</Text>
-            <Text style={styles.value}>{data.request_id}</Text>
-          </View>
-          {/* A razão social vem primeiro e o uuid vira "ID interno": o campo
-              existe para o TITULAR saber de quem são os dados, e um uuid cru
-              não responde isso a ninguém. O id continua no documento porque é
-              o que o suporte pede quando alguém liga citando o relatório. */}
-          <View style={styles.row}>
-            <Text style={styles.label}>Organização:</Text>
-            <Text style={styles.value}>{data.organization_legal_name || "—"}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>ID interno:</Text>
-            <Text style={styles.value}>{data.organization_id}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Gerado em:</Text>
-            <Text style={styles.value}>{fmtDate(data.generated_at)}</Text>
-          </View>
-          {data.no_local_footprint ? (
-            <View style={styles.row}>
-              <Text style={styles.label}>Status:</Text>
-              <Text style={styles.value}>
-                Nenhum dado pessoal localizado nos sistemas internos.
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Contact */}
-        {data.contact ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Dados Pessoais (Contato)</Text>
-            <View style={styles.row}>
-              <Text style={styles.label}>Nome:</Text>
-              <Text style={styles.value}>{data.contact.name ?? "—"}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Email:</Text>
-              <Text style={styles.value}>{data.contact.email ?? "—"}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Telefone:</Text>
-              <Text style={styles.value}>{data.contact.phone_number ?? "—"}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>{data.documento_rotulo}:</Text>
-              <Text style={styles.value}>
-                {data.contact.cpf_present ? "Armazenado (criptografado)" : "—"}
-              </Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Origem:</Text>
-              <Text style={styles.value}>{data.contact.source ?? "—"}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Criado em:</Text>
-              <Text style={styles.value}>{fmtDate(data.contact.created_at)}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Anonimizado:</Text>
-              <Text style={styles.value}>{data.contact.is_anonymized ? "Sim" : "Não"}</Text>
-            </View>
-          </View>
-        ) : null}
-
-        {/* FORK clinic (#86): a ficha cadastral do paciente, só quando existe. */}
-        {data.ficha_clinica ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ficha do paciente</Text>
-            {linhasDaFicha(data.ficha_clinica).map(([rotulo, valor]) => (
-              <View key={rotulo} style={styles.row}>
-                <Text style={styles.label}>{rotulo}:</Text>
-                <Text style={styles.value}>{valor}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Consents */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Consentimentos</Text>
-          {data.consents.length === 0 ? (
-            <Text style={styles.small}>Nenhum consentimento registrado.</Text>
-          ) : (
-            data.consents.map((c, i) => (
-              <View key={i} style={styles.row}>
-                <Text style={styles.label}>{c.scope}:</Text>
-                <Text style={styles.value}>
-                  {c.granted ? "concedido" : "negado"}
-                  {c.granted_at ? ` em ${fmtDate(c.granted_at)}` : ""}
-                </Text>
-              </View>
-            ))
-          )}
-        </View>
-
-        {/* Conversations */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Histórico de Atendimento</Text>
-          <Text style={styles.small}>
-            Total de conversas: {data.conversations.length} · Total de mensagens:{" "}
-            {data.messages_count_total} · Amostra incluída neste relatório:{" "}
-            {data.messages_recent.length}
-          </Text>
-          {data.conversations.slice(0, 10).map((c) => (
-            <View key={c.id} style={styles.itemBlock}>
-              <Text>
-                Conversa #{c.id.slice(0, 8)} · {c.channel} · {c.status}
-              </Text>
-              <Text style={styles.small}>
-                Última mensagem: {fmtDate(c.last_message_at)} · Criada em{" "}
-                {fmtDate(c.created_at)}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Recent messages preview */}
-        {data.messages_recent.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Mensagens Recentes (amostra)</Text>
-            {data.messages_recent.slice(0, 25).map((m) => (
-              <View key={m.id} style={styles.itemBlock}>
-                <Text style={styles.small}>
-                  {fmtDate(m.created_at)} · {m.direction} · {m.type} · {m.status}
-                </Text>
-                <Text>{m.body ? m.body.slice(0, 280) : m.has_media ? "[mídia]" : "—"}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Leads */}
-        {data.leads.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Atividade Comercial — Leads</Text>
-            {data.leads.map((l) => (
-              <View key={l.id} style={styles.itemBlock}>
-                <Text>
-                  {l.title ?? "(sem título)"} · {l.status} ·{" "}
-                  {fmtMoney(l.value_cents, l.currency)}
-                </Text>
-                <Text style={styles.small}>Criado em {fmtDate(l.created_at)}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Orders */}
-        {data.orders.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Pedidos</Text>
-            {data.orders.map((o) => (
-              <View key={o.id} style={styles.itemBlock}>
-                <Text>
-                  {o.external_provider ?? "—"} #{o.external_id ?? o.id.slice(0, 8)} ·{" "}
-                  {o.status} · {fmtMoney(o.total_cents, o.currency)}
-                </Text>
-                <Text style={styles.small}>Pedido em {fmtDate(o.ordered_at)}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Agenda — vai no PDF, e não só no JSON, porque é a substância legível
-            do Art. 18 II: "houve consulta no dia tal, sobre isto". `activities`
-            fica só no JSON de propósito (type/source_module é telemetria); um
-            compromisso, não. */}
-        {data.appointments.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Agenda — Compromissos</Text>
-            {data.appointments.map((c) => (
-              <View key={c.id} style={styles.itemBlock}>
-                <Text>
-                  {c.title ?? "(sem título)"} · {c.status}
-                  {c.location_details ? ` · ${c.location_details}` : ""}
-                </Text>
-                <Text style={styles.small}>
-                  {fmtDate(c.starts_at)} até {fmtDate(c.ends_at)} ({c.time_zone})
-                </Text>
-                {c.description ? <Text style={styles.small}>{c.description}</Text> : null}
-                {c.notes ? <Text style={styles.small}>Anotação: {c.notes}</Text> : null}
-                {c.meeting_url ? <Text style={styles.small}>Link da reunião: {c.meeting_url}</Text> : null}
-                {c.cancellation_reason ? (
-                  <Text style={styles.small}>Cancelado: {c.cancellation_reason}</Text>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* O fluxo entrega este PDF; armazenar as categorias só no JSON não
-            as disponibiliza ao titular. Consumir apenas a projeção do coletor. */}
-        {data.reply_drafts?.length ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Sugestões e respostas revisadas</Text>
-            {data.reply_drafts.map(reply=><View key={reply.id} style={styles.itemBlock}>
-              <Text>Estado: {reply.status}</Text>
-              {reply.original_body?<Text>Sugestão: {reply.original_body}</Text>:null}
-              {reply.edited_body&&reply.edited_body!==reply.original_body?<Text>Edição: {reply.edited_body}</Text>:null}
-              {reply.approved_body?<Text>Texto aprovado: {reply.approved_body}</Text>:null}
-              {reply.feedback?<Text>Revisão: {JSON.stringify(reply.feedback)}</Text>:null}
-              {Array.isArray(reply.proposals)&&reply.proposals.length?<Text>Propostas: {JSON.stringify(reply.proposals)}</Text>:null}
-              <Text style={styles.small}>Criado em {fmtDate(reply.created_at)}</Text>
-            </View>)}
-          </View>
-        ):null}
-
-        {data.meeting_deliveries?.length ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Entregas de links de reunião</Text>
-            {data.meeting_deliveries.map((delivery) => (
-              <View key={delivery.id} style={styles.itemBlock}>
-                <Text>{deliveryStatus[delivery.status] ?? delivery.status}</Text>
-                <Text style={styles.small}>Registro: {delivery.id}</Text>
-                <Text style={styles.small}>
-                  Compromisso: {delivery.appointment_id ?? "referência indisponível"}
-                </Text>
-                <Text style={styles.small}>
-                  Criado em {fmtDate(delivery.created_at)} · Programado para {fmtDate(delivery.run_after)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {data.appointment_notices?.length ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Avisos sobre compromissos</Text>
-            {data.appointment_notices.map((notice) => (
-              <View key={notice.id} style={styles.itemBlock}>
-                <Text>{notice.title} · {noticeStatus[notice.status] ?? notice.status}</Text>
-                {notice.body ? <Text>{notice.body}</Text> : null}
-                <Text style={styles.small}>Registro: {notice.id}</Text>
-                <Text style={styles.small}>
-                  Compromisso: {notice.ref_id ?? "referência indisponível"}
-                </Text>
-                <Text style={styles.small}>
-                  Criado em {fmtDate(notice.created_at)}
-                  {notice.resolved_at ? ` · Resolvido em ${fmtDate(notice.resolved_at)}` : ""}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Captação — de onde a pessoa veio. Entra no PDF porque `remote_ip`,
-            `user_agent` e `utm` são dados que a organização guarda A RESPEITO
-            dela e que ela raramente imagina que existem. */}
-        {data.webhook_captures.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Como seus dados chegaram até nós</Text>
-            {data.webhook_captures.map((c) => (
-              <View key={c.id} style={styles.itemBlock}>
-                <Text>
-                  {c.source_name ?? "(origem não identificada)"} · {c.outcome}
-                </Text>
-                <Text style={styles.small}>
-                  Recebido em {fmtDate(c.received_at)}
-                  {c.remote_ip ? ` · IP ${c.remote_ip}` : ""}
-                </Text>
-                {c.user_agent ? (
-                  <Text style={styles.small}>Navegador: {c.user_agent.slice(0, 160)}</Text>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Audit */}
-        {data.audit_log_extract.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Atividades de Auditoria</Text>
-            {data.audit_log_extract.slice(0, 50).map((a) => (
-              <View key={a.id} style={styles.row}>
-                <Text style={styles.label}>{fmtDate(a.created_at)}</Text>
-                <Text style={styles.value}>
-                  {a.action}
-                  {a.resource_type ? ` · ${a.resource_type}` : ""}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Unsigned warning */}
-        {unsignedWarning ? (
-          <View style={styles.warningBanner}>
-            <Text>
-              ASSINATURA DIGITAL PAdES PENDENTE — chave LGPD_SIGNING_KEY não
-              configurada. A integridade do documento é garantida por hash SHA-256
-              registrado em log auditável.
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Footer */}
-        {/* CONTROLADOR, nunca marca — ver o cabeçalho deste arquivo. */}
-        <View style={styles.footer} fixed>
-          <Text>
-            Controlador: {data.organization_legal_name || "—"} · Relatório de Acesso aos
-            Dados{data.lei_citada ? ` — ${data.lei_citada}` : ""} · Encarregado (DPO):{" "}
-            {encarregado(data)} · Validade do link de download conforme e-mail recebido
-          </Text>
-        </View>
-      </Page>
-    </Document>
+  add(secao("Metadados da Solicitação"));
+  add(
+    linha("ID", data.request_id),
+    linha("Organização", data.organization_legal_name || "—"),
+    linha("ID interno", data.organization_id),
+    linha("Gerado em", fmtDate(data.generated_at)),
   );
+  if (data.no_local_footprint) add(linha("Status", "Nenhum dado pessoal localizado nos sistemas internos."));
+
+  if (data.contact) {
+    add(secao("Dados Pessoais (Contato)"));
+    add(
+      linha("Nome", data.contact.name ?? "—"),
+      linha("Email", data.contact.email ?? "—"),
+      linha("Telefone", data.contact.phone_number ?? "—"),
+      linha(data.documento_rotulo, data.contact.cpf_present ? "Armazenado (criptografado)" : "—"),
+      linha("Origem", data.contact.source ?? "—"),
+      linha("Criado em", fmtDate(data.contact.created_at)),
+      linha("Anonimizado", data.contact.is_anonymized ? "Sim" : "Não"),
+    );
+  }
+
+  if (data.ficha_clinica) {
+    add(secao("Ficha do paciente"));
+    add(...linhasDaFicha(data.ficha_clinica).map(([r, v]) => linha(r, v)));
+  }
+
+  add(secao("Consentimentos"));
+  if (data.consents.length === 0) add(p("Nenhum consentimento registrado."));
+  else add(...data.consents.map((x) => linha(x.scope, `${x.granted ? "concedido" : "negado"}${x.granted_at ? ` em ${fmtDate(x.granted_at)}` : ""}`)));
+
+  add(secao("Histórico de Atendimento"));
+  add(
+    p(
+      `Total de conversas: ${data.conversations.length} · Total de mensagens: ${data.messages_count_total} · Amostra incluída neste relatório: ${data.messages_recent.length}`,
+    ),
+  );
+  for (const x of data.conversations.slice(0, 10)) {
+    add(p(`Conversa #${x.id.slice(0, 8)} · ${x.channel} · ${x.status}`), p(`Última mensagem: ${fmtDate(x.last_message_at)} · Criada em ${fmtDate(x.created_at)}`));
+  }
+
+  if (data.messages_recent.length > 0) {
+    add(secao("Mensagens Recentes (amostra)"));
+    for (const m of data.messages_recent.slice(0, 25)) {
+      add(p(`${fmtDate(m.created_at)} · ${m.direction} · ${m.type} · ${m.status}`), p(m.body ? m.body.slice(0, 280) : m.has_media ? "[mídia]" : "—"));
+    }
+  }
+
+  if (data.leads.length > 0) {
+    add(secao("Atividade Comercial — Leads"));
+    for (const l of data.leads) add(p(`${l.title ?? "(sem título)"} · ${l.status} · ${fmtMoney(l.value_cents, l.currency)}`), p(`Criado em ${fmtDate(l.created_at)}`));
+  }
+
+  if (data.orders.length > 0) {
+    add(secao("Pedidos"));
+    for (const o of data.orders) {
+      add(
+        p(`${o.external_provider ?? "—"} #${o.external_id ?? o.id.slice(0, 8)} · ${o.status} · ${fmtMoney(o.total_cents, o.currency)}`),
+        p(`Pedido em ${fmtDate(o.ordered_at)}`),
+      );
+    }
+  }
+
+  if (data.appointments.length > 0) {
+    add(secao("Agenda — Compromissos"));
+    for (const x of data.appointments) {
+      add(p(`${x.title ?? "(sem título)"} · ${x.status}${x.location_details ? ` · ${x.location_details}` : ""}`));
+      add(p(`${fmtDate(x.starts_at)} até ${fmtDate(x.ends_at)} (${x.time_zone})`));
+      if (x.description) add(p(x.description));
+      if (x.notes) add(p(`Anotação: ${x.notes}`));
+      if (x.meeting_url) add(p(`Link da reunião: ${x.meeting_url}`));
+      if (x.cancellation_reason) add(p(`Cancelado: ${x.cancellation_reason}`));
+    }
+  }
+
+  if (data.reply_drafts?.length) {
+    add(secao("Sugestões e respostas revisadas"));
+    for (const r of data.reply_drafts) {
+      add(p(`Estado: ${r.status}`));
+      if (r.original_body) add(p(`Sugestão: ${r.original_body}`));
+      if (r.edited_body && r.edited_body !== r.original_body) add(p(`Edição: ${r.edited_body}`));
+      if (r.approved_body) add(p(`Texto aprovado: ${r.approved_body}`));
+      if (r.feedback) add(p(`Revisão: ${JSON.stringify(r.feedback)}`));
+      if (Array.isArray(r.proposals) && r.proposals.length) add(p(`Propostas: ${JSON.stringify(r.proposals)}`));
+      add(p(`Criado em ${fmtDate(r.created_at)}`));
+    }
+  }
+
+  if (data.meeting_deliveries?.length) {
+    add(secao("Entregas de links de reunião"));
+    for (const d of data.meeting_deliveries) {
+      add(
+        p(deliveryStatus[d.status] ?? d.status),
+        p(`Registro: ${d.id}`),
+        p(`Compromisso: ${d.appointment_id ?? "referência indisponível"}`),
+        p(`Criado em ${fmtDate(d.created_at)} · Programado para ${fmtDate(d.run_after)}`),
+      );
+    }
+  }
+
+  if (data.appointment_notices?.length) {
+    add(secao("Avisos sobre compromissos"));
+    for (const n of data.appointment_notices) {
+      add(p(`${n.title} · ${noticeStatus[n.status] ?? n.status}`));
+      if (n.body) add(p(n.body));
+      add(p(`Registro: ${n.id}`), p(`Compromisso: ${n.ref_id ?? "referência indisponível"}`));
+      add(p(`Criado em ${fmtDate(n.created_at)}${n.resolved_at ? ` · Resolvido em ${fmtDate(n.resolved_at)}` : ""}`));
+    }
+  }
+
+  if (data.webhook_captures.length > 0) {
+    add(secao("Como seus dados chegaram até nós"));
+    for (const w of data.webhook_captures) {
+      add(p(`${w.source_name ?? "(origem não identificada)"} · ${w.outcome}`), p(`Recebido em ${fmtDate(w.received_at)}${w.remote_ip ? ` · IP ${w.remote_ip}` : ""}`));
+      if (w.user_agent) add(p(`Navegador: ${w.user_agent.slice(0, 160)}`));
+    }
+  }
+
+  if (data.audit_log_extract.length > 0) {
+    add(secao("Atividades de Auditoria"));
+    add(...data.audit_log_extract.slice(0, 50).map((a) => linha(fmtDate(a.created_at), `${a.action}${a.resource_type ? ` · ${a.resource_type}` : ""}`)));
+  }
+
+  if (unsignedWarning) {
+    add({
+      type: "aviso",
+      attrs: { estado: "atencao" },
+      content: [
+        t(
+          "ASSINATURA DIGITAL PAdES PENDENTE — chave LGPD_SIGNING_KEY não configurada. A integridade do documento é garantida por hash SHA-256 registrado em log auditável.",
+        ),
+      ],
+    });
+  }
+  add(p(linhaDoControlador(data)));
+
+  return {
+    tipo: "Relatório de Acesso aos Dados",
+    numero: shortId,
+    titulo: "Relatório de Acesso aos Dados",
+    metadados: [
+      ["Data", fmtDate(data.generated_at)],
+      ["Destinatário(a)", data.contact?.name ?? null],
+      ["Assunto", data.lei_citada ? `Direito de acesso — ${data.lei_citada}` : "Direito de acesso aos dados"],
+    ],
+    avisos: [{ estado: "info", texto: linhaDoControlador(data), emTodasAsPaginas: true }],
+    corpo: { type: "doc", content: c },
+    emitidoEm: new Date(data.generated_at),
+  };
+}
+
+/** Contexto mínimo quando quem chama não resolveu a marca: o controlador nos dois papéis. */
+async function contextoDoPayload(data: ExportPayload): Promise<ContextoDaMarca> {
+  return montarContextoDaMarca({
+    nomeDaMarca: data.organization_display_name || data.organization_legal_name,
+    razaoSocial: data.organization_legal_name,
+  });
 }
 
 export async function renderLgpdPdf(
   data: ExportPayload,
-  options: { unsignedWarning?: boolean } = {},
+  options: { unsignedWarning?: boolean; contexto?: ContextoDaMarca | null } = {},
 ): Promise<Buffer> {
-  const element = <LgpdExportPdf data={data} unsignedWarning={options.unsignedWarning} />;
-  const buf = await renderToBuffer(element);
-  return buf as Buffer;
+  const contexto = options.contexto ?? (await contextoDoPayload(data));
+  return renderizarDocumento(lgpdParaTimbrado(data, options.unsignedWarning ?? false), contexto);
 }
 
 /** FORK clinic (#86): as linhas preenchidas da ficha, na ordem da tela. O RG sai mascarado, como o CPF. */

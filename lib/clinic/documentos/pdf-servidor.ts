@@ -13,6 +13,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { tagDeIdioma } from "@/lib/i18n/datas";
 import {
   contextoDoSnapshot,
   ehSnapshotDaMarca,
@@ -93,7 +94,7 @@ export async function gerarPdfDoDocumentoEmitido(opcoes: {
     const opcoesDeData: Intl.DateTimeFormatOptions = comHora
       ? { dateStyle: "short", timeStyle: "short", timeZone: fuso }
       : { dateStyle: "short", timeZone: /^\d{4}-\d{2}-\d{2}$/.test(iso) ? "UTC" : fuso };
-    return new Intl.DateTimeFormat("pt-BR", opcoesDeData).format(new Date(iso));
+    return new Intl.DateTimeFormat(tagDeIdioma("pt-BR"), opcoesDeData).format(new Date(iso));
   };
 
   const aceite = (d.clinic_documento_aceites ?? []).find((a) => a.tipo === "aceite") ?? null;
