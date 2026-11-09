@@ -66,10 +66,10 @@ const noticeStatus: Record<string, string> = {
   dismissed: "Dispensado",
 };
 
-const t = (texto: string, negrito = false): NoDoDocumento => ({ type: "text", text: texto, ...(negrito ? { marks: [{ type: "bold" }] } : {}) });
-const p = (texto: string): NoDoDocumento => ({ type: "paragraph", content: [t(texto)] });
-const secao = (titulo: string): NoDoDocumento => ({ type: "heading", attrs: { level: 2 }, content: [t(titulo)] });
-const linha = (rotulo: string, valor: string): NoDoDocumento => ({ type: "paragraph", content: [t(`${rotulo}: `, true), t(valor)] });
+const txt = (texto: string, negrito = false): NoDoDocumento => ({ type: "text", text: texto, ...(negrito ? { marks: [{ type: "bold" }] } : {}) });
+const p = (texto: string): NoDoDocumento => ({ type: "paragraph", content: [txt(texto)] });
+const secao = (titulo: string): NoDoDocumento => ({ type: "heading", attrs: { level: 2 }, content: [txt(titulo)] });
+const linha = (rotulo: string, valor: string): NoDoDocumento => ({ type: "paragraph", content: [txt(`${rotulo}: `, true), txt(valor)] });
 
 /** A linha do CONTROLADOR — uma vez por página, fixa acima do rodapé (como o rodapé antigo). */
 export function linhaDoControlador(data: ExportPayload): string {
@@ -211,7 +211,7 @@ export function lgpdParaTimbrado(data: ExportPayload, unsignedWarning = false): 
       type: "aviso",
       attrs: { estado: "atencao" },
       content: [
-        t(
+        txt(
           "ASSINATURA DIGITAL PAdES PENDENTE — chave LGPD_SIGNING_KEY não configurada. A integridade do documento é garantida por hash SHA-256 registrado em log auditável.",
         ),
       ],
