@@ -875,6 +875,7 @@ export const AUDIT_ACTIONS = [
   "clinic.orcamento_recusado",
   "clinic.orcamento_nova_versao",
   "clinic.orcamento_contrato_baixado",
+  "clinic.documento_pdf_baixado",
   "clinic.orcamentos_expirados",
   // FORK clinic (8009): pós-aceite reprocessado — ids apenas.
   "clinic.orcamento_pos_aceite_reprocessado",

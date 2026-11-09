@@ -334,6 +334,12 @@ function CartaoDoDocumento({
         <Button size="sm" variant="ghost" onClick={() => setAberto((v) => !v)}>
           {aberto ? t("Ocultar texto") : t("Ver texto")}
         </Button>
+        {/* FORK clinic (papel timbrado D3) — o documento no papel timbrado, com a marca do dia da emissão. */}
+        <Button size="sm" variant="outline" asChild>
+          <a href={`/api/v1/clinic/documentos/${doc.id}/pdf`} target="_blank" rel="noopener" data-testid="documento-pdf">
+            {t("Baixar PDF")}
+          </a>
+        </Button>
         {doc.status === "emitido" && dados.pode_colher_aceite ? (
           <>
             <Button

@@ -82,5 +82,5 @@ Exemplo de referência: `lib/clinic/pops/impressao.ts` + `app/api/v1/clinic/pops
 |---|---|---|
 | D1 | Motor, fontes, testes; POP migrado | PR #125 |
 | D2 | Campos novos: site, WhatsApp, descritor, responsável técnico e registro (Organização, migration 8013); cor dos filetes e "Baixar modelo do papel timbrado" (Marca) | PR do D2 |
-| D3 | PDF dos termos emitidos e do contrato do orçamento, com snapshot do contexto (o já emitido não muda de cara) | a seguir |
+| D3 | PDF dos termos emitidos (`GET /api/v1/clinic/documentos/[id]/pdf` + "Baixar PDF" na aba Documentos) e do contrato do orçamento; snapshot da marca fixado na 1ª geração (migration 8014) | PR do D3 |
 | D4 | Prontuário e exportação LGPD no motor | a seguir |
