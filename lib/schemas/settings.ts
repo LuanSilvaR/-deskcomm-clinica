@@ -90,6 +90,9 @@ function textoOpcional(normalizar: (v: string) => string, regra: z.ZodString) {
   return z.preprocess((v) => {
     if (v === undefined || v === null) return v;
     if (typeof v !== "string") return v;
+    // Vazio é decidido ANTES de normalizar: o site ganha "https://" e um campo
+    // só com espaços viraria "https://" em vez de null.
+    if (v.trim() === "") return null;
     const limpo = normalizar(v.trim());
     return limpo === "" ? null : limpo;
   }, regra.nullable().optional());
@@ -149,6 +152,15 @@ export const tenantSchema = z.object({
   address_city: textoOpcional((v) => v, z.string().max(120)),
   address_uf: textoOpcional((v) => v.toUpperCase(), z.string().regex(/^[A-Z]{2}$/, "UF com 2 letras.")),
   address_city_ibge_code: textoOpcional((v) => v.replace(/\D/g, ""), z.string().regex(/^\d{7}$/)),
+  // FORK clinic (8013) — campos do papel timbrado. Mesma régua dos CHECKs.
+  website: textoOpcional(
+    (v) => (/^https?:\/\//i.test(v) ? v : `https://${v}`),
+    z.string().max(200).regex(/^https?:\/\/[^\s/$.?#].[^\s]*$/i, "Site inválido."),
+  ),
+  whatsapp_phone: textoOpcional((v) => v.replace(/\D/g, ""), z.string().regex(/^\d{10,13}$/, "WhatsApp com DDD.")),
+  descriptor: textoOpcional((v) => v, z.string().max(60, "Descritor com até 60 caracteres.")),
+  technical_lead_name: textoOpcional((v) => v, z.string().max(120)),
+  technical_lead_registry: textoOpcional((v) => v, z.string().max(60)),
 });
 export type TenantInput = z.infer<typeof tenantSchema>;
 

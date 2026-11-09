@@ -68,6 +68,9 @@ export default async function MarcaDaOrganizacaoPage() {
   const caminhoDoFavicon = faviconDeSettings(data?.settings ?? null);
   const base = baseDoStorage();
   const faviconUrl = caminhoDoFavicon && base ? urlPublicaDoLogo(caminhoDoFavicon, base) : null;
+  // FORK clinic (8013) — cor dos filetes do papel timbrado, em settings.clinic.
+  const corCrua = (data?.settings as { clinic?: { cor_filetes?: unknown } } | null)?.clinic?.cor_filetes;
+  const corDosFiletes = typeof corCrua === "string" && /^#[0-9a-f]{6}$/i.test(corCrua) ? corCrua : null;
   const linha = await marcaDaInstalacao();
   const idioma = user.idioma;
 
@@ -91,6 +94,7 @@ export default async function MarcaDaOrganizacaoPage() {
           logo_path: gravada?.logo_path ?? null,
         }}
         faviconUrl={faviconUrl}
+        corDosFiletes={corDosFiletes}
         // As DUAS camadas de baixo descem para o formulário, e não uma resolução
         // já pronta: a prévia ao vivo remonta a pilha inteira a cada tecla, pelo
         // mesmo caminho do servidor. Sem elas, a tela não saberia responder "e se

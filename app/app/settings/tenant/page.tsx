@@ -34,6 +34,12 @@ interface OrgRow {
   address_city: string | null;
   address_uf: string | null;
   address_city_ibge_code: string | null;
+  // FORK clinic (8013) — campos do papel timbrado.
+  website: string | null;
+  whatsapp_phone: string | null;
+  descriptor: string | null;
+  technical_lead_name: string | null;
+  technical_lead_registry: string | null;
   /** Portas escolhidas pela EMPRESA (issue #1341). Opaco aqui: quem lê é `lerInterface`. */
   interface_settings: unknown;
 }
@@ -50,7 +56,7 @@ export default async function TenantSettingsPage() {
   const { data } = await supabase
     .from("organizations")
     .select(
-      "display_name, legal_name, cnpj, country, timezone, locale, currency, media_retention_days, dpo_email, privacy_policy_url, interface_settings, contact_phone, address_cep, address_street, address_number, address_complement, address_district, address_city, address_uf, address_city_ibge_code",
+      "display_name, legal_name, cnpj, country, timezone, locale, currency, media_retention_days, dpo_email, privacy_policy_url, interface_settings, contact_phone, address_cep, address_street, address_number, address_complement, address_district, address_city, address_uf, address_city_ibge_code, website, whatsapp_phone, descriptor, technical_lead_name, technical_lead_registry",
     )
     .eq("id", activeOrg.orgId)
     .maybeSingle();
@@ -95,6 +101,11 @@ export default async function TenantSettingsPage() {
             address_city: row.address_city,
             address_uf: row.address_uf,
             address_city_ibge_code: row.address_city_ibge_code,
+            website: row.website,
+            whatsapp_phone: formatarTelefone(row.whatsapp_phone),
+            descriptor: row.descriptor,
+            technical_lead_name: row.technical_lead_name,
+            technical_lead_registry: row.technical_lead_registry,
           }}
         />
       )}

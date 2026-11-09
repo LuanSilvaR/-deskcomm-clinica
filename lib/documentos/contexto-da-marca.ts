@@ -185,7 +185,7 @@ async function baixarDaMarca(caminho: string | null | undefined, orgId: string):
 
 /** Colunas lidas de `organizations`. As de contato/endereço vêm da 8011. */
 const COLUNAS =
-  "display_name, legal_name, cnpj, settings, contact_phone, address_street, address_number, address_complement, address_district, address_city, address_uf, address_cep";
+  "display_name, legal_name, cnpj, settings, contact_phone, address_street, address_number, address_complement, address_district, address_city, address_uf, address_cep, website, whatsapp_phone, descriptor, technical_lead_name, technical_lead_registry";
 
 interface LinhaDaOrganizacao {
   display_name: string | null;
@@ -200,6 +200,11 @@ interface LinhaDaOrganizacao {
   address_city: string | null;
   address_uf: string | null;
   address_cep: string | null;
+  website: string | null;
+  whatsapp_phone: string | null;
+  descriptor: string | null;
+  technical_lead_name: string | null;
+  technical_lead_registry: string | null;
 }
 
 /** Cliente do Supabase da leitura: sessão, ou service role já filtrado pela organização. */
@@ -222,6 +227,11 @@ export async function lerEntradaDoContexto(
     razaoSocial: o.legal_name,
     cnpj: o.cnpj,
     telefone: o.contact_phone,
+    whatsapp: o.whatsapp_phone,
+    site: o.website,
+    descritor: o.descriptor,
+    responsavelNome: o.technical_lead_name,
+    responsavelRegistro: o.technical_lead_registry,
     corDaMarca: marca?.accent_hex ?? null,
     corDosFiletes: texto(clinic.cor_filetes),
     endereco: {
