@@ -110,3 +110,34 @@ export function tratarFavicon(bytes: Buffer | null): ImagemDoDocumento | null {
   const png = cabecalhoPng(bytes);
   return png ? { data: bytes, format: "png", largura: png.largura, altura: png.altura } : null;
 }
+
+/** O PNG tem canal alfa (tipo de cor 4 ou 6)? Régua da marca d'água. */
+export function temTransparencia(img: ImagemDoDocumento | null): boolean {
+  if (!img) return false;
+  if (img.format !== "png") return false;
+  return cabecalhoPng(img.data)?.alfa ?? false;
+}
+
+/**
+ * A marca d'água (watermark.color = primary): o DESENHO do símbolo, pela
+ * transparência dele, pintado numa cor só. Não é recolorir a marca — é a
+ * silhueta dela, a 7,5%, atrás do texto. Sem `sharp`, devolve `null` e a
+ * página sai sem marca d'água (nunca com o logo colorido no lugar).
+ */
+export async function silhuetaTingida(img: ImagemDoDocumento, hex: string): Promise<ImagemDoDocumento | null> {
+  const sharp = await carregarSharp();
+  if (!sharp) return null;
+  try {
+    const alfa = await sharp(img.data).ensureAlpha().extractChannel(3).raw().toBuffer({ resolveWithObject: true });
+    const n = Number.parseInt(hex.slice(1), 16);
+    const data = await sharp({
+      create: { width: alfa.info.width, height: alfa.info.height, channels: 3, background: { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 } },
+    })
+      .joinChannel(alfa.data, { raw: { width: alfa.info.width, height: alfa.info.height, channels: 1 } })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    return { data, format: "png", largura: alfa.info.width, altura: alfa.info.height };
+  } catch {
+    return null;
+  }
+}

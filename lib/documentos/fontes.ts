@@ -38,3 +38,20 @@ export function registrarFontes(): void {
   Font.registerHyphenationCallback((palavra) => [palavra]);
   registradas = true;
 }
+
+/**
+ * Carrega TODAS as variantes antes de desenhar. O react-pdf só pré-carrega as
+ * fontes dos textos que enxerga na árvore — e o cabeçalho e o rodapé nascem
+ * dentro de `render` (por página). Sem isto, o wordmark (Cormorant 600) caía
+ * na Helvetica-Bold sempre que nenhum H2 do corpo carregava a mesma variante
+ * (medido: documento sem H2 saía com a marca em Helvetica).
+ */
+export async function carregarFontes(): Promise<void> {
+  registrarFontes();
+  await Promise.all([
+    Font.load({ fontFamily: FAMILIA.texto, fontWeight: 400 }),
+    Font.load({ fontFamily: FAMILIA.texto, fontWeight: 700 }),
+    Font.load({ fontFamily: FAMILIA.titulo, fontWeight: 500 }),
+    Font.load({ fontFamily: FAMILIA.titulo, fontWeight: 600 }),
+  ]);
+}

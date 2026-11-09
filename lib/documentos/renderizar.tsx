@@ -1,5 +1,6 @@
 /**
- * FORK clinic — o MOTOR ÚNICO de documentos: o papel timbrado travado.
+ * FORK clinic — o MOTOR ÚNICO de documentos: o papel timbrado travado
+ * (especificação "Papel timbrado padrão", layoutVersion 2.0.0).
  *
  * Todo documento do sistema (POP, termos, contrato, prontuário, LGPD) passa
  * por aqui. Cada tipo entrega SÓ: tipo, número, título, metadados, avisos,
@@ -7,11 +8,11 @@
  * e espaçamentos são deste arquivo + `tema.ts` + `paleta.ts`, alimentados pelo
  * `ContextoDaMarca` (Configurações › Organização e › Marca).
  *
- * Referência visual: `Farias_Rocha_Papel_Timbrado_v2.pdf`. Regras, contrato e
- * divergências: `docs/padrao-documentos.md`.
+ * Cada bloco abaixo cita a chave da especificação que implementa (topBand,
+ * header.first, header.compact, footer, openingBlock, signatureBlock,
+ * watermark). Regras e divergências: `docs/padrao-documentos.md`.
  *
- * Determinístico: as datas do PDF (criação/modificação) vêm de `emitidoEm`,
- * nunca do relógio daqui — mesmo conteúdo + mesmo contexto = mesmo arquivo.
+ * Determinístico: as datas do PDF vêm de `emitidoEm`, nunca do relógio daqui.
  */
 import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 
@@ -19,7 +20,7 @@ import type { NoDoDocumento } from "@/lib/clinic/pops/documento";
 
 import { Bloco, CaixaDeAviso, estilosDoCorpo } from "./blocos";
 import type { ContextoDaMarca } from "./contexto-da-marca";
-import { registrarFontes } from "./fontes";
+import { carregarFontes, registrarFontes } from "./fontes";
 import { ESTADOS, paraPretoEBranco, type Estado, type Papeis } from "./paleta";
 import { ABERTURA, ASSINATURA, CABECALHO, COMPACTO, FAIXA, FAMILIA, MARCA_DAGUA, PAGINA, RODAPE, TIPO, VERSAO_DO_LAYOUT } from "./tema";
 
@@ -33,26 +34,31 @@ export interface AvisoDoDocumento {
 }
 
 export interface DocumentoTimbrado {
-  /** Eyebrow: "PROCEDIMENTO OPERACIONAL PADRÃO", "CONTRATO"… */
+  /** openingBlock.eyebrow — {{documentType}}: "Declaração", "Contrato"… */
   tipo: string;
-  /** Depois de "Nº " no eyebrow: "007/2026", "POP-007 · v2.0". */
+  /** openingBlock.eyebrow — {{documentNumber}}: "007/2026". */
   numero?: string | null;
   titulo: string;
-  /** Linhas da tabela de abertura. Valor vazio some (sem rótulo órfão). */
+  /** openingBlock.metadataTable — valor vazio some (sem rótulo órfão). */
   metadados?: [string, string | null | undefined][];
   avisos?: AvisoDoDocumento[];
   corpo: NoDoDocumento;
-  /** Fechamento "Atenciosamente," + linha + nome + cargo/registro. */
-  assinatura?: { nome: string; cargo?: string | null; fecho?: string | null } | null;
+  /** signatureBlock — "Atenciosamente," + linha + nome + "cargo  ·  registro". */
+  assinatura?: { nome: string; cargo?: string | null; registro?: string | null; fecho?: string | null } | null;
   /** Datas do PDF (determinismo). */
   emitidoEm: Date;
-  /** Desligar só com motivo (fax, P&B). */
+  /** Desligar só com motivo (fax). */
   semMarcaDagua?: boolean;
-  /** Variante monocromática para impressão em P&B. */
+  /** Variante monocromática para impressão em P&B (também desliga a marca d'água). */
   pretoEBranco?: boolean;
 }
 
+/** Linhas sem as vazias, no máximo 3 (footer.maxLinesPerColumn). */
+const linhas = (...xs: (string | null | undefined)[]) =>
+  xs.filter((x): x is string => Boolean(x && x.trim())).slice(0, RODAPE.maximoDeLinhas);
+
 function estilos(c: Papeis) {
+  const ui = { fontFamily: FAMILIA.texto };
   return StyleSheet.create({
     pagina: {
       paddingTop: PAGINA.margemTopo,
@@ -63,30 +69,38 @@ function estilos(c: Papeis) {
       fontSize: TIPO.corpo.tamanho,
       color: c.ink,
     },
+    // topBand
     faixa: { position: "absolute", top: 0, left: 0, right: 0 },
     faixaPrimary: { height: FAIXA.primary, backgroundColor: c.primary },
     faixaAccent: { height: FAIXA.accent, marginTop: FAIXA.vao, backgroundColor: c.accent },
-    cabecalho: {
-      position: "absolute",
-      top: PAGINA.cabecalhoTopo,
-      left: PAGINA.margemLateral,
-      right: PAGINA.margemLateral,
-    },
-    cabecalhoInterno: {},
+    // header (o contêiner fixo é que é absoluto)
+    cabecalho: { position: "absolute", top: PAGINA.cabecalhoTopo, left: PAGINA.margemLateral, right: PAGINA.margemLateral },
     linhaDoCabecalho: { flexDirection: "row", alignItems: "center", minHeight: CABECALHO.alturaDoLogo },
-    colunaDoLogo: { width: CABECALHO.colunaDoLogo, height: CABECALHO.alturaDoLogo, justifyContent: "center" },
-    wordmark: { flex: 1, paddingLeft: 6 },
-    nomeDaMarca: { fontFamily: FAMILIA.titulo, fontWeight: CABECALHO.wordmark.peso, fontSize: CABECALHO.wordmark.tamanho, lineHeight: 1, color: c.primary },
-    descritor: { fontFamily: FAMILIA.texto, fontWeight: CABECALHO.descritor.peso, fontSize: CABECALHO.descritor.tamanho, letterSpacing: CABECALHO.descritor.espacamento, color: c.muted, marginTop: 2 },
-    contatos: { width: PAGINA.larguraUtil * 0.36, alignItems: "flex-end" },
-    contatoForte: { fontFamily: FAMILIA.texto, fontWeight: 700, fontSize: CABECALHO.contatos.tamanho, lineHeight: CABECALHO.contatos.entrelinha, color: c.ink, textAlign: "right" },
-    contato: { fontFamily: FAMILIA.texto, fontSize: CABECALHO.contatos.tamanho, lineHeight: CABECALHO.contatos.entrelinha, color: c.muted, textAlign: "right" },
-    filete: { borderBottomWidth: CABECALHO.filete, borderBottomColor: c.accent, marginTop: CABECALHO.distanciaDoFilete },
+    colunaDoLogo: { width: CABECALHO.colunas.logo, height: CABECALHO.alturaDoLogo, justifyContent: "center" },
+    colunaDoWordmark: { width: CABECALHO.colunas.wordmark, justifyContent: "center" },
+    colunaDoWordmarkSemLogo: { width: CABECALHO.colunas.logo + CABECALHO.colunas.wordmark, justifyContent: "center" },
+    nomeDaMarca: {
+      fontFamily: FAMILIA.titulo,
+      fontWeight: CABECALHO.wordmark.peso,
+      fontSize: CABECALHO.wordmark.tamanho,
+      // Entrelinha exata de 15 pt (menor que o corpo de 26 pt) faz o react-pdf
+      // trocar a fonte e sobrepor o descritor (medido). Linha 1,0 e o descritor
+      // puxado para cima dão o mesmo desenho do modelo.
+      lineHeight: 1,
+      color: c.primary,
+    },
+    descritor: { ...ui, fontWeight: CABECALHO.descritor.peso, fontSize: CABECALHO.descritor.tamanho, letterSpacing: CABECALHO.descritor.espacamento, color: c.muted, marginTop: 2 },
+    colunaDosContatos: { width: CABECALHO.colunas.contatos, alignItems: "flex-end", justifyContent: "center" },
+    contatoForte: { ...ui, fontWeight: 700, fontSize: CABECALHO.contatos.tamanho, color: c.ink, textAlign: "right", marginBottom: 4 },
+    contato: { ...ui, fontSize: CABECALHO.contatos.tamanho, color: c.muted, textAlign: "right", marginBottom: 4 },
+    filete: { borderBottomWidth: CABECALHO.filete, borderBottomColor: c.accent, marginTop: CABECALHO.antesDoFilete },
+    // header.compact
     linhaCompacta: { flexDirection: "row", alignItems: "center" },
     favicon: { width: COMPACTO.favicon, height: COMPACTO.favicon, objectFit: "contain", marginRight: 6 },
     nomeCompacto: { flex: 1, fontFamily: FAMILIA.titulo, fontWeight: COMPACTO.nome.peso, fontSize: COMPACTO.nome.tamanho, color: c.primary },
-    descritorCompacto: { fontFamily: FAMILIA.texto, fontWeight: COMPACTO.descritor.peso, fontSize: COMPACTO.descritor.tamanho, letterSpacing: COMPACTO.descritor.espacamento, color: c.muted },
-    fileteCompacto: { borderBottomWidth: COMPACTO.filete, borderBottomColor: c.accent, marginTop: COMPACTO.distanciaDoFilete },
+    descritorCompacto: { ...ui, fontWeight: COMPACTO.descritor.peso, fontSize: COMPACTO.descritor.tamanho, letterSpacing: COMPACTO.descritor.espacamento, color: c.muted },
+    fileteCompacto: { borderBottomWidth: COMPACTO.filete, borderBottomColor: c.accent, marginTop: COMPACTO.antesDoFilete },
+    // footer — sem lineHeight: o react-pdf descarta texto absoluto com lineHeight (medido).
     rodape: {
       position: "absolute",
       bottom: PAGINA.rodapeBase,
@@ -94,31 +108,36 @@ function estilos(c: Papeis) {
       right: PAGINA.margemLateral,
       borderTopWidth: RODAPE.filete,
       borderTopColor: c.accent,
-      paddingTop: RODAPE.distanciaDoFilete,
-      height: RODAPE.distanciaDoFilete + 3 * RODAPE.tamanho * RODAPE.entrelinha + 2,
+      paddingTop: RODAPE.depoisDoFilete,
+      height: RODAPE.depoisDoFilete + RODAPE.maximoDeLinhas * (TIPO.rodape.tamanho * 1.2 + TIPO.rodape.depois) + 2,
       flexDirection: "row",
     },
-    rodapeEsq: { width: RODAPE.colunaEsquerda },
-    rodapeDir: { width: RODAPE.colunaDireita, alignItems: "flex-end" },
-    rodapeForte: { marginBottom: 2, fontFamily: FAMILIA.texto, fontWeight: 700, fontSize: RODAPE.tamanho, color: c.ink },
-    rodapeTexto: { marginBottom: 2, fontFamily: FAMILIA.texto, fontSize: RODAPE.tamanho, color: c.muted },
-    rodapeTextoDir: { marginBottom: 2, fontFamily: FAMILIA.texto, fontSize: RODAPE.tamanho, color: c.muted, textAlign: "right" },
+    rodapeEsq: { width: RODAPE.colunas.esquerda },
+    rodapeDir: { width: RODAPE.colunas.direita, alignItems: "flex-end" },
+    rodapeForte: { ...ui, fontWeight: 700, fontSize: TIPO.rodape.tamanho, color: c.ink, marginBottom: TIPO.rodape.depois },
+    rodapeTexto: { ...ui, fontSize: TIPO.rodape.tamanho, color: c.muted, marginBottom: TIPO.rodape.depois },
+    rodapeTextoDir: { ...ui, fontSize: TIPO.rodape.tamanho, color: c.muted, textAlign: "right", marginBottom: TIPO.rodape.depois },
+    negrito: { ...ui, fontWeight: 700 },
     avisoFixo: {
       position: "absolute",
       bottom: PAGINA.margemBase - 14,
       left: PAGINA.margemLateral,
       right: PAGINA.margemLateral,
-      fontFamily: FAMILIA.texto,
+      ...ui,
       fontWeight: 700,
-      fontSize: TIPO.auxiliar.tamanho,
+      fontSize: TIPO.rodape.tamanho,
       textAlign: "center",
     },
+    // watermark
     marcaDagua: { position: "absolute", left: MARCA_DAGUA.x, top: MARCA_DAGUA.y, width: MARCA_DAGUA.largura, opacity: MARCA_DAGUA.opacidade },
+    // openingBlock
     eyebrow: {
       marginTop: TIPO.eyebrow.antes,
-      fontFamily: FAMILIA.texto,
+      marginBottom: TIPO.eyebrow.depois,
+      ...ui,
       fontWeight: TIPO.eyebrow.peso,
       fontSize: TIPO.eyebrow.tamanho,
+      lineHeight: TIPO.eyebrow.entrelinha,
       letterSpacing: TIPO.eyebrow.espacamento,
       color: c.primary,
     },
@@ -128,39 +147,47 @@ function estilos(c: Papeis) {
       fontSize: TIPO.titulo.tamanho,
       lineHeight: TIPO.titulo.entrelinha,
       color: c.ink,
-      marginTop: 4,
+      marginTop: TIPO.titulo.antes,
       marginBottom: TIPO.titulo.depois,
     },
-    meta: { backgroundColor: c.surface, marginBottom: ABERTURA.depoisDaTabela },
+    meta: { backgroundColor: c.surface, marginBottom: ABERTURA.antesDoCorpo },
     metaLinha: { flexDirection: "row" },
     metaDivisoria: { borderBottomWidth: ABERTURA.divisoria, borderBottomColor: c.border },
     metaRotulo: {
       width: ABERTURA.colunaDoRotulo,
       paddingVertical: ABERTURA.paddingVertical,
       paddingHorizontal: ABERTURA.paddingHorizontal,
-      fontFamily: FAMILIA.texto,
+      ...ui,
       fontWeight: ABERTURA.rotulo.peso,
       fontSize: ABERTURA.rotulo.tamanho,
       letterSpacing: ABERTURA.rotulo.espacamento,
       color: c.muted,
     },
-    metaValor: {
-      flex: 1,
-      paddingVertical: ABERTURA.paddingVertical,
-      paddingHorizontal: ABERTURA.paddingHorizontal,
-      fontFamily: FAMILIA.texto,
-      fontSize: ABERTURA.valor.tamanho,
-      color: c.ink,
-    },
+    metaValor: { flex: 1, paddingVertical: ABERTURA.paddingVertical, paddingHorizontal: ABERTURA.paddingHorizontal, ...ui, fontSize: ABERTURA.valor.tamanho, color: c.ink },
+    // signatureBlock
     assinatura: { marginTop: ASSINATURA.antesDoFecho },
-    fecho: { fontFamily: FAMILIA.texto, fontSize: TIPO.corpo.tamanho, color: c.ink },
-    linhaDaAssinatura: { width: ASSINATURA.larguraDaLinha, borderTopWidth: ASSINATURA.espessura, borderTopColor: c.ink, marginTop: ASSINATURA.antesDaLinha, marginBottom: 6 },
-    nomeDaAssinatura: { fontFamily: FAMILIA.texto, fontWeight: 700, fontSize: TIPO.corpo.tamanho, color: c.ink },
-    cargo: { fontFamily: FAMILIA.texto, fontSize: ASSINATURA.cargo.tamanho, color: c.muted, marginTop: 2 },
+    fecho: { ...ui, fontSize: TIPO.corpo.tamanho, lineHeight: TIPO.corpo.entrelinha, color: c.ink },
+    linhaDaAssinatura: {
+      width: ASSINATURA.larguraDaLinha,
+      borderTopWidth: ASSINATURA.espessura,
+      borderTopColor: c.ink,
+      marginTop: ASSINATURA.antesDaLinha,
+      marginBottom: ASSINATURA.depoisDaLinha,
+    },
+    nomeDaAssinatura: { ...ui, fontWeight: ASSINATURA.nome.peso, fontSize: ASSINATURA.nome.tamanho, color: c.ink },
+    cargo: { ...ui, fontSize: ASSINATURA.cargo.tamanho, color: c.muted, marginTop: 3 },
   });
 }
 type Estilos = ReturnType<typeof estilos>;
 
+/** O símbolo cabe em 25 × 19 mm, com a proporção preservada (react-pdf exige tamanho explícito). */
+function tamanhoDoSimbolo(img: { largura: number; altura: number }) {
+  const proporcao = img.largura / img.altura;
+  const altura = Math.min(CABECALHO.alturaDoLogo, CABECALHO.larguraMaximaDoLogo / proporcao);
+  return { width: altura * proporcao, height: altura };
+}
+
+/** topBand — faixa primary 3,9 mm, vão 0,6 mm, filete accent 0,7 mm, sangrada. */
 function Faixa({ s }: { s: Estilos }) {
   return (
     <View fixed style={s.faixa}>
@@ -170,34 +197,28 @@ function Faixa({ s }: { s: Estilos }) {
   );
 }
 
-/** O símbolo cabe em 25 × 19 mm, com a proporção preservada (react-pdf exige tamanho explícito). */
-function tamanhoDoSimbolo(img: { largura: number; altura: number }) {
-  const proporcao = img.largura / img.altura;
-  const altura = Math.min(CABECALHO.alturaDoLogo, CABECALHO.colunaDoLogo / proporcao);
-  return { width: altura * proporcao, height: altura };
-}
-
+/** header.first — [símbolo 25 mm] [wordmark 75,8 mm] [contatos 69,2 mm] + filete accent. */
 function CabecalhoCompleto({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
-  const linhasDireita = [...ctx.contatos, ctx.cidadeUf].filter((x): x is string => Boolean(x));
   return (
-    <View style={s.cabecalhoInterno}>
+    <View>
       <View style={s.linhaDoCabecalho}>
         {ctx.simbolo ? (
           <View style={s.colunaDoLogo}>
             <Image style={tamanhoDoSimbolo(ctx.simbolo)} src={{ data: ctx.simbolo.data, format: ctx.simbolo.format }} />
           </View>
         ) : null}
-        <View style={s.wordmark}>
+        <View style={ctx.simbolo ? s.colunaDoWordmark : s.colunaDoWordmarkSemLogo}>
           <Text style={s.nomeDaMarca}>{ctx.nomeDaMarca}</Text>
           {ctx.descritor ? <Text style={s.descritor}>{ctx.descritor.toUpperCase()}</Text> : null}
         </View>
-        <View style={s.contatos}>
+        <View style={s.colunaDosContatos}>
           {ctx.site ? <Text style={s.contatoForte}>{ctx.site.exibir}</Text> : null}
-          {linhasDireita.map((l) => (
+          {ctx.contatos.map((l) => (
             <Text key={l} style={s.contato}>
               {l}
             </Text>
           ))}
+          {ctx.cidadeUf ? <Text style={s.contato}>{ctx.cidadeUf}</Text> : null}
         </View>
       </View>
       <View style={s.filete} />
@@ -205,10 +226,11 @@ function CabecalhoCompleto({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
   );
 }
 
+/** header.compact — favicon 6 mm + nome; descritor à direita; filete accent. */
 function CabecalhoCompacto({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
   const icone = ctx.favicon ?? ctx.simbolo;
   return (
-    <View style={s.cabecalhoInterno}>
+    <View>
       <View style={s.linhaCompacta}>
         {icone ? <Image style={s.favicon} src={{ data: icone.data, format: icone.format }} /> : null}
         <Text style={s.nomeCompacto}>{ctx.nomeDaMarca}</Text>
@@ -219,9 +241,10 @@ function CabecalhoCompacto({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
   );
 }
 
+/** footer — esquerda: razão social, CNPJ, responsável; direita: endereço, cidade/UF/CEP, página. */
 function Rodape({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
-  const esquerda = [ctx.cnpj ? `CNPJ ${ctx.cnpj}` : null, ctx.responsavel].filter((x): x is string => Boolean(x));
-  const direita = [ctx.enderecoLinha, ctx.cidadeUfCep].filter((x): x is string => Boolean(x));
+  const esquerda = linhas(ctx.cnpj ? `CNPJ ${ctx.cnpj}` : null, ctx.responsavel).slice(0, RODAPE.maximoDeLinhas - 1);
+  const direita = linhas(ctx.enderecoLinha, ctx.cidadeUfCep).slice(0, RODAPE.maximoDeLinhas - 1);
   return (
     <View fixed style={s.rodape}>
       <View style={s.rodapeEsq}>
@@ -238,17 +261,22 @@ function Rodape({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
             {l}
           </Text>
         ))}
-        <Text style={s.rodapeTextoDir} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+        <Text
+          style={s.rodapeTextoDir}
+          render={({ pageNumber, totalPages }) => (
+            <>
+              Página <Text style={s.negrito}>{pageNumber}</Text> de <Text style={s.negrito}>{totalPages}</Text>
+            </>
+          )}
+        />
       </View>
     </View>
   );
 }
 
-/**
- * Espaço reservado na página 1 para o cabeçalho completo (que é absoluto):
- * da margem de 30 mm até logo abaixo do filete.
- */
-const ESPACO_DO_CABECALHO_COMPLETO = PAGINA.cabecalhoTopo + CABECALHO.alturaDoLogo + CABECALHO.distanciaDoFilete + CABECALHO.filete - PAGINA.margemTopo;
+/** Espaço da página 1 sob o cabeçalho completo (absoluto): até logo abaixo do filete. */
+const ESPACO_DO_CABECALHO_COMPLETO =
+  PAGINA.cabecalhoTopo + CABECALHO.alturaDoLogo + CABECALHO.antesDoFilete + CABECALHO.filete - PAGINA.margemTopo;
 
 export function DocumentoPdf({ doc, contexto }: { doc: DocumentoTimbrado; contexto: ContextoDaMarca }) {
   registrarFontes();
@@ -257,22 +285,23 @@ export function DocumentoPdf({ doc, contexto }: { doc: DocumentoTimbrado; contex
   const corpo = estilosDoCorpo(cores);
   const metadados = (doc.metadados ?? []).filter((m): m is [string, string] => Boolean(m[1] && m[1].trim()));
   const fixos = (doc.avisos ?? []).filter((a) => a.emTodasAsPaginas);
-  const marcaDagua = !doc.semMarcaDagua && !doc.pretoEBranco && contexto.marcaDaguaPermitida ? contexto.simbolo : null;
-  const eyebrow = `${doc.tipo}${doc.numero ? ` · Nº ${doc.numero}` : ""}`.toUpperCase();
+  const marcaDagua = !doc.semMarcaDagua && !doc.pretoEBranco ? contexto.marcaDagua : null;
+  const eyebrow = `${doc.tipo}${doc.numero ? `${ABERTURA.separadorDoEyebrow}Nº ${doc.numero}` : ""}`.toUpperCase();
+  const cargo = linhas(doc.assinatura?.cargo, doc.assinatura?.registro).join(ASSINATURA.separador);
 
   return (
     <Document
       title={`${doc.titulo} — ${contexto.nomeDaMarca}`}
-      author={contexto.razaoSocial}
+      author={contexto.nomeDaMarca}
       subject={doc.tipo}
       creator={contexto.nomeDaMarca}
-      producer={`${contexto.nomeDaMarca} · layout ${VERSAO_DO_LAYOUT}`}
+      producer={`${contexto.nomeDaMarca} · papel timbrado ${VERSAO_DO_LAYOUT}`}
       language="pt-BR"
       creationDate={doc.emitidoEm}
       modificationDate={doc.emitidoEm}
     >
       <Page size={PAGINA.tamanho} style={s.pagina}>
-        {/* Marca d'água primeiro: desenhada por trás do texto, só na página 1 (não é `fixed`). */}
+        {/* watermark — primeiro, para ficar atrás do texto; só na página 1 (não é `fixed`). */}
         {marcaDagua ? <Image style={s.marcaDagua} src={{ data: marcaDagua.data, format: marcaDagua.format }} /> : null}
         <Faixa s={s} />
         <View
@@ -282,12 +311,15 @@ export function DocumentoPdf({ doc, contexto }: { doc: DocumentoTimbrado; contex
         />
 
         <View style={{ height: ESPACO_DO_CABECALHO_COMPLETO }} />
-        <Text style={s.eyebrow}>{eyebrow}</Text>
+        {/* openingBlock: eyebrow → título → tabela de metadados → corpo */}
+        <Text style={s.eyebrow} minPresenceAhead={80}>
+          {eyebrow}
+        </Text>
         <Text style={s.titulo}>{doc.titulo}</Text>
         {metadados.length ? (
-          <View style={s.meta} wrap={false}>
+          <View style={s.meta}>
             {metadados.map(([rotulo, valor], i) => (
-              <View key={rotulo} style={i < metadados.length - 1 ? [s.metaLinha, s.metaDivisoria] : s.metaLinha}>
+              <View key={rotulo} wrap={false} style={i < metadados.length - 1 ? [s.metaLinha, s.metaDivisoria] : s.metaLinha}>
                 <Text style={s.metaRotulo}>{rotulo.toUpperCase()}</Text>
                 <Text style={s.metaValor}>{valor}</Text>
               </View>
@@ -303,12 +335,13 @@ export function DocumentoPdf({ doc, contexto }: { doc: DocumentoTimbrado; contex
           <Bloco key={`b${i}`} no={n} s={corpo} chave={`b${i}`} />
         ))}
 
+        {/* signatureBlock — o bloco inteiro junto: "Atenciosamente," nunca fica sozinho. */}
         {doc.assinatura ? (
           <View style={s.assinatura} wrap={false}>
-            <Text style={s.fecho}>{doc.assinatura.fecho ?? "Atenciosamente,"}</Text>
+            <Text style={s.fecho}>{doc.assinatura.fecho ?? ASSINATURA.fecho}</Text>
             <View style={s.linhaDaAssinatura} />
             <Text style={s.nomeDaAssinatura}>{doc.assinatura.nome}</Text>
-            {doc.assinatura.cargo ? <Text style={s.cargo}>{doc.assinatura.cargo}</Text> : null}
+            {cargo ? <Text style={s.cargo}>{cargo}</Text> : null}
           </View>
         ) : null}
 
@@ -324,5 +357,6 @@ export function DocumentoPdf({ doc, contexto }: { doc: DocumentoTimbrado; contex
 }
 
 export async function renderizarDocumento(doc: DocumentoTimbrado, contexto: ContextoDaMarca): Promise<Buffer> {
+  await carregarFontes();
   return renderToBuffer(<DocumentoPdf doc={doc} contexto={contexto} />);
 }

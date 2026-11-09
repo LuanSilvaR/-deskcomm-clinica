@@ -84,10 +84,10 @@ export function cidadeUf(e: Endereco): string | null {
   return partes.length ? partes.join(" – ") : null;
 }
 
-/** "Cidade – UF · CEP 00000-000". */
+/** "Cidade – UF · 00000-000" (footer.right.line2 — sem rótulo, como no modelo). */
 export function cidadeUfCep(e: Endereco): string | null {
   const cep = limpo(e.cep) ? formatarCep((e.cep ?? "").replace(/\D/g, "")) : null;
-  const partes = [cidadeUf(e), cep ? `CEP ${cep}` : null].filter(Boolean);
+  const partes = [cidadeUf(e), cep].filter(Boolean);
   return partes.length ? partes.join(" · ") : null;
 }
 
@@ -96,7 +96,7 @@ export function linhaDoResponsavel(nome: string | null | undefined, registro: st
   const n = limpo(nome);
   if (!n) return null;
   const r = limpo(registro);
-  return `Responsável técnica(o): ${r ? `${n} · ${r}` : n}`;
+  return `Responsável técnica: ${r ? `${n} · ${r}` : n}`;
 }
 
 export { limpo as textoLimpo };

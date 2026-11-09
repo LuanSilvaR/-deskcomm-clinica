@@ -48,15 +48,15 @@ describe("formatação", () => {
     expect(linhaDoEndereco({ logradouro: "Rua A", numero: "10", complemento: "", bairro: "Centro" })).toBe("Rua A, 10, Centro");
     expect(linhaDoEndereco({})).toBeNull();
     expect(cidadeUf({ cidade: "Planaltina", uf: "go" })).toBe("Planaltina – GO");
-    expect(cidadeUfCep({ cidade: "Planaltina", uf: "GO", cep: "73750000" })).toBe("Planaltina – GO · CEP 73750-000");
-    expect(cidadeUfCep({ cep: "73750000" })).toBe("CEP 73750-000");
+    expect(cidadeUfCep({ cidade: "Planaltina", uf: "GO", cep: "73750000" })).toBe("Planaltina – GO · 73750-000");
+    expect(cidadeUfCep({ cep: "73750000" })).toBe("73750-000");
     expect(cidadeUfCep({})).toBeNull();
   });
 
   it("responsável técnico: sem nome não há linha; sem registro, só o nome", () => {
     expect(linhaDoResponsavel(null, "CRM 1")).toBeNull();
-    expect(linhaDoResponsavel("Pessoa Ficticia", null)).toBe("Responsável técnica(o): Pessoa Ficticia");
-    expect(linhaDoResponsavel("Pessoa Ficticia", "CRBM 0000")).toBe("Responsável técnica(o): Pessoa Ficticia · CRBM 0000");
+    expect(linhaDoResponsavel("Pessoa Ficticia", null)).toBe("Responsável técnica: Pessoa Ficticia");
+    expect(linhaDoResponsavel("Pessoa Ficticia", "CRBM 0000")).toBe("Responsável técnica: Pessoa Ficticia · CRBM 0000");
   });
 });
 

@@ -46,10 +46,10 @@ describe("contexto da marca", () => {
   it("logo compacto e transparente vira o símbolo; marca d'água só com 600 px ou mais", async () => {
     const grande = await montarContextoDaMarca({ nomeDaMarca: "Marca", logo: await png(800, 800, true) });
     expect(grande.simbolo).not.toBeNull();
-    expect(grande.marcaDaguaPermitida).toBe(true);
+    expect(grande.marcaDagua).not.toBeNull();
     const pequeno = await montarContextoDaMarca({ nomeDaMarca: "Marca", logo: await png(300, 300, true) });
     expect(pequeno.simbolo).not.toBeNull();
-    expect(pequeno.marcaDaguaPermitida).toBe(false);
+    expect(pequeno.marcaDagua).toBeNull();
   });
 
   it("logo transparente tem as margens recortadas", async () => {
@@ -61,7 +61,7 @@ describe("contexto da marca", () => {
     const c = await montarContextoDaMarca({ nomeDaMarca: "Marca", logo: await png(1200, 300, true), favicon: await png(512, 512, true) });
     expect(c.logo).not.toBeNull();
     expect(c.simbolo?.largura).toBe(512);
-    expect(c.marcaDaguaPermitida).toBe(true);
+    expect(c.marcaDagua).not.toBeNull();
   });
 
   it("logo com fundo opaco: fica de fora e avisa", async () => {
@@ -102,8 +102,7 @@ describe("PDF do papel timbrado", () => {
     const t = (await texto(await renderizarDocumento(DOC, ctx))).replace(/\s+/g, "");
     expect(t).not.toContain("ASSUNTO");
     expect(t).not.toContain("CNPJ");
-    expect(t).not.toContain("CEP");
-    expect(t).not.toContain("WhatsApp");
+        expect(t).not.toContain("WhatsApp");
   }, 60_000);
 
   it("determinístico: mesmo documento e mesmo contexto geram o mesmo arquivo", async () => {

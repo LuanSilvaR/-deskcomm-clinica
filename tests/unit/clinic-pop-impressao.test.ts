@@ -73,7 +73,7 @@ describe("impressão do POP", () => {
       "Clínica Ficticia Estética LTDA",
       "CNPJ 11.222.333/0001-81",
       "Rua das Flores, 100",
-      "Campo Grande – MS · CEP 79000-000",
+      "Campo Grande – MS · 79000-000",
       "Toxina Botulínica",
       "POP-007",
       "2.0 · Aprovado",
@@ -89,7 +89,7 @@ describe("impressão do POP", () => {
     ]) {
       expect(texto, esperado).toContain(esperado);
     }
-    expect(semEspacos(texto)).toContain(semEspacos("PROCEDIMENTO OPERACIONAL PADRÃO · Nº POP-007 · V2.0"));
+    expect(semEspacos(texto)).toContain(semEspacos("PROCEDIMENTO OPERACIONAL PADRÃO  ·  Nº POP-007 · V2.0"));
     expect(semEspacos(texto)).toContain("IMPRESSOEM");
     expect(texto).not.toContain("NÃO VIGENTE");
     const total = Number(/Página 1 de (\d+)/.exec(texto)?.[1]);

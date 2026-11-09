@@ -27,8 +27,9 @@ import {
   linhasDeContato,
   textoLimpo,
 } from "./formatar";
-import { tratarFavicon, tratarLogo, type ImagemDoDocumento } from "./imagens";
+import { silhuetaTingida, temTransparencia, tratarFavicon, tratarLogo, type ImagemDoDocumento } from "./imagens";
 import { resolverPaleta, type Papeis } from "./paleta";
+import { MARCA_DAGUA } from "./tema";
 
 /** O que as duas telas de Configurações guardam — cru, como vem do banco. */
 export interface EntradaDoContexto {
@@ -55,6 +56,12 @@ export interface EntradaDoContexto {
   corDosFiletes?: string | null;
   logo?: Buffer | null;
   favicon?: Buffer | null;
+  /**
+   * Modelo em branco (emptyFieldPolicy.blankTemplateMode): campo vazio vira
+   * "[Telefone / WhatsApp]", "[Endereço completo]"… Só para gerar o modelo —
+   * documento EMITIDO nunca liga isto.
+   */
+  modeloEmBranco?: boolean;
 }
 
 export interface ContextoDaMarca {
@@ -83,8 +90,14 @@ export interface ContextoDaMarca {
   simbolo: ImagemDoDocumento | null;
   /** Largura em px do arquivo de onde o símbolo veio. */
   larguraDoSimboloOriginal: number;
-  /** Marca d'água permitida: símbolo do logo com ≥ 600 px, ou do favicon com ≥ 512 px. */
-  marcaDaguaPermitida: boolean;
+  /**
+   * A marca d'água já pronta: a silhueta do símbolo tingida de `primary`.
+   * `null` quando a régua não deixa — símbolo sem transparência, logo com menos
+   * de 600 px ou favicon com menos de 512 px.
+   */
+  marcaDagua: ImagemDoDocumento | null;
+  /** Modo "modelo em branco": campos vazios aparecem como [placeholder]. */
+  modeloEmBranco: boolean;
   cores: Papeis;
   /** O que não saiu como cadastrado (CNPJ inválido, logo opaco, cor ajustada) — para a tela e o log. */
   avisos: string[];
@@ -113,24 +126,39 @@ export async function montarContextoDaMarca(e: EntradaDoContexto): Promise<Conte
   const paleta = resolverPaleta({ semente: e.corDaMarca, corDosFiletes: e.corDosFiletes });
   avisos.push(...paleta.avisos);
 
+  const reguaDaMarcaDagua = logoCompacto
+    ? logo.larguraOriginal >= MARCA_DAGUA.larguraMinimaDoLogo
+    : temTransparencia(favicon) && (favicon?.largura ?? 0) >= MARCA_DAGUA.larguraMinimaDoFavicon;
+  const marcaDagua = simbolo && reguaDaMarcaDagua ? await silhuetaTingida(simbolo, paleta.papeis.primary) : null;
+
+  // Modelo em branco: o placeholder entra NO LUGAR do campo vazio, nunca de um cheio.
+  const branco = Boolean(e.modeloEmBranco);
+  const ou = <T,>(valor: T | null, placeholder: T): T | null => (valor ?? (branco ? placeholder : null));
+  const contatos = linhasDeContato(e.telefone, e.whatsapp);
+  const cep = textoLimpo(e.endereco?.cep) ? cidadeUfCep({ cep: e.endereco?.cep }) : branco ? "[CEP]" : null;
+  const cidade = cidadeUf(e.endereco ?? {}) ?? (branco ? "[Cidade – UF]" : null);
+  const responsavelNome = textoLimpo(e.responsavelNome) ?? (branco ? "[Nome do(a) responsável técnico(a)]" : null);
+  const responsavelRegistro = textoLimpo(e.responsavelRegistro) ?? (branco ? "[Registro profissional]" : null);
+
   const end = e.endereco ?? {};
   return {
     nomeDaMarca,
     razaoSocial,
     descritor: textoLimpo(e.descritor),
-    site: formatarSite(e.site),
-    contatos: linhasDeContato(e.telefone, e.whatsapp),
-    cidadeUf: cidadeUf(end),
-    enderecoLinha: linhaDoEndereco(end),
-    cidadeUfCep: cidadeUfCep(end),
-    cnpj,
-    responsavel: linhaDoResponsavel(e.responsavelNome, e.responsavelRegistro),
+    site: ou(formatarSite(e.site), { exibir: "[site.com.br]", url: "" }),
+    contatos: contatos.length ? contatos : branco ? ["[Telefone / WhatsApp]"] : [],
+    cidadeUf: cidade,
+    enderecoLinha: ou(linhaDoEndereco(end), "[Endereço completo]"),
+    cidadeUfCep: [cidade, cep].filter(Boolean).join(" · ") || null,
+    cnpj: ou(cnpj, "[00.000.000/0000-00]"),
+    responsavel: linhaDoResponsavel(responsavelNome, responsavelRegistro),
     logo: logo.imagem,
     larguraDoLogoOriginal: logo.larguraOriginal,
     favicon,
     simbolo,
     larguraDoSimboloOriginal,
-    marcaDaguaPermitida: logoCompacto ? logo.larguraOriginal >= 600 : (favicon?.largura ?? 0) >= 512,
+    marcaDagua,
+    modeloEmBranco: Boolean(e.modeloEmBranco),
     cores: paleta.papeis,
     avisos,
   };
