@@ -71,7 +71,7 @@ const p = (texto: string): NoDoDocumento => ({ type: "paragraph", content: [t(te
 const secao = (titulo: string): NoDoDocumento => ({ type: "heading", attrs: { level: 2 }, content: [t(titulo)] });
 const linha = (rotulo: string, valor: string): NoDoDocumento => ({ type: "paragraph", content: [t(`${rotulo}: `, true), t(valor)] });
 
-/** A linha do CONTROLADOR — no corpo e fixa em todas as páginas (era o rodapé). */
+/** A linha do CONTROLADOR — uma vez por página, fixa acima do rodapé (como o rodapé antigo). */
 export function linhaDoControlador(data: ExportPayload): string {
   return `Controlador: ${data.organization_legal_name || "—"} · Relatório de Acesso aos Dados${data.lei_citada ? ` — ${data.lei_citada}` : ""} · Encarregado (DPO): ${encarregado(data)} · Validade do link de download conforme e-mail recebido`;
 }
@@ -217,7 +217,6 @@ export function lgpdParaTimbrado(data: ExportPayload, unsignedWarning = false): 
       ],
     });
   }
-  add(p(linhaDoControlador(data)));
 
   return {
     tipo: "Relatório de Acesso aos Dados",
@@ -228,7 +227,7 @@ export function lgpdParaTimbrado(data: ExportPayload, unsignedWarning = false): 
       ["Destinatário(a)", data.contact?.name ?? null],
       ["Assunto", data.lei_citada ? `Direito de acesso — ${data.lei_citada}` : "Direito de acesso aos dados"],
     ],
-    avisos: [{ estado: "info", texto: linhaDoControlador(data), emTodasAsPaginas: true }],
+    avisos: [{ estado: "info", texto: linhaDoControlador(data), emTodasAsPaginas: true, soNaLinhaFixa: true }],
     corpo: { type: "doc", content: c },
     emitidoEm: new Date(data.generated_at),
   };
@@ -237,8 +236,9 @@ export function lgpdParaTimbrado(data: ExportPayload, unsignedWarning = false): 
 /** Contexto mínimo quando quem chama não resolveu a marca: o controlador nos dois papéis. */
 async function contextoDoPayload(data: ExportPayload): Promise<ContextoDaMarca> {
   return montarContextoDaMarca({
-    nomeDaMarca: data.organization_display_name || data.organization_legal_name,
-    razaoSocial: data.organization_legal_name,
+    // Reserva: o CONTROLADOR (razão social) nos dois papéis — nunca o nome fantasia.
+    nomeDaMarca: data.organization_legal_name || "Relatório de Acesso aos Dados",
+    razaoSocial: data.organization_legal_name || null,
   });
 }
 
