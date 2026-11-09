@@ -279,7 +279,7 @@ export function TenantForm({ initial }: Props) {
             </p>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {texto("website", t("Site"), { placeholder: "suaclinica.com.br", maxLength: 200 })}
+            {texto("website", t("Site"), { placeholder: "https://www.example.com", maxLength: 200 })}
             {texto("whatsapp_phone", t("WhatsApp"), { type: "tel", inputMode: "tel", placeholder: "(11) 99999-9999", maxLength: 20 })}
             <div className="sm:col-span-2">{texto("descriptor", t("Descritor (ex.: Estética Avançada)"), { maxLength: 60 })}</div>
             {texto("technical_lead_name", t("Responsável técnico(a)"), { maxLength: 120 })}

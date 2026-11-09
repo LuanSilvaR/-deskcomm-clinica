@@ -11005,6 +11005,7 @@ export const DICIONARIO: Traducoes = {
   // lookup dinâmico, que o teste de cobertura não enxerga. As marcas
   // (Instagram, Facebook…) não mudam de idioma e ficam de fora.
   Site: { es: "Sitio web" },
+  WhatsApp: { es: "WhatsApp" },
   "Google Meu Negócio": { es: "Google Mi Negocio" },
   // ─── Agenda dos colegas (components/agenda/AgendaDosColegas.tsx) ───────────
   // A opção por organização da migration 0343 (issue #978). As frases de recusa
