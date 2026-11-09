@@ -25,6 +25,11 @@ const CAMPOS_DE_CONTATO_E_ENDERECO = [
   "address_city",
   "address_uf",
   "address_city_ibge_code",
+  "website",
+  "whatsapp_phone",
+  "descriptor",
+  "technical_lead_name",
+  "technical_lead_registry",
 ] as const;
 
 function contatoEEndereco(d: TenantInput): Partial<Record<(typeof CAMPOS_DE_CONTATO_E_ENDERECO)[number], string | null>> {

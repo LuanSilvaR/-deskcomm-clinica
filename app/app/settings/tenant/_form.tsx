@@ -80,7 +80,7 @@ export function TenantForm({ initial }: Props) {
     if (!parsed.success) {
       // Os campos de contato e endereço têm mensagem própria ("Telefone com
       // DDD."); os demais seguem no aviso genérico de sempre.
-      const proprio = parsed.error.issues.find((i) => String(i.path[0] ?? "").match(/^(contact_|address_)/));
+      const proprio = parsed.error.issues.find((i) => String(i.path[0] ?? "").match(/^(contact_|address_|website|whatsapp_|descriptor|technical_)/));
       toast.error(proprio ? t(proprio.message) : t("Dados inválidos."));
       return;
     }
@@ -267,6 +267,23 @@ export function TenantForm({ initial }: Props) {
             {texto("address_district", t("Bairro"), { maxLength: 120 })}
             {texto("address_city", t("Cidade"), { maxLength: 120 })}
             {texto("address_uf", t("UF"), { maxLength: 2 })}
+          </div>
+        </div>
+
+        {/* FORK clinic (8013) — o que o papel timbrado mostra (docs/padrao-documentos.md). */}
+        <div className="space-y-4 border-t pt-4" data-testid="org-para-os-documentos">
+          <div>
+            <h2 className="text-base font-medium">{t("Para os documentos")}</h2>
+            <p className="text-xs text-muted-foreground">
+              {t("Aparecem no cabeçalho e no rodapé de todo documento que o sistema gera. Campo vazio não aparece.")}
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {texto("website", t("Site"), { placeholder: "suaclinica.com.br", maxLength: 200 })}
+            {texto("whatsapp_phone", t("WhatsApp"), { type: "tel", inputMode: "tel", placeholder: "(11) 99999-9999", maxLength: 20 })}
+            <div className="sm:col-span-2">{texto("descriptor", t("Descritor (ex.: Estética Avançada)"), { maxLength: 60 })}</div>
+            {texto("technical_lead_name", t("Responsável técnico(a)"), { maxLength: 120 })}
+            {texto("technical_lead_registry", t("Registro profissional (ex.: CRBM 0000)"), { maxLength: 60 })}
           </div>
         </div>
 
