@@ -301,8 +301,9 @@ export function DocumentoPdf({ doc, contexto }: { doc: DocumentoTimbrado; contex
       modificationDate={doc.emitidoEm}
     >
       <Page size={PAGINA.tamanho} style={s.pagina}>
-        {/* watermark — primeiro, para ficar atrás do texto; só na página 1 (não é `fixed`). */}
-        {marcaDagua ? <Image style={s.marcaDagua} src={{ data: marcaDagua.data, format: marcaDagua.format }} /> : null}
+        {/* watermark — primeiro, para ficar atrás do texto; `fixed` = em TODAS as páginas
+            (decisão do dono do produto, 2026-11-09 — a especificação 2.0.0 previa só a 1ª). */}
+        {marcaDagua ? <Image fixed style={s.marcaDagua} src={{ data: marcaDagua.data, format: marcaDagua.format }} /> : null}
         <Faixa s={s} />
         <View
           fixed

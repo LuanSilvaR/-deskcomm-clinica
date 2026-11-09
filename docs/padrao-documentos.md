@@ -68,6 +68,8 @@ Exemplo de referência: `lib/clinic/pops/impressao.ts` + `app/api/v1/clinic/pops
 
 ## Divergências registradas em relação ao PDF de referência
 
+- **Marca d'água em todas as páginas:** a especificação 2.0.0 previa a marca d'água só na página 1. Por decisão do dono do produto (2026-11-09), ela aparece em todas as páginas, na mesma posição e opacidade.
+
 - **Entrelinha do wordmark:** a especificação pede entrelinha exata de 15 pt para um corpo de 26 pt. No react-pdf, entrelinha menor que o corpo troca a fonte e sobrepõe o descritor, então o motor usa 1,0 com o descritor logo abaixo. O desenho fica o mesmo.
 - **Entrelinha do rodapé:** sem `lineHeight` (o react-pdf descarta texto absoluto com `lineHeight`). O espaçamento vem de margem.
 - **Itálico:** sem fonte itálica registrada. Texto em itálico do editor sai no peso normal.

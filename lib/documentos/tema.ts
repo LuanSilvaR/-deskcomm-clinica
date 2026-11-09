@@ -102,7 +102,7 @@ export const ASSINATURA = {
   separador: "  ·  ",
 } as const;
 
-/** watermark — só na página 1, tingida de `primary`. */
+/** watermark — em todas as páginas (decisão do dono, 2026-11-09), tingida de `primary`. */
 export const MARCA_DAGUA = {
   largura: mm(80),
   x: mm(112),
