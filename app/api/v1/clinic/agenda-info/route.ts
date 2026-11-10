@@ -8,7 +8,9 @@
  *   - por profissional: nome da ficha, conselho e especialidades (9001);
  *   - `q` (opcional): nome, telefone, CPF ou nascimento → ids dos pacientes da
  *     janela que batem. O CPF nunca volta;
- *   - S2 (#67): as salas reservadas por compromisso e a lista de salas ativas (filtro "Sala").
+ *   - S2 (#67): as salas reservadas por compromisso e a lista de salas ativas (filtro "Sala");
+ *   - S3 (#68): os procedimentos de cada compromisso (8016) e o catálogo ativo
+ *     (painel "Novo agendamento" e filtro "Procedimento").
  * Leitura (`agenda.ver`), pela sessão — a RLS de quem pede vale.
  */
 import { randomUUID } from "node:crypto";
@@ -21,7 +23,7 @@ import { textoDoConselho, type FichaDoProfissional } from "@/lib/clinic/agenda/a
 import { contarFaltas } from "@/lib/clinic/agenda/faltas";
 import { compromissosDePrimeiraVez, compromissosRemarcados } from "@/lib/clinic/agenda/primeira-vez";
 import { PERMISSAO_VER_OUTROS } from "@/lib/clinic/agenda/escopo-da-agenda";
-import type { InfoDoCompromisso, SalaDaAgenda } from "@/lib/clinic/agenda/filtros-da-agenda";
+import type { InfoDoCompromisso, ProcedimentoDaAgenda, SalaDaAgenda } from "@/lib/clinic/agenda/filtros-da-agenda";
 import { filtrarContatosPelaBusca } from "@/lib/clinic/pacientes/busca-no-banco";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -56,15 +58,17 @@ export async function GET(req: NextRequest): Promise<Response> {
     .lt("starts_at", lido.data.ate)
     .gt("ends_at", lido.data.de);
   if (soOProprio) consultaDosCompromissos = consultaDosCompromissos.eq("owner_user_id", authz.user.id);
-  const [ags, recursos, profs] = await Promise.all([
+  const [ags, recursos, profs, catalogo] = await Promise.all([
     consultaDosCompromissos.limit(1000),
     supabase.from("clinic_resources").select("id, name, category").eq("organization_id", org).eq("is_active", true).order("name"),
     supabase
       .from("clinic_professionals")
       .select("user_id, display_name, council, council_number, council_uf, is_active, clinic_professional_specialties(clinic_specialties(id, name))")
       .eq("organization_id", org),
+    supabase.from("clinic_procedures").select("id, name").eq("organization_id", org).eq("is_active", true).order("name"),
   ]);
-  const erro = ags.error ?? profs.error ?? recursos.error;
+  const erro = ags.error ?? profs.error ?? recursos.error ?? catalogo.error;
+  const procedimentos: ProcedimentoDaAgenda[] = ((catalogo.data ?? []) as Array<{ id: string; name: string }>).map((p) => ({ id: p.id, nome: p.name }));
   if (erro) return fail("internal_error", erro.message, 500, { requestId });
 
   const lista = (ags.data ?? []) as Array<{ id: string; contact_id: string | null; starts_at: string }>;
@@ -77,7 +81,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     .map((r) => ({ id: r.id, nome: r.name }));
   const idsDasSalas = new Set(salas.map((x) => x.id));
 
-  const [visitas, confirmacoes, faltas, busca, primeiraVez, remarcados, reservas] = await Promise.all([
+  const [visitas, confirmacoes, faltas, busca, primeiraVez, remarcados, reservas, procsDosAgs] = await Promise.all([
     ids.length
       ? supabase.from("clinic_appointment_visits").select("appointment_id, status, changed_at").eq("organization_id", org).in("appointment_id", ids)
       : Promise.resolve({ data: [], error: null }),
@@ -94,6 +98,9 @@ export async function GET(req: NextRequest): Promise<Response> {
     ids.length && idsDasSalas.size
       ? supabase.from("clinic_appointment_resources").select("appointment_id, resource_id").eq("organization_id", org).in("appointment_id", ids)
       : Promise.resolve({ data: [], error: null }),
+    ids.length
+      ? supabase.from("clinic_agendamento_procedimentos").select("appointment_id, procedure_id, ordem").eq("organization_id", org).in("appointment_id", ids).order("ordem")
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (visitas.error) return fail("internal_error", visitas.error.message, 500, { requestId });
 
@@ -106,6 +113,12 @@ export async function GET(req: NextRequest): Promise<Response> {
     const l = salasPor.get(r.appointment_id) ?? [];
     l.push(r.resource_id);
     salasPor.set(r.appointment_id, l);
+  }
+  const procsPor = new Map<string, string[]>();
+  for (const r of (procsDosAgs.data ?? []) as Array<{ appointment_id: string; procedure_id: string }>) {
+    const l = procsPor.get(r.appointment_id) ?? [];
+    l.push(r.procedure_id);
+    procsPor.set(r.appointment_id, l);
   }
   const confirmacaoPor = new Map(((confirmacoes.data ?? []) as Array<{ appointment_id: string; status: string }>).map((c) => [c.appointment_id, c.status]));
 
@@ -121,6 +134,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       primeira_vez: primeiraVez.has(a.id),
       remarcado: remarcados.has(a.id),
       salas: salasPor.get(a.id) ?? [],
+      procedimentos: procsPor.get(a.id) ?? [],
     };
   }
 
@@ -143,6 +157,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       profissionais,
       pacientes_da_busca: lido.data.q ? ((busca.data ?? []) as Array<{ id: string }>).map((c) => c.id) : null,
       salas,
+      procedimentos,
     },
     { requestId },
   );

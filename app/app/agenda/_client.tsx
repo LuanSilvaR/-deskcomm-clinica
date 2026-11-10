@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { EntradaDaAgenda } from "@/components/agenda/EntradaDaAgenda";
 import { EnderecoDaMarcacao } from "@/components/agenda/EnderecoDaMarcacao";
@@ -33,6 +34,8 @@ import { EscolhaDoProfissional, useRegrasDeProfissionaisLigadas } from "@/compon
 import { BarraDeFiltrosDaAgenda, useFiltrosDaAgenda } from "@/components/clinic/agenda/BarraDeFiltrosDaAgenda";
 import { ProvedorDaInfoDaClinica, useInfoDaClinica } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
 import { ListaDoDiaDaAgenda } from "@/components/clinic/agenda/ListaDoDiaDaAgenda";
+import { ProcedimentosDaMarcacao, salvarProcedimentosDoAgendamento } from "@/components/clinic/agenda/ProcedimentosDaMarcacao";
+import { EstadoDosDias } from "@/components/clinic/agenda/EstadoDosDias";
 import { CabecalhoDoProfissional } from "@/components/clinic/agenda/SeletorDeProfissional";
 import type { ForaDaAgendaDoDia } from "@/components/agenda/GradeDaAgenda";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -235,6 +238,8 @@ export function AgendaClient({
   // vazia) = a pessoa editou, e o tipo novo não pode devolver o que ela apagou.
   const [enderecoEditado, setEnderecoEditado] = React.useState<string | null>(null);
   const [observacao, setObservacao] = React.useState("");
+  // FORK clinic (agenda S3 #68): procedimentos do novo agendamento, na ordem escolhida.
+  const [procedimentosDaMarcacao, setProcedimentosDaMarcacao] = React.useState<string[]>([]);
   /**
    * O TÍTULO LIVRE DO COMPROMISSO (#3766) — a agenda também serve para
    * atendimento externo, e "OS 1234" ou "Atendimento fulano" é o que quem olha
@@ -632,8 +637,17 @@ export function AgendaClient({
       ...(tituloLivreLigado && tituloLivre.trim() ? { title: tituloLivre.trim() } : {}),
       ...(encaixe ? { encaixe } : {}),
     };
+    const procedimentosEscolhidos = procedimentosDaMarcacao;
     return marcar.mutateAsync(corpo).then(
-      (r) => {
+      async (r) => {
+        // FORK clinic (agenda S3 #68): grava os procedimentos com o id que a marcação devolveu.
+        // Falhar aqui não desfaz a marcação: o agendamento existe; avisamos e seguimos.
+        if (procedimentosEscolhidos.length && r?.data?.id) {
+          await salvarProcedimentosDoAgendamento(r.data.id, procedimentosEscolhidos).catch(() => {
+            toast.error(t("O agendamento foi marcado, mas os procedimentos não foram salvos. Abra o agendamento e tente de novo."));
+          });
+        }
+        setProcedimentosDaMarcacao([]);
         setOcupado(null);
         setErroDoEncaixe(null);
         setEmailConvidado("");
@@ -936,6 +950,7 @@ export function AgendaClient({
         limpar={limparFiltros}
         especialidades={especialidades}
         salas={infoDaClinica?.salas ?? []}
+        procedimentos={infoDaClinica?.procedimentos ?? []}
         total={agendamentos.length}
       />
 
@@ -1175,6 +1190,11 @@ export function AgendaClient({
                   value={endereco}
                   onChange={setEnderecoEditado}
                 />
+                <ProcedimentosDaMarcacao
+                  catalogo={infoDaClinica?.procedimentos ?? []}
+                  valor={procedimentosDaMarcacao}
+                  onChange={setProcedimentosDaMarcacao}
+                />
                 <div>
                   <label className="block" htmlFor="observacao-do-compromisso">
                     {t("Observação")}{" "}
@@ -1221,6 +1241,18 @@ export function AgendaClient({
                 }}
               />
             </div>
+          ) : null}
+          {tipo && !remarcandoId ? (
+            // FORK clinic (agenda S3 #68): estado dos próximos dias do profissional.
+            <EstadoDosDias
+              profissional={profissionalDaMarcacao ?? tipo.donoId ?? null}
+              horariosPorDia={horariosPorDia}
+              hoje={ancoraLocalDoDia(hojeNaOrganizacao)}
+              onEscolher={(dia) => {
+                const primeiro = horariosPorDia[dia]?.[0];
+                if (primeiro) setHorarioEscolhido(primeiro);
+              }}
+            />
           ) : null}
           {tipo && (
             <div className="mt-4 lg:min-h-0 lg:flex-1">
