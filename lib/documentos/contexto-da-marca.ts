@@ -88,6 +88,14 @@ export interface ContextoDaMarca {
    * dos dois, `null`: o cabeçalho fica só com o wordmark em texto.
    */
   simbolo: ImagemDoDocumento | null;
+  /**
+   * #140 — o logo HORIZONTAL (proporção acima de 1,6:1), que já traz o nome
+   * escrito. Quando existe, o cabeçalho desenha ELE, inteiro, no lugar de
+   * símbolo + wordmark em texto — senão o papel sai com uma marca diferente da
+   * cadastrada (o favicon e o nome digitado). `null` para logo compacto ou
+   * ausente: aí vale o desenho de sempre. O símbolo (marca d'água) não muda.
+   */
+  logoDoCabecalho: ImagemDoDocumento | null;
   /** Largura em px do arquivo de onde o símbolo veio. */
   larguraDoSimboloOriginal: number;
   /**
@@ -120,6 +128,7 @@ export async function montarContextoDaMarca(e: EntradaDoContexto): Promise<Conte
 
   const favicon = tratarFavicon(e.favicon ?? null);
   const logoCompacto = logo.imagem && logo.imagem.largura / logo.imagem.altura <= PROPORCAO_MAXIMA_DO_SIMBOLO ? logo.imagem : null;
+  const logoDoCabecalho = logo.imagem && !logoCompacto ? logo.imagem : null;
   const simbolo = logoCompacto ?? favicon ?? null;
   const larguraDoSimboloOriginal = logoCompacto ? logo.larguraOriginal : (favicon?.largura ?? 0);
 
@@ -156,6 +165,7 @@ export async function montarContextoDaMarca(e: EntradaDoContexto): Promise<Conte
     larguraDoLogoOriginal: logo.larguraOriginal,
     favicon,
     simbolo,
+    logoDoCabecalho,
     larguraDoSimboloOriginal,
     marcaDagua,
     modeloEmBranco: Boolean(e.modeloEmBranco),
