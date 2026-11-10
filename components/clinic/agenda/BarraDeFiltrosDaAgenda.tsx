@@ -5,6 +5,7 @@
  * especialidade, status (vários), período, paciente (nome, CPF ou nascimento)
  * e "somente horários livres", com chips do que está ativo e "Limpar filtros".
  * S2 (#67): sala e "+ Mais filtros" (fins de semana, cancelados, indisponíveis).
+ * S3 (#68): procedimento.
  * O estado mora na URL (`useFiltrosDaAgenda`) e vale na hora.
  * O filtro de pessoa continua sendo o dos avatares, do núcleo.
  */
@@ -15,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useT } from "@/hooks/i18n/useT";
-import { CHAVES_DOS_FILTROS, algumFiltroAtivo, filtrosExtrasAtivos, lerFiltros, type FiltrosDaAgenda, type SalaDaAgenda } from "@/lib/clinic/agenda/filtros-da-agenda";
+import { CHAVES_DOS_FILTROS, algumFiltroAtivo, filtrosExtrasAtivos, lerFiltros, type FiltrosDaAgenda, type ProcedimentoDaAgenda, type SalaDaAgenda } from "@/lib/clinic/agenda/filtros-da-agenda";
 import { PERIODOS_DO_DIA, ROTULO_DE_EXIBICAO, ROTULO_DO_PERIODO, STATUS_DE_EXIBICAO, type PeriodoDoDia, type StatusDeExibicao } from "@/lib/clinic/visitas/exibicao";
 import { CaretDown, MagnifyingGlass, X } from "@/lib/ui/icons";
 
@@ -53,6 +54,7 @@ export function BarraDeFiltrosDaAgenda({
   limpar,
   especialidades,
   salas = [],
+  procedimentos = [],
   total,
 }: {
   filtros: FiltrosDaAgenda;
@@ -61,6 +63,8 @@ export function BarraDeFiltrosDaAgenda({
   especialidades: [string, string][];
   /** S2 (#67): salas ativas da clínica (vazio = o filtro não aparece). */
   salas?: SalaDaAgenda[];
+  /** S3 (#68): catálogo de procedimentos ativos (vazio = o filtro não aparece). */
+  procedimentos?: ProcedimentoDaAgenda[];
   /** Quantos compromissos a grade mostra com os filtros (lido pelo leitor de tela). */
   total: number;
 }) {
@@ -107,6 +111,8 @@ export function BarraDeFiltrosDaAgenda({
   if (filtros.q) chips.push({ chave: "q", rotulo: `${t("Paciente")}: ${filtros.q}`, limpar: { q: null } });
   if (filtros.soLivres) chips.push({ chave: "livres", rotulo: t("Somente horários livres"), limpar: { livres: null } });
   if (filtros.sala) chips.push({ chave: "sala", rotulo: `${t("Sala")}: ${salas.find((x) => x.id === filtros.sala)?.nome ?? "?"}`, limpar: { sala: null } });
+  if (filtros.procedimento)
+    chips.push({ chave: "proc", rotulo: `${t("Procedimento")}: ${procedimentos.find((x) => x.id === filtros.procedimento)?.nome ?? "?"}`, limpar: { proc: null } });
   if (filtros.cancelados) chips.push({ chave: "cancelados", rotulo: t("Mostrando cancelados"), limpar: { cancelados: null } });
   if (filtros.semFimDeSemana) chips.push({ chave: "fds", rotulo: t("Sem fins de semana"), limpar: { fds: null } });
   if (filtros.semIndisponiveis) chips.push({ chave: "indisp", rotulo: t("Sem destaque de indisponíveis"), limpar: { indisp: null } });
@@ -169,6 +175,28 @@ export function BarraDeFiltrosDaAgenda({
             >
               <option value="">{t("Todas as salas")}</option>
               {salas.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.nome}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : null}
+
+        {procedimentos.length > 0 ? (
+          <>
+            <label className="sr-only block" htmlFor="filtro-procedimento">
+              {t("Procedimento")}
+            </label>
+            <select
+              id="filtro-procedimento"
+              data-testid="filtro-procedimento"
+              className="h-9 max-w-56 rounded-md border bg-transparent px-2 text-sm"
+              value={filtros.procedimento}
+              onChange={(e) => mudar({ proc: e.target.value || null })}
+            >
+              <option value="">{t("Todos os procedimentos")}</option>
+              {procedimentos.map((x) => (
                 <option key={x.id} value={x.id}>
                   {x.nome}
                 </option>

@@ -8220,6 +8220,23 @@ export const DICIONARIO: Traducoes = {
   // ─── app/api/v1/agenda/agendamentos/_handler.ts + lib/agenda/consulta.ts ───
   "O tipo deste agendamento não existe mais.": { es: "El tipo de esta cita ya no existe." },
   "Agendamento não encontrado.": { es: "Cita no encontrada." },
+  // FORK clinic (agenda S3 #68)
+  "Procedimentos escolhidos": { es: "Procedimientos elegidos" },
+  Tirar: { es: "Quitar" },
+  "Adicionar outro procedimento": { es: "Agregar otro procedimiento" },
+  "Escolher procedimento": { es: "Elegir procedimiento" },
+  "A duração não muda: o horário de fim continua o escolhido.": { es: "La duración no cambia: la hora de fin sigue siendo la elegida." },
+  "Todos os procedimentos": { es: "Todos los procedimientos" },
+  "O agendamento foi marcado, mas os procedimentos não foram salvos. Abra o agendamento e tente de novo.": {
+    es: "La cita fue agendada, pero los procedimientos no se guardaron. Abra la cita e intente de nuevo.",
+  },
+  "Nascimento (opcional)": { es: "Nacimiento (opcional)" },
+  "Já existe um paciente com este telefone.": { es: "Ya existe un paciente con este teléfono." },
+  "Abrir o paciente existente": { es: "Abrir el paciente existente" },
+  "Próximos dias": { es: "Próximos días" },
+  "Sem agenda": { es: "Sin agenda" },
+  "Lista de procedimentos inválida.": { es: "Lista de procedimientos inválida." },
+  "Você não tem permissão para mudar este agendamento.": { es: "No tiene permiso para cambiar esta cita." },
   "Este agendamento foi cancelado. Marque um novo em vez de reabrir este.": {
     es: "Esta cita se canceló. Agenda una nueva en lugar de reabrirla.",
   },

@@ -13,6 +13,7 @@ import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { VisitaDoPaciente } from "@/components/clinic/VisitaDoPaciente";
 import { DetalheDoEncaixe } from "@/components/clinic/agenda/DetalheDoEncaixe";
 import { HistoricoDoAgendamento } from "@/components/clinic/agenda/HistoricoDoAgendamento";
+import { ProcedimentosDoAgendamento } from "@/components/clinic/agenda/ProcedimentosDaMarcacao";
 import { rotuloDoLocal } from "@/lib/agenda/locais";
 
 type Detalhe = {
@@ -212,6 +213,8 @@ export function DetalheDoCompromisso({
             ) : null}
             {/* FORK clinic (agenda S6b): motivo e autor do encaixe, quando houver. */}
             <DetalheDoEncaixe appointmentId={a.id} />
+            {/* FORK clinic (agenda S3 #68): procedimentos do agendamento (8016). */}
+            <ProcedimentosDoAgendamento appointmentId={a.id} />
             {a.contact_id ? (
               <HistoricoDoAgendamento appointmentId={a.id} />
             ) : (

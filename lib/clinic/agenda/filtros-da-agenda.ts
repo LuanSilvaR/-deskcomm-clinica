@@ -2,7 +2,7 @@
  * FORK clinic (melhorias da Agenda) — os filtros da tela /app/agenda.
  *
  * Moram na URL (`esp`, `status`, `periodo`, `q`, `livres`; S2 #67: `sala`,
- * `cancelados`, `fds`, `indisp`) para o link ser
+ * `cancelados`, `fds`, `indisp`; S3 #68: `proc`) para o link ser
  * compartilhável e o "voltar" do navegador funcionar. O filtro de PESSOA
  * continua sendo o do núcleo (avatares, `FiltroDePessoas`). Puro e testado.
  */
@@ -22,6 +22,13 @@ export interface InfoDoCompromisso {
   remarcado?: boolean;
   /** FORK clinic (agenda S2 #67): salas reservadas para o compromisso (`clinic_appointment_resources`). */
   salas?: string[];
+  /** FORK clinic (agenda S3 #68): procedimentos do agendamento, na ordem (8016). */
+  procedimentos?: string[];
+}
+
+export interface ProcedimentoDaAgenda {
+  id: string;
+  nome: string;
 }
 
 export interface SalaDaAgenda {
@@ -35,6 +42,8 @@ export interface InfoDaClinica {
   pacientes_da_busca: string[] | null;
   /** FORK clinic (agenda S2 #67): salas ativas da clínica, para o filtro. */
   salas?: SalaDaAgenda[];
+  /** FORK clinic (agenda S3 #68): catálogo de procedimentos ativos. */
+  procedimentos?: ProcedimentoDaAgenda[];
 }
 
 export interface FiltrosDaAgenda {
@@ -47,6 +56,8 @@ export interface FiltrosDaAgenda {
   soLivres: boolean;
   /** S2 (#67): id da sala ("" = todas). */
   sala: string;
+  /** S3 (#68): id do procedimento ("" = todos). */
+  procedimento: string;
   /** S2: a grade mostra também os cancelados. */
   cancelados: boolean;
   /** S2: a semana esconde sábado e domingo. */
@@ -68,6 +79,7 @@ export function lerFiltros(p: URLSearchParams): FiltrosDaAgenda {
     q: p.get("q") ?? "",
     soLivres: p.get("livres") === "1",
     sala: p.get("sala") ?? "",
+    procedimento: p.get("proc") ?? "",
     cancelados: p.get("cancelados") === "1",
     semFimDeSemana: p.get("fds") === "0",
     semIndisponiveis: p.get("indisp") === "0",
@@ -75,11 +87,11 @@ export function lerFiltros(p: URLSearchParams): FiltrosDaAgenda {
 }
 
 /** As chaves que "Limpar filtros" apaga (as do núcleo, como `compromisso`, ficam). */
-export const CHAVES_DOS_FILTROS = ["esp", "status", "periodo", "q", "livres", "sala", "cancelados", "fds", "indisp"] as const;
+export const CHAVES_DOS_FILTROS = ["esp", "status", "periodo", "q", "livres", "sala", "proc", "cancelados", "fds", "indisp"] as const;
 
 export function algumFiltroAtivo(f: FiltrosDaAgenda): boolean {
   return Boolean(
-    f.especialidade || f.statusMudou || f.periodos.length || f.q || f.soLivres || f.sala || f.cancelados || f.semFimDeSemana || f.semIndisponiveis,
+    f.especialidade || f.statusMudou || f.periodos.length || f.q || f.soLivres || f.sala || f.procedimento || f.cancelados || f.semFimDeSemana || f.semIndisponiveis,
   );
 }
 
@@ -105,6 +117,7 @@ export function passaNosFiltros(
   if (f.especialidade && !(info.profissionais[a.responsavelId]?.especialidades ?? []).some((e) => e.id === f.especialidade)) return false;
   const c = info.compromissos[a.id];
   if (f.sala && !(c?.salas ?? []).includes(f.sala)) return false;
+  if (f.procedimento && !(c?.procedimentos ?? []).includes(f.procedimento)) return false;
   if (info.pacientes_da_busca && !(c?.paciente_id && info.pacientes_da_busca.includes(c.paciente_id))) return false;
   // Ocupação do Google não tem status de visita: some só se o filtro de status mudou.
   if (a.origem === "google_sync") return !f.statusMudou;

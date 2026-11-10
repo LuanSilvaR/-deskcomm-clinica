@@ -112,3 +112,18 @@ describe("S2 (#67): sala e + Mais filtros", () => {
     expect(filtrosExtrasAtivos(x)).toBe(0);
   });
 });
+
+describe('S3 (#68): filtro de procedimento', () => {
+  const comProcs: InfoDaClinica = {
+    ...info,
+    compromissos: { a1: { ...info.compromissos.a1!, procedimentos: ['p1', 'p2'] }, a2: { ...info.compromissos.a2!, procedimentos: [] } },
+  };
+  it('só passa quem tem o procedimento; vai para a URL e entra no Limpar filtros', () => {
+    const x = f('proc=p2');
+    expect(x.procedimento).toBe('p2');
+    expect(algumFiltroAtivo(x)).toBe(true);
+    expect(CHAVES_DOS_FILTROS).toContain('proc');
+    expect(passaNosFiltros(ag('a1', 9), x, comProcs)).toBe(true);
+    expect(passaNosFiltros(ag('a2', 9), x, comProcs)).toBe(false);
+  });
+});
