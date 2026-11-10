@@ -266,7 +266,7 @@ export function ListaDeProfissionais({
                       data-testid={`favoritar-${p.user_id}`}
                       aria-pressed={favoritos.includes(p.user_id)}
                       aria-label={favoritos.includes(p.user_id) ? t("Tirar dos favoritos") : t("Marcar como favorito")}
-                      className="rounded p-1 hover:bg-muted"
+                      className="rounded-md p-1 hover:bg-muted"
                       onClick={(e) => {
                         e.stopPropagation();
                         onFavoritar(p.user_id);

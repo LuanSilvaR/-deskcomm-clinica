@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { copyToClipboard } from "@/lib/clipboard";
 import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
 import { DotsThree } from "@/lib/ui/icons";
 
@@ -44,12 +45,8 @@ export function MenuDoCompromisso({
     }
   };
   const copiar = async () => {
-    try {
-      await navigator.clipboard.writeText(resumo);
-      toast.success(t("Resumo copiado."));
-    } catch {
-      toast.error(t("Não consegui copiar agora."));
-    }
+    if (await copyToClipboard(resumo)) toast.success(t("Resumo copiado."));
+    else toast.error(t("Não consegui copiar agora."));
   };
 
   return (

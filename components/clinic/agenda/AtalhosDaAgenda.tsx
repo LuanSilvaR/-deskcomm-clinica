@@ -128,13 +128,13 @@ export function JanelaDeAtalhos({
           {ATALHOS_DA_AGENDA.map((a) => (
             <React.Fragment key={a.tecla}>
               <dt>
-                <kbd className="rounded border bg-muted px-1.5 font-mono text-xs">{a.tecla}</kbd>
+                <kbd className="rounded-md border bg-muted px-1.5 font-mono text-xs">{a.tecla}</kbd>
               </dt>
               <dd>{t(a.rotulo)}</dd>
             </React.Fragment>
           ))}
           <dt>
-            <kbd className="rounded border bg-muted px-1.5 font-mono text-xs">/</kbd>
+            <kbd className="rounded-md border bg-muted px-1.5 font-mono text-xs">/</kbd>
           </dt>
           <dd>{t("Buscar paciente")}</dd>
         </dl>

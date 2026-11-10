@@ -46,6 +46,6 @@ describe("S7 (#70): produtividade da Agenda", () => {
     expect(lerPreferencias('{"visao":"ano"}').visao).toBeNull();
     expect(lerFavoritos('["a",1,"b"]')).toEqual(["a", "b"]);
     expect(lerFavoritos("nada")).toEqual([]);
-    expect(chaveDaAgenda("favoritos", "o1", "u1")).toBe("deskcomm.agenda.favoritos.o1.u1");
+    expect(chaveDaAgenda("favoritos", "o1", "u1")).toBe("clinica.agenda.favoritos.o1.u1");
   });
 });

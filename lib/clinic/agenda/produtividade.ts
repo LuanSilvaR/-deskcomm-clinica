@@ -83,7 +83,7 @@ export function lerFavoritos(cru: string | null): string[] {
 }
 
 export const chaveDaAgenda = (tipo: "favoritos" | "preferencias", orgId: string, usuarioId: string) =>
-  `deskcomm.agenda.${tipo}.${orgId}.${usuarioId}`;
+  `clinica.agenda.${tipo}.${orgId}.${usuarioId}`;
 
 /** Resumo do agendamento para colar (WhatsApp, e-mail): paciente, dia, hora e profissional. */
 export function resumoDoAgendamento(a: { paciente: string | null; inicio: Date; profissional: string | null; titulo: string }, formatar: (d: Date) => string): string {
