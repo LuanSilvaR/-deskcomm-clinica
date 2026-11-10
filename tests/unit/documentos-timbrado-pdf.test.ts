@@ -113,6 +113,21 @@ describe("PDF do papel timbrado", () => {
     expect(desenho).not.toContain(rgb("#8f5a4a"));
   }, 60_000);
 
+  it("#126: o rótulo de versão/estado (caixa de aviso) segue a paleta do papel, não o amarelo fixo", async () => {
+    const ctx = await montarContextoDaMarca({ nomeDaMarca: "Marca Ficticia", corDosFiletes: "#5d4b91" });
+    const comAviso: DocumentoTimbrado = {
+      ...DOC,
+      avisos: [
+        { estado: "atencao", texto: "VERSÃO 3.0 — RASCUNHO — NÃO APROVADO" },
+        { estado: "atencao", texto: "RASCUNHO", emTodasAsPaginas: true, soNaLinhaFixa: true },
+      ],
+    };
+    const desenho = coresDoPdf(await renderizarDocumento(comAviso, ctx));
+    expect(await texto(await renderizarDocumento(comAviso, ctx))).toContain("RASCUNHO — NÃO APROVADO");
+    for (const amarelo of ["#fdf5e6", "#e2b866", "#5c3d00"]) expect(desenho).not.toContain(rgb(amarelo));
+    expect(desenho).toContain(rgb(ctx.cores.surface));
+  }, 60_000);
+
   it("determinístico: mesmo documento e mesmo contexto geram o mesmo arquivo", async () => {
     const ctx = await montarContextoDaMarca({ nomeDaMarca: "Marca Ficticia", corDaMarca: "#8F5A4A" });
     const a = await renderizarDocumento(DOC, ctx);

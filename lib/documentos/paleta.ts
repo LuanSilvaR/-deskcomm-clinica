@@ -110,9 +110,10 @@ export function resolverPaleta(entrada: { semente?: string | null; corDosFiletes
 }
 
 /**
- * Cores de ESTADO das caixas de aviso (5.10): fundo claro + borda + texto.
- * Fixas de propósito — aviso de "não vigente" não pode mudar de cara com a
- * marca — e nunca usam `accent`. O texto é sempre acompanhado de ícone.
+ * Ícones de ESTADO das caixas de aviso (5.10). As cores fixas abaixo ficaram
+ * só como referência histórica: desde a issue #126 a caixa usa a PALETA do
+ * papel timbrado (`coresDoAviso`) — o dono quer o rótulo "VERSÃO … — RASCUNHO"
+ * na cor do documento. O estado continua distinguível pelo ícone e pelo texto.
  */
 export const ESTADOS = {
   info: { fundo: "#EEF4FB", borda: "#9DB8DA", texto: "#1F3A5F", icone: "i" },
@@ -121,6 +122,12 @@ export const ESTADOS = {
   sucesso: { fundo: "#EDF7EF", borda: "#9CCBA5", texto: "#1E4D2B", icone: "OK" },
 } as const;
 export type Estado = keyof typeof ESTADOS;
+
+/** Cores da caixa de aviso tiradas da paleta: fundo surface, borda primary, texto com ≥ 4,5:1. */
+export function coresDoAviso(estado: Estado, p: Papeis): { fundo: string; borda: string; texto: string; icone: string } {
+  const texto = razaoDeContraste(p.primary, p.surface) >= PISO_DE_TEXTO ? p.primary : p.ink;
+  return { fundo: p.surface, borda: p.primary, texto, icone: ESTADOS[estado].icone };
+}
 
 /** Versão monocromática para impressão em P&B: `ink` no lugar de `primary`. */
 export function paraPretoEBranco(p: Papeis): Papeis {
