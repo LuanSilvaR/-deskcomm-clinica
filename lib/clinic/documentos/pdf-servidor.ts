@@ -8,13 +8,15 @@
  * A marca do documento é a do SNAPSHOT (migration 8014): na primeira geração,
  * os dados crus de Configurações são fixados no documento
  * (`fn_clinic_documento_fixar_marca`, uma vez só); daí em diante toda
- * reimpressão sai igual, mesmo que a Organização ou a Marca mudem.
+ * reimpressão sai com os mesmos textos, nomes e logo, mesmo que a Organização
+ * ou a Marca mudem. Só as CORES seguem as Configurações de agora (#126).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import {
+  comCoresAtuais,
   contextoDoSnapshot,
   ehSnapshotDaMarca,
   lerEntradaDoContexto,
@@ -85,6 +87,8 @@ export async function gerarPdfDoDocumentoEmitido(opcoes: {
     });
     // Falhar em fixar não impede o PDF: sai com o contexto de agora, e a próxima tentativa fixa.
     if (error) logger.warn("[documentos/pdf] não fixou o snapshot da marca", { codigo: error.code, documento: documentoId });
+  } else {
+    snapshot = comCoresAtuais(snapshot, await lerEntradaDoContexto(sessao, orgId));
   }
   const contexto = await contextoDoSnapshot(snapshot, orgId);
 
