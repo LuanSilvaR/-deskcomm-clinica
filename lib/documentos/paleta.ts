@@ -2,13 +2,16 @@
  * FORK clinic — os 7 PAPÉIS de cor do papel timbrado. O layout nunca usa hex
  * direto: lê `ink`, `muted`, `primary`, `surface`, `border`, `accent`, `paper`.
  *
- * A Marca guarda UMA cor semente (`settings.branding.accent_hex`). Os papéis
+ * A semente é a "cor do papel timbrado" (`settings.clinic.cor_filetes`, nome
+ * histórico da coluna) quando preenchida — ela manda no documento INTEIRO
+ * (issue #126: o dono quer o PDF todo na cor escolhida). Vazia, vale a cor da
+ * Marca (`settings.branding.accent_hex`). Os papéis
  * saem da MESMA rampa que pinta o produto (`rampaDeSemente`), para o documento
  * e a tela contarem a mesma cor:
  *   primary = a própria semente (grau 600), escurecida até 4,5:1 se preciso;
  *   surface = grau 100 · border = grau 200 · ink = grau 950 (≥ 12:1);
  *   muted   = ink clareado até ≈ 6:1;
- *   accent  = a "cor dos filetes" (campo opcional) ou o grau 300.
+ *   accent  = o grau 300 da mesma rampa (filetes).
  * Sem semente: os padrões do Design System v2.0.
  *
  * Validação WCAG: ink e muted ≥ 4,5:1 sobre paper e surface; primary ≥ 4,5:1
@@ -64,12 +67,11 @@ export interface PaletaResolvida {
 export function resolverPaleta(entrada: { semente?: string | null; corDosFiletes?: string | null }): PaletaResolvida {
   const avisos: string[] = [];
   const paper = PAPEIS_PADRAO.paper;
-  const semente = entrada.semente && ehHexValido(entrada.semente) ? normalizarHex(entrada.semente) : null;
-  const filete = entrada.corDosFiletes && ehHexValido(entrada.corDosFiletes) ? normalizarHex(entrada.corDosFiletes) : null;
+  const daMarca = entrada.semente && ehHexValido(entrada.semente) ? normalizarHex(entrada.semente) : null;
+  const doPapel = entrada.corDosFiletes && ehHexValido(entrada.corDosFiletes) ? normalizarHex(entrada.corDosFiletes) : null;
+  const semente = doPapel ?? daMarca;
 
-  if (!semente) {
-    return { papeis: { ...PAPEIS_PADRAO, accent: filete ?? PAPEIS_PADRAO.accent }, avisos };
-  }
+  if (!semente) return { papeis: { ...PAPEIS_PADRAO }, avisos };
 
   const rampa = rampaDeSemente(semente);
   const surface = rampa[1];
@@ -102,7 +104,7 @@ export function resolverPaleta(entrada: { semente?: string | null; corDosFiletes
   }
 
   return {
-    papeis: { ink, muted, primary, surface, border, accent: filete ?? rampa[3], paper },
+    papeis: { ink, muted, primary, surface, border, accent: rampa[3], paper },
     avisos,
   };
 }

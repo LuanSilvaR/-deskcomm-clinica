@@ -37,7 +37,7 @@ Baseline visual: `Farias_Rocha_Papel_Timbrado_v2.pdf`. As amostras geradas pelo 
 | `simbolo` | Marca › logo, se compacto (até 1,6:1); senão o favicon | Coluna do logo e marca d'água |
 | `favicon` | Marca › favicon (8012) | Cabeçalho compacto |
 | `marcaDagua` | Silhueta do símbolo tingida de `primary` | Só se o símbolo for transparente e tiver ≥ 600 px (logo) ou ≥ 512 px (favicon) |
-| `cores` | Marca › cor (semente) e cor dos filetes (D2) | 7 papéis, com WCAG |
+| `cores` | Marca › "Cor do papel timbrado" (`settings.clinic.cor_filetes`) quando preenchida — pinta o documento inteiro (#126); vazia, a cor da Marca (semente) | 7 papéis, com WCAG |
 | `avisos` | O que não saiu como cadastrado | Para a tela e o log |
 
 **Modo modelo em branco** (`modeloEmBranco: true`): campo vazio vira `[placeholder]`. Serve só para gerar o modelo. Documento emitido nunca usa.

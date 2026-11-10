@@ -4,6 +4,7 @@
  * logo opaco, campos vazios) e o PDF (A4, fontes embutidas, metadados,
  * determinismo, nada de "[placeholder]"). Imagens geradas aqui; dados fictícios.
  */
+import { inflateSync } from "node:zlib";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
@@ -105,6 +106,13 @@ describe("PDF do papel timbrado", () => {
         expect(t).not.toContain("WhatsApp");
   }, 60_000);
 
+  it("#126: a cor do papel timbrado pinta o PDF (faixa, títulos, tabela) — a cor da Marca sai de cena", async () => {
+    const ctx = await montarContextoDaMarca({ nomeDaMarca: "Marca Ficticia", corDaMarca: "#8F5A4A", corDosFiletes: "#5d4b91" });
+    const desenho = coresDoPdf(await renderizarDocumento(DOC, ctx));
+    expect(desenho).toContain(rgb("#5d4b91"));
+    expect(desenho).not.toContain(rgb("#8f5a4a"));
+  }, 60_000);
+
   it("determinístico: mesmo documento e mesmo contexto geram o mesmo arquivo", async () => {
     const ctx = await montarContextoDaMarca({ nomeDaMarca: "Marca Ficticia", corDaMarca: "#8F5A4A" });
     const a = await renderizarDocumento(DOC, ctx);
@@ -112,3 +120,25 @@ describe("PDF do papel timbrado", () => {
     expect(a.equals(b)).toBe(true);
   }, 60_000);
 });
+
+/** Operadores de cor (`r g b scn` / `SCN` / `rg`) de todos os streams do PDF, já descomprimidos. */
+function coresDoPdf(buf: Buffer): string[] {
+  const cru = buf.toString("latin1");
+  const cores: string[] = [];
+  for (const m of cru.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+    let corpo: string;
+    try {
+      corpo = inflateSync(Buffer.from(m[1] ?? "", "latin1")).toString("latin1");
+    } catch {
+      corpo = m[1] ?? "";
+    }
+    for (const c of corpo.matchAll(/([\d.]+) ([\d.]+) ([\d.]+) (?:rg|RG|scn|SCN)\b/g)) {
+      cores.push([c[1], c[2], c[3]].map((n) => Math.round(Number(n) * 255).toString(16).padStart(2, "0")).join(""));
+    }
+  }
+  return cores;
+}
+
+function rgb(hex: string): string {
+  return hex.slice(1).toLowerCase();
+}

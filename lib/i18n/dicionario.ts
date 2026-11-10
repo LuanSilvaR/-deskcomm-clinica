@@ -4920,12 +4920,12 @@ export const DICIONARIO: Traducoes = {
   "Ícone da aba (favicon)": { es: "Ícono de la pestaña (favicon)" },
   // FORK clinic (8013) — papel timbrado
   "Papel timbrado dos documentos": { es: "Papel membretado de los documentos" },
-  "Cor dos filetes (opcional)": { es: "Color de los filetes (opcional)" },
+  "Cor do papel timbrado (opcional)": { es: "Color del papel membretado (opcional)" },
   "Salvar cor": { es: "Guardar color" },
   "Papel timbrado atualizado.": { es: "Papel membretado actualizado." },
   "Não consegui salvar a cor agora.": { es: "No pude guardar el color ahora." },
-  "Os traços finos da faixa do topo, do cabeçalho e do rodapé. Vazio, o papel usa um tom claro da cor da marca. Ela nunca é usada em texto.": {
-    es: "Los trazos finos de la franja superior, del encabezado y del pie. Vacío, el papel usa un tono claro del color de la marca. Nunca se usa en texto.",
+  "Pinta o documento inteiro: faixa do topo, títulos, tabelas e filetes. Vazio, o papel usa a cor da marca. Se a cor for clara demais para leitura, os textos saem num tom mais escuro dela.": {
+    es: "Pinta todo el documento: franja superior, títulos, tablas y filetes. Vacío, el papel usa el color de la marca. Si el color es demasiado claro para leer, los textos salen en un tono más oscuro de él.",
   },
   "Baixar modelo do papel timbrado": { es: "Descargar modelo del papel membretado" },
   "Mostra o papel como ele sai em todo documento. O que estiver entre colchetes ainda falta em Configurações › Organização ou › Marca.": {
