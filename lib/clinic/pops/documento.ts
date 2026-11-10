@@ -3,7 +3,11 @@
  *
  * Nada de HTML: o que se grava é uma ÁRVORE de nós de uma lista FECHADA, com
  * marcas de uma lista fechada e sem atributo livre (sem href, sem style, sem
- * classe). O que não está aqui é recusado na rota. Por isso a tela e o PDF podem
+ * classe). Tipo de nó ou marca fora da lista é recusado na rota. ATRIBUTO
+ * desconhecido de um nó conhecido é DESCARTADO, não recusado: o Tiptap 3.31
+ * passou a pôr `align` em toda célula de tabela, e recusar o documento inteiro
+ * por isso fazia nenhum POP com tabela ser salvo (issue #124) — o autosave
+ * falhava calado e o texto depois da primeira tabela se perdia. Por isso a tela e o PDF podem
  * renderizar a árvore sem sanitizar HTML — não existe HTML para injetar.
  *
  * Nós: doc, paragraph, heading(1–3), bulletList, orderedList, listItem, table,
@@ -12,8 +16,9 @@
  */
 import { z } from "zod";
 
-export const LIMITE_DE_BYTES = 1_048_576;
-export const LIMITE_DE_NOS = 20_000;
+/** 5 MB — o mesmo número do CHECK clinic_pop_versions_documento_check (migration 8015). Um POP de 12 mil caracteres ocupa ~25 KB. */
+export const LIMITE_DE_BYTES = 5 * 1024 * 1024;
+export const LIMITE_DE_NOS = 100_000;
 export const LIMITE_DE_PROFUNDIDADE = 12;
 
 export interface NoDoDocumento {
@@ -29,20 +34,20 @@ const marca = z.object({ type: z.enum(["bold", "italic", "underline"]) }).strict
 const texto = z
   .object({
     type: z.literal("text"),
-    text: z.string().min(1).max(20_000),
+    text: z.string().min(1).max(100_000),
     marks: z.array(marca).max(3).optional(),
   })
   .strict();
 
-const semAttrs = z.object({}).strict().optional();
-const alinhamento = z.object({ textAlign: z.enum(["left", "center", "right", "justify"]).nullish() }).strict().optional();
+// Atributos: `z.object` sem `.strict()` DESCARTA as chaves desconhecidas (ver o cabeçalho).
+const semAttrs = z.object({}).optional();
+const alinhamento = z.object({ textAlign: z.enum(["left", "center", "right", "justify"]).nullish() }).optional();
 const celula = z
   .object({
     colspan: z.number().int().min(1).max(20).optional(),
     rowspan: z.number().int().min(1).max(50).optional(),
     colwidth: z.array(z.number().int().min(1).max(2000)).nullish(),
   })
-  .strict()
   .optional();
 
 const no: z.ZodType<NoDoDocumento> = z.lazy(() =>
@@ -52,7 +57,7 @@ const no: z.ZodType<NoDoDocumento> = z.lazy(() =>
     z
       .object({
         type: z.literal("heading"),
-        attrs: z.object({ level: z.union([z.literal(1), z.literal(2), z.literal(3)]), textAlign: z.enum(["left", "center", "right", "justify"]).nullish() }).strict(),
+        attrs: z.object({ level: z.union([z.literal(1), z.literal(2), z.literal(3)]), textAlign: z.enum(["left", "center", "right", "justify"]).nullish() }),
         content: z.array(no).optional(),
       })
       .strict(),
@@ -60,7 +65,7 @@ const no: z.ZodType<NoDoDocumento> = z.lazy(() =>
     z
       .object({
         type: z.literal("orderedList"),
-        attrs: z.object({ start: z.number().int().min(0).max(10_000).optional(), type: z.string().max(10).nullish() }).strict().optional(),
+        attrs: z.object({ start: z.number().int().min(0).max(10_000).optional(), type: z.string().max(10).nullish() }).optional(),
         content: z.array(no).optional(),
       })
       .strict(),
@@ -76,7 +81,7 @@ const no: z.ZodType<NoDoDocumento> = z.lazy(() =>
 );
 
 export const documentoSchema = z
-  .object({ type: z.literal("doc"), content: z.array(no).max(5_000) })
+  .object({ type: z.literal("doc"), content: z.array(no).max(50_000) })
   .strict();
 
 export type Documento = z.infer<typeof documentoSchema>;
@@ -99,7 +104,7 @@ export function validarDocumento(bruto: unknown): ResultadoDaValidacao {
   } catch {
     return { ok: false, motivo: "Documento inválido." };
   }
-  if (tamanho > LIMITE_DE_BYTES) return { ok: false, motivo: "O documento passou do tamanho máximo (1 MB)." };
+  if (tamanho > LIMITE_DE_BYTES) return { ok: false, motivo: "O documento passou do tamanho máximo (5 MB)." };
   const lido = documentoSchema.safeParse(bruto);
   if (!lido.success) return { ok: false, motivo: "O documento tem um elemento que o editor não permite." };
   const acc = { nos: 0, fundo: 0 };
