@@ -14,6 +14,7 @@ import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
+import { requireSupportWrite } from "@/lib/impersonate/support";
 import { escopoDaLeitura } from "@/lib/clinic/agenda/escopo-da-agenda";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -67,6 +68,8 @@ export async function GET(_req: NextRequest, ctx: Ctx): Promise<Response> {
 }
 
 export async function PUT(req: NextRequest, ctx: Ctx): Promise<Response> {
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
   const requestId = randomUUID();
   const authz = await requirePermission("agenda.ver", { requestId, resource: "calendar_appointments" });
   if (!authz.ok) return authz.response;

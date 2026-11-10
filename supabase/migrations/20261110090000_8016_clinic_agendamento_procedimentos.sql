@@ -29,10 +29,9 @@ create index if not exists clinic_agendamento_procedimentos_org_proc
 
 alter table public.clinic_agendamento_procedimentos enable row level security;
 drop policy if exists tenant_isolation_clinic_agendamento_procedimentos_all on public.clinic_agendamento_procedimentos;
+-- Só LEITURA pela sessão: quem escreve é fn_clinic_agendamento_procedimentos_salvar (definer).
 create policy tenant_isolation_clinic_agendamento_procedimentos_all on public.clinic_agendamento_procedimentos
-  for all to authenticated
-  using (organization_id in (select public.fn_user_org_ids()))
-  with check (organization_id in (select public.fn_user_org_ids()));
+  for select using (organization_id in (select public.fn_user_org_ids()));
 revoke all on public.clinic_agendamento_procedimentos from anon;
 revoke insert, update, delete, truncate on public.clinic_agendamento_procedimentos from authenticated;
 grant select on public.clinic_agendamento_procedimentos to authenticated;
