@@ -270,6 +270,17 @@ export type SnapshotDaMarca = Omit<EntradaDoContexto, "logo" | "favicon" | "mode
   faviconPath: string | null;
 };
 
+/**
+ * As CORES não ficam congeladas (issue #126): o dono troca a cor do papel e
+ * espera ver todos os PDFs na cor nova, inclusive os termos já emitidos. Cor
+ * não muda o conteúdo jurídico (o texto e o sha256 continuam os do snapshot);
+ * nomes, CNPJ, endereço, contatos e logo seguem os do dia da emissão.
+ */
+export function comCoresAtuais(snapshot: SnapshotDaMarca, atual: Pick<EntradaDoContexto, "corDaMarca" | "corDosFiletes"> | null): SnapshotDaMarca {
+  if (!atual) return snapshot;
+  return { ...snapshot, corDaMarca: atual.corDaMarca ?? null, corDosFiletes: atual.corDosFiletes ?? null };
+}
+
 /** Valida o formato mínimo de um snapshot lido do banco. */
 export function ehSnapshotDaMarca(x: unknown): x is SnapshotDaMarca {
   return typeof x === "object" && x !== null && !Array.isArray(x) && "logoPath" in x && "faviconPath" in x;

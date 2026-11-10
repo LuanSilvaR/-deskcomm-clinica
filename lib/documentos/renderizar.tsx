@@ -21,7 +21,7 @@ import type { NoDoDocumento } from "@/lib/clinic/pops/documento";
 import { Bloco, CaixaDeAviso, estilosDoCorpo } from "./blocos";
 import type { ContextoDaMarca } from "./contexto-da-marca";
 import { carregarFontes, registrarFontes } from "./fontes";
-import { ESTADOS, paraPretoEBranco, type Estado, type Papeis } from "./paleta";
+import { coresDoAviso, paraPretoEBranco, type Estado, type Papeis } from "./paleta";
 import { ABERTURA, ASSINATURA, CABECALHO, COMPACTO, FAIXA, FAMILIA, MARCA_DAGUA, PAGINA, RODAPE, TIPO, VERSAO_DO_LAYOUT } from "./tema";
 
 export { VERSAO_DO_LAYOUT };
@@ -336,7 +336,7 @@ export function DocumentoPdf({ doc, contexto }: { doc: DocumentoTimbrado; contex
         {(doc.avisos ?? [])
           .filter((a) => !a.soNaLinhaFixa)
           .map((a) => (
-            <CaixaDeAviso key={a.texto} estado={a.estado} texto={a.texto} />
+            <CaixaDeAviso key={a.texto} estado={a.estado} texto={a.texto} cores={cores} />
           ))}
 
         {(doc.corpo.content ?? []).map((n, i) => (
@@ -354,7 +354,7 @@ export function DocumentoPdf({ doc, contexto }: { doc: DocumentoTimbrado; contex
         ) : null}
 
         {fixos.map((a) => (
-          <Text key={`fixo-${a.texto}`} fixed style={[s.avisoFixo, { color: ESTADOS[a.estado].texto }]}>
+          <Text key={`fixo-${a.texto}`} fixed style={[s.avisoFixo, { color: coresDoAviso(a.estado, cores).texto }]}>
             {a.texto}
           </Text>
         ))}

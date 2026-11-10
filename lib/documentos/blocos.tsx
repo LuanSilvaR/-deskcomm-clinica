@@ -11,10 +11,14 @@ import React from "react";
 
 import type { NoDoDocumento } from "@/lib/clinic/pops/documento";
 
-import { ESTADOS, type Estado, type Papeis } from "./paleta";
+import { ESTADOS, coresDoAviso, type Estado, type Papeis } from "./paleta";
 import { AVISO, FAMILIA, TABELA, TIPO } from "./tema";
 
 export function estilosDoCorpo(c: Papeis) {
+  return { ...criarEstilosDoCorpo(c), cores: c };
+}
+
+function criarEstilosDoCorpo(c: Papeis) {
   return StyleSheet.create({
     p: { fontFamily: FAMILIA.texto, fontSize: TIPO.corpo.tamanho, lineHeight: TIPO.corpo.entrelinha, marginBottom: TIPO.corpo.depois, color: c.ink },
     h1: { fontFamily: FAMILIA.titulo, fontWeight: TIPO.h1.peso, fontSize: TIPO.h1.tamanho, lineHeight: TIPO.h1.entrelinha, marginTop: TIPO.h1.antes, marginBottom: TIPO.h1.depois, color: c.ink },
@@ -35,9 +39,9 @@ export function estilosDoCorpo(c: Papeis) {
 }
 export type EstilosDoCorpo = ReturnType<typeof estilosDoCorpo>;
 
-/** Caixa de aviso (5.10): fundo claro do estado + borda + ícone + texto. Nunca usa `accent`. */
-export function CaixaDeAviso({ estado, texto }: { estado: Estado; texto: string }) {
-  const e = ESTADOS[estado];
+/** Caixa de aviso (5.10): fundo surface + borda primary + ícone + texto, na paleta do papel (#126). Nunca usa `accent`. */
+export function CaixaDeAviso({ estado, texto, cores }: { estado: Estado; texto: string; cores: Papeis }) {
+  const e = coresDoAviso(estado, cores);
   return (
     <View
       wrap={false}
@@ -132,7 +136,7 @@ export function Bloco({ no: n, s, chave, ordem }: { no: NoDoDocumento; s: Estilo
     }
     case "aviso": {
       const estado = ((n.attrs?.estado as string | undefined) ?? "atencao") as Estado;
-      return <CaixaDeAviso estado={estado in ESTADOS ? estado : "atencao"} texto={textoPlano(filhos)} />;
+      return <CaixaDeAviso estado={estado in ESTADOS ? estado : "atencao"} texto={textoPlano(filhos)} cores={s.cores} />;
     }
     case "horizontalRule":
       return <View style={s.hr} />;

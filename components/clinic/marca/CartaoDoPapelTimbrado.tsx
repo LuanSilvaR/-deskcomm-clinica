@@ -4,7 +4,9 @@
  * FORK clinic (8013) — o papel timbrado em Configurações › Marca.
  *
  * Dois controles:
- *  - a COR DOS FILETES (os traços finos da faixa, do cabeçalho e do rodapé).
+ *  - a COR DO PAPEL TIMBRADO: pinta o documento inteiro (faixa, títulos, tabelas,
+ *    filetes); vazia, vale a cor da Marca (issue #126). A coluna segue
+ *    `cor_filetes` (nome histórico — não se renomeia campo em uso).
  *    Vazia, o papel usa um tom claro derivado da cor da marca. Nunca vira texto.
  *  - "Baixar modelo": o PDF do papel timbrado desta empresa como ele sai em todo
  *    documento, com [placeholders] no que ainda falta preencher — o laço de
@@ -48,7 +50,7 @@ export function CartaoDoPapelTimbrado({ corDosFiletes }: { corDosFiletes: string
   return (
     <div className="space-y-4" data-papel-timbrado>
       <div className="space-y-2">
-        <Label htmlFor="cor-filetes">{t("Cor dos filetes (opcional)")}</Label>
+        <Label htmlFor="cor-filetes">{t("Cor do papel timbrado (opcional)")}</Label>
         <div className="flex flex-wrap items-center gap-3">
           <label
             className="relative h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-sm border border-border"
@@ -75,7 +77,7 @@ export function CartaoDoPapelTimbrado({ corDosFiletes }: { corDosFiletes: string
           </Button>
         </div>
         <p className="text-xs text-text-muted">
-          {t("Os traços finos da faixa do topo, do cabeçalho e do rodapé. Vazio, o papel usa um tom claro da cor da marca. Ela nunca é usada em texto.")}
+          {t("Pinta o documento inteiro: faixa do topo, títulos, tabelas e filetes. Vazio, o papel usa a cor da marca. Se a cor for clara demais para leitura, os textos saem num tom mais escuro dela.")}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">

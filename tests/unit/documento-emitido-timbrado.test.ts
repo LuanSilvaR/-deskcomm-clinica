@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { extractPdfText } from "@/lib/ai/rag/extractors/pdf";
 import { documentoEmitidoParaTimbrado, textoParaBlocos, type DocumentoEmitido } from "@/lib/clinic/documentos/timbrado";
-import { montarContextoDaMarca } from "@/lib/documentos/contexto-da-marca";
+import { comCoresAtuais, montarContextoDaMarca, type SnapshotDaMarca } from "@/lib/documentos/contexto-da-marca";
 import { renderizarDocumento } from "@/lib/documentos/renderizar";
 
 const fmt = { data: (iso: string) => iso.slice(0, 10), dataHora: (iso: string) => iso.slice(0, 16).replace("T", " ") };
@@ -65,4 +65,31 @@ describe("documento emitido → papel timbrado", () => {
       expect(texto, esperado).toContain(esperado);
     }
   }, 60_000);
+});
+
+describe("#126: termo já emitido segue as CORES de agora, o resto continua congelado", () => {
+  const snapshot = {
+    nomeDaMarca: "Clinica Ficticia",
+    razaoSocial: "Clinica Ficticia LTDA",
+    corDaMarca: "#8f5a4a",
+    corDosFiletes: null,
+    logoPath: "org/logo-antigo.png",
+    faviconPath: null,
+  } as SnapshotDaMarca;
+
+  it("troca só corDaMarca e corDosFiletes", () => {
+    const r = comCoresAtuais(snapshot, { corDaMarca: "#8f5a4a", corDosFiletes: "#5d4b91" });
+    expect(r.corDosFiletes).toBe("#5d4b91");
+    expect(r.nomeDaMarca).toBe("Clinica Ficticia");
+    expect(r.razaoSocial).toBe("Clinica Ficticia LTDA");
+    expect(r.logoPath).toBe("org/logo-antigo.png");
+  });
+
+  it("cor apagada nas Configurações some também do termo antigo", () => {
+    expect(comCoresAtuais({ ...snapshot, corDosFiletes: "#5d4b91" }, { corDaMarca: "#8f5a4a", corDosFiletes: null }).corDosFiletes).toBeNull();
+  });
+
+  it("sem leitura das Configurações (falha), fica o snapshot inteiro", () => {
+    expect(comCoresAtuais(snapshot, null)).toEqual(snapshot);
+  });
 });

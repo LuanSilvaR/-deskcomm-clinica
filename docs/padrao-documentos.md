@@ -37,7 +37,7 @@ Baseline visual: `Farias_Rocha_Papel_Timbrado_v2.pdf`. As amostras geradas pelo 
 | `simbolo` | Marca › logo, se compacto (até 1,6:1); senão o favicon | Coluna do logo e marca d'água |
 | `favicon` | Marca › favicon (8012) | Cabeçalho compacto |
 | `marcaDagua` | Silhueta do símbolo tingida de `primary` | Só se o símbolo for transparente e tiver ≥ 600 px (logo) ou ≥ 512 px (favicon) |
-| `cores` | Marca › cor (semente) e cor dos filetes (D2) | 7 papéis, com WCAG |
+| `cores` | Marca › "Cor do papel timbrado" (`settings.clinic.cor_filetes`) quando preenchida — pinta o documento inteiro (#126); vazia, a cor da Marca (semente) | 7 papéis, com WCAG |
 | `avisos` | O que não saiu como cadastrado | Para a tela e o log |
 
 **Modo modelo em branco** (`modeloEmBranco: true`): campo vazio vira `[placeholder]`. Serve só para gerar o modelo. Documento emitido nunca usa.
@@ -82,7 +82,7 @@ Exemplo de referência: `lib/clinic/pops/impressao.ts` + `app/api/v1/clinic/pops
 |---|---|---|
 | D1 | Motor, fontes, testes; POP migrado | PR #125 |
 | D2 | Campos novos: site, WhatsApp, descritor, responsável técnico e registro (Organização, migration 8013); cor dos filetes e "Baixar modelo do papel timbrado" (Marca) | PR do D2 |
-| D3 | PDF dos termos emitidos (`GET /api/v1/clinic/documentos/[id]/pdf` + "Baixar PDF" na aba Documentos) e do contrato do orçamento; snapshot da marca fixado na 1ª geração (migration 8014) | PR do D3 |
+| D3 | PDF dos termos emitidos (`GET /api/v1/clinic/documentos/[id]/pdf` + "Baixar PDF" na aba Documentos) e do contrato do orçamento; snapshot da marca fixado na 1ª geração (migration 8014) — textos, nomes e logo congelados; as CORES seguem sempre as Configurações atuais (#126) | PR do D3 |
 | D4 | Prontuário no motor (a página `/imprimir/prontuario` vira o PDF) e relatório LGPD no papel timbrado, com a linha do controlador em todas as páginas | PR do D4 |
 
 ## Situação final

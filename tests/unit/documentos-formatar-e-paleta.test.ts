@@ -76,9 +76,8 @@ describe("paleta: 7 papéis com contraste WCAG", () => {
   });
 
   it("a cor da marca vira o primary sem mudar, quando já tem contraste", () => {
-    const r = resolverPaleta({ semente: "#8F5A4A", corDosFiletes: "#D4AF7C" });
+    const r = resolverPaleta({ semente: "#8F5A4A" });
     expect(r.papeis.primary).toBe("#8f5a4a");
-    expect(r.papeis.accent).toBe("#d4af7c");
     expect(r.avisos).toEqual([]);
     contrastesOk(r.papeis);
   });
@@ -92,6 +91,27 @@ describe("paleta: 7 papéis com contraste WCAG", () => {
     expect(r.avisos.join(" ")).toMatch(/escurecida/);
     const h = (x: string) => hexParaOklch(x).h;
     expect(Math.abs(h(r.papeis.primary) - h("#ffd400"))).toBeLessThan(6);
+  });
+
+  it("#126: a cor do papel timbrado manda no documento inteiro, não só nos filetes", () => {
+    const daMarca = resolverPaleta({ semente: "#8F5A4A" }).papeis;
+    const r = resolverPaleta({ semente: "#8F5A4A", corDosFiletes: "#5d4b91" });
+    expect(r.papeis.primary).toBe("#5d4b91");
+    expect(r.papeis).toEqual(resolverPaleta({ semente: "#5d4b91" }).papeis);
+    for (const papel of ["primary", "surface", "border", "accent", "ink"] as const) {
+      expect(r.papeis[papel]).not.toBe(daMarca[papel]);
+    }
+    contrastesOk(r.papeis);
+  });
+
+  it("só a cor do papel (sem cor da marca) também vira a semente", () => {
+    expect(resolverPaleta({ corDosFiletes: "#5d4b91" }).papeis.primary).toBe("#5d4b91");
+  });
+
+  it("cor do papel clara demais: os textos saem num tom mais escuro dela", () => {
+    const r = resolverPaleta({ corDosFiletes: "#ffd400" });
+    expect(r.avisos.join(" ")).toMatch(/escurecida/);
+    contrastesOk(r.papeis);
   });
 
   it("sem cor dos filetes, o accent sai da rampa da marca; cor inválida é ignorada", () => {
