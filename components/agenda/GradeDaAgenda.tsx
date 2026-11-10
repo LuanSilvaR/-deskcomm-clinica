@@ -1023,10 +1023,13 @@ export function GradeDaAgenda({
   onAbrirAgendamento,
   interacao,
   foraDaAgenda,
+  ocultarFimDeSemana = false,
   className,
 }: {
   /** FORK clinic: por dia (`yyyy-MM-dd`), o que não é horário livre de quem está em contexto. */
   foraDaAgenda?: Record<string, ForaDaAgendaDoDia>;
+  /** FORK clinic (agenda S2 #67): a semana mostra só segunda a sexta. A visão de dia não muda. */
+  ocultarFimDeSemana?: boolean;
   visao: VisaoDaAgenda;
   /** O período que a grade mostra. */
   ancora: Date;
@@ -1050,7 +1053,10 @@ export function GradeDaAgenda({
   interacao?: InteracaoDaGrade;
   className?: string;
 }) {
-  const dias = visao === "dia" ? [ancora] : diasDaSemanaDe(ancora);
+  const dias =
+    visao === "dia"
+      ? [ancora]
+      : diasDaSemanaDe(ancora).filter((d) => !ocultarFimDeSemana || (d.getDay() !== 0 && d.getDay() !== 6));
 
   const gradeRef = React.useRef<HTMLDivElement>(null);
   const [proposta, setProposta] = React.useState<PropostaDeRemarcacao | null>(null);

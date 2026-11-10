@@ -55,6 +55,7 @@ export function AgendaInterativa({
   onAbrirAgendamento,
   donoId,
   foraDaAgenda,
+  ocultarFimDeSemana = false,
   podeRemarcar = true,
   etiquetas,
   className,
@@ -67,6 +68,8 @@ export function AgendaInterativa({
   donoId?: string | null;
   /** FORK clinic: jornada e bloqueios de `donoId`, por dia. */
   foraDaAgenda?: Record<string, ForaDaAgendaDoDia>;
+  /** FORK clinic (agenda S2 #67): repassado à grade. */
+  ocultarFimDeSemana?: boolean;
   visao: VisaoDaAgenda;
   ancora: Date;
   /** INJETADO, como na grade: relógio lido aqui dentro daria dois relógios ao teste. */
@@ -356,6 +359,7 @@ export function AgendaInterativa({
         fechamentos={fechamentos}
         onAbrirAgendamento={onAbrirAgendamento}
         foraDaAgenda={foraDaAgenda}
+        ocultarFimDeSemana={ocultarFimDeSemana}
         className="min-h-0 flex-1"
         interacao={
           tipo && onMarcarEm
