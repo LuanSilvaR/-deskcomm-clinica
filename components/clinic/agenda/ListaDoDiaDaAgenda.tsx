@@ -34,6 +34,7 @@ import { useUsuarioIdOpcional } from "@/hooks/auth/AuthProvider";
 import { ArrowSquareOut, Plus } from "@/lib/ui/icons";
 
 import { BarraDeOcupacao } from "./BarraDeOcupacao";
+import { MenuDoCompromisso } from "./MenuDoCompromisso";
 import { SeloDeStatus } from "./SeloDeStatus";
 
 interface Resposta {
@@ -312,6 +313,13 @@ function LinhaDoCompromisso({
         <Button size="icon" variant="ghost" data-testid="linha-abrir" aria-label={`${t("Abrir compromisso (remarcar ou cancelar)")}: ${paciente}`} onClick={() => onAbrir(l.id)}>
           <ArrowSquareOut aria-hidden />
         </Button>
+        {/* FORK clinic (agenda S7 #70): menu ⋮ do agendamento. */}
+        <MenuDoCompromisso
+          id={l.id}
+          pacienteId={l.paciente_id}
+          resumo={[l.titulo, paciente, `${l.inicio.slice(8, 10)}/${l.inicio.slice(5, 7)} ${horaDoMinuto(l.inicio_minuto)}`].join(" · ")}
+          onAbrir={onAbrir}
+        />
       </span>
     </li>
   );

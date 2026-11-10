@@ -8,6 +8,7 @@
  * basta, sem acento e sem caixa. Teclado: setas andam, Enter abre, Esc fecha.
  * A lista é a que a API liberou (`agenda.ver_outros`); sem a permissão ela tem
  * só a própria pessoa, e o botão de trocar nem aparece.
+ * S7 (#70): ★ favoritos (primeiro na lista) e ‹ › para o anterior/seguinte.
  */
 import * as React from "react";
 
@@ -16,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { useT } from "@/hooks/i18n/useT";
 import { buscarProfissionais, iniciais, type ProfissionalDaAgenda } from "@/lib/clinic/agenda/contexto-da-agenda";
-import { CaretDown, MagnifyingGlass } from "@/lib/ui/icons";
+import { CaretDown, CaretLeft, CaretRight, MagnifyingGlass } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
 function Iniciais({ nome, grande = false }: { nome: string; grande?: boolean }) {
@@ -40,6 +41,10 @@ export function CabecalhoDoProfissional({
   podeTrocar,
   carregando,
   onTrocar,
+  favoritos = [],
+  onFavoritar,
+  onAnterior,
+  onSeguinte,
 }: {
   profissional: ProfissionalDaAgenda | null;
   lista: readonly ProfissionalDaAgenda[];
@@ -47,6 +52,11 @@ export function CabecalhoDoProfissional({
   podeTrocar: boolean;
   carregando: boolean;
   onTrocar: (id: string) => void;
+  /** S7 (#70): ids favoritos deste usuário, na ordem marcada. */
+  favoritos?: readonly string[];
+  onFavoritar?: (id: string) => void;
+  onAnterior?: () => void;
+  onSeguinte?: () => void;
 }) {
   const t = useT();
   const [aberto, setAberto] = React.useState(false);
@@ -93,6 +103,12 @@ export function CabecalhoDoProfissional({
     >
       {cartao}
       {podeTrocar && lista.length > 1 ? (
+        <div className="flex items-center gap-1">
+        {onAnterior ? (
+          <Button variant="ghost" size="sm" data-testid="profissional-anterior" aria-label={t("Profissional anterior")} title={t("Profissional anterior") + " ([)"} onClick={onAnterior}>
+            <CaretLeft size={14} aria-hidden />
+          </Button>
+        ) : null}
         <Popover open={aberto} onOpenChange={setAberto}>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" data-testid="trocar-profissional" aria-haspopup="listbox" aria-expanded={aberto}>
@@ -105,6 +121,8 @@ export function CabecalhoDoProfissional({
               lista={lista}
               recentes={recentes}
               atual={profissional.user_id}
+              favoritos={favoritos}
+              onFavoritar={onFavoritar}
               onEscolher={(id) => {
                 onTrocar(id);
                 setAberto(false);
@@ -112,6 +130,12 @@ export function CabecalhoDoProfissional({
             />
           </PopoverContent>
         </Popover>
+        {onSeguinte ? (
+          <Button variant="ghost" size="sm" data-testid="profissional-seguinte" aria-label={t("Próximo profissional")} title={t("Próximo profissional") + " (])"} onClick={onSeguinte}>
+            <CaretRight size={14} aria-hidden />
+          </Button>
+        ) : null}
+        </div>
       ) : null}
     </div>
   );
@@ -122,11 +146,15 @@ export function ListaDeProfissionais({
   recentes,
   atual,
   onEscolher,
+  favoritos = [],
+  onFavoritar,
 }: {
   lista: readonly ProfissionalDaAgenda[];
   recentes: readonly ProfissionalDaAgenda[];
   atual: string | null;
   onEscolher: (id: string) => void;
+  favoritos?: readonly string[];
+  onFavoritar?: (id: string) => void;
 }) {
   const t = useT();
   const [busca, setBusca] = React.useState("");
@@ -137,13 +165,19 @@ export function ListaDeProfissionais({
   // Sem busca: recentes primeiro (sem repetir) e depois todos. Com busca: só o que bate.
   const secoes = React.useMemo(() => {
     if (busca.trim()) return [{ titulo: null as string | null, itens: encontrados }];
-    const ids = new Set(recentes.map((r) => r.user_id));
-    const comRecentes = recentes.length > 0 && lista.length > 5;
+    // S7 (#70): favoritos primeiro; depois recentes e o resto, sem repetir.
+    const fav = favoritos.map((id) => lista.find((p) => p.user_id === id)).filter((p): p is ProfissionalDaAgenda => Boolean(p));
+    const idsFav = new Set(fav.map((p) => p.user_id));
+    const rec = recentes.filter((r) => !idsFav.has(r.user_id));
+    const ids = new Set([...idsFav, ...rec.map((r) => r.user_id)]);
+    const comRecentes = rec.length > 0 && lista.length > 5;
+    const resto = lista.filter((p) => !idsFav.has(p.user_id) && (!comRecentes || !ids.has(p.user_id)));
     return [
-      ...(comRecentes ? [{ titulo: t("Recentes"), itens: [...recentes] }] : []),
-      { titulo: comRecentes ? t("Todos os profissionais") : null, itens: comRecentes ? lista.filter((p) => !ids.has(p.user_id)) : [...lista] },
+      ...(fav.length ? [{ titulo: t("Favoritos"), itens: fav }] : []),
+      ...(comRecentes ? [{ titulo: t("Recentes"), itens: rec }] : []),
+      { titulo: fav.length || comRecentes ? t("Todos os profissionais") : null, itens: resto },
     ];
-  }, [busca, encontrados, recentes, lista, t]);
+  }, [busca, encontrados, recentes, lista, favoritos, t]);
   const ordem = secoes.flatMap((s) => s.itens);
 
   React.useEffect(() => {
@@ -226,6 +260,23 @@ export function ListaDeProfissionais({
                     <span className="rounded-full border border-border px-1.5 text-[10px] text-text-muted">{t("Inativo")}</span>
                   ) : null}
                   {p.user_id === atual ? <span className="text-xs font-semibold text-accent">{t("Aberta")}</span> : null}
+                  {onFavoritar ? (
+                    <button
+                      type="button"
+                      data-testid={`favoritar-${p.user_id}`}
+                      aria-pressed={favoritos.includes(p.user_id)}
+                      aria-label={favoritos.includes(p.user_id) ? t("Tirar dos favoritos") : t("Marcar como favorito")}
+                      className="rounded p-1 hover:bg-muted"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onFavoritar(p.user_id);
+                      }}
+                    >
+                      <span aria-hidden className={favoritos.includes(p.user_id) ? "text-warning" : "text-text-muted"}>
+                        {favoritos.includes(p.user_id) ? "★" : "☆"}
+                      </span>
+                    </button>
+                  ) : null}
                 </li>
               );
             })}

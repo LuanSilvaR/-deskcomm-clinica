@@ -180,6 +180,12 @@ export interface InteracaoDaGrade {
    * em vez de remarcar em silêncio ou aproximar para o horário mais perto.
    */
   onArrastarPara?: (entrada: { id: string; instante: string | null; razao: string }) => void;
+  /**
+   * FORK clinic (agenda S7 #70): arrastar sobre blocos LIVRES seleciona uma faixa.
+   * `inicio` é o instante PUBLICADO do primeiro bloco; `fim`, o fim do último.
+   * Ausente = nada muda (só o clique, como no upstream).
+   */
+  onSelecionarFaixa?: (faixa: { inicio: string; fim: string }) => void;
 }
 
 /** Onde um card arrastado está sendo proposto — o mesmo estado para ponteiro e teclado. */
@@ -329,9 +335,43 @@ function CamadaDeMarcacao({
   const localeDaData = useLocaleDeData();
   const chave = chaveDoDia(dia);
   const publicados = interacao.horariosPorDia[chave] ?? [];
+  // FORK clinic (agenda S7 #70): seleção de faixa por arraste (mouse/caneta).
+  const [selecao, setSelecao] = React.useState<{ de: number; ate: number } | null>(null);
+  const arrastando = React.useRef(false);
+  const moveu = React.useRef(false);
+  const selecionar = interacao.onSelecionarFaixa;
+  React.useEffect(() => {
+    if (!selecionar) return;
+    const soltar = () => {
+      if (!arrastando.current) return;
+      arrastando.current = false;
+      setSelecao((atual) => {
+        if (atual && moveu.current) {
+          const ini = Math.min(atual.de, atual.ate);
+          const fimMin = Math.max(atual.de, atual.ate) + PASSO_DA_CELULA_MIN;
+          const primeiro = horarioNaCelula(publicados, ini);
+          if (primeiro) selecionar({ inicio: primeiro.instante, fim: instanteDoMinuto(dia, fimMin).toISOString() });
+        }
+        return null;
+      });
+    };
+    window.addEventListener("pointerup", soltar);
+    return () => window.removeEventListener("pointerup", soltar);
+  }, [selecionar, publicados, dia]);
 
   return (
     <>
+      {selecao && selecao.ate !== selecao.de ? (
+        <div
+          aria-hidden
+          data-testid={`selecao-${chave}`}
+          className="pointer-events-none absolute inset-x-0.5 z-10 rounded-sm border-2 border-accent bg-accent-soft/60"
+          style={{
+            top: pixelsDe(Math.min(selecao.de, selecao.ate) - PRIMEIRA_HORA * 60),
+            height: pixelsDe(Math.abs(selecao.ate - selecao.de) + PASSO_DA_CELULA_MIN),
+          }}
+        />
+      ) : null}
       {CELULAS.map((minuto) => {
         const livre = horarioNaCelula(publicados, minuto);
         const inicio = instanteDoMinuto(dia, minuto);
@@ -364,7 +404,36 @@ function CamadaDeMarcacao({
                     .replace("{motivo}", razao)
             }
             title={livre ? undefined : razao}
-            onClick={livre ? () => interacao.onMarcarEm(livre.instante) : undefined}
+            onClick={
+              livre
+                ? () => {
+                    if (moveu.current) {
+                      moveu.current = false;
+                      return;
+                    }
+                    interacao.onMarcarEm(livre.instante);
+                  }
+                : undefined
+            }
+            onPointerDown={
+              livre && selecionar
+                ? (e) => {
+                    if (e.pointerType === "touch" || e.button !== 0) return;
+                    arrastando.current = true;
+                    moveu.current = false;
+                    setSelecao({ de: minuto, ate: minuto });
+                  }
+                : undefined
+            }
+            onPointerEnter={
+              selecionar
+                ? () => {
+                    if (!arrastando.current || !livre) return;
+                    moveu.current = true;
+                    setSelecao((s) => (s ? { ...s, ate: minuto } : s));
+                  }
+                : undefined
+            }
             className={cn(
               "absolute inset-x-0 z-0 transition-colors duration-fast ease-out",
               "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-500",
