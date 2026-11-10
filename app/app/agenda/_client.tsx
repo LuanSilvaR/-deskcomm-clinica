@@ -563,9 +563,10 @@ export function AgendaClient({
   // histórico, que lê `agendamentos` (cheio) e o separa sozinha em `separar()`.
   // Mesma fonte, dois recortes: a grade responde "o que está de pé", o
   // histórico responde "o que aconteceu", cancelado incluso.
+  // FORK clinic (agenda S2 #67): "+ Mais filtros › Mostrar cancelados na grade" traz o cancelado de volta.
   const agendamentosDaGrade = React.useMemo(
-    () => agendamentos.filter((a) => a.situacao !== "cancelled"),
-    [agendamentos],
+    () => (filtros.cancelados ? agendamentos : agendamentos.filter((a) => a.situacao !== "cancelled")),
+    [agendamentos, filtros.cancelados],
   );
 
   // As faixas FECHADAS em "Dias fora da rotina" — e pela MESMA pessoa isolada que
@@ -934,6 +935,7 @@ export function AgendaClient({
         mudar={mudarFiltro}
         limpar={limparFiltros}
         especialidades={especialidades}
+        salas={infoDaClinica?.salas ?? []}
         total={agendamentos.length}
       />
 
@@ -1592,13 +1594,14 @@ export function AgendaClient({
       ) : null}
       <AgendaInterativa
         donoId={donoDaAgenda}
-        foraDaAgenda={foraDaAgenda}
+        foraDaAgenda={filtros.semIndisponiveis ? undefined : foraDaAgenda}
+        ocultarFimDeSemana={filtros.semFimDeSemana}
         visao={visao}
         ancora={ancora}
         agora={new Date()}
         pessoas={pessoas}
         agendamentos={agendamentosDaGrade}
-        fechamentos={fechamentosDaGrade}
+        fechamentos={filtros.semIndisponiveis ? [] : fechamentosDaGrade}
         recorte={recorteDaGrade}
         tipos={tiposDoContexto.map((t) => ({ id: t.id, nome: t.nome, duracaoMin: t.duracaoMin }))}
         tipo={tipo ? { id: tipo.id, duracaoMin: tipo.duracaoMin } : null}

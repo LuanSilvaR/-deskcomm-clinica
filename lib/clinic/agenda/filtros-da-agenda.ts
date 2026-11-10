@@ -1,7 +1,8 @@
 /**
  * FORK clinic (melhorias da Agenda) — os filtros da tela /app/agenda.
  *
- * Moram na URL (`esp`, `status`, `periodo`, `q`, `livres`) para o link ser
+ * Moram na URL (`esp`, `status`, `periodo`, `q`, `livres`; S2 #67: `sala`,
+ * `cancelados`, `fds`, `indisp`) para o link ser
  * compartilhável e o "voltar" do navegador funcionar. O filtro de PESSOA
  * continua sendo o do núcleo (avatares, `FiltroDePessoas`). Puro e testado.
  */
@@ -19,12 +20,21 @@ export interface InfoDoCompromisso {
   primeira_vez?: boolean;
   /** FORK clinic (agenda S4): mudou de horário e ninguém confirmou depois. */
   remarcado?: boolean;
+  /** FORK clinic (agenda S2 #67): salas reservadas para o compromisso (`clinic_appointment_resources`). */
+  salas?: string[];
+}
+
+export interface SalaDaAgenda {
+  id: string;
+  nome: string;
 }
 
 export interface InfoDaClinica {
   compromissos: Record<string, InfoDoCompromisso>;
   profissionais: Record<string, FichaDoProfissional>;
   pacientes_da_busca: string[] | null;
+  /** FORK clinic (agenda S2 #67): salas ativas da clínica, para o filtro. */
+  salas?: SalaDaAgenda[];
 }
 
 export interface FiltrosDaAgenda {
@@ -35,6 +45,14 @@ export interface FiltrosDaAgenda {
   periodos: readonly PeriodoDoDia[];
   q: string;
   soLivres: boolean;
+  /** S2 (#67): id da sala ("" = todas). */
+  sala: string;
+  /** S2: a grade mostra também os cancelados. */
+  cancelados: boolean;
+  /** S2: a semana esconde sábado e domingo. */
+  semFimDeSemana: boolean;
+  /** S2: a grade não pinta fora do expediente nem bloqueios. */
+  semIndisponiveis: boolean;
 }
 
 const lista = (v: string | null) => (v ?? "").split(",").filter(Boolean);
@@ -49,14 +67,25 @@ export function lerFiltros(p: URLSearchParams): FiltrosDaAgenda {
     periodos: lista(p.get("periodo")).filter((x): x is PeriodoDoDia => (PERIODOS_DO_DIA as readonly string[]).includes(x)),
     q: p.get("q") ?? "",
     soLivres: p.get("livres") === "1",
+    sala: p.get("sala") ?? "",
+    cancelados: p.get("cancelados") === "1",
+    semFimDeSemana: p.get("fds") === "0",
+    semIndisponiveis: p.get("indisp") === "0",
   };
 }
 
 /** As chaves que "Limpar filtros" apaga (as do núcleo, como `compromisso`, ficam). */
-export const CHAVES_DOS_FILTROS = ["esp", "status", "periodo", "q", "livres"] as const;
+export const CHAVES_DOS_FILTROS = ["esp", "status", "periodo", "q", "livres", "sala", "cancelados", "fds", "indisp"] as const;
 
 export function algumFiltroAtivo(f: FiltrosDaAgenda): boolean {
-  return Boolean(f.especialidade || f.statusMudou || f.periodos.length || f.q || f.soLivres);
+  return Boolean(
+    f.especialidade || f.statusMudou || f.periodos.length || f.q || f.soLivres || f.sala || f.cancelados || f.semFimDeSemana || f.semIndisponiveis,
+  );
+}
+
+/** Quantos filtros estão ligados (o "N filtros" do botão "+ Mais filtros" conta só os dele). */
+export function filtrosExtrasAtivos(f: FiltrosDaAgenda): number {
+  return [f.cancelados, f.semFimDeSemana, f.semIndisponiveis].filter(Boolean).length;
 }
 
 /**
@@ -75,6 +104,7 @@ export function passaNosFiltros(
   if (!info) return true;
   if (f.especialidade && !(info.profissionais[a.responsavelId]?.especialidades ?? []).some((e) => e.id === f.especialidade)) return false;
   const c = info.compromissos[a.id];
+  if (f.sala && !(c?.salas ?? []).includes(f.sala)) return false;
   if (info.pacientes_da_busca && !(c?.paciente_id && info.pacientes_da_busca.includes(c.paciente_id))) return false;
   // Ocupação do Google não tem status de visita: some só se o filtro de status mudou.
   if (a.origem === "google_sync") return !f.statusMudou;
