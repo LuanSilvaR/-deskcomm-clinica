@@ -49,3 +49,13 @@
 ## Pendências
 - O #3700 (pessoa relacionada acha o negócio no funil) fica para uma entrega separada.
 - "Tornar principal" (trocar o principal por um extra) não entrou: o principal continua sendo editado pelo "Editar contato".
+
+## Atualização 2026-11-10 (merge da develop)
+- Migrations **renumeradas**: 8011 → **8018** e 8012 → **8019**. A `develop` usou 8011 (endereço da empresa) e 8012
+  (favicon) enquanto esta branch estava parada. Arquivo, MANIFEST e apêndice do baseline foram ajustados; o apêndice
+  agora fica depois da 8017 e antes da VARREDURA anon.
+- Nenhuma migration nova da `develop` (8006–8017) toca `fn_upsert_wa_contact`, `fn_mesclar_contatos`,
+  `fn_lgpd_cascade_redact_contact` ou `contact_phones`: rodar a 8018 por último não desfaz nada.
+- Conflitos do tipo "os dois lados acrescentaram" (opção orçamentos × vários telefones) resolvidos mantendo os dois.
+  A chave `WhatsApp`, duplicada no dicionário, foi removida.
+- Verify depois do merge: lint 0 erros; typecheck limpo; `test:db` **312/312**; `test:unit` sem regressão.
