@@ -65,6 +65,13 @@ describe("contexto da marca", () => {
     expect(c.marcaDagua).not.toBeNull();
   });
 
+  it("#140: logo horizontal vai inteira para o cabeçalho; logo compacto não", async () => {
+    const horizontal = await montarContextoDaMarca({ nomeDaMarca: "Marca", logo: await png(1200, 300, true), favicon: await png(512, 512, true) });
+    expect(horizontal.logoDoCabecalho).toBe(horizontal.logo);
+    const compacto = await montarContextoDaMarca({ nomeDaMarca: "Marca", logo: await png(800, 800, true) });
+    expect(compacto.logoDoCabecalho).toBeNull();
+  });
+
   it("logo com fundo opaco: fica de fora e avisa", async () => {
     const c = await montarContextoDaMarca({ nomeDaMarca: "Marca", logo: await png(800, 800, false) });
     expect(c.logo).toBeNull();
@@ -96,6 +103,24 @@ describe("PDF do papel timbrado", () => {
     expect(t).toContain("Página 1 de 1");
     expect(t).toContain("Atenciosamente,");
     expect(t).not.toContain("[");
+  }, 60_000);
+
+  it("#140: com logo horizontal, o cabeçalho desenha a logo cadastrada (não o favicon + nome em texto), em todas as páginas", async () => {
+    const entrada = { nomeDaMarca: "Wordmark Unico", razaoSocial: "Razao Ficticia LTDA", favicon: await png(512, 512, true) };
+    const longo: DocumentoTimbrado = {
+      ...DOC,
+      corpo: { type: "doc", content: Array.from({ length: 60 }, (_, i) => ({ type: "paragraph", content: [{ type: "text", text: `Parágrafo ${i + 1} de teste.` }] })) },
+    };
+    // Logo horizontal 1200×300 → recortada para 600×150 (o miolo opaco).
+    const comLogo = await renderizarDocumento(longo, await montarContextoDaMarca({ ...entrada, logo: await png(1200, 300, true) }));
+    const t = await texto(comLogo);
+    expect(t).toContain("Página 2 de");
+    expect(t).not.toContain("Wordmark Unico");
+    expect(comLogo.toString("latin1")).toMatch(/\/Width 600\b/);
+
+    // Controle: sem logo horizontal, o nome continua escrito no cabeçalho.
+    const semLogo = await texto(await renderizarDocumento(longo, await montarContextoDaMarca(entrada)));
+    expect(semLogo).toContain("Wordmark Unico");
   }, 60_000);
 
   it("campo vazio não aparece: metadado sem valor, CNPJ, endereço e contatos ausentes não deixam rótulo", async () => {
