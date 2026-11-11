@@ -82,6 +82,15 @@ describe("classificarEnvio", () => {
   it("waha failed com error_message meta_131026 é ambiguo", () => {
     expect(classificarEnvio("waha", { status: "failed", error_code: "waha_error", error_message: "meta_131026: x" })).toBe("ambiguo");
   });
+  it("meta_503 (servidor) é ambiguo", () => {
+    expect(classificarEnvio("meta_cloud", { status: "failed", error_code: "meta_error", error_message: "meta_503: x" })).toBe("ambiguo");
+  });
+  it("meta_2 (serviço temporário) é ambiguo", () => {
+    expect(classificarEnvio("meta_cloud", { status: "failed", error_code: "meta_error", error_message: "meta_2: x" })).toBe("ambiguo");
+  });
+  it("meta_100 é nao_saiu", () => {
+    expect(classificarEnvio("meta_cloud", { status: "failed", error_code: "meta_error", error_message: "meta_100: x" })).toBe("nao_saiu");
+  });
   it("queued e sending são ambiguo", () => {
     expect(classificarEnvio("waha", { status: "queued", error_code: null })).toBe("ambiguo");
     expect(classificarEnvio("waha", { status: "sending", error_code: null })).toBe("ambiguo");

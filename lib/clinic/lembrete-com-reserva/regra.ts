@@ -99,7 +99,26 @@ export function decidirPasso(i: {
  * lança outra coisa ("fetch failed"). O handler guarda isso em `error_message`.
  * Padrão exclusivo da Meta.
  */
-const RECUSA_SINCRONA_DA_META = /^meta_\d+:/;
+const RECUSA_SINCRONA_DA_META = /^meta_(\d+):/;
+
+/** Números de `meta_<n>:` que NÃO provam recusa: problema do lado da Meta, a mensagem pode ter sido aceita. */
+const NUMEROS_DA_META_QUE_FICAM_AMBIGUOS = {
+  codigosDaGraph: [
+    1, // Graph: API Unknown, falha desconhecida do servidor
+    2, // Graph: API Service, indisponibilidade temporária
+  ],
+  httpMin: 500, // HTTP 5xx (500-599): erro de servidor, não prova que não foi aceita
+  httpMax: 599,
+} as const;
+
+function recusaSincronaDaMeta(erro: string | null | undefined): boolean {
+  const achou = RECUSA_SINCRONA_DA_META.exec(erro ?? "");
+  if (!achou) return false;
+  const n = Number(achou[1]);
+  const x = NUMEROS_DA_META_QUE_FICAM_AMBIGUOS;
+  if ((x.codigosDaGraph as readonly number[]).includes(n)) return false;
+  return !(n >= x.httpMin && n <= x.httpMax);
+}
 
 export function classificarEnvio(
   provider: ProviderDoLembrete,
@@ -110,7 +129,7 @@ export function classificarEnvio(
   if (m.status === "failed" && m.error_code && CODIGOS_QUE_GARANTEM_NAO_ENTREGA[provider].includes(m.error_code)) {
     return "nao_saiu";
   }
-  if (m.status === "failed" && provider === "meta_cloud" && RECUSA_SINCRONA_DA_META.test(m.error_message ?? "")) {
+  if (m.status === "failed" && provider === "meta_cloud" && recusaSincronaDaMeta(m.error_message)) {
     return "nao_saiu";
   }
   return "ambiguo";
