@@ -331,6 +331,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "tests/invariants/clinic-menu-da-clinica.test.ts prova gerente recusado (42501), admin liga e anon sem EXECUTE.",
   },
   {
+    // FORK clinic (migration 8024).
+    fn: "fn_clinic_definir_atestado_anonimizacao(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, e a escrita é só a chave settings.clinic.atestado_anonimizacao da organização informada. tests/invariants/clinic-atestado-anonimizacao.test.ts prova gerente recusado (clinic_flag_forbidden), admin liga e anon sem EXECUTE.",
+  },
+  {
     // FORK clinic (migration 9015).
     fn: "fn_clinic_definir_procedimentos(uuid,boolean)",
     razao:

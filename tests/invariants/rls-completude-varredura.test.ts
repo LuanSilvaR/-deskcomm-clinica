@@ -76,6 +76,11 @@ interface Excecao {
  */
 const PROVA_PROPRIA: readonly Excecao[] = [
   {
+    tabela: "clinic_atestados_anonimizacao",
+    razao:
+      "tests/invariants/clinic-atestado-anonimizacao.test.ts — isolamento com JWT authenticated: admin da A lê 1 linha da A e 0 da B.",
+  },
+  {
     tabela: "prospecting_settings",
     razao:
       "tests/invariants/prospecting.test.ts — tabela exclusiva do servidor, ACL e RLS verificadas; FK composta e comandos autenticados cercam a organização.",
