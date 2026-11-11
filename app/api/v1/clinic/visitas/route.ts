@@ -12,6 +12,7 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { prontuarioLigado } from "@/lib/clinic/flags";
+import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
 import { ehStatusDaVisita } from "@/lib/clinic/visitas/status";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { createClient } from "@/lib/supabase/server";
@@ -71,6 +72,16 @@ export async function GET(req: NextRequest): Promise<Response> {
   const confirmacaoPorAgendamento = new Map(
     (confirmacoes ?? []).map((c) => [c.appointment_id as string, { status: c.status as string, falha: (c.falha as string | null) ?? null }]),
   );
+  // FORK clinic (prontuário F1): a tela esconde "Iniciar/Finalizar" quando é o profissional quem faz.
+  const { data: orgRow } = await supabase.from("organizations").select("settings").eq("id", org).maybeSingle();
+  const settings = (orgRow as { settings?: unknown } | null)?.settings;
+  // #83: o motivo do lembrete só volta com a chave da clínica ligada.
+  const comLembrete = lembreteComReservaLigado(settings);
+  const { data: falhasDoLembrete } =
+    comLembrete && ids.length
+      ? await supabase.from("calendar_appointments").select("id, reminder_falha").eq("organization_id", org).in("id", ids)
+      : { data: [] };
+  const lembreteFalhaPor = new Map((falhasDoLembrete ?? []).map((r) => [r.id as string, (r.reminder_falha as string | null) ?? null]));
   const porAgendamento = new Map((visitas ?? []).map((v) => [v.appointment_id as string, v]));
 
   const itens = (agendamentos ?? []).map((a) => {
@@ -89,9 +100,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       desde: v?.changed_at ?? null,
       confirmacao: confirmacaoPorAgendamento.get(a.id as string)?.status ?? null,
       confirmacao_falha: confirmacaoPorAgendamento.get(a.id as string)?.falha ?? null,
+      ...(comLembrete ? { lembrete_falha: lembreteFalhaPor.get(a.id as string) ?? null } : {}),
     };
   });
-  // FORK clinic (prontuário F1): a tela esconde "Iniciar/Finalizar" quando é o profissional quem faz.
-  const { data: orgRow } = await supabase.from("organizations").select("settings").eq("id", org).maybeSingle();
-  return ok({ dia, itens, prontuario: prontuarioLigado((orgRow as { settings?: unknown } | null)?.settings) }, { requestId });
+  return ok({ dia, itens, prontuario: prontuarioLigado(settings) }, { requestId });
 }

@@ -7,9 +7,11 @@
 import { useT } from "@/hooks/i18n/useT";
 import {
   ehFalhaDoLembrete,
+  ehFalhaDoLembreteComReserva,
   ehStatusDaConfirmacao,
   ROTULO_DA_CONFIRMACAO,
   ROTULO_DA_FALHA,
+  ROTULO_DA_FALHA_COM_RESERVA,
   type StatusDaConfirmacao,
 } from "@/lib/clinic/confirmacao/status";
 
@@ -23,13 +25,28 @@ const COR: Record<StatusDaConfirmacao, string> = {
 export function SeloDaConfirmacao({
   status,
   falha,
+  falhaDoLembrete,
 }: {
   status: string | null | undefined;
   /** 9006: o lembrete não chegou ou nem saiu — o rótulo diz por que ligar. */
   falha?: string | null;
+  /** #83: motivo do lembrete com reserva. Só aparece quando NÃO há pedido de confirmação (um aviso só). */
+  falhaDoLembrete?: string | null;
 }) {
   const t = useT();
-  if (!ehStatusDaConfirmacao(status)) return null;
+  if (!ehStatusDaConfirmacao(status)) {
+    if (!ehFalhaDoLembreteComReserva(falhaDoLembrete)) return null;
+    const cor = falhaDoLembrete === "fora_do_horario" ? "bg-muted text-text-muted" : "bg-warning/15 text-warning";
+    return (
+      <span
+        className={`rounded-full px-2 py-0.5 text-xs font-medium ${cor}`}
+        data-testid="selo-da-confirmacao"
+        data-falha-do-lembrete={falhaDoLembrete}
+      >
+        {t(ROTULO_DA_FALHA_COM_RESERVA[falhaDoLembrete])}
+      </span>
+    );
+  }
   const rotulo = status === "sem_resposta" && ehFalhaDoLembrete(falha) ? ROTULO_DA_FALHA[falha] : ROTULO_DA_CONFIRMACAO[status];
   return (
     <span

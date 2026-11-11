@@ -24,6 +24,8 @@ export interface InfoDoCompromisso {
   salas?: string[];
   /** FORK clinic (agenda S3 #68): procedimentos do agendamento, na ordem (8016). */
   procedimentos?: string[];
+  /** #83: por que o lembrete com reserva não saiu; só vem com a chave da clínica ligada. */
+  lembrete_falha?: string | null;
 }
 
 export interface ProcedimentoDaAgenda {

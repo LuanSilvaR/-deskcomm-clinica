@@ -130,7 +130,7 @@ export function StatusNaLinha({ agendamento }: { agendamento: { id: string; situ
     <span className="flex shrink-0 flex-wrap items-center gap-1" data-testid="status-na-linha">
       <SeloDeStatus status={status} />
       {c?.primeira_vez ? <SeloPrimeiraVez /> : null}
-      {status !== "confirmado" ? <SeloDaConfirmacao status={c?.confirmacao} /> : null}
+      {status !== "confirmado" ? <SeloDaConfirmacao status={c?.confirmacao} falhaDoLembrete={c?.lembrete_falha} /> : null}
       {c && c.faltas > 0 ? (
         <span className="rounded-full bg-error-bg px-2 py-0.5 text-xs text-error-fg" data-testid="selo-faltas">
           {t("faltou")} {c.faltas}×

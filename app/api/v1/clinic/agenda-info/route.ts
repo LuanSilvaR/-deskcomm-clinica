@@ -24,6 +24,7 @@ import { contarFaltas } from "@/lib/clinic/agenda/faltas";
 import { compromissosDePrimeiraVez, compromissosRemarcados } from "@/lib/clinic/agenda/primeira-vez";
 import { PERMISSAO_VER_OUTROS } from "@/lib/clinic/agenda/escopo-da-agenda";
 import type { InfoDoCompromisso, ProcedimentoDaAgenda, SalaDaAgenda } from "@/lib/clinic/agenda/filtros-da-agenda";
+import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
 import { filtrarContatosPelaBusca } from "@/lib/clinic/pacientes/busca-no-banco";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     .lt("starts_at", lido.data.ate)
     .gt("ends_at", lido.data.de);
   if (soOProprio) consultaDosCompromissos = consultaDosCompromissos.eq("owner_user_id", authz.user.id);
-  const [ags, recursos, profs, catalogo] = await Promise.all([
+  const [ags, recursos, profs, catalogo, orgRow] = await Promise.all([
     consultaDosCompromissos.limit(1000),
     supabase.from("clinic_resources").select("id, name, category").eq("organization_id", org).eq("is_active", true).order("name"),
     supabase
@@ -66,6 +67,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       .select("user_id, display_name, council, council_number, council_uf, is_active, clinic_professional_specialties(clinic_specialties(id, name))")
       .eq("organization_id", org),
     supabase.from("clinic_procedures").select("id, name").eq("organization_id", org).eq("is_active", true).order("name"),
+    // #83: a chave do lembrete com reserva decide se o motivo da falha volta na resposta.
+    supabase.from("organizations").select("settings").eq("id", org).maybeSingle(),
   ]);
   const erro = ags.error ?? profs.error ?? recursos.error ?? catalogo.error;
   const procedimentos: ProcedimentoDaAgenda[] = ((catalogo.data ?? []) as Array<{ id: string; name: string }>).map((p) => ({ id: p.id, nome: p.name }));
@@ -81,7 +84,8 @@ export async function GET(req: NextRequest): Promise<Response> {
     .map((r) => ({ id: r.id, nome: r.name }));
   const idsDasSalas = new Set(salas.map((x) => x.id));
 
-  const [visitas, confirmacoes, faltas, busca, primeiraVez, remarcados, reservas, procsDosAgs] = await Promise.all([
+  const comLembrete = lembreteComReservaLigado((orgRow.data as { settings?: unknown } | null)?.settings);
+  const [visitas, confirmacoes, faltas, busca, primeiraVez, remarcados, reservas, procsDosAgs, falhasDoLembrete] = await Promise.all([
     ids.length
       ? supabase.from("clinic_appointment_visits").select("appointment_id, status, changed_at").eq("organization_id", org).in("appointment_id", ids)
       : Promise.resolve({ data: [], error: null }),
@@ -100,6 +104,9 @@ export async function GET(req: NextRequest): Promise<Response> {
       : Promise.resolve({ data: [], error: null }),
     ids.length
       ? supabase.from("clinic_agendamento_procedimentos").select("appointment_id, procedure_id, ordem").eq("organization_id", org).in("appointment_id", ids).order("ordem")
+      : Promise.resolve({ data: [], error: null }),
+    comLembrete && ids.length
+      ? supabase.from("calendar_appointments").select("id, reminder_falha").eq("organization_id", org).in("id", ids)
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (visitas.error) return fail("internal_error", visitas.error.message, 500, { requestId });
@@ -122,6 +129,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
   const confirmacaoPor = new Map(((confirmacoes.data ?? []) as Array<{ appointment_id: string; status: string }>).map((c) => [c.appointment_id, c.status]));
 
+  const lembreteFalhaPor = new Map(
+    ((falhasDoLembrete.data ?? []) as Array<{ id: string; reminder_falha: string | null }>).map((r) => [r.id, r.reminder_falha]),
+  );
   const compromissos: Record<string, InfoDoCompromisso> = {};
   for (const a of lista) {
     const v = visitaPor.get(a.id);
@@ -135,6 +145,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       remarcado: remarcados.has(a.id),
       salas: salasPor.get(a.id) ?? [],
       procedimentos: procsPor.get(a.id) ?? [],
+      // #83: a chave nem existe na resposta com a função desligada.
+      ...(comLembrete ? { lembrete_falha: lembreteFalhaPor.get(a.id) ?? null } : {}),
     };
   }
 

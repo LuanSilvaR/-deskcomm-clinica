@@ -13340,6 +13340,12 @@ export const DICIONARIO: Traducoes = {
   "Nenhum orçamento neste período.": { es: "Ningún presupuesto en este período." },
   "Orçamentos da clínica, contratos aceitos e a conversão do mês.": { es: "Presupuestos de la clínica, contratos aceptados y la conversión del mes." },
   "O texto do contrato não confere com o orçamento. Recarregue e envie de novo.": { es: "El texto del contrato no coincide con el presupuesto. Recargue y envíe de nuevo." },
+  // FORK clinic (#83): motivo do lembrete com reserva no selo da consulta.
+  "Lembrete não saiu: nenhum número conectado — ligar": { es: "El recordatorio no se envió: ningún número conectado — llamar" },
+  "Lembrete aguardando o horário de envio": { es: "Recordatorio esperando el horario de envío" },
+  "Lembrete não saiu: janela fechada e sem modelo aprovado — ligar": { es: "El recordatorio no se envió: ventana cerrada y sin plantilla aprobada — llamar" },
+  "Lembrete não saiu após 3 tentativas — ligar": { es: "El recordatorio no se envió tras 3 intentos — llamar" },
+  "Lembrete com envio não confirmado — conferir": { es: "Recordatorio con envío no confirmado — verificar" },
 };
 
 /**

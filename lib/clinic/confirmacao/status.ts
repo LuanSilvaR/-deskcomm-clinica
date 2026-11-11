@@ -1,3 +1,5 @@
+import type { FalhaDoLembreteComReserva } from "@/lib/clinic/lembrete-com-reserva/regra";
+
 /**
  * O vocabulário da confirmação de consulta (migration 9004) — espelha o CHECK
  * de `clinic_confirmation_requests.status`. Puro: serve tela e servidor.
@@ -29,3 +31,16 @@ export const ROTULO_DA_FALHA: Record<FalhaDoLembrete, string> = {
   envio_falhou: "Lembrete não chegou — ligar",
   nao_enviado: "Lembrete não saiu — ligar",
 };
+
+/** #83: por que o lembrete com reserva não saiu (`calendar_appointments.reminder_falha`, migration 8023). */
+export const ROTULO_DA_FALHA_COM_RESERVA: Record<FalhaDoLembreteComReserva, string> = {
+  sem_caminho: "Lembrete não saiu: nenhum número conectado — ligar",
+  fora_do_horario: "Lembrete aguardando o horário de envio",
+  meta_sem_modelo: "Lembrete não saiu: janela fechada e sem modelo aprovado — ligar",
+  erro_apos_tentativas: "Lembrete não saiu após 3 tentativas — ligar",
+  envio_nao_confirmado: "Lembrete com envio não confirmado — conferir",
+};
+
+export function ehFalhaDoLembreteComReserva(v: unknown): v is FalhaDoLembreteComReserva {
+  return typeof v === "string" && Object.prototype.hasOwnProperty.call(ROTULO_DA_FALHA_COM_RESERVA, v);
+}
