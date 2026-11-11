@@ -5,7 +5,7 @@
 
 export const MAX_TENTATIVAS_DO_LEMBRETE = 3;
 
-import { capabilitiesOf } from "@/lib/channels";
+import { capabilitiesOf } from "@/lib/channels/capabilities";
 import { envioRecusadoComCerteza } from "@/lib/channels/envio-recusado";
 import { PROVIDERS_DO_LEMBRETE } from "@/lib/channels/lembrete";
 import type { ChannelProvider } from "@/lib/channels/types";
