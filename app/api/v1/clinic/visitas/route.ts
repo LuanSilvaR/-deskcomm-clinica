@@ -12,7 +12,7 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
 import { prontuarioLigado } from "@/lib/clinic/flags";
-import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
+import { lembreteComReservaLigado, tentativasGastasDoLembrete } from "@/lib/clinic/lembrete-com-reserva/regra";
 import { ehStatusDaVisita } from "@/lib/clinic/visitas/status";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { createClient } from "@/lib/supabase/server";
@@ -79,9 +79,12 @@ export async function GET(req: NextRequest): Promise<Response> {
   const comLembrete = lembreteComReservaLigado(settings);
   const { data: falhasDoLembrete } =
     comLembrete && ids.length
-      ? await supabase.from("calendar_appointments").select("id, reminder_falha").eq("organization_id", org).in("id", ids)
+      ? await supabase.from("calendar_appointments").select("id, reminder_falha, reminder_tentativas").eq("organization_id", org).in("id", ids)
       : { data: [] };
   const lembreteFalhaPor = new Map((falhasDoLembrete ?? []).map((r) => [r.id as string, (r.reminder_falha as string | null) ?? null]));
+  const lembreteTentativasPor = new Map(
+    (falhasDoLembrete ?? []).map((r) => [r.id as string, tentativasGastasDoLembrete(r.reminder_tentativas)]),
+  );
   const porAgendamento = new Map((visitas ?? []).map((v) => [v.appointment_id as string, v]));
 
   const itens = (agendamentos ?? []).map((a) => {
@@ -100,7 +103,9 @@ export async function GET(req: NextRequest): Promise<Response> {
       desde: v?.changed_at ?? null,
       confirmacao: confirmacaoPorAgendamento.get(a.id as string)?.status ?? null,
       confirmacao_falha: confirmacaoPorAgendamento.get(a.id as string)?.falha ?? null,
-      ...(comLembrete ? { lembrete_falha: lembreteFalhaPor.get(a.id as string) ?? null } : {}),
+      ...(comLembrete
+        ? { lembrete_falha: lembreteFalhaPor.get(a.id as string) ?? null, lembrete_tentativas: lembreteTentativasPor.get(a.id as string) ?? 0 }
+        : {}),
     };
   });
   return ok({ dia, itens, prontuario: prontuarioLigado(settings) }, { requestId });

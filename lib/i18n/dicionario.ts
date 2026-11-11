@@ -13345,6 +13345,8 @@ export const DICIONARIO: Traducoes = {
   "Lembrete aguardando o horário de envio": { es: "Recordatorio esperando el horario de envío" },
   "Lembrete não saiu: janela fechada e sem modelo aprovado — ligar": { es: "El recordatorio no se envió: ventana cerrada y sin plantilla aprobada — llamar" },
   "Lembrete não saiu após 3 tentativas — ligar": { es: "El recordatorio no se envió tras 3 intentos — llamar" },
+  "Lembrete não saiu — tentando de novo (1/3)": { es: "El recordatorio no se envió — intentando de nuevo (1/3)" },
+  "Lembrete não saiu — tentando de novo (2/3)": { es: "El recordatorio no se envió — intentando de nuevo (2/3)" },
   "Lembrete com envio não confirmado — conferir": { es: "Recordatorio con envío no confirmado — verificar" },
 };
 

@@ -4,6 +4,7 @@ import {
   decidirPasso,
   lembreteComReservaLigado,
   ordenarCaminhos,
+  tentativasGastasDoLembrete,
   type CanalCandidato,
 } from "./regra";
 
@@ -118,5 +119,13 @@ describe("lembreteComReservaLigado", () => {
     expect(lembreteComReservaLigado(null)).toBe(false);
     expect(lembreteComReservaLigado("x")).toBe(false);
     expect(lembreteComReservaLigado({ clinic: { lembrete_com_reserva: "true" } })).toBe(false);
+  });
+});
+
+describe("tentativasGastasDoLembrete", () => {
+  it("é o maior contador do jsonb; vazio ou inválido vale 0", () => {
+    expect(tentativasGastasDoLembrete({ "1440": 1, "180": 2 })).toBe(2);
+    expect(tentativasGastasDoLembrete(null)).toBe(0);
+    expect(tentativasGastasDoLembrete({ "1440": "x" })).toBe(0);
   });
 });

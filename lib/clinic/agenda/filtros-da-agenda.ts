@@ -26,6 +26,8 @@ export interface InfoDoCompromisso {
   procedimentos?: string[];
   /** #83: por que o lembrete com reserva não saiu; só vem com a chave da clínica ligada. */
   lembrete_falha?: string | null;
+  /** #83: tentativas gastas do lembrete; só vem com a chave ligada. */
+  lembrete_tentativas?: number;
 }
 
 export interface ProcedimentoDaAgenda {

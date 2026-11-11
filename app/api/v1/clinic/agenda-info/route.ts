@@ -24,7 +24,7 @@ import { contarFaltas } from "@/lib/clinic/agenda/faltas";
 import { compromissosDePrimeiraVez, compromissosRemarcados } from "@/lib/clinic/agenda/primeira-vez";
 import { PERMISSAO_VER_OUTROS } from "@/lib/clinic/agenda/escopo-da-agenda";
 import type { InfoDoCompromisso, ProcedimentoDaAgenda, SalaDaAgenda } from "@/lib/clinic/agenda/filtros-da-agenda";
-import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
+import { lembreteComReservaLigado, tentativasGastasDoLembrete } from "@/lib/clinic/lembrete-com-reserva/regra";
 import { filtrarContatosPelaBusca } from "@/lib/clinic/pacientes/busca-no-banco";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       ? supabase.from("clinic_agendamento_procedimentos").select("appointment_id, procedure_id, ordem").eq("organization_id", org).in("appointment_id", ids).order("ordem")
       : Promise.resolve({ data: [], error: null }),
     comLembrete && ids.length
-      ? supabase.from("calendar_appointments").select("id, reminder_falha").eq("organization_id", org).in("id", ids)
+      ? supabase.from("calendar_appointments").select("id, reminder_falha, reminder_tentativas").eq("organization_id", org).in("id", ids)
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (visitas.error) return fail("internal_error", visitas.error.message, 500, { requestId });
@@ -132,6 +132,12 @@ export async function GET(req: NextRequest): Promise<Response> {
   const lembreteFalhaPor = new Map(
     ((falhasDoLembrete.data ?? []) as Array<{ id: string; reminder_falha: string | null }>).map((r) => [r.id, r.reminder_falha]),
   );
+  const lembreteTentativasPor = new Map(
+    ((falhasDoLembrete.data ?? []) as Array<{ id: string; reminder_tentativas?: unknown }>).map((r) => [
+      r.id,
+      tentativasGastasDoLembrete(r.reminder_tentativas),
+    ]),
+  );
   const compromissos: Record<string, InfoDoCompromisso> = {};
   for (const a of lista) {
     const v = visitaPor.get(a.id);
@@ -146,7 +152,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       salas: salasPor.get(a.id) ?? [],
       procedimentos: procsPor.get(a.id) ?? [],
       // #83: a chave nem existe na resposta com a função desligada.
-      ...(comLembrete ? { lembrete_falha: lembreteFalhaPor.get(a.id) ?? null } : {}),
+      ...(comLembrete ? { lembrete_falha: lembreteFalhaPor.get(a.id) ?? null, lembrete_tentativas: lembreteTentativasPor.get(a.id) ?? 0 } : {}),
     };
   }
 

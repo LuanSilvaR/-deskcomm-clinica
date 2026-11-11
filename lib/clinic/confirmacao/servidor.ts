@@ -27,6 +27,7 @@ import {
   type RespostaDeConfirmacao,
 } from "./resposta";
 import { aguardaAReservaDaMeta } from "../lembrete-com-reserva/falha-avisada-depois";
+import { lembreteComReservaLigado } from "../lembrete-com-reserva/regra";
 import type { StatusDaConfirmacao } from "./status";
 
 type Admin = SupabaseClient;
@@ -431,7 +432,7 @@ export async function marcarLembretesQueNaoSairam(
 ): Promise<{ marcados: number; falhas: number }> {
   const { data: orgs, error: e1 } = await admin
     .from("organizations")
-    .select("id")
+    .select("id, settings")
     .eq("settings->clinic->>confirmacao_automatica", "true")
     .limit(500);
   if (e1) throw new Error(`listar organizações com confirmação: ${e1.message}`);
@@ -441,7 +442,7 @@ export async function marcarLembretesQueNaoSairam(
   let marcados = 0;
   let falhas = 0;
 
-  for (const { id: org } of (orgs ?? []) as { id: string }[]) {
+  for (const { id: org, settings } of (orgs ?? []) as { id: string; settings?: unknown }[]) {
     const { data: ags, error: e2 } = await admin
       .from("calendar_appointments")
       .select(
@@ -459,11 +460,31 @@ export async function marcarLembretesQueNaoSairam(
       falhas += 1;
       continue;
     }
-    const candidatos = ((ags ?? []) as unknown as AgendamentoSemPedido[]).filter((a) => {
+    let candidatos = ((ags ?? []) as unknown as AgendamentoSemPedido[]).filter((a) => {
       const t = Array.isArray(a.calendar_event_types) ? a.calendar_event_types[0] : a.calendar_event_types;
       return !!t && tipoPedeConfirmacao(t);
     });
     if (candidatos.length === 0) continue;
+
+    // #83: com a chave ligada, quem pediu para não receber mensagem não ganha tarefa de ligar.
+    if (lembreteComReservaLigado(settings)) {
+      const { data: bloqueados, error: eb } = await admin
+        .from("contacts")
+        .select("id")
+        .eq("organization_id", org)
+        .eq("is_blocked", true)
+        .in(
+          "id",
+          candidatos.map((a) => a.contact_id),
+        );
+      if (eb) {
+        falhas += 1;
+        continue;
+      }
+      const fora = new Set(((bloqueados ?? []) as { id: string }[]).map((c) => c.id));
+      candidatos = candidatos.filter((a) => !fora.has(a.contact_id));
+      if (candidatos.length === 0) continue;
+    }
 
     const { data: existentes } = await admin
       .from("clinic_confirmation_requests")

@@ -362,4 +362,36 @@ describe("FORK clinic (9006): o lembrete que falhou", () => {
     expect(tarefas).toHaveLength(1);
     expect(tarefas[0]?.valores).toMatchObject({ title: "O lembrete não saiu — ligar para confirmar", contact_id: "c4" });
   });
+  describe("lembrete que não saiu — contato bloqueado (#83)", () => {
+    const ag = (id: string, contato: string) => ({
+      id,
+      title: "Consulta",
+      starts_at: "2026-10-01T13:00:00Z",
+      contact_id: contato,
+      calendar_event_types: { reminder_enabled: true, reminder_minutes_before: 1440, reminder_extra_offsets_minutes: null },
+    });
+    const cenario = (settings: unknown) =>
+      falso({
+        organizations: { select: { data: [{ id: "org-5", settings }] } },
+        calendar_appointments: { select: { data: [ag("ag-bloq", "c-bloq"), ag("ag-ok", "c-ok")] } },
+        clinic_confirmation_requests: { select: { data: [] } },
+        contacts: { select: { data: [{ id: "c-bloq" }] } },
+        crm_tasks: { insert: { data: { id: "t-x" } } },
+      });
+    const agora = new Date("2026-10-01T10:00:00Z");
+
+    it("com a chave ligada, contato bloqueado não ganha tarefa de ligar", async () => {
+      const { cliente, chamadas } = cenario({ clinic: { lembrete_com_reserva: true } });
+      expect(await marcarLembretesQueNaoSairam(cliente, agora)).toEqual({ marcados: 1, falhas: 0 });
+      const inserido = chamadas.filter((c) => c.tabela === "clinic_confirmation_requests" && c.op === "insert");
+      expect(inserido).toHaveLength(1);
+      expect(inserido[0]?.valores).toMatchObject({ appointment_id: "ag-ok", contact_id: "c-ok" });
+    });
+
+    it("com a chave desligada, segue como sempre (nem consulta contatos)", async () => {
+      const { cliente, chamadas } = cenario({});
+      expect(await marcarLembretesQueNaoSairam(cliente, agora)).toEqual({ marcados: 2, falhas: 0 });
+      expect(chamadas.some((c) => c.tabela === "contacts")).toBe(false);
+    });
+  });
 });

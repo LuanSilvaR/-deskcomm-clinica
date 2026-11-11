@@ -27,7 +27,7 @@ let settings: unknown = {};
 /** Builder encadeável e "await-ável" que devolve as linhas da tabela pedida. */
 function tabela(nome: string) {
   const linhas: Record<string, unknown[]> = {
-    calendar_appointments: [{ id: AG, contact_id: null, starts_at: "2026-11-11T12:00:00Z", reminder_falha: "sem_caminho" }],
+    calendar_appointments: [{ id: AG, contact_id: null, starts_at: "2026-11-11T12:00:00Z", reminder_falha: "sem_caminho", reminder_tentativas: { "1440": 2 } }],
     organizations: [{ settings }],
   };
   const dados = linhas[nome] ?? [];
@@ -55,11 +55,13 @@ describe("/api/v1/clinic/agenda-info — lembrete_falha", () => {
     const c = await pedir();
     expect(c).toBeDefined();
     expect("lembrete_falha" in c).toBe(false);
+    expect("lembrete_tentativas" in c).toBe(false);
   });
 
   it("devolve lembrete_falha com a chave ligada", async () => {
     settings = { clinic: { lembrete_com_reserva: true } };
     const c = await pedir();
     expect(c.lembrete_falha).toBe("sem_caminho");
+    expect(c.lembrete_tentativas).toBe(2);
   });
 });

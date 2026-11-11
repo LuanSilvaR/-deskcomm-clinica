@@ -31,4 +31,17 @@ describe("SeloDaConfirmacao — motivo do lembrete com reserva", () => {
     const { container } = render(<SeloDaConfirmacao status={null} falhaDoLembrete="qualquer" />);
     expect(container.innerHTML).toBe("");
   });
+  it("erro com tentativas sobrando: rótulo neutro, sem pedir ligação", () => {
+    render(<SeloDaConfirmacao status={null} falhaDoLembrete="erro_apos_tentativas" tentativasDoLembrete={1} />);
+    const selo = screen.getByTestId("selo-da-confirmacao");
+    expect(selo.textContent).toBe("Lembrete não saiu — tentando de novo (1/3)");
+    expect(selo.className).toContain("text-text-muted");
+  });
+
+  it("erro com as 3 tentativas gastas: pede ligação", () => {
+    render(<SeloDaConfirmacao status={null} falhaDoLembrete="erro_apos_tentativas" tentativasDoLembrete={3} />);
+    const selo = screen.getByTestId("selo-da-confirmacao");
+    expect(selo.textContent).toBe("Lembrete não saiu após 3 tentativas — ligar");
+    expect(selo.className).toContain("text-warning");
+  });
 });

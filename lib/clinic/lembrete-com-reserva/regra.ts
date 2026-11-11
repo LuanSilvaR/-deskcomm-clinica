@@ -146,3 +146,16 @@ export function lembreteComReservaLigado(settings: unknown): boolean {
   if (!clinic || typeof clinic !== "object") return false;
   return (clinic as Record<string, unknown>).lembrete_com_reserva === true;
 }
+
+/**
+ * Quantas tentativas o lembrete já gastou: o maior contador de
+ * `calendar_appointments.reminder_tentativas` (jsonb `{ "<degrau>": n }`).
+ */
+export function tentativasGastasDoLembrete(tentativas: unknown): number {
+  if (!tentativas || typeof tentativas !== "object") return 0;
+  let maior = 0;
+  for (const v of Object.values(tentativas as Record<string, unknown>)) {
+    if (typeof v === "number" && Number.isFinite(v) && v > maior) maior = v;
+  }
+  return maior;
+}

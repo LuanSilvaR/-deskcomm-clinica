@@ -1,4 +1,4 @@
-import type { FalhaDoLembreteComReserva } from "@/lib/clinic/lembrete-com-reserva/regra";
+import { MAX_TENTATIVAS_DO_LEMBRETE, type FalhaDoLembreteComReserva } from "@/lib/clinic/lembrete-com-reserva/regra";
 
 /**
  * O vocabulário da confirmação de consulta (migration 9004) — espelha o CHECK
@@ -43,4 +43,21 @@ export const ROTULO_DA_FALHA_COM_RESERVA: Record<FalhaDoLembreteComReserva, stri
 
 export function ehFalhaDoLembreteComReserva(v: unknown): v is FalhaDoLembreteComReserva {
   return typeof v === "string" && Object.prototype.hasOwnProperty.call(ROTULO_DA_FALHA_COM_RESERVA, v);
+}
+
+/** Rótulos neutros enquanto o cron ainda tenta de novo (chaves fixas para o dicionário em espanhol). */
+export const ROTULO_TENTANDO_DE_NOVO: Record<number, string> = {
+  1: "Lembrete não saiu — tentando de novo (1/3)",
+  2: "Lembrete não saiu — tentando de novo (2/3)",
+};
+
+/**
+ * O rótulo do selo: `erro_apos_tentativas` só pede ligação com as tentativas
+ * esgotadas (ou sem a contagem); antes disso, é "tentando de novo".
+ */
+export function rotuloDaFalhaDoLembrete(motivo: FalhaDoLembreteComReserva, tentativas: number | null | undefined): string {
+  if (motivo === "erro_apos_tentativas" && typeof tentativas === "number" && tentativas < MAX_TENTATIVAS_DO_LEMBRETE) {
+    return ROTULO_TENTANDO_DE_NOVO[Math.max(1, tentativas)] ?? ROTULO_DA_FALHA_COM_RESERVA[motivo];
+  }
+  return ROTULO_DA_FALHA_COM_RESERVA[motivo];
 }
