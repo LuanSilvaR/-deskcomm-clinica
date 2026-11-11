@@ -51,11 +51,11 @@ o seletor, confere o selo e devolve a chave a **desligada**, apagando tudo o que
 
 | Foto | O que mostra |
 |---|---|
-| `evidence/83-lembrete-com-reserva/01-seletor-ausente-com-a-chave-desligada.png` | chave desligada: o seletor de modelo **não** existe |
-| `evidence/83-lembrete-com-reserva/02-chave-desligada-em-profissionais.png` | cartão novo em Profissionais, desligado |
-| `evidence/83-lembrete-com-reserva/03-chave-ligada-em-profissionais.png` | cartão ligado (botão "Desligar") |
-| `evidence/83-lembrete-com-reserva/04-seletor-de-modelo-com-a-chave-ligada.png` | seletor com "Nenhum" e a frase de onde criar o modelo |
-| `evidence/83-lembrete-com-reserva/05-selo-lembrete-sem-modelo.png` | selo "Lembrete não saiu: janela fechada e sem modelo aprovado — ligar" na Recepção |
+| `evidence/83-lembrete-com-reserva/01-seletor-ausente-com-a-chave-desligada.png`<br><img src="../../../evidence/83-lembrete-com-reserva/01-seletor-ausente-com-a-chave-desligada.png" alt="foto 01" width="480"> | chave desligada: o seletor de modelo **não** existe |
+| `evidence/83-lembrete-com-reserva/02-chave-desligada-em-profissionais.png`<br><img src="../../../evidence/83-lembrete-com-reserva/02-chave-desligada-em-profissionais.png" alt="foto 02" width="480"> | cartão novo em Profissionais, desligado |
+| `evidence/83-lembrete-com-reserva/03-chave-ligada-em-profissionais.png`<br><img src="../../../evidence/83-lembrete-com-reserva/03-chave-ligada-em-profissionais.png" alt="foto 03" width="480"> | cartão ligado (botão "Desligar") |
+| `evidence/83-lembrete-com-reserva/04-seletor-de-modelo-com-a-chave-ligada.png`<br><img src="../../../evidence/83-lembrete-com-reserva/04-seletor-de-modelo-com-a-chave-ligada.png" alt="foto 04" width="480"> | seletor com "Nenhum" e a frase de onde criar o modelo |
+| `evidence/83-lembrete-com-reserva/05-selo-lembrete-sem-modelo.png`<br><img src="../../../evidence/83-lembrete-com-reserva/05-selo-lembrete-sem-modelo.png" alt="foto 05" width="480"> | selo "Lembrete não saiu: janela fechada e sem modelo aprovado — ligar" na Recepção |
 
 Observação: o selo só aparece com a chave **ligada** (de propósito: desligada, a tela é idêntica à de antes). Ele
 aparece na Recepção e no histórico da agenda; o painel de detalhe da consulta continua mostrando só o pedido de
