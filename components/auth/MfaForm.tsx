@@ -10,10 +10,13 @@ import { verifyMfa } from "@/app/actions/auth/verifyMfa";
 
 interface MfaFormProps {
   next?: string;
+  /** #89: a empresa permite confiar no dispositivo (o servidor confere de novo). */
+  podeConfiar?: boolean;
 }
 
-export function MfaForm({ next }: MfaFormProps) {
+export function MfaForm({ next, podeConfiar = false }: MfaFormProps) {
   const t = useT();
+  const [confiar, setConfiar] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
@@ -40,7 +43,7 @@ export function MfaForm({ next }: MfaFormProps) {
     if (finalCode.length !== 6 || locked) return;
     setError(null);
     startTransition(async () => {
-      const res = await verifyMfa(finalCode, next);
+      const res = await verifyMfa(finalCode, next, podeConfiar && confiar);
       if (!res) return; // server-side redirect on success
       if (res.error === "mfa_locked") {
         setLocked(true);
@@ -73,6 +76,26 @@ export function MfaForm({ next }: MfaFormProps) {
       className="space-y-6"
       noValidate
     >
+      {podeConfiar && (
+        // ACIMA do campo de propósito: o código envia sozinho no 6º dígito, então a
+        // escolha precisa estar feita antes de digitar.
+        <label className="flex items-start gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 accent-primary"
+            checked={confiar}
+            onChange={(e) => setConfiar(e.target.checked)}
+            disabled={isPending || locked}
+          />
+          <span>
+            {t("Confiar neste dispositivo por 30 dias")}
+            <span className="block text-xs">
+              {t("Neste navegador o código não será pedido de novo. Não marque em computador compartilhado.")}
+            </span>
+          </span>
+        </label>
+      )}
+
       <TOTPInput
         value={code}
         onChange={setCode}

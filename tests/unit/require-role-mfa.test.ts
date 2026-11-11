@@ -253,7 +253,10 @@ describe("requireRole — os caminhos que não passam pela leitura paralela", ()
     const r = await requireRole("admin", { organizationId: ORG_ID, allowPlatformAdmin: true });
     expect(r.ok).toBe(false);
     if (!r.ok) expect((await r.response.json()).error.code).toBe("mfa_required");
-    expect(stub.rpc).toHaveBeenCalledTimes(1);
+    // #89: papel (1) + a pergunta ao banco se a sessão aal1 foi reconhecida por um
+    // dispositivo confiável (`fn_session_mfa_proven`, 1). O stub não responde `true`,
+    // então a sessão segue em dívida — o que este teste cobra.
+    expect(stub.rpc).toHaveBeenCalledTimes(2);
     expect(stub.auth.getUser).toHaveBeenCalledTimes(1);
   });
 });
@@ -303,7 +306,8 @@ describe("requireRole — a leitura paralela não vaza nem guarda nada", () => {
     });
     const r = await requireRole("admin");
     expect(r.ok).toBe(false);
-    expect(stub.rpc).toHaveBeenCalledTimes(2);
+    // 2 leituras de papel + 1 `fn_session_mfa_proven` (#89) na sessão aal1.
+    expect(stub.rpc).toHaveBeenCalledTimes(3);
     expect(stub.auth.getUser).toHaveBeenCalledTimes(2);
   });
 });
