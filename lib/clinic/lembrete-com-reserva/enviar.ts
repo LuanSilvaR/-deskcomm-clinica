@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { sendMessageHandler } from "@/app/api/v1/messages/_handler";
+import { capabilitiesOf } from "@/lib/channels";
 import { isWindowOpen } from "@/lib/agent-engine/guardrails/messaging-window";
 import { lerModeloDoLembrete, valoresDoModeloDoLembrete } from "@/lib/agenda/lembrete-por-modelo";
 import { adiarAteAJanelaAbrir } from "@/lib/automation/janela-do-canal";
@@ -18,7 +19,7 @@ import {
 
 /**
  * Envio do lembrete com reserva (#83): tenta cada caminho na ordem da regra
- * (Meta, depois QR) e só passa ao próximo quando o anterior GARANTIU que não
+ * (canal oficial, depois QR) e só passa ao próximo quando o anterior GARANTIU que não
  * saiu. Erro ambíguo para na hora: nunca reenvia. Não grava em
  * `calendar_appointments` (o carimbo é do cron) e não lê configuração da org.
  */
@@ -89,7 +90,7 @@ export async function enviarLembreteComReserva(
     let janelaAberta = false;
     let modeloDoCanalId: string | null = null;
     let modelo: Awaited<ReturnType<typeof lerModeloDoLembrete>> = null;
-    if (!foraDoHorario && canal.provider === "meta_cloud") {
+    if (!foraDoHorario && capabilitiesOf(canal.provider).requiresTemplates) {
       janelaAberta = await janelaDoContatoAberta(admin, e.org, e.contatoId, canal.id);
       if (!janelaAberta && e.modeloDoTipoId) {
         modelo = await lerModeloDoLembrete(admin, e.org, e.modeloDoTipoId, canal.id);

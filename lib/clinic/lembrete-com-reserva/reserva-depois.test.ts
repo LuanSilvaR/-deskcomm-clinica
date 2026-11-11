@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({ enviar: vi.fn() }));
 vi.mock("./enviar", () => ({ enviarLembreteComReserva: h.enviar }));
 
 import { reenviarLembretesQueAMetaRecusou } from "./reserva-depois";
+import { PROVIDER_PREFERIDO_DO_LEMBRETE as OFICIAL, PROVIDER_DE_RESERVA_DO_LEMBRETE as QR } from "@/lib/channels/lembrete";
 
 const AGORA = new Date("2026-10-01T12:00:00Z");
 const FUTURO = "2026-10-01T18:00:00Z";
@@ -100,8 +101,8 @@ const marcasNaMensagem = (ops: Op[]) =>
 describe("reenviarLembretesQueAMetaRecusou", () => {
   beforeEach(() => h.enviar.mockReset());
 
-  it("Meta 131026 depois: reenvia pelo waha e marca feita", async () => {
-    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "waha-1", provider: "waha", mensagemId: "m-novo", via: "texto" });
+  it("Meta 131026 depois: reenvia pelo canal por QR e marca feita", async () => {
+    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "qr-1", provider: QR, mensagemId: "m-novo", via: "texto" });
     const { admin, ops } = montar({});
     const r = await reenviarLembretesQueAMetaRecusou(admin, AGORA);
     expect(r).toEqual({ reenviados: 1, semReserva: 0, ignorados: 0 });
@@ -125,7 +126,7 @@ describe("reenviarLembretesQueAMetaRecusou", () => {
   });
 
   it("a marca na mensagem original filtra organization_id e id e preserva o resto do metadata", async () => {
-    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "w", provider: "waha", mensagemId: "m-novo", via: "texto" });
+    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "w", provider: QR, mensagemId: "m-novo", via: "texto" });
     const { admin, ops } = montar({
       mensagens: [msg({ metadata: { lembrete: { appointment_id: "ap-1", degraus: [1440], tentativa: 1, reserva: null }, outro: 1 } })],
     });
@@ -162,7 +163,7 @@ describe("reenviarLembretesQueAMetaRecusou", () => {
     expect(marcasNaMensagem(ops).at(-1)).toBe("ambiguo");
   });
 
-  it("sem waha: marca sem_reserva", async () => {
+  it("sem canal por QR: marca sem_reserva", async () => {
     h.enviar.mockResolvedValue({ desfecho: "nao_saiu", motivo: "sem_caminho" });
     const { admin, ops } = montar({});
     const r = await reenviarLembretesQueAMetaRecusou(admin, AGORA);
@@ -186,7 +187,7 @@ describe("reenviarLembretesQueAMetaRecusou", () => {
     expect(ops[0]!.filtros).toContainEqual(["eq", "settings->clinic->>lembrete_com_reserva", "true"]);
   });
 
-  it("lê só falhas recentes, meta_cloud, do lembrete e ainda sem reserva, na organização", async () => {
+  it("lê só falhas recentes, do canal oficial, do lembrete e ainda sem reserva, na organização", async () => {
     h.enviar.mockResolvedValue({ desfecho: "nao_saiu", motivo: "sem_caminho" });
     const { admin, ops } = montar({});
     await reenviarLembretesQueAMetaRecusou(admin, AGORA);
@@ -202,7 +203,7 @@ describe("reenviarLembretesQueAMetaRecusou", () => {
   });
 
   it("reenvio atualiza reminder_message_id do pedido aberto", async () => {
-    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "w", provider: "waha", mensagemId: "m-novo", via: "texto" });
+    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "w", provider: QR, mensagemId: "m-novo", via: "texto" });
     const { admin, ops } = montar({});
     await reenviarLembretesQueAMetaRecusou(admin, AGORA);
     const up = ops.find((o) => o.tabela === "clinic_confirmation_requests" && o.op === "update");
@@ -223,7 +224,7 @@ describe("reenviarLembretesQueAMetaRecusou", () => {
   });
 
   it("repontar o pedido vem ANTES de marcar feita", async () => {
-    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "w", provider: "waha", mensagemId: "m-novo", via: "texto" });
+    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "w", provider: QR, mensagemId: "m-novo", via: "texto" });
     const { admin, ops } = montar({});
     await reenviarLembretesQueAMetaRecusou(admin, AGORA);
     const iPedido = ops.findIndex((o) => o.tabela === "clinic_confirmation_requests" && o.op === "update");
@@ -233,7 +234,7 @@ describe("reenviarLembretesQueAMetaRecusou", () => {
   });
 
   it("erro ao repontar o pedido: não marca feita, marca ambiguo e não reenvia", async () => {
-    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "w", provider: "waha", mensagemId: "m-novo", via: "texto" });
+    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "w", provider: QR, mensagemId: "m-novo", via: "texto" });
     const { admin, ops } = montar({ erroNoPedido: true });
     const r = await reenviarLembretesQueAMetaRecusou(admin, AGORA);
     expect(h.enviar).toHaveBeenCalledTimes(1);

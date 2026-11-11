@@ -249,7 +249,7 @@ describe("o cron NÃO pode filtrar por reminder_sent_at", () => {
 
 // ─── O ramo da chave `lembrete_com_reserva` (#83) ───────────────────────────
 // Aqui o Supabase É um dublê, porque o que se prova é a TRADUÇÃO do desfecho
-// em carimbo/falha, e não uma consulta. O envio de verdade (Meta/WAHA) é outro
+// em carimbo/falha, e não uma consulta. O envio de verdade (canal oficial/QR) é outro
 // módulo, mockado: nenhum teste chama rede.
 
 const h = vi.hoisted(() => ({
@@ -274,6 +274,7 @@ vi.mock("@/lib/clinic/confirmacao/servidor", () => ({
 }));
 
 import { GET } from "./route";
+import { PROVIDER_PREFERIDO_DO_LEMBRETE as OFICIAL, PROVIDER_DE_RESERVA_DO_LEMBRETE as QR } from "@/lib/channels/lembrete";
 
 interface Cenario {
   settingsLigada: boolean;
@@ -367,7 +368,7 @@ describe("cron com a chave do lembrete com reserva", () => {
   });
 
   it("chave ligada e enviado: carimba e limpa reminder_falha", async () => {
-    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "c", provider: "meta_cloud", mensagemId: "m1", via: "modelo" });
+    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "c", provider: OFICIAL, mensagemId: "m1", via: "modelo" });
     const { updates, corpo } = await rodar({ settingsLigada: true });
     expect(updates).toHaveLength(1);
     expect(updates[0]).toMatchObject({ reminder_sent_offsets_minutes: [1440], reminder_falha: null, reminder_falha_at: null });
@@ -383,7 +384,7 @@ describe("cron com a chave do lembrete com reserva", () => {
 
   it("chave ligada e enviado com confirmação: registra o pedido com a mensagem do envio", async () => {
     h.pedeConfirmacao = true;
-    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "c", provider: "waha", mensagemId: "m7", via: "texto" });
+    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "c", provider: QR, mensagemId: "m7", via: "texto" });
     await rodar({ settingsLigada: true });
     expect(h.registrarPedido).toHaveBeenCalledWith(
       expect.anything(),

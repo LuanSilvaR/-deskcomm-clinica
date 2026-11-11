@@ -22,6 +22,7 @@ vi.mock("@/lib/agenda/lembrete-por-modelo", () => ({
 }));
 
 import { enviarLembreteComReserva, type EntradaDoLembrete } from "./enviar";
+import { PROVIDER_PREFERIDO_DO_LEMBRETE as OFICIAL, PROVIDER_DE_RESERVA_DO_LEMBRETE as QR } from "@/lib/channels/lembrete";
 
 function admin() {
   return {
@@ -76,24 +77,24 @@ beforeEach(() => {
 });
 
 describe("enviarLembreteComReserva", () => {
-  it("só QR: manda texto pelo waha", async () => {
-    h.canais = [canal("w1", "waha")];
+  it("só QR: manda texto pelo canal por QR", async () => {
+    h.canais = [canal("w1", QR)];
     const r = await enviarLembreteComReserva(admin(), entrada());
-    expect(r).toEqual({ desfecho: "enviado", canalId: "w1", provider: "waha", mensagemId: "m1", via: "texto" });
+    expect(r).toEqual({ desfecho: "enviado", canalId: "w1", provider: QR, mensagemId: "m1", via: "texto" });
     expect(h.send.mock.calls[0]![2]).toMatchObject({ type: "text", body: "Oi Ana, amanhã 10h" });
     expect(h.conversasLidas).toBe(0);
   });
 
-  it("Meta janela aberta: texto pela Meta, não toca no waha", async () => {
-    h.canais = [canal("w1", "waha"), canal("mc", "meta_cloud")];
+  it("Meta janela aberta: texto pela Meta, não toca no canal por QR", async () => {
+    h.canais = [canal("w1", QR), canal("mc", OFICIAL)];
     h.conversa = { last_inbound_at: horasAtras(2) };
     const r = await enviarLembreteComReserva(admin(), entrada());
-    expect(r).toMatchObject({ desfecho: "enviado", canalId: "mc", provider: "meta_cloud", via: "texto" });
+    expect(r).toMatchObject({ desfecho: "enviado", canalId: "mc", provider: OFICIAL, via: "texto" });
     expect(h.send).toHaveBeenCalledTimes(1);
   });
 
   it("Meta janela fechada com modelo do número: manda modelo com {{1}}..{{4}} e body renderizado", async () => {
-    h.canais = [canal("mc", "meta_cloud")];
+    h.canais = [canal("mc", OFICIAL)];
     h.conversa = { last_inbound_at: horasAtras(48) };
     h.ler.mockResolvedValue({ id: "tpl", name: "lembrete", language: "pt_BR" });
     const valores = { "body.1": "Ana", "body.2": "amanhã", "body.3": "Limpeza", "body.4": "Rua A" };
@@ -110,31 +111,31 @@ describe("enviarLembreteComReserva", () => {
     });
   });
 
-  it("Meta janela fechada sem modelo: cai para o waha", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+  it("Meta janela fechada sem modelo: cai para o canal por QR", async () => {
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     const r = await enviarLembreteComReserva(admin(), entrada());
-    expect(r).toMatchObject({ desfecho: "enviado", canalId: "w1", provider: "waha" });
+    expect(r).toMatchObject({ desfecho: "enviado", canalId: "w1", provider: QR });
     expect(h.send).toHaveBeenCalledTimes(1);
   });
 
-  it("modelo de outro número da Meta: cai para o waha", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+  it("modelo de outro número da Meta: cai para o canal por QR", async () => {
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.ler.mockResolvedValue(null); // lerModeloDoLembrete só devolve modelo do MESMO canal
     const r = await enviarLembreteComReserva(admin(), entrada({ modeloDoTipoId: "tpl-de-outro" }));
     expect(h.ler).toHaveBeenCalledWith(expect.anything(), "org1", "tpl-de-outro", "mc");
     expect(r).toMatchObject({ desfecho: "enviado", canalId: "w1" });
   });
 
-  it("peça do modelo vazia: pula a Meta e cai para o waha", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+  it("peça do modelo vazia: pula a Meta e cai para o canal por QR", async () => {
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.ler.mockResolvedValue({ id: "tpl", name: "n", language: "pt_BR" });
     h.valores.mockReturnValue(null);
     const r = await enviarLembreteComReserva(admin(), entrada({ modeloDoTipoId: "tpl" }));
     expect(r).toMatchObject({ desfecho: "enviado", canalId: "w1" });
   });
 
-  it("Meta failed 131026 síncrono: cai para o waha", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+  it("Meta failed 131026 síncrono: cai para o canal por QR", async () => {
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.conversa = { last_inbound_at: horasAtras(1) };
     h.send
       .mockResolvedValueOnce({ id: "x", status: "failed", error_code: "131026", error_message: null })
@@ -144,8 +145,8 @@ describe("enviarLembreteComReserva", () => {
     expect(h.send).toHaveBeenCalledTimes(2);
   });
 
-  it("recusa síncrona da Meta (meta_100:) cai para o waha", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+  it("recusa síncrona da Meta (meta_100:) cai para o canal por QR", async () => {
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.conversa = { last_inbound_at: horasAtras(1) };
     h.send
       .mockResolvedValueOnce({ id: "x", status: "failed", error_code: "meta_error", error_message: "meta_100: bad" })
@@ -154,8 +155,8 @@ describe("enviarLembreteComReserva", () => {
     expect(r).toMatchObject({ desfecho: "enviado", canalId: "w1" });
   });
 
-  it("Meta queued: para e devolve ambiguo, waha não é chamado", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+  it("Meta queued: para e devolve ambiguo, canal por QR não é chamado", async () => {
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.conversa = { last_inbound_at: horasAtras(1) };
     h.send.mockResolvedValue({ id: "q1", status: "queued", error_code: null });
     const r = await enviarLembreteComReserva(admin(), entrada());
@@ -164,7 +165,7 @@ describe("enviarLembreteComReserva", () => {
   });
 
   it("exceção do envio: ambiguo, não tenta o próximo caminho", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.conversa = { last_inbound_at: horasAtras(1) };
     h.send.mockRejectedValue(new Error("fetch failed"));
     const r = await enviarLembreteComReserva(admin(), entrada());
@@ -173,14 +174,14 @@ describe("enviarLembreteComReserva", () => {
   });
 
   it("excluirCanalIds pula a Meta", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.conversa = { last_inbound_at: horasAtras(1) };
     const r = await enviarLembreteComReserva(admin(), entrada({ excluirCanalIds: ["mc"] }));
     expect(r).toMatchObject({ desfecho: "enviado", canalId: "w1" });
   });
 
   it("todos fora do horário: nao_saiu/fora_do_horario", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.adiar.mockResolvedValue("2026-01-02T08:00:00Z");
     const r = await enviarLembreteComReserva(admin(), entrada());
     expect(r).toEqual({ desfecho: "nao_saiu", motivo: "fora_do_horario" });
@@ -188,27 +189,27 @@ describe("enviarLembreteComReserva", () => {
   });
 
   it("só Meta sem modelo: nao_saiu/meta_sem_modelo", async () => {
-    h.canais = [canal("mc", "meta_cloud")];
+    h.canais = [canal("mc", OFICIAL)];
     const r = await enviarLembreteComReserva(admin(), entrada());
     expect(r).toEqual({ desfecho: "nao_saiu", motivo: "meta_sem_modelo" });
   });
 
   it("todos recusam: nao_saiu/erro_apos_tentativas", async () => {
-    h.canais = [canal("w1", "waha")];
+    h.canais = [canal("w1", QR)];
     h.send.mockResolvedValue({ id: "x", status: "failed", error_code: "missing_phone_number", error_message: null });
     const r = await enviarLembreteComReserva(admin(), entrada());
     expect(r).toEqual({ desfecho: "nao_saiu", motivo: "erro_apos_tentativas" });
   });
 
   it("Meta sem modelo + QR fora do horário: fora_do_horario", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.adiar.mockResolvedValueOnce(null).mockResolvedValueOnce("2026-01-02T08:00:00Z");
     const r = await enviarLembreteComReserva(admin(), entrada());
     expect(r).toEqual({ desfecho: "nao_saiu", motivo: "fora_do_horario" });
   });
 
   it("Meta fora do horário + QR recusa: erro_apos_tentativas", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.adiar.mockResolvedValueOnce("2026-01-02T08:00:00Z").mockResolvedValueOnce(null);
     h.send.mockResolvedValue({ id: "x", status: "failed", error_code: "missing_phone_number", error_message: null });
     const r = await enviarLembreteComReserva(admin(), entrada());
@@ -216,14 +217,14 @@ describe("enviarLembreteComReserva", () => {
   });
 
   it("Meta sem modelo + QR recusa: erro_apos_tentativas", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.send.mockResolvedValue({ id: "x", status: "failed", error_code: "missing_phone_number", error_message: null });
     const r = await enviarLembreteComReserva(admin(), entrada());
     expect(r).toEqual({ desfecho: "nao_saiu", motivo: "erro_apos_tentativas" });
   });
 
-  it("ensureConversation falha na Meta: nada saiu, usa o waha", async () => {
-    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+  it("ensureConversation falha na Meta: nada saiu, usa o canal por QR", async () => {
+    h.canais = [canal("mc", OFICIAL), canal("w1", QR)];
     h.conversa = { last_inbound_at: horasAtras(1) };
     h.ensure.mockRejectedValueOnce(new Error("db")).mockResolvedValueOnce("conv2");
     const r = await enviarLembreteComReserva(admin(), entrada());
@@ -237,7 +238,7 @@ describe("enviarLembreteComReserva", () => {
   });
 
   it("metadata.lembrete leva appointment_id, degraus e tentativa", async () => {
-    h.canais = [canal("w1", "waha")];
+    h.canais = [canal("w1", QR)];
     await enviarLembreteComReserva(admin(), entrada({ degraus: [1440, 60], tentativa: 2 }));
     const [, ctx, input] = h.send.mock.calls[0]!;
     expect(input.metadata).toEqual({

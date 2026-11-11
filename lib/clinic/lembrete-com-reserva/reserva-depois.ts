@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { gravarDesfechoNoCompromisso } from "./desfecho";
 import { enviarLembreteComReserva } from "./enviar";
+import { PROVIDER_PREFERIDO_DO_LEMBRETE } from "@/lib/channels/lembrete";
 import { logger } from "@/lib/logger";
 
 import { soFalhasAvisadasDepois } from "./falha-avisada-depois";
@@ -68,7 +69,7 @@ export async function reenviarLembretesQueAMetaRecusou(
       .from("channel_sessions")
       .select("id")
       .eq("organization_id", org)
-      .eq("provider", "meta_cloud");
+      .eq("provider", PROVIDER_PREFERIDO_DO_LEMBRETE);
     if (erroDosCanais) {
       logger.error("[reserva-depois] leitura dos canais falhou", { error: erroDosCanais.message });
       continue;
@@ -167,7 +168,7 @@ async function cuidarDeUma(
       return await ignorar("consulta_passou");
     }
 
-    const desfecho = classificarEnvio("meta_cloud", {
+    const desfecho = classificarEnvio(PROVIDER_PREFERIDO_DO_LEMBRETE, {
       status: "failed",
       error_code: m.error_code,
       error_message: m.error_message,

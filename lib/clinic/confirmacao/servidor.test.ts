@@ -12,6 +12,7 @@ import {
   deveAnexarPedido,
   marcarSemResposta,
 } from "./servidor";
+import { PROVIDER_PREFERIDO_DO_LEMBRETE as OFICIAL, PROVIDER_DE_RESERVA_DO_LEMBRETE as QR } from "@/lib/channels/lembrete";
 
 /**
  * Cliente falso: cada `from(tabela)` devolve um construtor encadeável que
@@ -215,7 +216,7 @@ describe("FORK clinic (9006): o lembrete que falhou", () => {
   describe("carência enquanto a reserva do lembrete (#83) decide", () => {
     const comMensagem = (
       reserva: string | null,
-      provider = "meta_cloud",
+      provider = OFICIAL,
       extra: { external_id?: string | null; created_at?: string } = {},
     ) => ({
       ...pedido(),
@@ -277,7 +278,7 @@ describe("FORK clinic (9006): o lembrete que falhou", () => {
 
     it("falha velha (3 dias) com reserva nula: a 9006 abre a tarefa", async () => {
       const { cliente } = falso({
-        clinic_confirmation_requests: { select: { data: [comMensagem(null, "meta_cloud", { created_at: "2026-09-27T08:00:00Z" })] } },
+        clinic_confirmation_requests: { select: { data: [comMensagem(null, OFICIAL, { created_at: "2026-09-27T08:00:00Z" })] } },
         organizations: { select: { data: [{ id: "org-3" }] } },
         crm_tasks: { insert: { data: { id: "t-v" } } },
       });
@@ -286,16 +287,16 @@ describe("FORK clinic (9006): o lembrete que falhou", () => {
 
     it("recusa síncrona (sem external_id) com reserva nula: a 9006 abre a tarefa", async () => {
       const { cliente } = falso({
-        clinic_confirmation_requests: { select: { data: [comMensagem(null, "meta_cloud", { external_id: null })] } },
+        clinic_confirmation_requests: { select: { data: [comMensagem(null, OFICIAL, { external_id: null })] } },
         organizations: { select: { data: [{ id: "org-3" }] } },
         crm_tasks: { insert: { data: { id: "t-s" } } },
       });
       expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 1, falhas: 0 });
     });
 
-    it("mensagem de canal waha com reserva nula não fica presa", async () => {
+    it("mensagem de canal por QR com reserva nula não fica presa", async () => {
       const { cliente } = falso({
-        clinic_confirmation_requests: { select: { data: [comMensagem(null, "waha")] } },
+        clinic_confirmation_requests: { select: { data: [comMensagem(null, QR)] } },
         organizations: { select: { data: [{ id: "org-3" }] } },
         crm_tasks: { insert: { data: { id: "t-w" } } },
       });
