@@ -13,12 +13,15 @@ Agora, **se a clínica ligar a chave nova**, o lembrete segue esta ordem:
    aprovado** escolhido para aquele tipo de agendamento.
 2. Se a Meta não puder (sem modelo, fora do horário, recusou com certeza), tenta o **número de QR code**.
 3. Se nenhum funcionar, o lembrete **não** é marcado como enviado, a tela mostra o motivo e a próxima rodada tenta de
-   novo, no máximo 3 vezes. Na 3ª, desiste e abre a tarefa "ligar" que já existia.
+   novo, no máximo 3 vezes. Enquanto ainda há tentativa, o selo diz "Lembrete não saiu — tentando de novo (1/3)"; só
+   depois da 3ª ele diz "— ligar". A tarefa "ligar" (a que já existia) **não** abre na 3ª falha: ela só abre quando a
+   **confirmação automática** da clínica está ligada e **somente na janela de até 4 horas antes da consulta**. Com a
+   confirmação automática desligada, não abre tarefa nenhuma (só o selo na tela).
 4. Se a Meta aceitar o envio e só depois avisar que não entregou, o lembrete sai na hora pelo QR code (uma única vez),
    desde que a consulta ainda não tenha começado.
 
 Regras de segurança: nunca manda duas vezes (erro duvidoso não reenvia); quem pediu para não receber mensagens
-(contato bloqueado) não recebe por nenhum número; **chave desligada = tudo como era antes**. A chave **nasce
+(contato bloqueado) não recebe por nenhum número e, com a chave ligada, também **não ganha tarefa de ligar**; **chave desligada = tudo como era antes**. A chave **nasce
 desligada**.
 
 ## Como validar na 3001 (passo a passo)
@@ -48,11 +51,11 @@ o seletor, confere o selo e devolve a chave a **desligada**, apagando tudo o que
 
 | Foto | O que mostra |
 |---|---|
-| ![01](../../../evidence/83-lembrete-com-reserva/01-seletor-ausente-com-a-chave-desligada.png) | chave desligada: o seletor de modelo **não** existe |
-| ![02](../../../evidence/83-lembrete-com-reserva/02-chave-desligada-em-profissionais.png) | cartão novo em Profissionais, desligado |
-| ![03](../../../evidence/83-lembrete-com-reserva/03-chave-ligada-em-profissionais.png) | cartão ligado (botão "Desligar") |
-| ![04](../../../evidence/83-lembrete-com-reserva/04-seletor-de-modelo-com-a-chave-ligada.png) | seletor com "Nenhum" e a frase de onde criar o modelo |
-| ![05](../../../evidence/83-lembrete-com-reserva/05-selo-lembrete-sem-modelo.png) | selo "Lembrete não saiu: janela fechada e sem modelo aprovado — ligar" na Recepção |
+| `evidence/83-lembrete-com-reserva/01-seletor-ausente-com-a-chave-desligada.png` | chave desligada: o seletor de modelo **não** existe |
+| `evidence/83-lembrete-com-reserva/02-chave-desligada-em-profissionais.png` | cartão novo em Profissionais, desligado |
+| `evidence/83-lembrete-com-reserva/03-chave-ligada-em-profissionais.png` | cartão ligado (botão "Desligar") |
+| `evidence/83-lembrete-com-reserva/04-seletor-de-modelo-com-a-chave-ligada.png` | seletor com "Nenhum" e a frase de onde criar o modelo |
+| `evidence/83-lembrete-com-reserva/05-selo-lembrete-sem-modelo.png` | selo "Lembrete não saiu: janela fechada e sem modelo aprovado — ligar" na Recepção |
 
 Observação: o selo só aparece com a chave **ligada** (de propósito: desligada, a tela é idêntica à de antes). Ele
 aparece na Recepção e no histórico da agenda; o painel de detalhe da consulta continua mostrando só o pedido de
@@ -82,6 +85,10 @@ Nota: ao fim do Playwright no Windows aparece `Assertion failed: !(handle->flags
 sai com 127 mesmo com "1 passed" — é um defeito conhecido do Node no Windows ao encerrar, não do teste.
 
 ## Antes de publicar (ordem importa)
+> **ATENÇÃO — risco alto:** aplique a migration **8023 ANTES de subir o código**. Se o código subir primeiro, o robô
+> que manda os lembretes (cron) passa a dar erro para **TODAS as clínicas, mesmo as de chave desligada**, e **nenhum
+> lembrete sai** até a migration ser aplicada. Não é só as telas que quebram.
+
 **A migration 8023 precisa ser aplicada no banco ANTES de subir o código.** Sem ela, as colunas novas
 (`reminder_meta_template_id`, `reminder_tentativas`, `reminder_falha`, `reminder_falha_at`) não existem e as telas de
 Agendamentos e a Recepção falham ao ler. A migration é aditiva e idempotente (nada removido). Arquivo:

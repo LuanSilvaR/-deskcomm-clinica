@@ -105,6 +105,8 @@ test.beforeAll(async () => {
       owner_user_id: creds.users.agent!.id,
       contact_id: contatoId,
       status: "confirmed",
+      // Já carimbado como lembrado: o lembrete NÃO está vencido, então um cron rodando no mesmo banco não envia nada de verdade.
+      reminder_sent_offsets_minutes: [1440],
       reminder_falha: "meta_sem_modelo",
       reminder_falha_at: new Date().toISOString(),
     })
