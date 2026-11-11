@@ -694,6 +694,17 @@ export function TiposDeAgendamentoClient({
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const dados = new FormData(e.currentTarget);
+                  // #83: calculado FORA do corpo do PATCH (a cerca tela → rota lê
+                  // as chaves do corpo, e estes quatro são argumentos, não campos).
+                  const parteDoModelo = parteDoModeloNoPatch({
+                    chaveLigada: lembreteComReservaLigado,
+                    lembreteLigado: dados.get("reminder_enabled") === "on",
+                    inicial: valorInicialDoSeletor(
+                      tipo.reminder_meta_template_id,
+                      modelosDoLembrete.map((m) => m.id),
+                    ),
+                    atual: String(dados.get("reminder_meta_template_id") ?? ""),
+                  });
                   const feito = await comErro(
                     () =>
                       apiClient.patch("/api/v1/agenda/tipos", {
@@ -748,15 +759,7 @@ export function TiposDeAgendamentoClient({
                           : {}),
                         // #83: só com a chave ligada o seletor existe; "Nenhum"
                         // vira null (limpa). Desligado, o campo nem é enviado.
-                        ...parteDoModeloNoPatch({
-                          chaveLigada: lembreteComReservaLigado,
-                          lembreteLigado: dados.get("reminder_enabled") === "on",
-                          inicial: valorInicialDoSeletor(
-                            tipo.reminder_meta_template_id,
-                            modelosDoLembrete.map((m) => m.id),
-                          ),
-                          atual: String(dados.get("reminder_meta_template_id") ?? ""),
-                        }),
+                        ...parteDoModelo,
                       }),
                     "Tipo alterado.",
                   );
