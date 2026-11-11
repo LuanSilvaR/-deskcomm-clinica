@@ -121,4 +121,13 @@ describe("valorParaParametro", () => {
   it("tira quebra de linha e tabulação", () => {
     expect(valorParaParametro("Rua A\n\t 12")).toBe("Rua A 12");
   });
+
+  it("junta espaços repetidos e espaços especiais", () => {
+    expect(valorParaParametro("A  B")).toBe("A B");
+    expect(valorParaParametro("A  B")).toBe("A B");
+  });
+
+  it("corta em 200 caracteres", () => {
+    expect(valorParaParametro("x".repeat(250))).toHaveLength(200);
+  });
 });

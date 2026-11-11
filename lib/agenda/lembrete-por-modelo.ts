@@ -30,12 +30,13 @@ import { deriveTemplateContract } from "@/lib/channels/meta/template-contract";
 export const ORDEM_DAS_VARIAVEIS_DO_LEMBRETE = ["primeiro_nome", "quando", "titulo", "endereco"] as const;
 
 /**
- * Limpa o valor para parâmetro de modelo da Meta: quebra de linha e tabulação
- * (com os espaços ao redor) viram um espaço, 4+ espaços seguidos viram um, e as pontas são aparadas.
- * Local: o fork não tem `lib/channels/meta/variaveis-do-fluxo.ts`.
+ * Limpa o valor para parâmetro de modelo da Meta: qualquer sequência de espaço,
+ * quebra de linha ou tabulação vira um espaço, as pontas são aparadas e o valor
+ * é cortado em 200 caracteres. Igual ao upstream (`variaveis-do-fluxo.ts`), que o
+ * fork não tem.
  */
 export function valorParaParametro(v: string): string {
-  return v.replace(/ *[\r\n\t][ \r\n\t]*/g, " ").replace(/ {4,}/g, " ").trim();
+  return v.replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
 /** A linha de `meta_templates` que o lembrete lê. */
