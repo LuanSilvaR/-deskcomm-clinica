@@ -26,6 +26,7 @@ import {
   interpretarResposta,
   type RespostaDeConfirmacao,
 } from "./resposta";
+import { aguardaAReservaDaMeta } from "../lembrete-com-reserva/falha-avisada-depois";
 import type { StatusDaConfirmacao } from "./status";
 
 type Admin = SupabaseClient;
@@ -297,6 +298,8 @@ export function tipoPedeConfirmacao(tipo: {
 
 interface MensagemDoLembrete {
   status: string;
+  external_id: string | null;
+  created_at: string;
   metadata: { lembrete?: { reserva?: string | null } } | null;
   canal?: { provider: string } | { provider: string }[] | null;
 }
@@ -307,13 +310,11 @@ function mensagemDe(l: { mensagem?: MensagemDoLembrete | MensagemDoLembrete[] | 
   return Array.isArray(m) ? (m[0] ?? null) : m;
 }
 
-/** Mensagem da Meta, do lembrete com reserva, cuja reserva ainda não decidiu. */
-function aguardaAReserva(m: MensagemDoLembrete | null): boolean {
-  if (!m) return false;
-  const lembrete = m.metadata?.lembrete;
-  if (!lembrete || (lembrete.reserva ?? null) !== null) return false;
+/** Entrega ao predicado único (falha-avisada-depois.ts) o que o select trouxe. */
+function paraOPredicado(m: MensagemDoLembrete | null) {
+  if (!m) return null;
   const canal = Array.isArray(m.canal) ? m.canal[0] : m.canal;
-  return canal?.provider === "meta_cloud";
+  return { ...m, provider: canal?.provider };
 }
 
 /**
@@ -330,7 +331,7 @@ export async function marcarLembretesQueFalharam(
     .from("clinic_confirmation_requests")
     .select(
       "id, organization_id, contact_id, appointment_id, task_id, status, " +
-        "mensagem:messages!clinic_confirmation_requests_reminder_message_id_fkey!inner(status, metadata, canal:channel_sessions(provider)), " +
+        "mensagem:messages!clinic_confirmation_requests_reminder_message_id_fkey!inner(status, external_id, created_at, metadata, canal:channel_sessions(provider)), " +
         "calendar_appointments!inner(starts_at, status, title, owner_user_id, contact_id)",
     )
     .eq("status", "aguardando")
@@ -350,7 +351,10 @@ export async function marcarLembretesQueFalharam(
   // reenviar o lembrete que a Meta recusou depois. Enquanto `reserva` é nula,
   // a tarefa de ligar espera. Só vale para mensagem da Meta (a varredura da
   // reserva só olha esse canal).
-  const esperandoReserva = linhas.filter((l) => aguardaAReserva(mensagemDe(l)));
+  const esperandoReserva = linhas.filter((l) => {
+    const m = mensagemDe(l);
+    return m?.metadata?.lembrete?.reserva === "bloqueado" || aguardaAReservaDaMeta(paraOPredicado(m), agora);
+  });
   let orgsComReserva = new Set<string>();
   if (esperandoReserva.length > 0) {
     const { data: ligadas } = await admin
@@ -366,7 +370,12 @@ export async function marcarLembretesQueFalharam(
   for (const linha of linhas) {
     const agendamento = agendamentoDe(linha);
     if (!agendamento) continue;
-    if (orgsComReserva.has(linha.organization_id) && aguardaAReserva(mensagemDe(linha))) continue;
+    if (orgsComReserva.has(linha.organization_id)) {
+      const m = mensagemDe(linha);
+      // Opt-out (reserva 'bloqueado') não abre a tarefa de ligar.
+      if (m?.metadata?.lembrete?.reserva === "bloqueado") continue;
+      if (aguardaAReservaDaMeta(paraOPredicado(m), agora)) continue;
+    }
     try {
       const tarefa = await abrirTarefa(admin, {
         organizationId: linha.organization_id,

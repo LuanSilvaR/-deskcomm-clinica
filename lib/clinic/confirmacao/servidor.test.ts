@@ -213,12 +213,19 @@ describe("FORK clinic (9006): o lembrete que falhou", () => {
   });
 
   describe("carência enquanto a reserva do lembrete (#83) decide", () => {
-    const comMensagem = (reserva: string | null, provider = "meta_cloud") => ({
+    const comMensagem = (
+      reserva: string | null,
+      provider = "meta_cloud",
+      extra: { external_id?: string | null; created_at?: string } = {},
+    ) => ({
       ...pedido(),
       organization_id: "org-3",
       contact_id: "c3",
       mensagem: {
         status: "failed",
+        external_id: "wamid.x",
+        created_at: "2026-09-30T08:00:00Z",
+        ...extra,
         metadata: { lembrete: { appointment_id: "ag-1", degraus: [1440], tentativa: 1, reserva } },
         canal: { provider },
       },
@@ -254,6 +261,34 @@ describe("FORK clinic (9006): o lembrete que falhou", () => {
         clinic_confirmation_requests: { select: { data: [comMensagem(null)] } },
         organizations: { select: { data: [] } },
         crm_tasks: { insert: { data: { id: "t-z" } } },
+      });
+      expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 1, falhas: 0 });
+    });
+
+    it("reserva bloqueado (opt-out) não abre a tarefa de ligar", async () => {
+      const { cliente, chamadas } = falso({
+        clinic_confirmation_requests: { select: { data: [comMensagem("bloqueado")] } },
+        organizations: { select: { data: [{ id: "org-3" }] } },
+        crm_tasks: { insert: { data: { id: "t-b" } } },
+      });
+      expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 0, falhas: 0 });
+      expect(chamadas.some((c) => c.tabela === "crm_tasks")).toBe(false);
+    });
+
+    it("falha velha (3 dias) com reserva nula: a 9006 abre a tarefa", async () => {
+      const { cliente } = falso({
+        clinic_confirmation_requests: { select: { data: [comMensagem(null, "meta_cloud", { created_at: "2026-09-27T08:00:00Z" })] } },
+        organizations: { select: { data: [{ id: "org-3" }] } },
+        crm_tasks: { insert: { data: { id: "t-v" } } },
+      });
+      expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 1, falhas: 0 });
+    });
+
+    it("recusa síncrona (sem external_id) com reserva nula: a 9006 abre a tarefa", async () => {
+      const { cliente } = falso({
+        clinic_confirmation_requests: { select: { data: [comMensagem(null, "meta_cloud", { external_id: null })] } },
+        organizations: { select: { data: [{ id: "org-3" }] } },
+        crm_tasks: { insert: { data: { id: "t-s" } } },
       });
       expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 1, falhas: 0 });
     });

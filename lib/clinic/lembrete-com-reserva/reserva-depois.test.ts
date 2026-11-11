@@ -30,16 +30,18 @@ interface Cenario {
   compromisso?: Linha | null;
   bloqueado?: boolean;
   reivindica?: boolean;
+  erroNoPedido?: boolean;
 }
 
 const msg = (extra: Linha = {}, lembrete: Linha = {}): Linha => ({
   id: "m-1",
   contact_id: "ct-1",
   channel_session_id: "meta-1",
+  external_id: "wamid.x",
   body: "Oi, Maria! Sua consulta é amanhã.",
   status: "failed",
   error_code: "131026",
-  error_message: "meta_131026: Message undeliverable",
+  error_message: "Message undeliverable",
   metadata: { lembrete: { appointment_id: "ap-1", degraus: [1440], tentativa: 1, reserva: null, ...lembrete } },
   ...extra,
 });
@@ -74,6 +76,7 @@ function montar(c: Cenario) {
       q.update = (v: Linha) => ((o.op = "update"), (o.valores = v), q);
       const resultado = () => {
         if (o.op === "update") {
+          if (o.tabela === "clinic_confirmation_requests" && c.erroNoPedido) return { data: null, error: { message: "falhou" } };
           const reivindicacao = o.tabela === "messages" && o.filtros.some(([t]) => t === "is");
           return { data: reivindicacao ? (c.reivindica === false ? [] : [{ id: "m-1" }]) : null, error: null };
         }
@@ -188,6 +191,8 @@ describe("reenviarLembretesQueAMetaRecusou", () => {
     expect(leitura.filtros).toContainEqual(["eq", "status", "failed"]);
     expect(leitura.filtros).toContainEqual(["in", "channel_session_id", ["meta-1", "meta-2"]]);
     expect(leitura.filtros).toContainEqual(["not", "metadata->lembrete", "is"]);
+    // só o que a Meta aceitou (wamid): recusa síncrona nunca é candidata
+    expect(leitura.filtros).toContainEqual(["not", "external_id", "is"]);
     expect(leitura.filtros).toContainEqual(["is", "metadata->lembrete->>reserva", null]);
     expect(leitura.filtros).toContainEqual(["gt", "created_at", "2026-09-29T12:00:00.000Z"]);
   });
@@ -202,6 +207,44 @@ describe("reenviarLembretesQueAMetaRecusou", () => {
     expect(up?.filtros).toContainEqual(["eq", "appointment_id", "ap-1"]);
     expect(up?.filtros).toContainEqual(["eq", "reminder_message_id", "m-1"]);
     expect(up?.filtros).toContainEqual(["eq", "status", "aguardando"]);
+  });
+
+  it("recusa síncrona (sem external_id) nem é lida como candidata", async () => {
+    const { admin, ops } = montar({ mensagens: [] });
+    await reenviarLembretesQueAMetaRecusou(admin, AGORA);
+    const leitura = ops.find((o) => o.tabela === "messages" && o.op === "select")!;
+    expect(leitura.filtros).toContainEqual(["not", "external_id", "is"]);
+    expect(h.enviar).not.toHaveBeenCalled();
+    expect(ops.some((o) => o.tabela === "messages" && o.op === "update")).toBe(false);
+  });
+
+  it("repontar o pedido vem ANTES de marcar feita", async () => {
+    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "w", provider: "waha", mensagemId: "m-novo", via: "texto" });
+    const { admin, ops } = montar({});
+    await reenviarLembretesQueAMetaRecusou(admin, AGORA);
+    const iPedido = ops.findIndex((o) => o.tabela === "clinic_confirmation_requests" && o.op === "update");
+    const iFeita = ops.findIndex((o) => o.tabela === "messages" && o.valores?.metadata?.lembrete?.reserva === "feita");
+    expect(iPedido).toBeGreaterThan(-1);
+    expect(iPedido).toBeLessThan(iFeita);
+  });
+
+  it("erro ao repontar o pedido: não marca feita, marca ambiguo e não reenvia", async () => {
+    h.enviar.mockResolvedValue({ desfecho: "enviado", canalId: "w", provider: "waha", mensagemId: "m-novo", via: "texto" });
+    const { admin, ops } = montar({ erroNoPedido: true });
+    const r = await reenviarLembretesQueAMetaRecusou(admin, AGORA);
+    expect(h.enviar).toHaveBeenCalledTimes(1);
+    expect(r.reenviados).toBe(0);
+    expect(marcasNaMensagem(ops)).not.toContain("feita");
+    expect(marcasNaMensagem(ops).at(-1)).toBe("ambiguo");
+  });
+
+  it("QR fora do horário: devolve a reivindicação e não grava nada no compromisso", async () => {
+    h.enviar.mockResolvedValue({ desfecho: "nao_saiu", motivo: "fora_do_horario" });
+    const { admin, ops } = montar({});
+    const r = await reenviarLembretesQueAMetaRecusou(admin, AGORA);
+    expect(marcasNaMensagem(ops)).toEqual(["em_andamento", null]);
+    expect(ops.some((o) => o.tabela === "calendar_appointments" && o.op === "update")).toBe(false);
+    expect(r).toEqual({ reenviados: 0, semReserva: 0, ignorados: 1 });
   });
 
   it("nunca duas vezes: se a reivindicação não afeta nenhuma linha, nada é enviado", async () => {

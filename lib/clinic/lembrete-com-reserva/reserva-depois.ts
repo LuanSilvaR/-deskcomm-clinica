@@ -2,6 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { gravarDesfechoNoCompromisso } from "./desfecho";
 import { enviarLembreteComReserva } from "./enviar";
+import { logger } from "@/lib/logger";
+
+import { soFalhasAvisadasDepois } from "./falha-avisada-depois";
 import { classificarEnvio, MAX_TENTATIVAS_DO_LEMBRETE } from "./regra";
 
 /**
@@ -17,7 +20,6 @@ import { classificarEnvio, MAX_TENTATIVAS_DO_LEMBRETE } from "./regra";
  * condicional (`reserva` ainda nula). Só quem afetou a linha segue; uma rodada
  * concorrente que perde a disputa não envia nada.
  */
-const JANELA_MS = 2 * 24 * 60 * 60_000;
 const LIMITE_DE_ORGANIZACOES = 500;
 
 type Linha = Record<string, unknown>;
@@ -57,31 +59,37 @@ export async function reenviarLembretesQueAMetaRecusou(
     .limit(LIMITE_DE_ORGANIZACOES);
   if (!Array.isArray(orgs)) return resumo;
 
-  const desde = new Date(agora.getTime() - JANELA_MS).toISOString();
   let restante = limite;
 
   for (const { id: org } of orgs as { id: string }[]) {
     if (restante <= 0) break;
 
-    const { data: canais } = await admin
+    const { data: canais, error: erroDosCanais } = await admin
       .from("channel_sessions")
       .select("id")
       .eq("organization_id", org)
       .eq("provider", "meta_cloud");
+    if (erroDosCanais) {
+      logger.error("[reserva-depois] leitura dos canais falhou", { error: erroDosCanais.message });
+      continue;
+    }
     const metaIds = Array.isArray(canais) ? (canais as { id: string }[]).map((c) => c.id) : [];
     if (metaIds.length === 0) continue;
 
-    const { data: mensagens } = await admin
-      .from("messages")
-      .select("id, contact_id, body, error_code, error_message, metadata")
-      .eq("organization_id", org)
-      .eq("status", "failed")
-      .in("channel_session_id", metaIds)
-      .not("metadata->lembrete", "is", null)
-      .is("metadata->lembrete->>reserva", null)
-      .gt("created_at", desde)
+    const { data: mensagens, error: erroDasMensagens } = await soFalhasAvisadasDepois(
+      admin
+        .from("messages")
+        .select("id, contact_id, body, error_code, error_message, metadata")
+        .eq("organization_id", org)
+        .in("channel_session_id", metaIds),
+      agora,
+    )
       .order("created_at", { ascending: true })
       .limit(restante);
+    if (erroDasMensagens) {
+      logger.error("[reserva-depois] leitura das mensagens falhou", { error: erroDasMensagens.message });
+      continue;
+    }
     if (!Array.isArray(mensagens)) continue;
     restante -= mensagens.length;
 
@@ -100,7 +108,7 @@ async function cuidarDeUma(
   const metadata: Linha = m.metadata ?? {};
   const lembrete = (metadata.lembrete ?? {}) as DoLembrete;
 
-  const marcar = async (reserva: string) => {
+  const marcar = async (reserva: string | null) => {
     const { error } = await admin
       .from("messages")
       .update({ metadata: { ...metadata, lembrete: { ...lembrete, reserva } } })
@@ -193,6 +201,27 @@ async function cuidarDeUma(
       tentativa: proxima,
     });
 
+    if (r.desfecho === "nao_saiu" && r.motivo === "fora_do_horario") {
+      // Ruling 16: devolve a reivindicação e não grava selo; a próxima varredura
+      // tenta de novo quando o horário do QR abrir (dentro dos 2 dias).
+      await marcar(null);
+      resumo.ignorados += 1;
+      return;
+    }
+
+    if (r.desfecho === "enviado") {
+      // O pedido de confirmação aberto passa a olhar a mensagem nova (9006).
+      // ANTES de marcar feita: se falhar, cai no catch (ambíguo), nunca reenvia.
+      const { error: erroDoPedido } = await admin
+        .from("clinic_confirmation_requests")
+        .update({ reminder_message_id: r.mensagemId })
+        .eq("organization_id", org)
+        .eq("appointment_id", ap.id)
+        .eq("reminder_message_id", m.id)
+        .eq("status", "aguardando");
+      if (erroDoPedido) throw new Error(`repontar pedido: ${erroDoPedido.message}`);
+    }
+
     await marcar(r.desfecho === "nao_saiu" ? "sem_reserva" : "feita");
     await gravarDesfechoNoCompromisso(
       admin,
@@ -208,14 +237,6 @@ async function cuidarDeUma(
     );
 
     if (r.desfecho === "enviado") {
-      // O pedido de confirmação aberto passa a olhar a mensagem nova (9006).
-      await admin
-        .from("clinic_confirmation_requests")
-        .update({ reminder_message_id: r.mensagemId })
-        .eq("organization_id", org)
-        .eq("appointment_id", ap.id)
-        .eq("reminder_message_id", m.id)
-        .eq("status", "aguardando");
       resumo.reenviados += 1;
     } else if (r.desfecho === "nao_saiu") {
       resumo.semReserva += 1;
