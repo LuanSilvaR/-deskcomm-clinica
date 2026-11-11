@@ -431,10 +431,10 @@ const PARES: Array<{
   {
     tabela: "entregas_de_aviso_de_agendamento",
     coluna: "erro_codigo",
-    // Migration 0707: o MESMO vocabulário do aviso de caso — mesmo canal, mesmo
-    // transporte, mesmas causas.
-    arquivo: "lib/escalacao/vocabulario-do-aviso.ts",
-    simbolo: "ERROS_DA_ENTREGA_DE_AVISO",
+    // Migration 8020 (fork #84): o vocabulário do aviso de caso mais dois códigos
+    // que o aviso de caso do fork ainda não tem — lista própria, para bater.
+    arquivo: "lib/agenda/vocabulario-do-aviso-de-agendamento.ts",
+    simbolo: "ERROS_DA_ENTREGA_DE_AGENDAMENTO",
   },
   {
     tabela: "team_invites",

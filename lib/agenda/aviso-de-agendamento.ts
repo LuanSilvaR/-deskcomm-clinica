@@ -60,7 +60,7 @@ import {
   type PacingDoAviso,
   type TransporteDoAviso,
 } from "@/lib/escalacao/aviso-ao-suporte";
-import type { ErroDaEntregaDeAviso } from "@/lib/escalacao/vocabulario-do-aviso";
+import type { ErroDaEntregaDeAgendamento } from "@/lib/agenda/vocabulario-do-aviso-de-agendamento";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import type { EventRow } from "@/lib/event-log/dispatcher";
 import { logger } from "@/lib/logger";
@@ -158,13 +158,7 @@ export interface PatchDaEntregaDeAgendamento {
   enviado_em?: string | null;
 }
 
-/**
- * Os erros da entrega do aviso de agendamento: os do aviso de caso mais o destino
- * que voltou a ser número da própria organização (a `check` da migration 8020
- * aceita os dois). Fork #84: o vocabulário do aviso de caso do fork é anterior ao
- * do upstream, então o código extra mora aqui.
- */
-export type ErroDaEntregaDeAgendamento = ErroDaEntregaDeAviso | "destino_da_propria_organizacao";
+export type { ErroDaEntregaDeAgendamento } from "@/lib/agenda/vocabulario-do-aviso-de-agendamento";
 
 export interface AvisoDeAgendamentoDb
   extends Pick<

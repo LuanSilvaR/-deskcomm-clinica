@@ -38,6 +38,30 @@ export const ALVOS_DA_ENTREGA_DE_AGENDAMENTO = ["numero", "grupo"] as const;
 export type AlvoDaEntregaDeAgendamento = (typeof ALVOS_DA_ENTREGA_DE_AGENDAMENTO)[number];
 
 /** Os três eventos de `lib/agenda/laco.ts` que este aviso consome. */
+/**
+ * Os erros da entrega do aviso de agendamento — a `check` de
+ * `entregas_de_aviso_de_agendamento.erro_codigo` (migration 8020). Fork #84: são
+ * os do aviso de caso MAIS `canal_desativado` e `destino_da_propria_organizacao`,
+ * que o aviso de caso do fork ainda não tem (ele é anterior ao do upstream). Lista
+ * própria para o vocabulário banco × TypeScript bater com a tabela.
+ */
+export const ERROS_DA_ENTREGA_DE_AGENDAMENTO = [
+  "canal_desconectado",
+  "canal_arquivado",
+  "canal_nao_aceita_aviso_livre",
+  "canal_desativado",
+  "transporte_ausente",
+  "destino_invalido",
+  "destino_da_propria_organizacao",
+  "teto_diario_do_numero",
+  "sem_endereco_publico",
+  "titular_anonimizado",
+  "expirou",
+  "falha_no_envio",
+  "indeterminado",
+] as const;
+export type ErroDaEntregaDeAgendamento = (typeof ERROS_DA_ENTREGA_DE_AGENDAMENTO)[number];
+
 export const EVENTOS_DO_AVISO_DE_AGENDAMENTO = [
   "appointment.created",
   "appointment.rescheduled",
