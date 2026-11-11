@@ -47,7 +47,7 @@ export function montarDocumentoDoAtestado(
     rotulado("Data do ato", dataHoraNoFuso(d.anonimizado_em, d.fuso)),
     rotulado("Data de emissão", dataHoraNoFuso(d.emitido_em, d.fuso)),
     rotulado(rotuloDoCodigo, codigo.curto),
-    paragrafo("Confira este código em LGPD › Conferir código, no sistema da clínica. A autenticidade deste código pode ser confirmada pela clínica, mediante solicitação ao seu encarregado (DPO)."),
+    paragrafo("A autenticidade deste código pode ser confirmada pela clínica, mediante solicitação ao seu encarregado (DPO)."),
   ];
 
   return {

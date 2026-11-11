@@ -469,7 +469,7 @@ export function ProfissionaisClient({
           <div>
             <p className="font-medium">{t("Atestado de anonimização")}</p>
             <p className="text-sm text-text-muted">
-              {t("Ao anonimizar um paciente, o sistema gera um atestado em PDF com data, responsável, IP, o que foi anonimizado e o que foi guardado por lei (prontuário).")}
+              {t("Ao anonimizar um paciente, o sistema gera um atestado em PDF com data, responsável, IP, o que foi anonimizado e o que foi guardado por lei (prontuário, orçamentos e registros financeiros).")}
             </p>
           </div>
           {podeLigar ? (

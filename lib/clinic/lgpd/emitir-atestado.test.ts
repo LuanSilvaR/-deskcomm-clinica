@@ -202,7 +202,8 @@ describe("montarDocumentoDoAtestado", () => {
     expect(s).toContain("Código de integridade");
     expect(s).not.toContain("Código de autenticidade");
     expect(s).toContain("não registrado");
-    expect(s).toContain("Conferir código");
+    expect(s).toContain("encarregado (DPO)");
+    expect(s).not.toContain("Conferir código");
   });
 
   it("não carrega nome de paciente", () => {

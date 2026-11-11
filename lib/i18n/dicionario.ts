@@ -13185,11 +13185,11 @@ export const DICIONARIO: Traducoes = {
   "Título livre desligado": { es: "Título libre desactivado" },
   // FORK clinic (#87) — atestado de anonimização.
   "Atestado de anonimização": { es: "Certificado de anonimización" },
-  "Ao anonimizar um paciente, o sistema gera um atestado em PDF com data, responsável, IP, o que foi anonimizado e o que foi guardado por lei (prontuário).": {
-    es: "Al anonimizar a un paciente, el sistema genera un certificado en PDF con fecha, responsable, IP, lo que se anonimizó y lo que se guardó por ley (historia clínica).",
+  "Ao anonimizar um paciente, o sistema gera um atestado em PDF com data, responsável, IP, o que foi anonimizado e o que foi guardado por lei (prontuário, orçamentos e registros financeiros).": {
+    es: "Al anonimizar a un paciente, el sistema genera un certificado en PDF con fecha, responsable, IP, lo que se anonimizó y lo que se guardó por ley (historia clínica, presupuestos y registros financieros).",
   },
-  "Prontuário, anexos, termos e planos de tratamento ficam guardados pelo prazo legal.": {
-    es: "La historia clínica, los anexos, los términos y los planes de tratamiento se conservan durante el plazo legal.",
+  "Prontuário, anexos, termos, planos de tratamento, orçamentos e registros financeiros (valores e datas) ficam guardados pelo prazo legal.": {
+    es: "La historia clínica, los anexos, los términos, los planes de tratamiento, los presupuestos y los registros financieros (valores y fechas) se conservan durante el plazo legal.",
   },
   "Baixar atestado": { es: "Descargar certificado" },
   "Gerar atestado": { es: "Generar certificado" },

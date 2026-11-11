@@ -7,7 +7,7 @@ import { IDIOMA_PADRAO } from "@/lib/i18n/idiomas";
 
 export const VERSAO_DO_ATESTADO = "clinic-atestado-anonimizacao.v1";
 
-export type CategoriaRetida = "prontuario" | "anexos" | "documentos" | "planos" | "financeiro";
+export type CategoriaRetida = "prontuario" | "anexos" | "documentos" | "planos" | "financeiro" | "orcamentos";
 
 export const CATEGORIAS_RETIDAS: Record<
   CategoriaRetida,
@@ -35,10 +35,15 @@ export const CATEGORIAS_RETIDAS: Record<
     motivo: "integram o prontuário: mesma guarda legal (Lei 13.787/2018, art. 6º; LGPD art. 16, I)",
   },
   financeiro: {
-    tabelas: ["sales", "clinic_orcamentos"],
+    tabelas: ["sales"],
     rotulo: "Registros financeiros",
     motivo:
-      "registros fiscais e contábeis (CTN art. 173 e 174; prazo de 5 anos); cumprimento de obrigação legal (LGPD art. 16, I)",
+      "guarda de documentos fiscais até a prescrição dos créditos tributários (CTN art. 195, parágrafo único, c/c arts. 173 e 174); cumprimento de obrigação legal (LGPD art. 16, I)",
+  },
+  orcamentos: {
+    tabelas: ["clinic_orcamentos"],
+    rotulo: "Orçamentos",
+    motivo: "prova da oferta e do atendimento, para exercício regular de direitos (LGPD art. 7º, VI; CDC art. 27)",
   },
 };
 
@@ -173,7 +178,7 @@ export function textoDaDeclaracao(d: DadosDoAtestado): string {
     ? `${d.organization_name} (CNPJ ${d.organization_document})`
     : d.organization_name;
   const partes = [
-    `Declaramos, na qualidade de controlador (${controlador}), que os dados de identificação e de contato do titular identificado pelo protocolo ${d.atestado_id} foram anonimizados, em atendimento à solicitação do titular (LGPD art. 18, IV e VI), e os demais dados não sujeitos a guarda legal foram redigidos, em ${quando}, por ${executor}.`,
+    `Declaramos, na qualidade de controlador (${controlador}), que, em ${quando}, por ${executor}, em atendimento à solicitação do titular identificado pelo protocolo ${d.atestado_id} (LGPD art. 18, IV e VI), os dados de identificação e de contato desse titular foram anonimizados e os demais dados não sujeitos a guarda legal foram redigidos.`,
   ];
   const diferenca = Math.abs(new Date(d.emitido_em).getTime() - new Date(d.anonimizado_em).getTime());
   if (diferenca > CINCO_MINUTOS_MS) {

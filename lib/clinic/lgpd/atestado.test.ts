@@ -116,7 +116,10 @@ describe("textoDaDeclaracao", () => {
     expect(t).toContain("podem conter dados clínicos do titular");
     expect(CATEGORIAS_RETIDAS.prontuario.motivo).toContain("art. 11, II");
     expect(CATEGORIAS_RETIDAS.financeiro.rotulo).toBe("Registros financeiros");
-    expect(CATEGORIAS_RETIDAS.financeiro.tabelas).toContain("sales");
+    expect(CATEGORIAS_RETIDAS.financeiro.tabelas).toEqual(["sales"]);
+    expect(CATEGORIAS_RETIDAS.orcamentos.tabelas).toEqual(["clinic_orcamentos"]);
+    expect(CATEGORIAS_RETIDAS.orcamentos.rotulo).toBe("Orçamentos");
+    expect(t).toMatch(/que, em .*, por Ana Executora, na função de admin, em atendimento à solicitação do titular identificado pelo protocolo 11111111/);
   });
   it("a linha canônica continua com o e-mail do executor", () => {
     expect(linhaCanonica(dados()).split("|")[6]).toBe("ana@exemplo.test");
