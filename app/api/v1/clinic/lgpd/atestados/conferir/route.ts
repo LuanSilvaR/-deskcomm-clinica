@@ -6,6 +6,7 @@ import { type NextRequest } from "next/server";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { normalizarCodigoCurto } from "@/lib/clinic/lgpd/atestado";
+import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { atestadoLigado, recursoDesligado } from "../_comum";
@@ -15,6 +16,8 @@ export const dynamic = "force-dynamic";
 const corpo = z.object({ codigo: z.string().min(1).max(64) });
 
 export async function POST(req: NextRequest): Promise<Response> {
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
   const requestId = randomUUID();
   const authz = await requireRole("admin", { requestId, resource: "clinic_atestados_anonimizacao" });
   if (!authz.ok) return authz.response;
