@@ -1,5 +1,8 @@
 import { createHash, createHmac } from "node:crypto";
 
+import { tagDeIdioma } from "@/lib/i18n/datas";
+import { IDIOMA_PADRAO } from "@/lib/i18n/idiomas";
+
 // Núcleo puro do atestado de anonimização (LGPD). Sem I/O: só texto, código e datas.
 
 export const VERSAO_DO_ATESTADO = "clinic-atestado-anonimizacao.v1";
@@ -117,7 +120,7 @@ export function dataHoraNoFuso(iso: string, fuso: string): string {
   const data = new Date(iso);
   if (Number.isNaN(data.getTime())) return iso;
   const formatar = (tz: string) => {
-    const partes = new Intl.DateTimeFormat("pt-BR", {
+    const partes = new Intl.DateTimeFormat(tagDeIdioma(IDIOMA_PADRAO), {
       timeZone: tz,
       day: "2-digit",
       month: "2-digit",

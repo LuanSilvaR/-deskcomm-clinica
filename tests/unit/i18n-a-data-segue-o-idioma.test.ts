@@ -88,7 +88,6 @@ const FORA_DE_INTERFACE: Record<string, string> = {
   // da interface faria um documento de conformidade mudar de forma conforme
   // quem apertou o botão.
   "lib/lgpd/pdf-renderer.tsx": "documento legal brasileiro: a data acompanha a lei, não a interface",
-  "lib/clinic/lgpd/atestado.ts": "atestado de anonimização: documento legal brasileiro, a data acompanha a lei, não a interface",
 };
 
 function arquivos(dir: string, acc: string[] = []): string[] {
