@@ -16,6 +16,7 @@ import {
   clinicProfissionaisLigado,
   encaixeLigadoNaConfig,
   tituloLivreLigadoNaConfig,
+  atestadoAnonimizacaoLigadoNaConfig,
   duracaoNaMarcacaoLigadaNaConfig,
   estoqueLigado,
   orcamentosLigado,
@@ -68,6 +69,7 @@ export default async function ProfissionaisPage() {
         estoqueInicial={estoqueLigado(org?.settings)}
         encaixeInicial={encaixeLigadoNaConfig(org?.settings)}
         tituloLivreInicial={tituloLivreLigadoNaConfig(org?.settings)}
+        atestadoInicial={atestadoAnonimizacaoLigadoNaConfig(org?.settings)}
         duracaoNaMarcacaoInicial={duracaoNaMarcacaoLigadaNaConfig(org?.settings)}
         orcamentosInicial={orcamentosLigado(org?.settings)}
         prazoInicial={prazoDoPacienteHoras(org?.settings)}

@@ -13183,6 +13183,23 @@ export const DICIONARIO: Traducoes = {
   // FORK clinic (#81) — opção do título livre.
   "Título livre ligado": { es: "Título libre activado" },
   "Título livre desligado": { es: "Título libre desactivado" },
+  // FORK clinic (#87) — atestado de anonimização.
+  "Atestado de anonimização": { es: "Certificado de anonimización" },
+  "Ao anonimizar um paciente, o sistema gera um atestado em PDF com data, responsável, IP, o que foi apagado e o que foi guardado por lei (prontuário).": {
+    es: "Al anonimizar a un paciente, el sistema genera un certificado en PDF con fecha, responsable, IP, lo que se borró y lo que se guardó por ley (historia clínica).",
+  },
+  "Baixar atestado": { es: "Descargar certificado" },
+  "Gerar atestado": { es: "Generar certificado" },
+  "Código do atestado": { es: "Código del certificado" },
+  "Atestado gerado — código": { es: "Certificado generado — código" },
+  "Anonimizado. O atestado não foi gerado:": { es: "Anonimizado. El certificado no se generó:" },
+  "Gere de novo pela ficha.": { es: "Genérelo de nuevo desde la ficha." },
+  "Conferir código": { es: "Revisar código" },
+  "Atestado encontrado": { es: "Certificado encontrado" },
+  "anonimizado em": { es: "anonimizado el" },
+  "Nenhum atestado com este código": { es: "Ningún certificado con este código" },
+  "Atestados emitidos": { es: "Certificados emitidos" },
+  "Nenhum atestado emitido ainda.": { es: "Ningún certificado emitido todavía." },
   "Permitir digitar o título do compromisso ao marcar (aparece na agenda e no lembrete ao paciente)": {
     es: "Permitir escribir el título de la cita al agendar (aparece en la agenda y en el recordatorio al paciente)",
   },

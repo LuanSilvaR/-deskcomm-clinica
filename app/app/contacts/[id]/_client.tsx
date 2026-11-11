@@ -21,6 +21,7 @@ import { ROLE_RANK } from "@/lib/auth/types";
 import { TimelineView } from "@/components/contacts/TimelineView";
 import { EditContactDialog } from "@/components/contacts/EditContactDialog";
 import { AnonymizeDialog } from "@/components/contacts/AnonymizeDialog";
+import { AtestadoDoPaciente } from "@/components/clinic/lgpd/AtestadoDoPaciente";
 import { PropostasDeDado } from "@/components/contacts/PropostasDeDado";
 import { ConversaNoDossie } from "@/components/kanban/ConversaNoDossie";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
@@ -390,12 +391,15 @@ export function ContactDetailClient({ contactId, abaInicial }: Props) {
                 </p>
               </div>
               {contact.is_anonymized ? (
-                <p className="text-sm text-muted-foreground">
-                  {t("Este paciente já foi anonimizado")}
-                  {contact.anonymized_at &&
-                    ` em ${format(new Date(contact.anonymized_at), "dd/MM/yyyy HH:mm", { locale: localeDaData })}`}
-                  .
-                </p>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {t("Este paciente já foi anonimizado")}
+                    {contact.anonymized_at &&
+                      ` em ${format(new Date(contact.anonymized_at), "dd/MM/yyyy HH:mm", { locale: localeDaData })}`}
+                    .
+                  </p>
+                  <AtestadoDoPaciente contactId={contactId} />
+                </div>
               ) : (
                 <Button variant="destructive" onClick={() => setAnonOpen(true)}>
                   {t("Anonimizar paciente")}

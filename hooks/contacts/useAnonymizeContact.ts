@@ -4,7 +4,7 @@ import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import type { LgpdAnonymizeInput } from "@/lib/schemas/contacts";
 
-interface AnonymizeResponse {
+export interface AnonymizeResponse {
   data: {
     contact_id: string;
     anonymized_at: string | null;
@@ -17,6 +17,8 @@ interface AnonymizeResponse {
     action: "anonymized" | "resumed" | "already_anonymized";
     redacted_lead_ids: string[];
     redacted_activities: number;
+    /** FORK clinic (#87): só vem com a chave "Atestado de anonimização" ligada. */
+    atestado?: { id: string; codigo_curto: string; algoritmo: string; emitido_em: string } | { erro: string };
   };
 }
 

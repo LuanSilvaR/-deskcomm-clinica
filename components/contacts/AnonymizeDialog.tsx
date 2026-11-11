@@ -14,7 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { useAnonymizeContact } from "@/hooks/contacts/useAnonymizeContact";
+import { useAnonymizeContact, type AnonymizeResponse } from "@/hooks/contacts/useAnonymizeContact";
+import { baixarAtestado } from "@/components/clinic/lgpd/atestados";
 
 interface Props {
   contactId: string;
@@ -31,7 +32,10 @@ export function AnonymizeDialog({ contactId, open, onOpenChange }: Props) {
   const [justification, setJustification] = useState("");
   const [confirm, setConfirm] = useState("");
 
+  const [atestado, setAtestado] = useState<AnonymizeResponse["data"]["atestado"]>(undefined);
+
   function reset() {
+    setAtestado(undefined);
     setStep(1);
     setJustification("");
     setConfirm("");
@@ -54,6 +58,14 @@ export function AnonymizeDialog({ contactId, open, onOpenChange }: Props) {
         toast.info(t("Paciente já estava anonimizado, e não faltava nada."));
       } else {
         toast.success(t("Paciente anonimizado."));
+      }
+      if (res.data.atestado) {
+        // Fica aberto para mostrar o código (ou o motivo de não ter saído).
+        setStep(1);
+        setJustification("");
+        setConfirm("");
+        setAtestado(res.data.atestado);
+        return;
       }
       reset();
       onOpenChange(false);
@@ -79,7 +91,28 @@ export function AnonymizeDialog({ contactId, open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        {step === 1 ? (
+        {atestado ? (
+          <div className="space-y-4" data-testid="anonimizar-atestado">
+            {"codigo_curto" in atestado ? (
+              <p className="text-sm">
+                {t("Atestado gerado — código")}{" "}
+                <strong data-testid="atestado-codigo-gerado">{atestado.codigo_curto}</strong>
+              </p>
+            ) : (
+              <p className="text-sm">
+                {t("Anonimizado. O atestado não foi gerado:")} {atestado.erro}. {t("Gere de novo pela ficha.")}
+              </p>
+            )}
+            <DialogFooter>
+              {"codigo_curto" in atestado ? (
+                <Button variant="outline" data-testid="atestado-baixar" onClick={() => void baixarAtestado(atestado.id)}>
+                  {t("Baixar atestado")}
+                </Button>
+              ) : null}
+              <Button onClick={() => handleOpenChange(false)}>{t("Fechar")}</Button>
+            </DialogFooter>
+          </div>
+        ) : step === 1 ? (
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="anon-justif">{t("Justificativa (mínimo 10 caracteres)")}</Label>
