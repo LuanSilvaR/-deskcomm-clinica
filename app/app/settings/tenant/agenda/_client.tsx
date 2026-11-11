@@ -27,6 +27,8 @@ import {
 } from "@/lib/agenda/lembretes";
 import { apiClient } from "@/lib/api/client";
 
+import { parteDoModeloNoPatch, valorInicialDoSeletor } from "./modelo-do-lembrete";
+
 export interface TipoRow {
   id: string;
   name: string;
@@ -320,7 +322,7 @@ function LembreteDoCompromisso({
             <select
               name="reminder_meta_template_id"
               disabled={!ligado}
-              defaultValue={tipo.reminder_meta_template_id ?? ""}
+              defaultValue={valorInicialDoSeletor(tipo.reminder_meta_template_id, modelos.map((m) => m.id))}
               data-testid={`editar-lembrete-modelo-${tipo.id}`}
               className="rounded-md border border-border bg-surface p-2 text-sm text-text disabled:opacity-50"
             >
@@ -746,12 +748,15 @@ export function TiposDeAgendamentoClient({
                           : {}),
                         // #83: só com a chave ligada o seletor existe; "Nenhum"
                         // vira null (limpa). Desligado, o campo nem é enviado.
-                        ...(lembreteComReservaLigado && dados.get("reminder_enabled") === "on"
-                          ? {
-                              reminder_meta_template_id:
-                                String(dados.get("reminder_meta_template_id") ?? "") || null,
-                            }
-                          : {}),
+                        ...parteDoModeloNoPatch({
+                          chaveLigada: lembreteComReservaLigado,
+                          lembreteLigado: dados.get("reminder_enabled") === "on",
+                          inicial: valorInicialDoSeletor(
+                            tipo.reminder_meta_template_id,
+                            modelosDoLembrete.map((m) => m.id),
+                          ),
+                          atual: String(dados.get("reminder_meta_template_id") ?? ""),
+                        }),
                       }),
                     "Tipo alterado.",
                   );

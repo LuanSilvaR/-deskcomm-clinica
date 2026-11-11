@@ -308,7 +308,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const admin = createAdminClient();
   if (await modeloRecusado(admin, autorizado.org.orgId, lido.data.reminder_meta_template_id)) {
-    return fail("validation_error", t("Esse modelo não pode ser usado no lembrete."), 422, { requestId });
+    return fail("validation_failed", t("Esse modelo não pode ser usado no lembrete."), 422, { requestId });
   }
   const { data, error } = await admin
     .from("calendar_event_types")
@@ -362,7 +362,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
 
   const admin = createAdminClient();
   if (await modeloRecusado(admin, autorizado.org.orgId, lido.data.reminder_meta_template_id)) {
-    return fail("validation_error", t("Esse modelo não pode ser usado no lembrete."), 422, { requestId });
+    return fail("validation_failed", t("Esse modelo não pode ser usado no lembrete."), 422, { requestId });
   }
   const { data, error } = await admin
     .from("calendar_event_types")

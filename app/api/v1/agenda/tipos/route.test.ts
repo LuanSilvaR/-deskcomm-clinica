@@ -519,8 +519,33 @@ describe("modelo aprovado do lembrete (#83)", () => {
     const res = await PATCH(req("PATCH", { id: TIPO_DA_ORG, reminder_meta_template_id: MODELO_DE_FORA }));
 
     expect(res.status).toBe(422);
-    expect((await corpoDeErro(res)).error.message).toBe("Esse modelo não pode ser usado no lembrete.");
+    const erro = (await corpoDeErro(res)).error;
+    expect(erro.code).toBe("validation_failed");
+    expect(erro.message).toBe("Esse modelo não pode ser usado no lembrete.");
     expect(escritas).toHaveLength(0);
+  });
+
+  it("POST: modelo inutilizável → 422 validation_failed, sem inserir", async () => {
+    authOk();
+    modelosUtilizaveis();
+    const linhas: Linha[] = [];
+    const { escritas } = makeAdmin(linhas);
+    const { POST } = await import("./route");
+
+    const res = await POST(
+      req("POST", {
+        name: "Retorno",
+        category: "retorno",
+        duration_minutes: 15,
+        location_kind: "in_person",
+        reminder_meta_template_id: MODELO_DE_FORA,
+      }),
+    );
+
+    expect(res.status).toBe(422);
+    expect((await corpoDeErro(res)).error.code).toBe("validation_failed");
+    expect(escritas).toHaveLength(0);
+    expect(linhas).toHaveLength(0);
   });
 
   it("aceita null para limpar, sem consultar modelos", async () => {
