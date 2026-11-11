@@ -78,7 +78,9 @@ import { autorizaCron } from "@/lib/auth/cron-auth";
 import { deveAnexarPedido, registrarPedido } from "@/lib/clinic/confirmacao/servidor";
 import { PEDIDO_DE_CONFIRMACAO } from "@/lib/clinic/confirmacao/resposta";
 import { enviarLembreteComReserva } from "@/lib/clinic/lembrete-com-reserva/enviar";
-import { lembreteComReservaLigado, MAX_TENTATIVAS_DO_LEMBRETE } from "@/lib/clinic/lembrete-com-reserva/regra";
+import { gravarDesfechoNoCompromisso } from "@/lib/clinic/lembrete-com-reserva/desfecho";
+import { reenviarLembretesQueAMetaRecusou } from "@/lib/clinic/lembrete-com-reserva/reserva-depois";
+import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
 
 export const dynamic = "force-dynamic";
 
@@ -271,6 +273,16 @@ async function handle(req: NextRequest): Promise<Response> {
   const admin = createAdminClient();
   const agora = new Date();
 
+  // A Meta aceita o envio e só depois avisa que falhou (#83): a reserva dessas
+  // mensagens roda ANTES do laço e nunca derruba a rodada.
+  const reservas = await reenviarLembretesQueAMetaRecusou(admin, agora).catch((err: unknown) => {
+    logger.error("[agenda-reminder] varredura da reserva falhou", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId,
+    });
+    return { reenviados: 0, semReserva: 0, ignorados: 0 };
+  });
+
   // `!inner` no tipo: só interessa compromisso cujo TIPO pede lembrete. O corte
   // por `starts_at` usa a maior antecedência possível — o corte fino, que depende
   // do `reminder_minutes_before` de cada linha, é `estaNaHora` logo abaixo.
@@ -451,16 +463,16 @@ async function handle(req: NextRequest): Promise<Response> {
   // Rodada que não avisou ninguém NÃO é mutação, e não audita — a lei está no
   // CLAUDE.md §Audit log, e `tests/unit/cron-audita-so-quando-ha-efeito.test.ts`
   // varre o AST de toda rota deste diretório atrás de `audit` incondicional.
-  if (enviados > 0) {
+  if (enviados > 0 || reservas.reenviados > 0) {
     await audit({
       action: "agenda.lembrete_enviado",
       resourceType: "calendar_appointment",
       requestId,
-      metadata: { enviados, pulados, motivos },
+      metadata: { enviados, pulados, motivos, reservas },
     });
   }
 
-  return ok({ examinados: linhas.length, enviados, pulados, motivos }, { requestId });
+  return ok({ examinados: linhas.length, enviados, pulados, motivos, reservas }, { requestId });
 }
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -541,14 +553,6 @@ async function lembrarComReserva(
 ): Promise<{ resultado: "enviado" } | { resultado: "pulado"; motivo: string }> {
   const { linha, tipo, pendentes, contato, organizacao, requestId } = e;
   const org = linha.organization_id;
-  const agora = () => new Date().toISOString();
-  const carimbo = () => ({
-    reminder_sent_at: agora(),
-    reminder_sent_offsets_minutes: [...new Set([...(linha.reminder_sent_offsets_minutes ?? []), ...pendentes])],
-  });
-  const gravar = (campos: Record<string, unknown>) =>
-    admin.from("calendar_appointments").update(campos).eq("id", linha.id).eq("organization_id", org);
-
   try {
     const { corpo, pedeConfirmacao, idioma } = await montarCorpo(admin, e);
     const { dia, hora } = diaEHora(
@@ -576,59 +580,41 @@ async function lembrarComReserva(
       tentativa,
     });
 
-    if (r.desfecho === "enviado") {
-      await gravar({ ...carimbo(), reminder_falha: null, reminder_falha_at: null });
-      if (pedeConfirmacao) {
-        // O lembrete já saiu; falhar aqui só perde o registro do pedido.
-        const { data: msg } = await admin
-          .from("messages")
-          .select("conversation_id")
-          .eq("id", r.mensagemId)
-          .eq("organization_id", org)
-          .maybeSingle();
-        await registrarPedido(admin, {
-          organizationId: org,
+    const gravado = await gravarDesfechoNoCompromisso(
+      admin,
+      {
+        org,
+        appointmentId: linha.id,
+        degraus: pendentes,
+        jaEnviados: linha.reminder_sent_offsets_minutes,
+        tentativas,
+        tentativa,
+      },
+      r,
+    );
+    if (r.desfecho === "enviado" && pedeConfirmacao) {
+      // O lembrete já saiu; falhar aqui só perde o registro do pedido.
+      const { data: msg } = await admin
+        .from("messages")
+        .select("conversation_id")
+        .eq("id", r.mensagemId)
+        .eq("organization_id", org)
+        .maybeSingle();
+      await registrarPedido(admin, {
+        organizationId: org,
+        appointmentId: linha.id,
+        contactId: contato.id,
+        conversationId: (msg as { conversation_id: string } | null)?.conversation_id ?? null,
+        reminderMessageId: r.mensagemId,
+      }).catch((err: unknown) =>
+        logger.error("[agenda-reminder] pedido de confirmação não registrado", {
           appointmentId: linha.id,
-          contactId: contato.id,
-          conversationId: (msg as { conversation_id: string } | null)?.conversation_id ?? null,
-          reminderMessageId: r.mensagemId,
-        }).catch((err: unknown) =>
-          logger.error("[agenda-reminder] pedido de confirmação não registrado", {
-            appointmentId: linha.id,
-            error: err instanceof Error ? err.message : String(err),
-            requestId,
-          }),
-        );
-      }
-      return { resultado: "enviado" };
+          error: err instanceof Error ? err.message : String(err),
+          requestId,
+        }),
+      );
     }
-
-    if (r.desfecho === "ambiguo") {
-      // Pode ter saído: carimba para nunca reenviar e deixa o selo para a tela.
-      await gravar({ ...carimbo(), reminder_falha: "envio_nao_confirmado", reminder_falha_at: agora() });
-      return { resultado: "pulado", motivo: "envio_nao_confirmado" };
-    }
-
-    if (r.motivo === "fora_do_horario") {
-      // Adiamento: não carimba e não gasta tentativa; só deixa o selo.
-      await gravar({ reminder_falha: "fora_do_horario", reminder_falha_at: agora() });
-      return { resultado: "pulado", motivo: "fora_da_janela" };
-    }
-
-    const contadas = { ...tentativas };
-    for (const d of pendentes) contadas[String(d)] = tentativa;
-    if (tentativa >= MAX_TENTATIVAS_DO_LEMBRETE) {
-      // A 9006 (`marcarLembretesQueNaoSairam`) abre a tarefa "ligar" no prazo dela.
-      await gravar({
-        ...carimbo(),
-        reminder_tentativas: contadas,
-        reminder_falha: "erro_apos_tentativas",
-        reminder_falha_at: agora(),
-      });
-    } else {
-      await gravar({ reminder_tentativas: contadas, reminder_falha: r.motivo, reminder_falha_at: agora() });
-    }
-    return { resultado: "pulado", motivo: "erro_no_envio" };
+    return gravado;
   } catch (err) {
     logger.error("[agenda-reminder] envio falhou", {
       appointmentId: linha.id,

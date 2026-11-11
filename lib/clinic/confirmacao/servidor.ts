@@ -295,6 +295,27 @@ export function tipoPedeConfirmacao(tipo: {
   return degrauPedeConfirmacao([tipo.reminder_minutes_before ?? 0, ...(tipo.reminder_extra_offsets_minutes ?? [])]);
 }
 
+interface MensagemDoLembrete {
+  status: string;
+  metadata: { lembrete?: { reserva?: string | null } } | null;
+  canal?: { provider: string } | { provider: string }[] | null;
+}
+
+function mensagemDe(l: { mensagem?: MensagemDoLembrete | MensagemDoLembrete[] | null }): MensagemDoLembrete | null {
+  const m = l.mensagem;
+  if (!m) return null;
+  return Array.isArray(m) ? (m[0] ?? null) : m;
+}
+
+/** Mensagem da Meta, do lembrete com reserva, cuja reserva ainda não decidiu. */
+function aguardaAReserva(m: MensagemDoLembrete | null): boolean {
+  if (!m) return false;
+  const lembrete = m.metadata?.lembrete;
+  if (!lembrete || (lembrete.reserva ?? null) !== null) return false;
+  const canal = Array.isArray(m.canal) ? m.canal[0] : m.canal;
+  return canal?.provider === "meta_cloud";
+}
+
 /**
  * FORK clinic (9006) — o lembrete SAIU, mas a mensagem terminou `failed`. A
  * tarefa de ligar abre na hora: esperar as 4 h seria esperar uma resposta que
@@ -309,7 +330,7 @@ export async function marcarLembretesQueFalharam(
     .from("clinic_confirmation_requests")
     .select(
       "id, organization_id, contact_id, appointment_id, task_id, status, " +
-        "mensagem:messages!clinic_confirmation_requests_reminder_message_id_fkey!inner(status), " +
+        "mensagem:messages!clinic_confirmation_requests_reminder_message_id_fkey!inner(status, metadata, canal:channel_sessions(provider)), " +
         "calendar_appointments!inner(starts_at, status, title, owner_user_id, contact_id)",
     )
     .eq("status", "aguardando")
@@ -319,11 +340,33 @@ export async function marcarLembretesQueFalharam(
     .limit(limite);
   if (error) throw new Error(`varrer lembretes que falharam: ${error.message}`);
 
+  const linhas = (data ?? []) as unknown as (PedidoAberto & {
+    organization_id: string;
+    contact_id: string | null;
+    mensagem?: MensagemDoLembrete | MensagemDoLembrete[] | null;
+  })[];
+
+  // Carência (#83): numa organização com a chave ligada, a reserva ainda pode
+  // reenviar o lembrete que a Meta recusou depois. Enquanto `reserva` é nula,
+  // a tarefa de ligar espera. Só vale para mensagem da Meta (a varredura da
+  // reserva só olha esse canal).
+  const esperandoReserva = linhas.filter((l) => aguardaAReserva(mensagemDe(l)));
+  let orgsComReserva = new Set<string>();
+  if (esperandoReserva.length > 0) {
+    const { data: ligadas } = await admin
+      .from("organizations")
+      .select("id")
+      .in("id", [...new Set(esperandoReserva.map((l) => l.organization_id))])
+      .eq("settings->clinic->>lembrete_com_reserva", "true");
+    orgsComReserva = new Set(((Array.isArray(ligadas) ? ligadas : []) as { id: string }[]).map((o) => o.id));
+  }
+
   let marcados = 0;
   let falhas = 0;
-  for (const linha of (data ?? []) as unknown as (PedidoAberto & { organization_id: string; contact_id: string | null })[]) {
+  for (const linha of linhas) {
     const agendamento = agendamentoDe(linha);
     if (!agendamento) continue;
+    if (orgsComReserva.has(linha.organization_id) && aguardaAReserva(mensagemDe(linha))) continue;
     try {
       const tarefa = await abrirTarefa(admin, {
         organizationId: linha.organization_id,
