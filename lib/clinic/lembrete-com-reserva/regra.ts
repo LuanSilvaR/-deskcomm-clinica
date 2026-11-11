@@ -106,6 +106,10 @@ const NUMEROS_DA_META_QUE_FICAM_AMBIGUOS = {
   codigosDaGraph: [
     1, // Graph: API Unknown, falha desconhecida do servidor
     2, // Graph: API Service, indisponibilidade temporária
+    408, // HTTP 408: request timeout, a Meta pode ter aceitado
+    131000, // Graph: "Something went wrong", falha genérica do lado da Meta
+    131016, // Graph: serviço indisponível
+    133004, // Graph: servidor temporariamente indisponível
   ],
   httpMin: 500, // HTTP 5xx (500-599): erro de servidor, não prova que não foi aceita
   httpMax: 599,

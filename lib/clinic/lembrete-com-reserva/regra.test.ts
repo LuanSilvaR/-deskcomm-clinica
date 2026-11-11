@@ -85,6 +85,12 @@ describe("classificarEnvio", () => {
   it("meta_503 (servidor) é ambiguo", () => {
     expect(classificarEnvio("meta_cloud", { status: "failed", error_code: "meta_error", error_message: "meta_503: x" })).toBe("ambiguo");
   });
+  it("meta_408 (timeout HTTP) é ambiguo", () => {
+    expect(classificarEnvio("meta_cloud", { status: "failed", error_code: "meta_error", error_message: "meta_408: x" })).toBe("ambiguo");
+  });
+  it("meta_131016 (serviço indisponível) é ambiguo", () => {
+    expect(classificarEnvio("meta_cloud", { status: "failed", error_code: "meta_error", error_message: "meta_131016: x" })).toBe("ambiguo");
+  });
   it("meta_2 (serviço temporário) é ambiguo", () => {
     expect(classificarEnvio("meta_cloud", { status: "failed", error_code: "meta_error", error_message: "meta_2: x" })).toBe("ambiguo");
   });
