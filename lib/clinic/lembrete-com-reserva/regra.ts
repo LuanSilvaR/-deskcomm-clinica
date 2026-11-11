@@ -92,13 +92,25 @@ export function decidirPasso(i: {
   return { tipo: "pular", motivo: "meta_sem_modelo" };
 }
 
+/**
+ * Recusa síncrona da Meta: o adaptador lança `meta_<code>: ...` SÓ quando a Graph
+ * API respondeu (!res.ok ou body.error), ou seja, a Meta recusou e nunca aceitou
+ * a mensagem (lib/channels/adapters/meta-cloud.ts:317-321). Erro de rede/timeout
+ * lança outra coisa ("fetch failed"). O handler guarda isso em `error_message`.
+ * Padrão exclusivo da Meta.
+ */
+const RECUSA_SINCRONA_DA_META = /^meta_\d+:/;
+
 export function classificarEnvio(
   provider: ProviderDoLembrete,
-  m: { status: string; error_code: string | null } | { excecao: true },
+  m: { status: string; error_code: string | null; error_message?: string | null } | { excecao: true },
 ): DesfechoDoEnvio {
   if ("excecao" in m) return "ambiguo";
   if (m.status === "sent" || m.status === "delivered" || m.status === "read") return "enviado";
   if (m.status === "failed" && m.error_code && CODIGOS_QUE_GARANTEM_NAO_ENTREGA[provider].includes(m.error_code)) {
+    return "nao_saiu";
+  }
+  if (m.status === "failed" && provider === "meta_cloud" && RECUSA_SINCRONA_DA_META.test(m.error_message ?? "")) {
     return "nao_saiu";
   }
   return "ambiguo";
