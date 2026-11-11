@@ -200,6 +200,37 @@ describe("enviarLembreteComReserva", () => {
     expect(r).toEqual({ desfecho: "nao_saiu", motivo: "erro_apos_tentativas" });
   });
 
+  it("Meta sem modelo + QR fora do horário: fora_do_horario", async () => {
+    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+    h.adiar.mockResolvedValueOnce(null).mockResolvedValueOnce("2026-01-02T08:00:00Z");
+    const r = await enviarLembreteComReserva(admin(), entrada());
+    expect(r).toEqual({ desfecho: "nao_saiu", motivo: "fora_do_horario" });
+  });
+
+  it("Meta fora do horário + QR recusa: erro_apos_tentativas", async () => {
+    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+    h.adiar.mockResolvedValueOnce("2026-01-02T08:00:00Z").mockResolvedValueOnce(null);
+    h.send.mockResolvedValue({ id: "x", status: "failed", error_code: "missing_phone_number", error_message: null });
+    const r = await enviarLembreteComReserva(admin(), entrada());
+    expect(r).toEqual({ desfecho: "nao_saiu", motivo: "erro_apos_tentativas" });
+  });
+
+  it("Meta sem modelo + QR recusa: erro_apos_tentativas", async () => {
+    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+    h.send.mockResolvedValue({ id: "x", status: "failed", error_code: "missing_phone_number", error_message: null });
+    const r = await enviarLembreteComReserva(admin(), entrada());
+    expect(r).toEqual({ desfecho: "nao_saiu", motivo: "erro_apos_tentativas" });
+  });
+
+  it("ensureConversation falha na Meta: nada saiu, usa o waha", async () => {
+    h.canais = [canal("mc", "meta_cloud"), canal("w1", "waha")];
+    h.conversa = { last_inbound_at: horasAtras(1) };
+    h.ensure.mockRejectedValueOnce(new Error("db")).mockResolvedValueOnce("conv2");
+    const r = await enviarLembreteComReserva(admin(), entrada());
+    expect(r).toMatchObject({ desfecho: "enviado", canalId: "w1" });
+    expect(h.send).toHaveBeenCalledTimes(1);
+  });
+
   it("nenhum canal: nao_saiu/sem_caminho", async () => {
     const r = await enviarLembreteComReserva(admin(), entrada());
     expect(r).toEqual({ desfecho: "nao_saiu", motivo: "sem_caminho" });

@@ -81,7 +81,7 @@ export async function enviarLembreteComReserva(
   if (caminhos.length === 0) return { desfecho: "nao_saiu", motivo: "sem_caminho" };
 
   let pulosPorHorario = 0;
-  let pulosSemModelo = 0;
+  let tentouEFalhou = 0;
 
   for (const canal of caminhos) {
     const foraDoHorario = (await adiarAteAJanelaAbrir(admin, e.org, canal.id)) !== null;
@@ -107,15 +107,22 @@ export async function enviarLembreteComReserva(
 
     if (passo.tipo === "pular") {
       if (passo.motivo === "fora_do_horario") pulosPorHorario += 1;
-      else pulosSemModelo += 1;
       continue;
     }
 
     await espacarEnvio(canal.id);
 
+    let conversaId: string;
+    try {
+      conversaId = await ensureConversation(admin, e.org, e.contatoId, canal.id);
+    } catch {
+      // Sem conversa nada foi enviado: conta como tentativa que falhou e segue.
+      tentouEFalhou += 1;
+      continue;
+    }
+
     let mensagem: Mensagem;
     try {
-      const conversaId = await ensureConversation(admin, e.org, e.contatoId, canal.id);
       const metadata = {
         lembrete: { appointment_id: e.appointmentId, degraus: e.degraus, tentativa: e.tentativa, reserva: null },
       };
@@ -142,7 +149,6 @@ export async function enviarLembreteComReserva(
       )) as unknown as Mensagem;
     } catch {
       // Exceção não prova que não saiu: para aqui, nunca tenta o próximo caminho.
-      if (classificarEnvio(canal.provider, { excecao: true }) !== "ambiguo") throw new Error("exceção deve ser ambígua");
       return { desfecho: "ambiguo", canalId: canal.id, mensagemId: null };
     }
 
@@ -162,14 +168,11 @@ export async function enviarLembreteComReserva(
     }
     if (desfecho === "ambiguo") return { desfecho: "ambiguo", canalId: canal.id, mensagemId: mensagem.id };
     // nao_saiu: segue para o próximo caminho.
+    tentouEFalhou += 1;
   }
 
-  const pulos = pulosPorHorario + pulosSemModelo;
-  if (pulos === caminhos.length && pulosPorHorario === caminhos.length) {
-    return { desfecho: "nao_saiu", motivo: "fora_do_horario" };
-  }
-  if (pulos === caminhos.length && pulosSemModelo === caminhos.length) {
-    return { desfecho: "nao_saiu", motivo: "meta_sem_modelo" };
-  }
-  return { desfecho: "nao_saiu", motivo: "erro_apos_tentativas" };
+  // Só quem tentou e recebeu nao_saiu gasta tentativa; pulos não gastam.
+  if (tentouEFalhou > 0) return { desfecho: "nao_saiu", motivo: "erro_apos_tentativas" };
+  if (pulosPorHorario > 0) return { desfecho: "nao_saiu", motivo: "fora_do_horario" };
+  return { desfecho: "nao_saiu", motivo: "meta_sem_modelo" };
 }
