@@ -105,7 +105,7 @@ export function AnonymizeDialog({ contactId, open, onOpenChange }: Props) {
             )}
             <DialogFooter>
               {"codigo_curto" in atestado ? (
-                <Button variant="outline" data-testid="atestado-baixar" onClick={() => void baixarAtestado(atestado.id)}>
+                <Button variant="outline" data-testid="atestado-baixar-dialogo" onClick={() => void baixarAtestado(atestado.id)}>
                   {t("Baixar atestado")}
                 </Button>
               ) : null}

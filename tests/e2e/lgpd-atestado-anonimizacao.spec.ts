@@ -81,7 +81,7 @@ test("atestado de anonimização: gerar, baixar e conferir — pela tela", async
     const resposta = page.waitForResponse(
       (r) => /\/api\/v1\/clinic\/lgpd\/atestados\/[0-9a-f-]{36}$/.test(r.url()) && r.request().method() === "GET",
     );
-    await page.getByTestId("atestado-baixar").click();
+    await page.getByTestId("atestado-baixar-dialogo").click();
     const corpo = (await (await resposta).json()) as { data: { url: string } };
     const pdf = await page.request.get(corpo.data.url);
     expect(pdf.status()).toBe(200);
