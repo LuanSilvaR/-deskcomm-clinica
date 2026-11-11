@@ -47,6 +47,7 @@ import {
   menuClinicaLigado,
   orcamentosLigado,
   descontoMaxDaConfig,
+  atestadoAnonimizacaoLigadoNaConfig,
   procedimentosLigados,
   prontuarioLigado,
   travaSobreposicaoLigada,
@@ -83,6 +84,8 @@ async function lerOpcoes(orgId: string) {
     // FORK clinic (orçamento O1)
     orcamentos: orcamentosLigado(settings),
     orcamentos_desconto_max_pct: descontoMaxDaConfig(settings),
+    // FORK clinic (#87)
+    atestado_anonimizacao: atestadoAnonimizacaoLigadoNaConfig(settings),
   };
 }
 
@@ -110,6 +113,7 @@ const patchSchema = z
     titulo_livre: z.boolean().optional(),
     duracao_na_marcacao: z.boolean().optional(),
     orcamentos: z.boolean().optional(),
+    atestado_anonimizacao: z.boolean().optional(),
     orcamentos_desconto_max_pct: z.number().min(0).max(100).optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
@@ -130,6 +134,7 @@ const FUNCAO_DA_OPCAO = {
   titulo_livre: "fn_clinic_definir_titulo_livre",
   duracao_na_marcacao: "fn_clinic_definir_duracao_na_marcacao",
   orcamentos: "fn_clinic_definir_orcamentos",
+  atestado_anonimizacao: "fn_clinic_definir_atestado_anonimizacao",
 } as const;
 
 export async function PATCH(req: NextRequest): Promise<Response> {
@@ -221,7 +226,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao", "orcamentos"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao", "orcamentos", "atestado_anonimizacao"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });
