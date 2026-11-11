@@ -34,7 +34,7 @@ import {
 import { ok, fail } from "@/lib/api/wrappers";
 import { atestadoAnonimizacaoLigadoNaConfig } from "@/lib/clinic/flags";
 import { emitirAtestado } from "@/lib/clinic/lgpd/emitir-atestado";
-import { papelEmPortugues } from "@/lib/clinic/lgpd/papel";
+import { executorDoPedido, ipDoPedido } from "@/lib/clinic/lgpd/executor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/require-role";
 import { lgpdAnonymizeSchema, validateRequest } from "@/lib/schemas";
@@ -245,20 +245,12 @@ async function atestadoDaAnonimizacao(
     return null;
   }
   try {
-    const { user, org: papelDaOrg } = p.authz;
-
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip")?.trim() || null;
     const r = await emitirAtestado(admin, {
       orgId: p.orgId,
       contactId: p.contactId,
       anonimizadoEm: p.anonimizadoEm,
-      executor: {
-        user_id: user.id,
-        nome: user.full_name?.trim() || user.email.split("@")[0] || user.email,
-        email: user.email || null,
-        papel: papelEmPortugues(papelDaOrg.role),
-      },
-      ip,
+      executor: executorDoPedido(p.authz),
+      ip: ipDoPedido(req),
     });
     if (r.ok) return r.atestado;
     if (r.jaExistia) {
