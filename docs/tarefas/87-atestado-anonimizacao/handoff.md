@@ -121,3 +121,25 @@ Nenhuma impede o uso; ficam para um cartão de acabamento.
   digital real não é simulada nos testes; upload parcial não é limpo; sem marca cadastrada o atestado falha (igual ao
   prontuário); só traduz papéis dono/admin (a rota já exige admin).
 - **Decisão:** as rotas não funcionam com a clínica suspensa (não mexemos na autenticação do núcleo para isso).
+
+## Massa de teste (pacientes de mentira para validar a mão)
+Arquivo: [massa-de-teste.sql](massa-de-teste.sql). Já foi aplicada no banco local; pode aplicar de novo sem duplicar nada
+(o comando está no topo do arquivo). Todos os dados são inventados (telefones `+55 11 90000-9001` a `9003`, e-mails `@exemplo.test`).
+
+**Onde entrar:** clínica demo **Farias Rocha**, na porta 3001, com o login do dono: `dono@clinica-demo.test`.
+A senha **não está escrita aqui**: fica no arquivo `.demo-clinica-creds.json` (fora do git), na pasta
+`D:\Projeto_claude_estudos\DeskcommCRM`. Abra o arquivo e procure a linha do dono. Antes de testar, ligue a chave
+(flag) do atestado para a clínica, que é o primeiro passo da validação. Busque os pacientes pela tag `massa-teste`.
+
+| Paciente | O que fazer | O que o atestado deve mostrar |
+|---|---|---|
+| **Bruna Teste Atestado** (tem tudo) | Anonimizar na ficha (aba LGPD) e baixar o atestado. O nome, o telefone e o e-mail dela devem sumir da ficha. | Guardados: **Prontuário e atendimentos = 3** (1 prontuário + 2 atendimentos), **Documentos = 1**, **Planos = 1**, **Orçamentos = 1**, **Registros financeiros = 1**. Sem "Fotos e anexos" (veja abaixo). |
+| **Caio Teste Sem Prontuario** (só cadastro) | Anonimizar e baixar o atestado. | A frase **"Nenhum registro foi retido por obrigação legal."**, sem nenhuma categoria. |
+| **Diana Teste Ja Anonimizada** (já anonimizada, sem atestado) | Abrir a ficha e clicar em **Gerar atestado** (com a chave ligada, como admin). Aparece como "Contato Anonimizado #a7e57000". | O aviso de que foi **emitido depois** (mostra as duas datas) e **Prontuário e atendimentos = 2** (1 prontuário + 1 atendimento). |
+
+Observações:
+- Não há foto/anexo na massa de propósito: a tabela de anexos exige um arquivo real guardado no storage, e uma linha sem
+  arquivo apareceria como imagem quebrada. Para ver a categoria "Fotos e anexos", suba uma foto de verdade na ficha da Bruna
+  antes de anonimizá-la (o atestado deve mostrar 1).
+- O telefone da Diana e o da Bruna ficam só no cadastro do contato; ao anonimizar, somem da ficha.
+- A massa não liga a chave e não cria nenhum atestado: isso é por sua conta, durante a validação.
