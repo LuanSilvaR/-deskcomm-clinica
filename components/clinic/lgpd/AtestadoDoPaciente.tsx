@@ -16,7 +16,7 @@ export function AtestadoDoPaciente({ contactId }: { contactId: string }) {
 
   const gerar = useMutation({
     mutationFn: () => apiClient.post("/api/v1/clinic/lgpd/atestados", { contact_id: contactId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["clinic-atestados"] }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["clinic-atestados"] }),
     onError: showApiError,
   });
 

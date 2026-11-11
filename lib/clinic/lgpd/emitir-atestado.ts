@@ -132,6 +132,19 @@ export async function emitirAtestado(admin: SupabaseClient, p: PedidoDeEmissao):
       pades: assinado.signed_pades,
       versao: VERSAO_DO_ATESTADO,
     });
+    if (erroInsert && erroInsert.code !== "23505") {
+      // A gravação pode ter entrado e só a resposta se perdeu: se a linha com este id existe, o arquivo é dela.
+      const { data: gravada } = await admin
+        .from("clinic_atestados_anonimizacao")
+        .select("id, codigo_curto, algoritmo, emitido_em")
+        .eq("organization_id", p.orgId)
+        .eq("id", id)
+        .maybeSingle();
+      if (gravada) {
+        const g = gravada as { id: string; codigo_curto: string; algoritmo: typeof algoritmo; emitido_em: string };
+        return { ok: true, atestado: { id: g.id, codigo_curto: g.codigo_curto, algoritmo: g.algoritmo, emitido_em: g.emitido_em } };
+      }
+    }
     if (erroInsert) {
       try {
         await admin.storage.from(BUCKET_DO_ATESTADO).remove([caminho]);

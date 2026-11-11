@@ -34,7 +34,7 @@ import {
 import { ok, fail } from "@/lib/api/wrappers";
 import { atestadoAnonimizacaoLigadoNaConfig } from "@/lib/clinic/flags";
 import { emitirAtestado } from "@/lib/clinic/lgpd/emitir-atestado";
-import { executorDoPedido, ipDoPedido } from "@/lib/clinic/lgpd/executor";
+import { executorDoPedido, ipDoPedido, type AutorizadoDoPedido } from "@/lib/clinic/lgpd/executor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/require-role";
 import { lgpdAnonymizeSchema, validateRequest } from "@/lib/schemas";
@@ -232,7 +232,7 @@ async function atestadoDaAnonimizacao(
     orgId: string;
     contactId: string;
     anonimizadoEm: string;
-    authz: { user: { id: string; email: string; full_name: string | null }; org: { role: string } };
+    authz: AutorizadoDoPedido;
   },
 ): Promise<AtestadoNaResposta | null> {
   let admin: ReturnType<typeof createAdminClient>;

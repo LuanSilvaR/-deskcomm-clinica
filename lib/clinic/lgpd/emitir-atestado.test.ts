@@ -30,6 +30,8 @@ interface Cenario {
   contagens?: Record<string, number>;
   contagemErro?: boolean;
   removeLanca?: boolean;
+  /** O insert dá erro de rede, mas a linha chegou a entrar. */
+  gravouMesmoAssim?: boolean;
 }
 
 function stub(c: Cenario = {}) {
@@ -54,6 +56,8 @@ function stub(c: Cenario = {}) {
     };
     b.maybeSingle = async () => {
       chamadas.filtros.push({ tabela, filtros });
+      if (tabela === "clinic_atestados_anonimizacao" && c.gravouMesmoAssim && filtros.id)
+        return { data: { id: filtros.id, codigo_curto: "ABCD-1234", algoritmo: "hmac", emitido_em: "2026-11-11T12:00:00.000Z" }, error: null };
       if (tabela === "clinic_atestados_anonimizacao") return { data: c.existente ? { id: "x" } : null, error: null };
       if (tabela === "contacts") return { data: c.contato === false ? null : { id: CONTATO, name: "Paciente Fictício" }, error: null };
       if (tabela === "organizations") return { data: linhaOrg, error: null };
@@ -137,6 +141,22 @@ describe("emitirAtestado", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.erro).toContain("bucket cheio");
     expect(chamadas.inserts).toHaveLength(0);
+  });
+
+  it("erro de gravação com a linha já gravada: devolve sucesso e mantém o arquivo", async () => {
+    const { admin, chamadas } = stub({ insertErro: { message: "fetch failed" }, gravouMesmoAssim: true });
+    const r = await emitirAtestado(admin, pedido);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.atestado.codigo_curto).toBe("ABCD-1234");
+    expect(chamadas.removes).toHaveLength(0);
+    expect(chamadas.filtros.some((f) => f.tabela === "clinic_atestados_anonimizacao" && f.filtros.organization_id === ORG && f.filtros.id)).toBe(true);
+  });
+
+  it("erro de gravação sem linha gravada: remove o arquivo e devolve erro", async () => {
+    const { admin, chamadas } = stub({ insertErro: { message: "fetch failed" } });
+    const r = await emitirAtestado(admin, pedido);
+    expect(r.ok).toBe(false);
+    expect(chamadas.removes).toHaveLength(1);
   });
 
   it("em conflito 23505 remove o arquivo e avisa que já existia", async () => {

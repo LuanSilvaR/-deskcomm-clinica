@@ -110,8 +110,17 @@ quanto ao conselho, lista do anonimizado completa e orçamentos como categoria p
 Nenhuma impede o uso; ficam para um cartão de acabamento.
 - **Testes que faltam:** troca de `|` por `/` com 12 campos, a borda dos 5 minutos, os motivos das outras categorias;
   filtro por clínica nas leituras, o caso "retomado", contato de outra clínica, id inválido, PDF nulo.
-- **Texto do cartão:** diz "guardado por lei" também para orçamentos, mas a base deles é defesa de direitos; sugerido
-  "por obrigação legal ou para defesa de direitos".
+- **Texto do cartão:** resolvido na revisão final ("por obrigação legal ou para defesa de direitos").
+- **Cofre dos PDFs:** os arquivos PDF ficam no mesmo cofre dos relatórios LGPD, que hoje qualquer membro da clínica
+  consegue ler direto pelo armazenamento (não só administradores). O PDF não tem dado do paciente, só nome, função e IP
+  de quem anonimizou e as contagens. Sugerido um cartão próprio para restringir o cofre a administradores (regra do
+  núcleo; vale também para os relatórios LGPD).
+- **Clínica suspensa:** não consegue baixar o atestado até ser reativada.
+- **Frase de transparência:** a frase do diálogo de anonimização sobre o que fica guardado só aparece com a chave do
+  atestado ligada.
+- **Re-rodar a prova pela tela:** na porta 3001 exige uma cópia da config do Playwright com `reuseExistingServer` ligado
+  e o arquivo `.env.e2e` (assim o teste usa o site que já está no ar em vez de subir outro). A 3001 agora roda o #87
+  (a prévia do #83 foi substituída).
 - **Erros silenciosos ou crus:** se a leitura da chave falhar com a chave ligada, o atestado não sai e nada avisa; em
   alguns caminhos o erro interno chega cru ao navegador (500) e a leitura da chave com erro vira 403; erro de rede ao
   gravar vira erro genérico.

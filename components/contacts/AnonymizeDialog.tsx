@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useAnonymizeContact, type AnonymizeResponse } from "@/hooks/contacts/useAnonymizeContact";
-import { baixarAtestado } from "@/components/clinic/lgpd/atestados";
+import { baixarAtestado, useAtestadoLigado } from "@/components/clinic/lgpd/atestados";
 
 interface Props {
   contactId: string;
@@ -28,6 +28,7 @@ const CONFIRM_TEXT = "ANONIMIZAR";
 export function AnonymizeDialog({ contactId, open, onOpenChange }: Props) {
   const t = useT();
   const anon = useAnonymizeContact();
+  const atestadoLigado = useAtestadoLigado().data === true;
   const [step, setStep] = useState<1 | 2>(1);
   const [justification, setJustification] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -88,7 +89,12 @@ export function AnonymizeDialog({ contactId, open, onOpenChange }: Props) {
             {t(
               "Esta ação é irreversível. O nome será substituído por \"Contato Anonimizado #N\", email/telefone/CPF serão limpos, e atividades terão conteúdo redigido.",
             )}{" "}
-            {t("Prontuário, anexos, termos, planos de tratamento, orçamentos e registros financeiros (valores e datas) ficam guardados pelo prazo legal.")}
+            {atestadoLigado ? (
+              <>
+                {" "}
+                {t("Prontuário, anexos, termos, planos de tratamento, orçamentos e registros financeiros (valores e datas) ficam guardados pelo prazo legal ou para defesa de direitos.")}
+              </>
+            ) : null}
           </DialogDescription>
         </DialogHeader>
 
