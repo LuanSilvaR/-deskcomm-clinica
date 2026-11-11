@@ -87,7 +87,8 @@ describe("dataHoraNoFuso", () => {
 
 describe("itens e linhas retidas", () => {
   it("lista fixa de anonimizados", () => {
-    expect(itensAnonimizados().length).toBeGreaterThanOrEqual(6);
+    expect(itensAnonimizados().length).toBeGreaterThanOrEqual(7);
+    expect(itensAnonimizados().at(-1)).toContain("demais registros vinculados ao contato fora do prontuário");
   });
   it("só categorias com quantidade > 0", () => {
     expect(linhasRetidas({})).toEqual([]);
@@ -99,11 +100,26 @@ describe("itens e linhas retidas", () => {
 });
 
 describe("textoDaDeclaracao", () => {
-  it("traz o protocolo e nenhum e-mail além do executor", () => {
+  it("traz o protocolo e não traz o e-mail do executor", () => {
     const t = textoDaDeclaracao(dados());
     expect(t).toContain("11111111-2222-3333-4444-555555555555");
-    expect(t.match(/@/g)).toHaveLength(1);
-    expect(t).toContain("ana@exemplo.test");
+    expect(t).not.toContain("@");
+    expect(t).not.toContain("ana@exemplo.test");
+    expect(t).toContain("Ana Executora, na função de admin");
+  });
+  it("fixa o texto jurídico revisado", () => {
+    const t = textoDaDeclaracao(dados());
+    expect(t).not.toMatch(/pseudonim/i);
+    expect(t).toContain("dados de identificação e de contato");
+    expect(t).toContain("os demais dados não sujeitos a guarda legal foram redigidos");
+    expect(t).toContain("LGPD art. 18, IV e VI");
+    expect(t).toContain("podem conter dados clínicos do titular");
+    expect(CATEGORIAS_RETIDAS.prontuario.motivo).toContain("art. 11, II");
+    expect(CATEGORIAS_RETIDAS.financeiro.rotulo).toBe("Registros financeiros");
+    expect(CATEGORIAS_RETIDAS.financeiro.tabelas).toContain("sales");
+  });
+  it("a linha canônica continua com o e-mail do executor", () => {
+    expect(linhaCanonica(dados()).split("|")[6]).toBe("ana@exemplo.test");
   });
   it("avisa de emissão tardia só com mais de 5 minutos", () => {
     expect(textoDaDeclaracao(dados())).not.toContain("emitido posteriormente");

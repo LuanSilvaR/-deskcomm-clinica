@@ -87,7 +87,8 @@ export function AnonymizeDialog({ contactId, open, onOpenChange }: Props) {
           <DialogDescription>
             {t(
               "Esta ação é irreversível. O nome será substituído por \"Contato Anonimizado #N\", email/telefone/CPF serão limpos, e atividades terão conteúdo redigido.",
-            )}
+            )}{" "}
+            {t("Prontuário, anexos, termos e planos de tratamento ficam guardados pelo prazo legal.")}
           </DialogDescription>
         </DialogHeader>
 

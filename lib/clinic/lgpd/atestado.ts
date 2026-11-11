@@ -4,7 +4,7 @@ import { createHash, createHmac } from "node:crypto";
 
 export const VERSAO_DO_ATESTADO = "clinic-atestado-anonimizacao.v1";
 
-export type CategoriaRetida = "prontuario" | "anexos" | "documentos" | "planos";
+export type CategoriaRetida = "prontuario" | "anexos" | "documentos" | "planos" | "financeiro";
 
 export const CATEGORIAS_RETIDAS: Record<
   CategoriaRetida,
@@ -14,22 +14,28 @@ export const CATEGORIAS_RETIDAS: Record<
     tabelas: ["clinic_prontuarios", "clinic_atendimentos"],
     rotulo: "Prontuário e atendimentos",
     motivo:
-      "guarda mínima de 20 anos do prontuário (CFM 1.821/2007; Lei 13.787/2018); exceção da LGPD art. 16, I",
+      "guarda mínima de 20 anos a partir do último registro (Lei 13.787/2018, art. 6º, e normas do conselho profissional do responsável técnico); cumprimento de obrigação legal (LGPD art. 16, I, e art. 11, II, \"a\")",
   },
   anexos: {
     tabelas: ["clinic_anexos"],
     rotulo: "Fotos e anexos clínicos",
-    motivo: "idem: fazem parte do prontuário",
+    motivo: "integram o prontuário: mesma guarda legal (Lei 13.787/2018, art. 6º; LGPD art. 16, I)",
   },
   documentos: {
     tabelas: ["clinic_documentos_emitidos"],
     rotulo: "Documentos emitidos e termos",
-    motivo: "prova do consentimento e do contrato (LGPD art. 16, I e art. 7º, VI)",
+    motivo: "prova do consentimento e da prestação do serviço, para exercício regular de direitos (LGPD art. 7º, VI, e art. 11, II, \"d\"), durante o prazo prescricional (CDC art. 27)",
   },
   planos: {
     tabelas: ["clinic_planos_tratamento"],
     rotulo: "Planos de tratamento",
-    motivo: "parte do prontuário",
+    motivo: "integram o prontuário: mesma guarda legal (Lei 13.787/2018, art. 6º; LGPD art. 16, I)",
+  },
+  financeiro: {
+    tabelas: ["sales", "clinic_orcamentos"],
+    rotulo: "Registros financeiros",
+    motivo:
+      "registros fiscais e contábeis (CTN art. 173 e 174; prazo de 5 anos); cumprimento de obrigação legal (LGPD art. 16, I)",
   },
 };
 
@@ -139,6 +145,7 @@ export function itensAnonimizados(): string[] {
     "a agenda (títulos e notas)",
     "os orçamentos (observações e motivos)",
     "as tarefas, as propostas e as campanhas",
+    "demais registros vinculados ao contato fora do prontuário (casos, ligações, transcrições, prospecção, campos personalizados e captações)",
   ];
 }
 
@@ -158,14 +165,12 @@ const CINCO_MINUTOS_MS = 5 * 60 * 1000;
 export function textoDaDeclaracao(d: DadosDoAtestado): string {
   const quando = dataHoraNoFuso(d.anonimizado_em, d.fuso);
   const emissao = dataHoraNoFuso(d.emitido_em, d.fuso);
-  const executor = d.executor.email
-    ? `${d.executor.nome} (${d.executor.email}), na função de ${d.executor.papel}`
-    : `${d.executor.nome}, na função de ${d.executor.papel}`;
+  const executor = `${d.executor.nome}, na função de ${d.executor.papel}`;
   const controlador = d.organization_document
     ? `${d.organization_name} (CNPJ ${d.organization_document})`
     : d.organization_name;
   const partes = [
-    `Declaramos, na qualidade de controlador (${controlador}), que os dados pessoais do titular identificado pelo protocolo ${d.atestado_id} foram anonimizados em ${quando}, por ${executor}.`,
+    `Declaramos, na qualidade de controlador (${controlador}), que os dados de identificação e de contato do titular identificado pelo protocolo ${d.atestado_id} foram anonimizados, em atendimento à solicitação do titular (LGPD art. 18, IV e VI), e os demais dados não sujeitos a guarda legal foram redigidos, em ${quando}, por ${executor}.`,
   ];
   const diferenca = Math.abs(new Date(d.emitido_em).getTime() - new Date(d.anonimizado_em).getTime());
   if (diferenca > CINCO_MINUTOS_MS) {
@@ -174,7 +179,7 @@ export function textoDaDeclaracao(d: DadosDoAtestado): string {
     );
   }
   partes.push(
-    "Os registros retidos continuam ligados ao contato anonimizado, sem nome nem contato, pelos motivos legais indicados.",
+    "Os registros retidos permanecem sob guarda da clínica, com acesso restrito, apenas pelo prazo e para as finalidades legais indicadas, e podem conter dados clínicos do titular.",
   );
   return partes.join(" ");
 }

@@ -30,7 +30,7 @@ export function montarDocumentoDoAtestado(
 ): DocumentoTimbrado {
   const retidas = linhasRetidas(d.retidos);
   const rotuloDoCodigo = codigo.algoritmo === "hmac-sha256" ? "Código de autenticidade" : "Código de integridade";
-  const executor = [d.executor.nome, d.executor.email, d.executor.papel].filter(Boolean).join(" · ");
+  const executor = [d.executor.nome, d.executor.papel].filter(Boolean).join(" · ");
 
   const corpo: NoDoDocumento[] = [
     rotulado("Protocolo", d.atestado_id),
@@ -40,14 +40,14 @@ export function montarDocumentoDoAtestado(
     secao("O que foi retido e por quê"),
     retidas.length > 0
       ? lista(retidas.map((l) => `${l.rotulo}: ${l.quantidade} registro(s). Motivo: ${l.motivo}.`))
-      : paragrafo("Nenhum registro clínico foi retido."),
+      : paragrafo("Nenhum registro foi retido por obrigação legal."),
     secao("Execução"),
     rotulado("Responsável", executor),
     rotulado("IP", d.ip ?? "não registrado"),
     rotulado("Data do ato", dataHoraNoFuso(d.anonimizado_em, d.fuso)),
     rotulado("Data de emissão", dataHoraNoFuso(d.emitido_em, d.fuso)),
     rotulado(rotuloDoCodigo, codigo.curto),
-    paragrafo("Confira este código em LGPD › Conferir código, no sistema da clínica."),
+    paragrafo("Confira este código em LGPD › Conferir código, no sistema da clínica. A autenticidade deste código pode ser confirmada pela clínica, mediante solicitação ao seu encarregado (DPO)."),
   ];
 
   return {
