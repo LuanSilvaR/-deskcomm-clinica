@@ -128,7 +128,7 @@ Nenhuma impede o uso; ficam para um cartão de acabamento.
   para tradução); alguns botões sem identificador de teste.
 - **Detalhes do servidor:** data inválida some com o aviso "emitido depois"; teórica colisão `a|b` x `a/b`; a assinatura
   digital real não é simulada nos testes; upload parcial não é limpo; sem marca cadastrada o atestado falha (igual ao
-  prontuário); só traduz papéis dono/admin (a rota já exige admin).
+  prontuário). Todos os papéis saem em português; o suporte da plataforma aparece como "suporte da plataforma".
 - **Decisão:** as rotas não funcionam com a clínica suspensa (não mexemos na autenticação do núcleo para isso).
 
 ## Massa de teste (pacientes de mentira para validar a mão)
