@@ -1,7 +1,7 @@
 # #85 — Pacientes: a ficha guarda vários telefones (upstream #3671)
 
 ## O que entrou
-- **Banco — migration 8011** (9043 do upstream renumerada):
+- **Banco — migration 8018** (9043 do upstream renumerada):
   - tabela `contact_phones` (tenant-aware, RLS: leitura por organização, escrita a partir de `agent`);
   - `contacts.phone_type` e `contacts.phone_whatsapp`, preenchidos nas fichas existentes sem mexer em `updated_at`;
   - regra "um número, uma ficha viva" por gatilho: o extra que repete o principal ou o extra de outra ficha volta 23505.
@@ -21,7 +21,7 @@
   - a ficha mostra o bloco "Telefones" quando há extra.
 
 ## Acréscimos do fork
-- **Opção da clínica** `settings.clinic.varios_telefones` — migration **8012**, nasce desligada, com interruptor em Configurações › Profissionais.
+- **Opção da clínica** `settings.clinic.varios_telefones` — migration **8019**, nasce desligada, com interruptor em Configurações › Profissionais.
   - Ligada: a ficha ganha "Adicionar telefone" (número, tipo, WhatsApp e rótulo) e "Remover" em cada extra.
   - Rota: `POST/DELETE /api/v1/clinic/pacientes/{id}/telefones`.
   - Exige `agent`, o escopo de pacientes e a opção ligada.
@@ -30,7 +30,7 @@
 - **Busca da agenda e da recepção** ("Quem será atendido", Agenda do dia, info da agenda): acha o paciente pelo número extra (`idsPorTelefoneExtra` em `lib/clinic/pacientes/busca-no-banco.ts`).
 
 ## Prova
-- Banco local: 8011 e 8012 aplicadas e reaplicadas sem erro (idempotentes).
+- Banco local: 8018 e 8019 aplicadas e reaplicadas sem erro (idempotentes).
 - `ficha-com-varios-telefones` (21 casos): verde.
 - `clinic-varios-telefones-opcao`: verde.
 - 11 suítes de banco do fork que tocam as mesmas funções (juntar fichas, LGPD/cascata/8001/8002, `telefone-do-lid`): 65/65 verdes.

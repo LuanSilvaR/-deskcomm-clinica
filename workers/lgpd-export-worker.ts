@@ -173,7 +173,12 @@ export async function processLgpdExport(event: EventRow): Promise<HandlerResult>
     // 4. Render PDF (with warning banner when unsigned).
     const padesConfigured = isPadesConfigured();
     const { renderLgpdPdf } = await import("@/lib/lgpd/pdf-renderer");
-    const pdfBuffer = await renderLgpdPdf(data, { unsignedWarning: !padesConfigured });
+    // FORK clinic (papel timbrado D4): o relatório sai no papel timbrado da
+    // organização do PEDIDO (orgId do job, fonte confiável). Sem contexto
+    // (falha de leitura), o renderizador cai no controlador nos dois papéis.
+    const { resolverContextoDaMarca } = await import("@/lib/documentos/contexto-da-marca");
+    const contexto = await resolverContextoDaMarca(admin, orgId).catch(() => null);
+    const pdfBuffer = await renderLgpdPdf(data, { unsignedWarning: !padesConfigured, contexto });
 
     // 5. Sign (stubbed when key missing).
     const signResult = await signPdfPades(pdfBuffer);

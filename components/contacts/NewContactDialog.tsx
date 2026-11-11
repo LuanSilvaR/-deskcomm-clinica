@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useT } from "@/hooks/i18n/useT";
@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { normalizarTags } from "@/lib/contacts/tag-normalizada";
+import { ApiError } from "@/lib/api/types";
+import { mascararTelefoneBR, telefoneParaE164 } from "@/lib/clinic/pacientes/telefone-br";
 import { contactCreateSchema, type ContactCreate } from "@/lib/schemas/contacts";
 import type { Contact } from "@/lib/types/contacts";
 import { useCreateContact } from "@/hooks/contacts/useCreateContact";
@@ -23,6 +25,8 @@ interface FormShape {
   name?: string;
   email?: string;
   phone_number?: string;
+  /** FORK clinic (agenda S3 #68): nascimento (yyyy-MM-dd), opcional. */
+  birthdate?: string;
   cpf?: string;
   tagsRaw?: string;
 }
@@ -50,13 +54,16 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
   const t = useT();
   const create = useCreateContact();
   const [serverError, setServerError] = useState<string | null>(null);
+  // FORK clinic (agenda S3 #68): o telefone já é de outro paciente → link para ele.
+  const [existenteId, setExistenteId] = useState<string | null>(null);
 
   const form = useForm<FormShape>({
-    defaultValues: { name: nomeInicial ?? "", email: "", phone_number: "", cpf: "", tagsRaw: "" },
+    defaultValues: { name: nomeInicial ?? "", email: "", phone_number: "", birthdate: "", cpf: "", tagsRaw: "" },
   });
 
   async function onSubmit(values: FormShape) {
     setServerError(null);
+    setExistenteId(null);
     // A MESMA normalização da API (lib/contacts/tag-normalizada): o que a ficha
     // grava é o que o filtro `?tag=` casa (issue #1224).
     const tags = normalizarTags((values.tagsRaw ?? "").split(","));
@@ -64,7 +71,9 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
     const payload: Record<string, unknown> = { source: "manual" };
     if (values.name?.trim()) payload.name = values.name.trim();
     if (values.email?.trim()) payload.email = values.email.trim();
-    if (values.phone_number?.trim()) payload.phone_number = values.phone_number.trim();
+    // FORK clinic (agenda S3 #68): máscara BR na tela, E.164 na API.
+    if (values.phone_number?.trim()) payload.phone_number = telefoneParaE164(values.phone_number) ?? values.phone_number.trim();
+    if (values.birthdate?.trim()) payload.birthdate = values.birthdate.trim();
     if (values.cpf?.trim()) payload.cpf = values.cpf.trim();
     if (tags.length) payload.tags = tags;
 
@@ -86,8 +95,12 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
       // silêncio. Quem garante que este caminho não volta a errar é o tipo do
       // hook, ligado ao retorno da rota.
       if (resposta?.data?.contact) onCriado?.(resposta.data.contact);
-    } catch {
+    } catch (err) {
       // error toast already handled by hook
+      if (err instanceof ApiError && err.status === 409 && err.code === "contact_exists") {
+        const id = (err.details as { contact_id?: string } | undefined)?.contact_id;
+        if (id) setExistenteId(id);
+      }
     }
   }
 
@@ -110,12 +123,19 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
             <Input id="email" type="email" {...form.register("email")} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="phone_number">{t("Telefone (E.164)")}</Label>
+            <Label htmlFor="phone_number">{t("Telefone")}</Label>
             <Input
               id="phone_number"
-              placeholder="+5511999998888"
-              {...form.register("phone_number")}
+              inputMode="tel"
+              placeholder="(61) 98210-3837"
+              {...form.register("phone_number", {
+                onChange: (e: ChangeEvent<HTMLInputElement>) => form.setValue("phone_number", mascararTelefoneBR(e.target.value)),
+              })}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="birthdate">{t("Nascimento (opcional)")}</Label>
+            <Input id="birthdate" type="date" {...form.register("birthdate")} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="cpf">{t("CPF (opcional)")}</Label>
@@ -128,6 +148,14 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
           {serverError && (
             <p className="text-sm text-error-fg">{serverError}</p>
           )}
+          {existenteId ? (
+            <p className="text-sm" data-testid="paciente-ja-existe">
+              {t("Já existe um paciente com este telefone.")}{" "}
+              <a className="underline" href={`/app/contacts/${existenteId}`} target="_blank" rel="noreferrer">
+                {t("Abrir o paciente existente")}
+              </a>
+            </p>
+          ) : null}
           <DialogFooter>
             <Button
               type="button"

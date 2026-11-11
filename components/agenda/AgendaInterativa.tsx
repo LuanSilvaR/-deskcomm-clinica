@@ -55,6 +55,8 @@ export function AgendaInterativa({
   onAbrirAgendamento,
   donoId,
   foraDaAgenda,
+  ocultarFimDeSemana = false,
+  onSelecionarFaixa,
   podeRemarcar = true,
   etiquetas,
   className,
@@ -67,6 +69,10 @@ export function AgendaInterativa({
   donoId?: string | null;
   /** FORK clinic: jornada e bloqueios de `donoId`, por dia. */
   foraDaAgenda?: Record<string, ForaDaAgendaDoDia>;
+  /** FORK clinic (agenda S2 #67): repassado à grade. */
+  ocultarFimDeSemana?: boolean;
+  /** FORK clinic (agenda S7 #70): arrastar sobre horários livres seleciona uma faixa. */
+  onSelecionarFaixa?: (faixa: { inicio: string; fim: string }) => void;
   visao: VisaoDaAgenda;
   ancora: Date;
   /** INJETADO, como na grade: relógio lido aqui dentro daria dois relógios ao teste. */
@@ -356,6 +362,7 @@ export function AgendaInterativa({
         fechamentos={fechamentos}
         onAbrirAgendamento={onAbrirAgendamento}
         foraDaAgenda={foraDaAgenda}
+        ocultarFimDeSemana={ocultarFimDeSemana}
         className="min-h-0 flex-1"
         interacao={
           tipo && onMarcarEm
@@ -364,6 +371,7 @@ export function AgendaInterativa({
                 motivo,
                 duracaoMin: tipo.duracaoMin,
                 onMarcarEm,
+                onSelecionarFaixa,
                 onArrastarPara: !podeRemarcar ? undefined : ({ instante, razao, id }) => {
                   if (!instante) {
                     // RECUSA EXPLÍCITA, sem tocar no servidor: o destino não

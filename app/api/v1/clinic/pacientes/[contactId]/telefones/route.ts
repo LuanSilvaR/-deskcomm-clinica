@@ -1,10 +1,10 @@
 /**
- * FORK clinic (#85) — os telefones EXTRAS da ficha do paciente (`contact_phones`, 8011).
+ * FORK clinic (#85) — os telefones EXTRAS da ficha do paciente (`contact_phones`, 8018).
  *
  * POST   — acrescenta um número à ficha (forma canônica; tipo, WhatsApp e rótulo).
  * DELETE — tira um número extra da ficha (`?telefone=+55…`). O principal não sai por aqui.
  *
- * Só com `settings.clinic.varios_telefones` ligado (8012): desligada, a ficha só
+ * Só com `settings.clinic.varios_telefones` ligado (8019): desligada, a ficha só
  * MOSTRA os extras que já existem (ex.: vindos da junção de fichas). Escrita a
  * partir de `agent` — o mesmo piso do PATCH de contato e da RLS da tabela. A
  * regra "um número, uma ficha" é do banco: número de outra ficha (ou o principal

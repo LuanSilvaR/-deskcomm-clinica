@@ -15,6 +15,31 @@ export type UpdateTenantResult =
   | { ok: true }
   | { ok: false; error: string; details?: unknown };
 
+const CAMPOS_DE_CONTATO_E_ENDERECO = [
+  "contact_phone",
+  "address_cep",
+  "address_street",
+  "address_number",
+  "address_complement",
+  "address_district",
+  "address_city",
+  "address_uf",
+  "address_city_ibge_code",
+  "website",
+  "whatsapp_phone",
+  "descriptor",
+  "technical_lead_name",
+  "technical_lead_registry",
+] as const;
+
+function contatoEEndereco(d: TenantInput): Partial<Record<(typeof CAMPOS_DE_CONTATO_E_ENDERECO)[number], string | null>> {
+  const r: Partial<Record<(typeof CAMPOS_DE_CONTATO_E_ENDERECO)[number], string | null>> = {};
+  for (const k of CAMPOS_DE_CONTATO_E_ENDERECO) {
+    if (d[k] !== undefined) r[k] = d[k] ?? null;
+  }
+  return r;
+}
+
 export async function updateTenant(input: TenantInput): Promise<UpdateTenantResult> {
   const parsed = tenantSchema.safeParse(input);
   if (!parsed.success) {
@@ -78,6 +103,9 @@ export async function updateTenant(input: TenantInput): Promise<UpdateTenantResu
       media_retention_days: parsed.data.media_retention_days,
       dpo_email: parsed.data.dpo_email ?? null,
       privacy_policy_url: parsed.data.privacy_policy_url ?? null,
+      // FORK clinic (8011) — telefone e endereço. Só entra a chave que veio:
+      // um chamador que não conhece os campos (undefined) não apaga o endereço.
+      ...contatoEEndereco(parsed.data),
     })
     .eq("id", activeOrg.orgId);
   if (error) return { ok: false, error: error.message };

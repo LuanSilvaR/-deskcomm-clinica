@@ -1,6 +1,6 @@
--- 8012 · clinic (FORK) — opção dos vários telefones na ficha (#85, upstream #3671)
+-- 8019 · clinic (FORK) — opção dos vários telefones na ficha (#85, upstream #3671)
 -- Liga/desliga settings.clinic.varios_telefones (nasce desligada). Ligada, a ficha
--- do paciente deixa adicionar e remover telefones extras (`contact_phones`, 8011).
+-- do paciente deixa adicionar e remover telefones extras (`contact_phones`, 8018).
 -- Desligada, a ficha só MOSTRA os extras que já existem (ex.: vindos da junção de
 -- fichas). Aditiva; sem tabela; sem HTTP.
 

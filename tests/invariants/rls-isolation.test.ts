@@ -639,7 +639,7 @@ export const TABLES = [
   "campaigns",
   "campaign_templates",
   "campaign_channel_sessions",
-  // migration 9043 do upstream (#85, 8011 no fork) — o segundo telefone da ficha (Spec 31 B1). Leitura por
+  // migration 9043 do upstream (#85, 8018 no fork) — o segundo telefone da ficha (Spec 31 B1). Leitura por
   // organização; a escrita exige `agent`, o papel semeado aqui.
   "contact_phones",
   // ⚠️ `cobranca_assinaturas` (migration 0583) NÃO entra nesta lista, pelo mesmo

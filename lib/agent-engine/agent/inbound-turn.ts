@@ -1409,6 +1409,33 @@ export function parseCheckpointText(text: string): CheckpointContent {
 }
 
 /**
+ * #142 — o fechamento do turno, com nova tentativa SÓ dele.
+ *
+ * O checkpoint é pedido em JSON livre e o modelo às vezes erra o formato (medido:
+ * 1 em 15 turnos com o Claude Haiku 5.5). Antes, o erro subia direto e a fila
+ * re-rodava o turno INTEIRO — o LLM principal de novo, o turno pago duas vezes —
+ * por causa de uma chamada pequena. Aqui quem repete é só o fechamento; o erro
+ * de sempre (sem o texto do modelo, que pode ter PII) só sobe depois de esgotar
+ * as tentativas, e aí vale o retry da fila como antes.
+ */
+export async function fecharTurnoComCheckpoint(
+  gerar: () => Promise<string>,
+  opts: { tentativas?: number; aoFalhar?: (tentativa: number, erro: Error) => void } = {},
+): Promise<CheckpointContent> {
+  const tentativas = Math.max(1, opts.tentativas ?? 2);
+  let ultimo: Error | null = null;
+  for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
+    try {
+      return parseCheckpointText(await gerar());
+    } catch (err) {
+      ultimo = err instanceof Error ? err : new Error(String(err));
+      if (tentativa < tentativas) opts.aoFalhar?.(tentativa, ultimo);
+    }
+  }
+  throw ultimo ?? new Error('fechamento do turno sem JSON de checkpoint — run re-tentado pela fila');
+}
+
+/**
  * Blocos do ritual de abertura (pt-br: é a língua do agente), compartilhados entre
  * o turno inbound e o follow-up (F3-03) — checkpoint + resumo + estado do funil +
  * contexto curado. Só o CABEÇALHO e o RODAPÉ mudam entre os dois tipos de turno.
@@ -4045,39 +4072,52 @@ async function executarTurnoDoAgente(
       avisarSemCandidato(preview);
       return;
     }
-    const closing = await runModelCall(
-      pool,
-      deps.llmCfg,
-      {
-        tenantId,
-        leadId: leadId || null,
-        jobId: job?.id,
-        purpose: 'checkpoint',
-        ...(agentConfig !== null
-          ? {
-              model: agentConfig.model,
-              llmOverride: {
-                provider: agentConfig.provider,
-                credentialId: agentConfig.credentialId,
-              },
-            }
-          : {}),
-        system,
-        messages: [
-          // prune: o checkpoint reusa a abertura só como texto — a mídia nativa (cara) já
-          // fez seu trabalho na 1ª chamada e não precisa ir de novo.
-          ...openingTextOnly,
-          ...responseMessages,
-          { role: 'user', content: CHECKPOINT_INSTRUCTION },
-        ],
+    // Id da chamada que PRODUZIU o checkpoint aceito — o lastro da atividade, mais
+    // abaixo. Com nova tentativa, é sempre o da última (a que deu certo).
+    let closingCallId: string | undefined;
+    const content = await fecharTurnoComCheckpoint(
+      async () => {
+        const closing = await runModelCall(
+          pool,
+          deps.llmCfg,
+          {
+            tenantId,
+            leadId: leadId || null,
+            jobId: job?.id,
+            purpose: 'checkpoint',
+            ...(agentConfig !== null
+              ? {
+                  model: agentConfig.model,
+                  llmOverride: {
+                    provider: agentConfig.provider,
+                    credentialId: agentConfig.credentialId,
+                  },
+                }
+              : {}),
+            system,
+            messages: [
+              // prune: o checkpoint reusa a abertura só como texto — a mídia nativa (cara) já
+              // fez seu trabalho na 1ª chamada e não precisa ir de novo.
+              ...openingTextOnly,
+              ...responseMessages,
+              { role: 'user', content: CHECKPOINT_INSTRUCTION },
+            ],
+          },
+          { registry: deps.registry, log: runLog },
+        );
+        closingCallId = closing.callId ?? undefined;
+        return closing.result.text.replace(
+          /https:\/\/meet\.google\.com\/[a-zA-Z0-9-]+/g,
+          '[link da reunião disponível na Agenda]',
+        );
       },
-      { registry: deps.registry, log: runLog },
-    );
-    const content = parseCheckpointText(
-      closing.result.text.replace(
-        /https:\/\/meet\.google\.com\/[a-zA-Z0-9-]+/g,
-        '[link da reunião disponível na Agenda]',
-      ),
+      {
+        aoFalhar: (tentativa, erro) =>
+          runLog.warn('checkpoint inválido — repetindo só o fechamento do turno', {
+            tentativa,
+            error: erro.message.slice(0, 120),
+          }),
+      },
     );
 
     if (preview) {
@@ -4198,7 +4238,7 @@ async function executarTurnoDoAgente(
           // O lastro é a chamada de modelo que PRODUZIU este checkpoint
           // (llm_calls.id). Sem ele a linha entraria como 'system' e perderia a
           // autoria justamente no evento mais "de IA" que existe.
-          ...(closing.callId ? { evidence: { llm_call_ids: [closing.callId] } } : {}),
+          ...(closingCallId ? { evidence: { llm_call_ids: [closingCallId] } } : {}),
           ...(agentConfig?.agentId ? { agentId: agentConfig.agentId } : {}),
           reason: mudanca.reason,
           payload: {

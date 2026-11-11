@@ -1,5 +1,5 @@
 /**
- * clinic (fork, pacientes #85) — migration 8012: opção dos vários telefones na ficha.
+ * clinic (fork, pacientes #85) — migration 8019: opção dos vários telefones na ficha.
  *
  * Prova no Postgres real:
  *   - nasce desligada; só o administrador liga (e desliga);
@@ -63,7 +63,7 @@ beforeAll(() => {
   `);
 });
 
-describe("opção dos vários telefones (8012)", () => {
+describe("opção dos vários telefones (8019)", () => {
   it("nasce desligada", () => {
     expect(opcao()).toBe("ausente");
   });

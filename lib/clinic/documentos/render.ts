@@ -10,14 +10,32 @@
  * documento continua legível e a lacuna fica visível. Marcador desconhecido
  * fica como está, para quem edita o modelo perceber o erro na prévia.
  */
-export const MARCADORES = ["paciente.nome", "clinica.nome", "profissional.nome", "procedimento", "data"] as const;
+export const MARCADORES = [
+  "paciente.nome",
+  "clinica.nome",
+  "profissional.nome",
+  "procedimento",
+  "data",
+  // FORK clinic (orçamento O3, 8008): preenchidos só no contrato gerado pelo orçamento.
+  "orcamento.numero",
+  "orcamento.itens",
+  "orcamento.subtotal",
+  "orcamento.desconto",
+  "orcamento.total",
+  "orcamento.forma_pagamento",
+  "orcamento.entrada",
+  "orcamento.parcelas",
+  "orcamento.pagamento",
+  "orcamento.validade",
+  "orcamento.observacao_pagamento",
+] as const;
 export type Marcador = (typeof MARCADORES)[number];
 export type DadosDoTermo = Partial<Record<Marcador, string | null>>;
 
 const LACUNA = "__________";
 
 export function renderizarTermo(modelo: string, dados: DadosDoTermo): string {
-  return modelo.replace(/\{\{\s*([a-z.]+)\s*\}\}/g, (inteiro, chave: string) => {
+  return modelo.replace(/\{\{\s*([a-z._]+)\s*\}\}/g, (inteiro, chave: string) => {
     if (!(MARCADORES as readonly string[]).includes(chave)) return inteiro;
     const valor = dados[chave as Marcador];
     return valor && valor.trim() ? valor.trim() : LACUNA;
@@ -27,7 +45,7 @@ export function renderizarTermo(modelo: string, dados: DadosDoTermo): string {
 /** Marcadores usados no modelo que o sistema não conhece (para a prévia avisar). */
 export function marcadoresDesconhecidos(modelo: string): string[] {
   const vistos = new Set<string>();
-  for (const m of modelo.matchAll(/\{\{\s*([a-z.]+)\s*\}\}/g)) {
+  for (const m of modelo.matchAll(/\{\{\s*([a-z._]+)\s*\}\}/g)) {
     if (!(MARCADORES as readonly string[]).includes(m[1]!)) vistos.add(m[1]!);
   }
   return [...vistos];

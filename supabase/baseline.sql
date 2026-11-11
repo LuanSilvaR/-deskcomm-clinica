@@ -49346,8 +49346,2234 @@ grant  execute on function public.fn_clinic_definir_duracao_na_marcacao(uuid, bo
 
 -- ---- fim clinic (migration 8005, fork) ----
 
--- ---- clinic: a ficha guarda vários telefones (migration 8011, fork) ----
--- 8011 · clinic (FORK) — a ficha guarda vários telefones (#85, upstream #3671 / 9043).
+-- ---- clinic: orçamento O1, tabela de preços (migration 8006, fork) ----
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 8006 · clinic — orçamento O1: tabela de preços com vigência (FORK)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/orcamento/plano.md (fase O1).
+--
+--   clinic_precos          cada linha é UMA vigência do preço de um item:
+--                          procedimento (clinic_procedures) OU tipo de serviço
+--                          (calendar_event_types) × nº de sessões (1 = avulso,
+--                          >1 = pacote). O preço vigente é a linha mais nova
+--                          com vigente_desde <= agora; `ativo = false` tira o
+--                          item da tabela daí em diante.
+--   clinic_precos_vigentes (view, security_invoker) o preço que vale agora.
+--
+-- Regras no BANCO:
+--   • a tabela só ACRESCENTA: UPDATE recusado sempre; DELETE só na cascata da
+--     exclusão da empresa. Mudar preço = publicar vigência nova; o orçamento
+--     já enviado guarda o preço da vigência que usou (fases O2/O3);
+--   • escreve só fn_clinic_preco_publicar (permissão orcamentos.precos + opção
+--     ligada + MFA); authenticated só LÊ, e com orcamentos.ver;
+--   • preço não é conteúdo clínico: a recepção vê sem abrir prontuário.
+-- A opção nasce desligada: settings.clinic.orcamentos. Aditiva, idempotente, sem HTTP.
+
+-- ─── preços ─────────────────────────────────────────────────────────────────
+create table if not exists public.clinic_precos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  procedure_id uuid,
+  event_type_id uuid references public.calendar_event_types(id) on delete cascade,
+  sessoes integer not null default 1,
+  descricao text,
+  preco_cents bigint not null,
+  ativo boolean not null default true,
+  vigente_desde timestamptz not null default now(),
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  constraint clinic_precos_org_id_key unique (organization_id, id),
+  constraint clinic_precos_procedure_fk foreign key (organization_id, procedure_id)
+    references public.clinic_procedures (organization_id, id) on delete cascade,
+  constraint clinic_precos_um_item check (num_nonnulls(procedure_id, event_type_id) = 1),
+  constraint clinic_precos_sessoes check (sessoes between 1 and 100),
+  constraint clinic_precos_valor check (preco_cents between 0 and 100000000),
+  constraint clinic_precos_descricao check (descricao is null or char_length(btrim(descricao)) between 1 and 120)
+);
+create index if not exists clinic_precos_item_idx
+  on public.clinic_precos (organization_id, coalesce(procedure_id, event_type_id), sessoes, vigente_desde desc, created_at desc);
+
+-- Só acrescenta: UPDATE recusado sempre; DELETE só na cascata (profundidade > 1).
+create or replace function public.fn_clinic_preco_imutavel()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+    return old;
+  end if;
+  raise exception 'preco_imutavel' using errcode = '55000';
+end $$;
+revoke execute on function public.fn_clinic_preco_imutavel() from public, anon, authenticated;
+drop trigger if exists trg_clinic_precos_imutavel on public.clinic_precos;
+create trigger trg_clinic_precos_imutavel before update or delete on public.clinic_precos
+  for each row execute function public.fn_clinic_preco_imutavel();
+
+-- ─── RLS: membro lê com orcamentos.ver; ninguém escreve direto ──────────────
+alter table public.clinic_precos enable row level security;
+drop policy if exists tenant_isolation_clinic_precos_all on public.clinic_precos;
+create policy tenant_isolation_clinic_precos_all on public.clinic_precos
+  using ((organization_id in (select public.fn_user_org_ids()))
+         and public.fn_role_at_least(organization_id, 'viewer'))
+  with check ((organization_id in (select public.fn_user_org_ids()))
+         and public.fn_role_at_least(organization_id, 'viewer'));
+drop policy if exists acesso_ler on public.clinic_precos;
+create policy acesso_ler on public.clinic_precos as restrictive for select
+  using (public.fn_has_permission(organization_id, 'orcamentos.ver'));
+revoke all on public.clinic_precos from anon;
+revoke insert, update, delete, truncate on public.clinic_precos from authenticated;
+revoke update, delete, truncate on public.clinic_precos from service_role;
+
+-- ─── o preço que vale agora ─────────────────────────────────────────────────
+create or replace view public.clinic_precos_vigentes
+with (security_invoker = true) as
+  select v.*
+    from (
+      select distinct on (p.organization_id, coalesce(p.procedure_id, p.event_type_id), p.sessoes) p.*
+        from public.clinic_precos p
+       where p.vigente_desde <= now()
+       order by p.organization_id, coalesce(p.procedure_id, p.event_type_id), p.sessoes,
+                p.vigente_desde desc, p.created_at desc, p.id desc
+    ) v
+   where v.ativo;
+revoke all on public.clinic_precos_vigentes from anon;
+grant select on public.clinic_precos_vigentes to authenticated;
+
+-- ─── permissões ─────────────────────────────────────────────────────────────
+insert into public.clinic_permissions (key, modulo, acao, nivel_base, depende_de, critica, descricao, clinica) values
+  ('orcamentos.ver', 'orcamentos', 'ver', 'agent', array[]::text[], false, 'Ver a tabela de preços e os orçamentos dos pacientes', false),
+  ('orcamentos.precos', 'orcamentos', 'precos', 'manager', array['orcamentos.ver']::text[], false, 'Cadastrar e mudar os preços da tabela', false)
+on conflict (key) do update
+  set modulo = excluded.modulo, acao = excluded.acao, nivel_base = excluded.nivel_base,
+      depende_de = excluded.depende_de, critica = excluded.critica, descricao = excluded.descricao,
+      clinica = excluded.clinica;
+
+-- Administrador: todas. Modelos (gerente/atendente/visualizador): pelo nível.
+insert into public.clinic_role_permissions (organization_id, role_id, permission_key)
+select r.organization_id, r.id, p.key
+  from public.clinic_roles r
+  join public.clinic_permissions p on p.modulo = 'orcamentos'
+ where r.system_key = 'administrador'
+    or (r.system_key = 'gerente' and public.fn_nivel_rank(p.nivel_base) <= public.fn_nivel_rank('manager'))
+    or (r.system_key = 'atendente' and public.fn_nivel_rank(p.nivel_base) <= public.fn_nivel_rank('agent'))
+    or (r.system_key = 'visualizador' and public.fn_nivel_rank(p.nivel_base) <= public.fn_nivel_rank('viewer'))
+on conflict do nothing;
+
+-- ─── a opção: settings.clinic.orcamentos (nasce desligada) ─────────────────
+create or replace function public.fn_clinic_definir_orcamentos(p_org uuid, p_ligado boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_antes boolean;
+begin
+  if auth.uid() is null
+     or p_org is null
+     or p_ligado is null
+     or not public.fn_role_at_least(p_org, 'admin')
+     or not public.fn_support_write_allowed(p_org) then
+    raise exception 'clinic_flag_forbidden' using errcode = '42501';
+  end if;
+  if not public.fn_session_mfa_proven() then
+    raise exception 'clinic_flag_mfa_required' using errcode = '42501';
+  end if;
+
+  select (o.settings -> 'clinic' -> 'orcamentos') = 'true'::jsonb into v_antes
+    from public.organizations o
+   where o.id = p_org;
+  if not found then
+    raise exception 'organization_not_found' using errcode = 'P0002';
+  end if;
+
+  update public.organizations
+     set settings = jsonb_set(
+           coalesce(settings, '{}'::jsonb),
+           '{clinic}',
+           (case when jsonb_typeof(settings -> 'clinic') = 'object' then settings -> 'clinic' else '{}'::jsonb end)
+             || jsonb_build_object('orcamentos', p_ligado),
+           true)
+   where id = p_org;
+
+  return jsonb_build_object('ligado', p_ligado, 'mudou', coalesce(v_antes, false) <> p_ligado);
+end $$;
+revoke execute on function public.fn_clinic_definir_orcamentos(uuid, boolean) from public, anon;
+grant  execute on function public.fn_clinic_definir_orcamentos(uuid, boolean) to authenticated;
+
+-- Permissão + MFA + suporte de escrita (fn_acesso_exigir) + opção ligada.
+create or replace function public.fn_clinic_orcamentos_exigir(p_org uuid, p_permissao text)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_acesso_exigir(p_org, p_permissao);
+  if not coalesce((select (o.settings -> 'clinic' -> 'orcamentos') = 'true'::jsonb
+                     from public.organizations o where o.id = p_org), false) then
+    raise exception 'orcamentos_desligado' using errcode = '42501';
+  end if;
+end $$;
+revoke execute on function public.fn_clinic_orcamentos_exigir(uuid, text) from public, anon, authenticated;
+
+-- ─── publicar uma vigência ──────────────────────────────────────────────────
+-- p_dados: {procedure_id | event_type_id, sessoes?, preco_cents, descricao?, ativo?}.
+-- Sempre INSERT: o preço antigo fica no histórico. Publicar igual ao vigente
+-- não cria linha (devolve `mudou = false`).
+create or replace function public.fn_clinic_preco_publicar(p_org uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_proc uuid;
+  v_tipo uuid;
+  v_sessoes integer;
+  v_preco bigint;
+  v_ativo boolean;
+  v_desc text;
+  v_atual public.clinic_precos;
+  v_id uuid;
+begin
+  perform public.fn_clinic_orcamentos_exigir(p_org, 'orcamentos.precos');
+  if p_dados is null or jsonb_typeof(p_dados) <> 'object' then
+    raise exception 'preco_dados_invalidos' using errcode = '22023';
+  end if;
+  begin
+    v_proc := nullif(p_dados ->> 'procedure_id', '')::uuid;
+    v_tipo := nullif(p_dados ->> 'event_type_id', '')::uuid;
+    v_sessoes := coalesce(nullif(p_dados ->> 'sessoes', '')::integer, 1);
+    v_preco := (p_dados ->> 'preco_cents')::bigint;
+    v_ativo := coalesce((p_dados ->> 'ativo')::boolean, true);
+  exception when others then
+    raise exception 'preco_dados_invalidos' using errcode = '22023';
+  end;
+  v_desc := nullif(btrim(coalesce(p_dados ->> 'descricao', '')), '');
+  if num_nonnulls(v_proc, v_tipo) <> 1 or v_preco is null or v_preco not between 0 and 100000000
+     or v_sessoes not between 1 and 100 then
+    raise exception 'preco_dados_invalidos' using errcode = '22023';
+  end if;
+  if v_proc is not null and not exists (
+    select 1 from public.clinic_procedures c where c.id = v_proc and c.organization_id = p_org) then
+    raise exception 'preco_item_invalido' using errcode = '22023';
+  end if;
+  if v_tipo is not null and not exists (
+    select 1 from public.calendar_event_types e where e.id = v_tipo and e.organization_id = p_org) then
+    raise exception 'preco_item_invalido' using errcode = '22023';
+  end if;
+
+  -- Uma publicação por item de cada vez (corrida entre duas abas).
+  perform pg_advisory_xact_lock(hashtextextended('clinic_preco:' || p_org || ':' || coalesce(v_proc, v_tipo) || ':' || v_sessoes, 0));
+
+  select * into v_atual
+    from public.clinic_precos p
+   where p.organization_id = p_org
+     and coalesce(p.procedure_id, p.event_type_id) = coalesce(v_proc, v_tipo)
+     and p.sessoes = v_sessoes
+     and p.vigente_desde <= now()
+   order by p.vigente_desde desc, p.created_at desc, p.id desc
+   limit 1;
+  if found and v_atual.preco_cents = v_preco and v_atual.ativo = v_ativo
+     and v_atual.descricao is not distinct from v_desc then
+    return jsonb_build_object('id', v_atual.id, 'mudou', false);
+  end if;
+  if not found and not v_ativo then
+    raise exception 'preco_item_invalido' using errcode = '22023';
+  end if;
+
+  insert into public.clinic_precos (organization_id, procedure_id, event_type_id, sessoes, descricao, preco_cents, ativo, created_by)
+  values (p_org, v_proc, v_tipo, v_sessoes, v_desc, v_preco, v_ativo, auth.uid())
+  returning id into v_id;
+  return jsonb_build_object('id', v_id, 'mudou', true, 'anterior_cents', v_atual.preco_cents);
+end $$;
+revoke execute on function public.fn_clinic_preco_publicar(uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_preco_publicar(uuid, jsonb) to authenticated;
+
+-- ---- fim clinic (migration 8006, fork) ----
+
+-- ---- clinic: orçamento O2, rascunho (migration 8007, fork) ----
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 8007 · clinic — orçamento O2: orçamento em rascunho (FORK)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/orcamento/plano.md (fase O2). Depende da 8006 (preços).
+--
+--   clinic_orcamentos       o orçamento do paciente: número sequencial por
+--                           empresa, versão, status, totais, desconto, condição
+--                           de pagamento (5 formas) e validade.
+--   clinic_orcamento_itens  as linhas: o preço vem da VIGÊNCIA da tabela de
+--                           preços (nunca do corpo da requisição) e a
+--                           descrição fica congelada.
+--
+-- Regras no BANCO:
+--   • escreve só fn_clinic_orcamento_* (permissão + opção + MFA); authenticated
+--     só LÊ, e com orcamentos.ver. Sem texto clínico;
+--   • itens só mudam enquanto o orçamento é RASCUNHO (trigger); orçamento não se
+--     apaga (DELETE só na cascata da exclusão da empresa) — cancela-se;
+--   • desconto acima do limite (settings.clinic.orcamentos_desconto_max_pct,
+--     padrão 10%) fica PENDENTE até alguém com orcamentos.aprovar_desconto
+--     aprovar; quem tem a permissão aprova ao salvar;
+--   • condição de pagamento: dinheiro, pix, debito, credito (à vista) ou
+--     parcelado (cartão, 2–24×, entrada opcional em dinheiro/pix/débito). O valor
+--     das parcelas é calculado aqui; o centavo que sobra vai na 1ª.
+-- Aditiva, idempotente, sem HTTP. Envio/contrato ficam para a O3.
+
+-- ─── orçamentos ─────────────────────────────────────────────────────────────
+create table if not exists public.clinic_orcamentos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id),
+  atendimento_id uuid,
+  profissional_user_id uuid references auth.users(id) on delete set null,
+  numero integer not null,
+  versao integer not null default 1,
+  substitui_id uuid,
+  status text not null default 'rascunho',
+  subtotal_cents bigint not null default 0,
+  desconto_cents bigint not null default 0,
+  total_cents bigint not null default 0,
+  desconto_pendente boolean not null default false,
+  desconto_aprovado_por uuid references auth.users(id) on delete set null,
+  desconto_aprovado_em timestamptz,
+  condicao_pagamento jsonb not null default '{"forma": "pix", "parcelas": 1}'::jsonb,
+  validade_ate date not null,
+  observacao text,
+  cancelado_em timestamptz,
+  cancelado_por uuid references auth.users(id) on delete set null,
+  motivo_cancelamento text,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint clinic_orcamentos_org_id_key unique (organization_id, id),
+  constraint clinic_orcamentos_numero_key unique (organization_id, numero, versao),
+  constraint clinic_orcamentos_atendimento_fk foreign key (organization_id, atendimento_id)
+    references public.clinic_atendimentos (organization_id, id),
+  constraint clinic_orcamentos_substitui_fk foreign key (organization_id, substitui_id)
+    references public.clinic_orcamentos (organization_id, id),
+  constraint clinic_orcamentos_status check (
+    status in ('rascunho', 'enviado', 'aprovado', 'recusado', 'expirado', 'cancelado', 'substituido')),
+  constraint clinic_orcamentos_valores check (
+    subtotal_cents between 0 and 1000000000 and desconto_cents between 0 and subtotal_cents
+    and total_cents = subtotal_cents - desconto_cents),
+  constraint clinic_orcamentos_numero check (numero >= 1 and versao >= 1),
+  constraint clinic_orcamentos_observacao check (observacao is null or char_length(observacao) <= 500),
+  constraint clinic_orcamentos_cancelado check ((status = 'cancelado') = (cancelado_em is not null))
+);
+create index if not exists clinic_orcamentos_paciente_idx
+  on public.clinic_orcamentos (organization_id, contact_id, created_at desc);
+create index if not exists clinic_orcamentos_atendimento_idx
+  on public.clinic_orcamentos (organization_id, atendimento_id) where atendimento_id is not null;
+
+-- ─── itens ──────────────────────────────────────────────────────────────────
+create table if not exists public.clinic_orcamento_itens (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  orcamento_id uuid not null,
+  preco_id uuid not null,
+  procedure_id uuid,
+  event_type_id uuid,
+  descricao text not null,
+  sessoes integer not null,
+  quantidade integer not null default 1,
+  preco_unit_cents bigint not null,
+  total_cents bigint not null,
+  posicao integer not null default 0,
+  created_at timestamptz not null default now(),
+  constraint clinic_orcamento_itens_orcamento_fk foreign key (organization_id, orcamento_id)
+    references public.clinic_orcamentos (organization_id, id) on delete cascade,
+  constraint clinic_orcamento_itens_preco_fk foreign key (organization_id, preco_id)
+    references public.clinic_precos (organization_id, id),
+  constraint clinic_orcamento_itens_quantidade check (quantidade between 1 and 50 and sessoes between 1 and 100),
+  constraint clinic_orcamento_itens_valores check (preco_unit_cents >= 0 and total_cents = preco_unit_cents * quantidade),
+  constraint clinic_orcamento_itens_descricao check (char_length(descricao) between 1 and 200)
+);
+create index if not exists clinic_orcamento_itens_orcamento_idx
+  on public.clinic_orcamento_itens (organization_id, orcamento_id, posicao);
+
+-- Orçamento não se apaga (só na cascata da empresa); itens só mudam em rascunho.
+create or replace function public.fn_clinic_orcamento_guarda()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_status text;
+begin
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+    return old;
+  end if;
+  if tg_table_name = 'clinic_orcamentos' then
+    raise exception 'orcamento_imutavel' using errcode = '55000';
+  end if;
+  select o.status into v_status
+    from public.clinic_orcamentos o
+   where o.organization_id = coalesce(new.organization_id, old.organization_id)
+     and o.id = coalesce(new.orcamento_id, old.orcamento_id);
+  if v_status is distinct from 'rascunho' then
+    raise exception 'orcamento_nao_editavel' using errcode = '55000';
+  end if;
+  return coalesce(new, old);
+end $$;
+revoke execute on function public.fn_clinic_orcamento_guarda() from public, anon, authenticated;
+drop trigger if exists trg_clinic_orcamentos_guarda on public.clinic_orcamentos;
+create trigger trg_clinic_orcamentos_guarda before delete on public.clinic_orcamentos
+  for each row execute function public.fn_clinic_orcamento_guarda();
+drop trigger if exists trg_clinic_orcamento_itens_guarda on public.clinic_orcamento_itens;
+create trigger trg_clinic_orcamento_itens_guarda before insert or update or delete on public.clinic_orcamento_itens
+  for each row execute function public.fn_clinic_orcamento_guarda();
+
+-- ─── RLS: membro lê com orcamentos.ver; ninguém escreve direto ──────────────
+do $rls$
+declare
+  t text;
+begin
+  foreach t in array array['clinic_orcamentos', 'clinic_orcamento_itens'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists tenant_isolation_%s_all on public.%I', t, t);
+    execute format($p$create policy tenant_isolation_%s_all on public.%I
+        using ((organization_id in (select public.fn_user_org_ids()))
+               and public.fn_role_at_least(organization_id, 'viewer'))
+        with check ((organization_id in (select public.fn_user_org_ids()))
+               and public.fn_role_at_least(organization_id, 'viewer'))$p$, t, t);
+    execute format('drop policy if exists acesso_ler on public.%I', t);
+    execute format($p$create policy acesso_ler on public.%I as restrictive for select
+                      using (public.fn_has_permission(organization_id, 'orcamentos.ver'))$p$, t);
+    execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete, truncate on public.%I from authenticated', t);
+  end loop;
+end
+$rls$;
+
+-- ─── permissões ─────────────────────────────────────────────────────────────
+insert into public.clinic_permissions (key, modulo, acao, nivel_base, depende_de, critica, descricao, clinica) values
+  ('orcamentos.criar', 'orcamentos', 'criar', 'agent', array['orcamentos.ver']::text[], false, 'Montar e editar orçamentos em rascunho', false),
+  ('orcamentos.aprovar_desconto', 'orcamentos', 'aprovar_desconto', 'manager', array['orcamentos.ver']::text[], false, 'Aprovar desconto acima do limite da clínica', false),
+  ('orcamentos.cancelar', 'orcamentos', 'cancelar', 'manager', array['orcamentos.ver']::text[], false, 'Cancelar orçamento', false)
+on conflict (key) do update
+  set modulo = excluded.modulo, acao = excluded.acao, nivel_base = excluded.nivel_base,
+      depende_de = excluded.depende_de, critica = excluded.critica, descricao = excluded.descricao,
+      clinica = excluded.clinica;
+
+insert into public.clinic_role_permissions (organization_id, role_id, permission_key)
+select r.organization_id, r.id, p.key
+  from public.clinic_roles r
+  join public.clinic_permissions p on p.modulo = 'orcamentos'
+ where r.system_key = 'administrador'
+    or (r.system_key = 'gerente' and public.fn_nivel_rank(p.nivel_base) <= public.fn_nivel_rank('manager'))
+    or (r.system_key = 'atendente' and public.fn_nivel_rank(p.nivel_base) <= public.fn_nivel_rank('agent'))
+    or (r.system_key = 'visualizador' and public.fn_nivel_rank(p.nivel_base) <= public.fn_nivel_rank('viewer'))
+on conflict do nothing;
+
+-- ─── limite de desconto (settings.clinic.orcamentos_desconto_max_pct) ───────
+create or replace function public.fn_clinic_orcamento_desconto_max(p_org uuid)
+returns numeric
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(
+    (select case when jsonb_typeof(o.settings -> 'clinic' -> 'orcamentos_desconto_max_pct') = 'number'
+                 then (o.settings -> 'clinic' ->> 'orcamentos_desconto_max_pct')::numeric end
+       from public.organizations o where o.id = p_org),
+    10);
+$$;
+revoke execute on function public.fn_clinic_orcamento_desconto_max(uuid) from public, anon, authenticated;
+
+create or replace function public.fn_clinic_definir_orcamentos_desconto_max(p_org uuid, p_pct numeric)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_antes numeric;
+begin
+  if auth.uid() is null
+     or p_org is null
+     or p_pct is null
+     or p_pct < 0 or p_pct > 100
+     or not public.fn_role_at_least(p_org, 'admin')
+     or not public.fn_support_write_allowed(p_org) then
+    raise exception 'clinic_flag_forbidden' using errcode = '42501';
+  end if;
+  if not public.fn_session_mfa_proven() then
+    raise exception 'clinic_flag_mfa_required' using errcode = '42501';
+  end if;
+  v_antes := public.fn_clinic_orcamento_desconto_max(p_org);
+  update public.organizations
+     set settings = jsonb_set(
+           coalesce(settings, '{}'::jsonb),
+           '{clinic}',
+           (case when jsonb_typeof(settings -> 'clinic') = 'object' then settings -> 'clinic' else '{}'::jsonb end)
+             || jsonb_build_object('orcamentos_desconto_max_pct', round(p_pct, 2)),
+           true)
+   where id = p_org;
+  if not found then
+    raise exception 'organization_not_found' using errcode = 'P0002';
+  end if;
+  return jsonb_build_object('pct', round(p_pct, 2), 'mudou', v_antes <> round(p_pct, 2));
+end $$;
+revoke execute on function public.fn_clinic_definir_orcamentos_desconto_max(uuid, numeric) from public, anon;
+grant  execute on function public.fn_clinic_definir_orcamentos_desconto_max(uuid, numeric) to authenticated;
+
+-- ─── condição de pagamento: valida e calcula as parcelas ────────────────────
+-- Entrada: {forma, parcelas?, entrada?: {valor_cents, forma}, observacao?}.
+-- Saída normalizada com valor_parcela_cents e primeira_parcela_cents.
+create or replace function public.fn_clinic_orcamento_condicao(p_condicao jsonb, p_total bigint)
+returns jsonb
+language plpgsql
+immutable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_forma text;
+  v_parcelas integer;
+  v_entrada bigint := 0;
+  v_entrada_forma text;
+  v_obs text;
+  v_resto bigint;
+  v_parcela bigint;
+begin
+  if p_condicao is null or jsonb_typeof(p_condicao) <> 'object' then
+    raise exception 'orcamento_pagamento_invalido' using errcode = '22023';
+  end if;
+  begin
+    v_forma := p_condicao ->> 'forma';
+    v_parcelas := coalesce(nullif(p_condicao ->> 'parcelas', '')::integer, 1);
+    if jsonb_typeof(p_condicao -> 'entrada') = 'object' then
+      v_entrada := coalesce(nullif(p_condicao -> 'entrada' ->> 'valor_cents', '')::bigint, 0);
+      v_entrada_forma := p_condicao -> 'entrada' ->> 'forma';
+    end if;
+  exception when others then
+    raise exception 'orcamento_pagamento_invalido' using errcode = '22023';
+  end;
+  v_obs := nullif(btrim(coalesce(p_condicao ->> 'observacao', '')), '');
+  if v_forma is null or v_forma not in ('dinheiro', 'pix', 'debito', 'credito', 'parcelado')
+     or (v_obs is not null and char_length(v_obs) > 200) then
+    raise exception 'orcamento_pagamento_invalido' using errcode = '22023';
+  end if;
+  if v_forma = 'parcelado' then
+    if v_parcelas not between 2 and 24 then
+      raise exception 'orcamento_pagamento_invalido' using errcode = '22023';
+    end if;
+    if v_entrada <> 0 and (v_entrada < 0 or v_entrada >= p_total
+                           or v_entrada_forma is null or v_entrada_forma not in ('dinheiro', 'pix', 'debito')) then
+      raise exception 'orcamento_pagamento_invalido' using errcode = '22023';
+    end if;
+  else
+    if v_parcelas <> 1 or v_entrada <> 0 then
+      raise exception 'orcamento_pagamento_invalido' using errcode = '22023';
+    end if;
+  end if;
+  v_resto := p_total - v_entrada;
+  v_parcela := v_resto / v_parcelas;
+  return jsonb_strip_nulls(jsonb_build_object(
+    'forma', v_forma,
+    'parcelas', v_parcelas,
+    'entrada', case when v_entrada > 0 then jsonb_build_object('valor_cents', v_entrada, 'forma', v_entrada_forma) end,
+    'valor_parcela_cents', v_parcela,
+    'primeira_parcela_cents', v_parcela + (v_resto - v_parcela * v_parcelas),
+    'observacao', v_obs));
+end $$;
+revoke execute on function public.fn_clinic_orcamento_condicao(jsonb, bigint) from public, anon, authenticated;
+
+-- ─── salvar (cria ou edita o rascunho) ──────────────────────────────────────
+-- p_dados: {contact_id, atendimento_id?, profissional_user_id?, itens: [{preco_id,
+-- quantidade?}], desconto_cents?, condicao_pagamento, validade_ate?, observacao?}.
+-- O preço e a descrição de cada item vêm da vigência ATUAL da tabela de preços.
+create or replace function public.fn_clinic_orcamento_salvar(p_org uuid, p_id uuid, p_dados jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_id uuid := p_id;
+  v_atual public.clinic_orcamentos;
+  v_contact uuid;
+  v_atend uuid;
+  v_prof uuid;
+  v_desconto bigint;
+  v_validade date;
+  v_obs text;
+  v_item jsonb;
+  v_preco public.clinic_precos;
+  v_nome text;
+  v_qtd integer;
+  v_pos integer := 0;
+  v_subtotal bigint := 0;
+  v_total bigint;
+  v_condicao jsonb;
+  v_numero integer;
+  v_max numeric;
+  v_pendente boolean;
+  v_pode_aprovar boolean;
+begin
+  perform public.fn_clinic_orcamentos_exigir(p_org, 'orcamentos.criar');
+  if p_dados is null or jsonb_typeof(p_dados) <> 'object'
+     or jsonb_typeof(p_dados -> 'itens') is distinct from 'array'
+     or jsonb_array_length(p_dados -> 'itens') not between 1 and 50 then
+    raise exception 'orcamento_dados_invalidos' using errcode = '22023';
+  end if;
+  begin
+    v_contact := nullif(p_dados ->> 'contact_id', '')::uuid;
+    v_atend := nullif(p_dados ->> 'atendimento_id', '')::uuid;
+    v_prof := coalesce(nullif(p_dados ->> 'profissional_user_id', '')::uuid, auth.uid());
+    v_desconto := coalesce(nullif(p_dados ->> 'desconto_cents', '')::bigint, 0);
+    v_validade := coalesce(nullif(p_dados ->> 'validade_ate', '')::date, current_date + 15);
+  exception when others then
+    raise exception 'orcamento_dados_invalidos' using errcode = '22023';
+  end;
+  v_obs := nullif(btrim(coalesce(p_dados ->> 'observacao', '')), '');
+  if v_validade < current_date or v_validade > current_date + 365
+     or (v_obs is not null and char_length(v_obs) > 500) then
+    raise exception 'orcamento_dados_invalidos' using errcode = '22023';
+  end if;
+
+  if v_id is not null then
+    select * into v_atual from public.clinic_orcamentos o
+     where o.organization_id = p_org and o.id = v_id
+     for update;
+    if not found then
+      raise exception 'orcamento_invalido' using errcode = '22023';
+    end if;
+    if v_atual.status <> 'rascunho' then
+      raise exception 'orcamento_nao_editavel' using errcode = '55000';
+    end if;
+    v_contact := v_atual.contact_id; -- o paciente do orçamento não muda
+  end if;
+
+  if v_contact is null or not exists (
+    select 1 from public.contacts c where c.id = v_contact and c.organization_id = p_org) then
+    raise exception 'orcamento_paciente_invalido' using errcode = '22023';
+  end if;
+  if v_atend is not null and not exists (
+    select 1 from public.clinic_atendimentos a
+     where a.organization_id = p_org and a.id = v_atend and a.contact_id = v_contact and a.status <> 'anulado') then
+    raise exception 'orcamento_atendimento_invalido' using errcode = '22023';
+  end if;
+  if v_prof is not null and not exists (
+    select 1 from public.user_organizations u where u.user_id = v_prof and u.organization_id = p_org) then
+    raise exception 'orcamento_dados_invalidos' using errcode = '22023';
+  end if;
+
+  if v_id is null then
+    perform pg_advisory_xact_lock(hashtextextended('clinic_orcamento_numero:' || p_org, 0));
+    select coalesce(max(o.numero), 0) + 1 into v_numero from public.clinic_orcamentos o where o.organization_id = p_org;
+    insert into public.clinic_orcamentos (organization_id, contact_id, numero, validade_ate, created_by, updated_by)
+    values (p_org, v_contact, v_numero, v_validade, auth.uid(), auth.uid())
+    returning id into v_id;
+  else
+    delete from public.clinic_orcamento_itens i where i.organization_id = p_org and i.orcamento_id = v_id;
+  end if;
+
+  for v_item in select * from jsonb_array_elements(p_dados -> 'itens') loop
+    v_preco := null;
+    v_nome := null;
+    begin
+      v_qtd := coalesce(nullif(v_item ->> 'quantidade', '')::integer, 1);
+      select p.* into v_preco
+        from public.clinic_precos p
+       where p.organization_id = p_org and p.id = nullif(v_item ->> 'preco_id', '')::uuid;
+    exception when others then
+      raise exception 'orcamento_dados_invalidos' using errcode = '22023';
+    end;
+    -- só a vigência ATUAL e ativa do item vale (a tabela pode ter mudado)
+    if v_preco.id is null or not v_preco.ativo or v_preco.vigente_desde > now() or exists (
+      select 1 from public.clinic_precos n
+       where n.organization_id = p_org
+         and coalesce(n.procedure_id, n.event_type_id) = coalesce(v_preco.procedure_id, v_preco.event_type_id)
+         and n.sessoes = v_preco.sessoes
+         and n.vigente_desde <= now()
+         and (n.vigente_desde, n.created_at, n.id) > (v_preco.vigente_desde, v_preco.created_at, v_preco.id)) then
+      raise exception 'orcamento_preco_desatualizado' using errcode = '22023';
+    end if;
+    if v_qtd not between 1 and 50 then
+      raise exception 'orcamento_dados_invalidos' using errcode = '22023';
+    end if;
+    if v_preco.procedure_id is not null then
+      select c.name into v_nome from public.clinic_procedures c where c.organization_id = p_org and c.id = v_preco.procedure_id;
+    else
+      select e.name into v_nome from public.calendar_event_types e where e.organization_id = p_org and e.id = v_preco.event_type_id;
+    end if;
+    v_nome := left(coalesce(v_preco.descricao,
+                            coalesce(v_nome, 'Item') || case when v_preco.sessoes > 1 then ' — ' || v_preco.sessoes || ' sessões' else '' end), 200);
+    v_pos := v_pos + 1;
+    insert into public.clinic_orcamento_itens (organization_id, orcamento_id, preco_id, procedure_id, event_type_id,
+                                               descricao, sessoes, quantidade, preco_unit_cents, total_cents, posicao)
+    values (p_org, v_id, v_preco.id, v_preco.procedure_id, v_preco.event_type_id,
+            v_nome, v_preco.sessoes, v_qtd, v_preco.preco_cents, v_preco.preco_cents * v_qtd, v_pos);
+    v_subtotal := v_subtotal + v_preco.preco_cents * v_qtd;
+  end loop;
+
+  if v_desconto < 0 or v_desconto > v_subtotal then
+    raise exception 'orcamento_desconto_invalido' using errcode = '22023';
+  end if;
+  v_total := v_subtotal - v_desconto;
+  v_condicao := public.fn_clinic_orcamento_condicao(
+    coalesce(p_dados -> 'condicao_pagamento', '{"forma": "pix"}'::jsonb), v_total);
+
+  v_max := public.fn_clinic_orcamento_desconto_max(p_org);
+  v_pendente := v_desconto > 0 and v_subtotal > 0 and (v_desconto * 100.0 / v_subtotal) > v_max;
+  v_pode_aprovar := public.fn_has_permission(p_org, 'orcamentos.aprovar_desconto');
+
+  update public.clinic_orcamentos set
+    atendimento_id = v_atend,
+    profissional_user_id = v_prof,
+    subtotal_cents = v_subtotal,
+    desconto_cents = v_desconto,
+    total_cents = v_total,
+    desconto_pendente = v_pendente and not v_pode_aprovar,
+    desconto_aprovado_por = case when v_pendente and v_pode_aprovar then auth.uid() end,
+    desconto_aprovado_em = case when v_pendente and v_pode_aprovar then now() end,
+    condicao_pagamento = v_condicao,
+    validade_ate = v_validade,
+    observacao = v_obs,
+    updated_by = auth.uid(),
+    updated_at = now()
+   where organization_id = p_org and id = v_id
+  returning numero into v_numero;
+
+  return jsonb_build_object('id', v_id, 'numero', v_numero, 'total_cents', v_total,
+                            'desconto_pendente', v_pendente and not v_pode_aprovar);
+end $$;
+revoke execute on function public.fn_clinic_orcamento_salvar(uuid, uuid, jsonb) from public, anon;
+grant  execute on function public.fn_clinic_orcamento_salvar(uuid, uuid, jsonb) to authenticated;
+
+-- ─── aprovar o desconto pendente ────────────────────────────────────────────
+create or replace function public.fn_clinic_orcamento_aprovar_desconto(p_org uuid, p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_clinic_orcamentos_exigir(p_org, 'orcamentos.aprovar_desconto');
+  update public.clinic_orcamentos set
+    desconto_pendente = false,
+    desconto_aprovado_por = auth.uid(),
+    desconto_aprovado_em = now(),
+    updated_by = auth.uid(),
+    updated_at = now()
+   where organization_id = p_org and id = p_id and status = 'rascunho' and desconto_pendente;
+  if not found then
+    raise exception 'orcamento_nao_editavel' using errcode = '55000';
+  end if;
+  return jsonb_build_object('id', p_id);
+end $$;
+revoke execute on function public.fn_clinic_orcamento_aprovar_desconto(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_orcamento_aprovar_desconto(uuid, uuid) to authenticated;
+
+-- ─── cancelar (na O2: só rascunho) ──────────────────────────────────────────
+create or replace function public.fn_clinic_orcamento_cancelar(p_org uuid, p_id uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_motivo text := nullif(btrim(coalesce(p_motivo, '')), '');
+begin
+  perform public.fn_clinic_orcamentos_exigir(p_org, 'orcamentos.cancelar');
+  if v_motivo is null or char_length(v_motivo) not between 3 and 300 then
+    raise exception 'orcamento_sem_motivo' using errcode = '22023';
+  end if;
+  update public.clinic_orcamentos set
+    status = 'cancelado',
+    cancelado_em = now(),
+    cancelado_por = auth.uid(),
+    motivo_cancelamento = v_motivo,
+    updated_by = auth.uid(),
+    updated_at = now()
+   where organization_id = p_org and id = p_id and status = 'rascunho';
+  if not found then
+    raise exception 'orcamento_nao_editavel' using errcode = '55000';
+  end if;
+  return jsonb_build_object('id', p_id);
+end $$;
+revoke execute on function public.fn_clinic_orcamento_cancelar(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_orcamento_cancelar(uuid, uuid, text) to authenticated;
+
+-- ---- fim clinic (migration 8007, fork) ----
+
+-- ---- clinic: orçamento O3, contrato (migration 8008, fork) ----
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 8008 · clinic — orçamento O3: o envio gera o contrato (FORK)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/orcamento/plano.md (fase O3). Depende da 8007.
+--
+-- O contrato NÃO é um sistema paralelo: é um documento do tipo `contrato` do
+-- módulo de documentos (9023), emitido por fn_clinic_documento_emitir com o
+-- texto já renderizado pelo servidor (itens, valores e forma de pagamento) e
+-- congelado com sha256. O aceite (presencial ou link) é o de sempre.
+--
+--   • clinic_orcamentos ganha enviado_em/por, documento_id, aprovado_em,
+--     recusado_em, expirado_em e motivo_recusa (aditivo);
+--   • clinic_documentos_emitidos ganha orcamento_id (aditivo, FK composta; uma
+--     vez preenchido não muda);
+--   • ENVIAR: rascunho → enviado, sem desconto pendente e dentro da validade;
+--   • o ACEITE do contrato aprova o orçamento (gatilho em
+--     clinic_documentos_emitidos: emitido → aceito); cancelar o documento pela
+--     aba Documentos cancela o orçamento enviado junto;
+--   • RECUSAR (enviado → recusado), CANCELAR (rascunho ou enviado → cancelado),
+--     NOVA VERSÃO (enviado → substituído + rascunho novo com o mesmo número) e
+--     EXPIRAR (cron, só service role) cancelam o contrato ainda não respondido.
+-- Gatilho sem HTTP. Aditiva e idempotente.
+
+-- ─── colunas novas ──────────────────────────────────────────────────────────
+alter table public.clinic_orcamentos add column if not exists enviado_em timestamptz;
+alter table public.clinic_orcamentos add column if not exists enviado_por uuid references auth.users(id) on delete set null;
+alter table public.clinic_orcamentos add column if not exists documento_id uuid;
+alter table public.clinic_orcamentos add column if not exists aprovado_em timestamptz;
+alter table public.clinic_orcamentos add column if not exists recusado_em timestamptz;
+alter table public.clinic_orcamentos add column if not exists expirado_em timestamptz;
+alter table public.clinic_orcamentos add column if not exists motivo_recusa text;
+
+alter table public.clinic_documentos_emitidos add column if not exists orcamento_id uuid;
+create index if not exists clinic_documentos_emitidos_orcamento_idx
+  on public.clinic_documentos_emitidos (organization_id, orcamento_id) where orcamento_id is not null;
+
+do $c$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'clinic_orcamentos_documento_fk') then
+    alter table public.clinic_orcamentos add constraint clinic_orcamentos_documento_fk
+      foreign key (organization_id, documento_id) references public.clinic_documentos_emitidos (organization_id, id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'clinic_documentos_emitidos_do_orcamento') then
+    alter table public.clinic_documentos_emitidos add constraint clinic_documentos_emitidos_do_orcamento
+      foreign key (organization_id, orcamento_id) references public.clinic_orcamentos (organization_id, id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'clinic_orcamentos_motivo_recusa') then
+    alter table public.clinic_orcamentos add constraint clinic_orcamentos_motivo_recusa
+      check (motivo_recusa is null or char_length(motivo_recusa) <= 300);
+  end if;
+end
+$c$;
+
+-- ─── documento ↔ orçamento ──────────────────────────────────────────────────
+-- (1) orcamento_id, uma vez preenchido, não muda; (2) o aceite do contrato
+-- aprova o orçamento enviado; (3) cancelar o contrato não respondido cancela o
+-- orçamento enviado. Só mexe em orçamento ENVIADO — quem já saiu desse estado
+-- (recusa, expiração, nova versão) chegou aqui pela função que cancelou.
+create or replace function public.fn_clinic_orcamento_pelo_documento()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'UPDATE' and old.orcamento_id is not null and new.orcamento_id is distinct from old.orcamento_id then
+    raise exception 'documento_imutavel' using errcode = '55000';
+  end if;
+  if tg_when = 'BEFORE' then
+    return new;
+  end if;
+  if new.orcamento_id is null or new.status = old.status then
+    return null;
+  end if;
+  if old.status = 'emitido' and new.status = 'aceito' then
+    update public.clinic_orcamentos
+       set status = 'aprovado', aprovado_em = now(), updated_at = now()
+     where organization_id = new.organization_id and id = new.orcamento_id and status = 'enviado';
+  elsif old.status = 'emitido' and new.status = 'cancelado' then
+    update public.clinic_orcamentos
+       set status = 'cancelado', cancelado_em = now(), cancelado_por = auth.uid(),
+           motivo_cancelamento = left(coalesce(new.motivo, 'Contrato cancelado'), 300), updated_at = now()
+     where organization_id = new.organization_id and id = new.orcamento_id and status = 'enviado';
+  end if;
+  return null;
+end $$;
+revoke execute on function public.fn_clinic_orcamento_pelo_documento() from public, anon, authenticated;
+drop trigger if exists trg_clinic_documento_orcamento_fixo on public.clinic_documentos_emitidos;
+create trigger trg_clinic_documento_orcamento_fixo before update of orcamento_id on public.clinic_documentos_emitidos
+  for each row execute function public.fn_clinic_orcamento_pelo_documento();
+drop trigger if exists trg_clinic_documento_orcamento_status on public.clinic_documentos_emitidos;
+create trigger trg_clinic_documento_orcamento_status after update of status on public.clinic_documentos_emitidos
+  for each row execute function public.fn_clinic_orcamento_pelo_documento();
+
+-- Cancela o contrato ainda NÃO respondido de um orçamento (e mata o link).
+create or replace function public.fn_clinic_orcamento_cancelar_contrato(p_org uuid, p_orcamento uuid, p_motivo text)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_doc uuid;
+begin
+  select o.documento_id into v_doc from public.clinic_orcamentos o where o.organization_id = p_org and o.id = p_orcamento;
+  if v_doc is null then
+    return;
+  end if;
+  update public.clinic_documentos_emitidos
+     set status = 'cancelado', motivo = left(coalesce(nullif(btrim(p_motivo), ''), 'Orçamento encerrado'), 300)
+   where organization_id = p_org and id = v_doc and status = 'emitido';
+  update public.clinic_documento_links set expira_em = least(expira_em, now())
+   where documento_id = v_doc and usado_em is null;
+end $$;
+revoke execute on function public.fn_clinic_orcamento_cancelar_contrato(uuid, uuid, text) from public, anon, authenticated;
+
+-- ─── enviar: congela e emite o contrato ────────────────────────────────────
+-- O texto (p_conteudo) é montado pelo servidor a partir do próprio orçamento
+-- (rota /enviar); o corpo da requisição só escolhe o orçamento e o modelo.
+create or replace function public.fn_clinic_orcamento_enviar(
+  p_org uuid, p_id uuid, p_modelo_versao uuid, p_titulo text, p_conteudo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v public.clinic_orcamentos;
+  v_tipo text;
+  v_doc jsonb;
+begin
+  perform public.fn_clinic_orcamentos_exigir(p_org, 'orcamentos.criar');
+  select * into v from public.clinic_orcamentos o where o.organization_id = p_org and o.id = p_id for update;
+  if not found then
+    raise exception 'orcamento_invalido' using errcode = '22023';
+  end if;
+  if v.status <> 'rascunho' then
+    raise exception 'orcamento_nao_editavel' using errcode = '55000';
+  end if;
+  if v.desconto_pendente then
+    raise exception 'orcamento_desconto_pendente' using errcode = '22023';
+  end if;
+  if v.validade_ate < current_date then
+    raise exception 'orcamento_vencido' using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.clinic_orcamento_itens i where i.organization_id = p_org and i.orcamento_id = p_id) then
+    raise exception 'orcamento_dados_invalidos' using errcode = '22023';
+  end if;
+  select m.tipo into v_tipo
+    from public.clinic_modelos_documento_versoes mv
+    join public.clinic_modelos_documento m on m.id = mv.modelo_id
+   where mv.id = p_modelo_versao and mv.organization_id = p_org;
+  if v_tipo is distinct from 'contrato' then
+    raise exception 'orcamento_modelo_invalido' using errcode = '22023';
+  end if;
+
+  -- documentos.emitir, MFA, prontuário ligado e paciente/atendimento conferidos lá dentro.
+  v_doc := public.fn_clinic_documento_emitir(p_org, v.contact_id, p_modelo_versao, p_titulo, p_conteudo,
+                                              v.atendimento_id, null, v.validade_ate);
+  update public.clinic_documentos_emitidos set orcamento_id = p_id
+   where organization_id = p_org and id = (v_doc ->> 'id')::uuid;
+  update public.clinic_orcamentos set
+    status = 'enviado',
+    enviado_em = now(),
+    enviado_por = auth.uid(),
+    documento_id = (v_doc ->> 'id')::uuid,
+    updated_by = auth.uid(),
+    updated_at = now()
+   where organization_id = p_org and id = p_id;
+  return jsonb_build_object('id', p_id, 'documento_id', v_doc ->> 'id', 'sha256', v_doc ->> 'sha256');
+end $$;
+revoke execute on function public.fn_clinic_orcamento_enviar(uuid, uuid, uuid, text, text) from public, anon;
+grant  execute on function public.fn_clinic_orcamento_enviar(uuid, uuid, uuid, text, text) to authenticated;
+
+-- ─── recusar (o paciente disse não) ────────────────────────────────────────
+create or replace function public.fn_clinic_orcamento_recusar(p_org uuid, p_id uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_motivo text := nullif(btrim(coalesce(p_motivo, '')), '');
+begin
+  perform public.fn_clinic_orcamentos_exigir(p_org, 'orcamentos.criar');
+  if v_motivo is null or char_length(v_motivo) not between 3 and 300 then
+    raise exception 'orcamento_sem_motivo' using errcode = '22023';
+  end if;
+  update public.clinic_orcamentos set
+    status = 'recusado', recusado_em = now(), motivo_recusa = v_motivo, updated_by = auth.uid(), updated_at = now()
+   where organization_id = p_org and id = p_id and status = 'enviado';
+  if not found then
+    raise exception 'orcamento_nao_editavel' using errcode = '55000';
+  end if;
+  perform public.fn_clinic_orcamento_cancelar_contrato(p_org, p_id, 'Orçamento recusado pelo paciente');
+  return jsonb_build_object('id', p_id);
+end $$;
+revoke execute on function public.fn_clinic_orcamento_recusar(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_orcamento_recusar(uuid, uuid, text) to authenticated;
+
+-- ─── cancelar: agora também o enviado (o contrato é cancelado junto) ───────
+create or replace function public.fn_clinic_orcamento_cancelar(p_org uuid, p_id uuid, p_motivo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_motivo text := nullif(btrim(coalesce(p_motivo, '')), '');
+begin
+  perform public.fn_clinic_orcamentos_exigir(p_org, 'orcamentos.cancelar');
+  if v_motivo is null or char_length(v_motivo) not between 3 and 300 then
+    raise exception 'orcamento_sem_motivo' using errcode = '22023';
+  end if;
+  update public.clinic_orcamentos set
+    status = 'cancelado',
+    cancelado_em = now(),
+    cancelado_por = auth.uid(),
+    motivo_cancelamento = v_motivo,
+    updated_by = auth.uid(),
+    updated_at = now()
+   where organization_id = p_org and id = p_id and status in ('rascunho', 'enviado');
+  if not found then
+    raise exception 'orcamento_nao_editavel' using errcode = '55000';
+  end if;
+  perform public.fn_clinic_orcamento_cancelar_contrato(p_org, p_id, 'Orçamento cancelado pela clínica');
+  return jsonb_build_object('id', p_id);
+end $$;
+revoke execute on function public.fn_clinic_orcamento_cancelar(uuid, uuid, text) from public, anon;
+grant  execute on function public.fn_clinic_orcamento_cancelar(uuid, uuid, text) to authenticated;
+
+-- ─── nova versão: revisar o que já foi enviado, recusado ou expirou ─────────
+-- Copia itens e condições para um RASCUNHO com o mesmo número e versão + 1.
+-- O enviado vira "substituído" e o contrato dele é cancelado.
+create or replace function public.fn_clinic_orcamento_nova_versao(p_org uuid, p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v public.clinic_orcamentos;
+  v_novo uuid;
+  v_versao integer;
+begin
+  perform public.fn_clinic_orcamentos_exigir(p_org, 'orcamentos.criar');
+  select * into v from public.clinic_orcamentos o where o.organization_id = p_org and o.id = p_id for update;
+  if not found then
+    raise exception 'orcamento_invalido' using errcode = '22023';
+  end if;
+  if v.status not in ('enviado', 'recusado', 'expirado') then
+    raise exception 'orcamento_nao_editavel' using errcode = '55000';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('clinic_orcamento_numero:' || p_org, 0));
+  if exists (select 1 from public.clinic_orcamentos o
+              where o.organization_id = p_org and o.numero = v.numero and o.status in ('rascunho', 'enviado', 'aprovado')
+                and o.id <> p_id) then
+    raise exception 'orcamento_versao_aberta' using errcode = '22023';
+  end if;
+  select max(o.versao) + 1 into v_versao from public.clinic_orcamentos o where o.organization_id = p_org and o.numero = v.numero;
+
+  insert into public.clinic_orcamentos (organization_id, contact_id, atendimento_id, profissional_user_id, numero, versao,
+                                        substitui_id, subtotal_cents, desconto_cents, total_cents, desconto_pendente,
+                                        condicao_pagamento, validade_ate, observacao, created_by, updated_by)
+  values (p_org, v.contact_id, v.atendimento_id, v.profissional_user_id, v.numero, v_versao, v.id,
+          v.subtotal_cents, v.desconto_cents, v.total_cents,
+          -- o desconto volta a passar pela régua ao salvar; aqui herda a decisão anterior
+          false,
+          v.condicao_pagamento, greatest(v.validade_ate, current_date + 15), v.observacao, auth.uid(), auth.uid())
+  returning id into v_novo;
+  insert into public.clinic_orcamento_itens (organization_id, orcamento_id, preco_id, procedure_id, event_type_id,
+                                             descricao, sessoes, quantidade, preco_unit_cents, total_cents, posicao)
+  select p_org, v_novo, i.preco_id, i.procedure_id, i.event_type_id, i.descricao, i.sessoes, i.quantidade,
+         i.preco_unit_cents, i.total_cents, i.posicao
+    from public.clinic_orcamento_itens i
+   where i.organization_id = p_org and i.orcamento_id = p_id;
+
+  if v.status = 'enviado' then
+    update public.clinic_orcamentos set status = 'substituido', updated_by = auth.uid(), updated_at = now()
+     where organization_id = p_org and id = p_id;
+    perform public.fn_clinic_orcamento_cancelar_contrato(p_org, p_id, 'Substituído por nova versão do orçamento');
+  end if;
+  return jsonb_build_object('id', v_novo, 'numero', v.numero, 'versao', v_versao);
+end $$;
+revoke execute on function public.fn_clinic_orcamento_nova_versao(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_orcamento_nova_versao(uuid, uuid) to authenticated;
+
+-- ─── expirar (cron, só service role) ───────────────────────────────────────
+create or replace function public.fn_clinic_orcamentos_expirar()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  r record;
+  v_n integer := 0;
+begin
+  for r in
+    select o.organization_id, o.id from public.clinic_orcamentos o
+     where o.status = 'enviado' and o.validade_ate < current_date
+     for update skip locked
+  loop
+    update public.clinic_orcamentos set status = 'expirado', expirado_em = now(), updated_at = now()
+     where organization_id = r.organization_id and id = r.id;
+    perform public.fn_clinic_orcamento_cancelar_contrato(r.organization_id, r.id, 'Orçamento expirado');
+    v_n := v_n + 1;
+  end loop;
+  return jsonb_build_object('expirados', v_n);
+end $$;
+revoke execute on function public.fn_clinic_orcamentos_expirar() from public, anon, authenticated;
+grant  execute on function public.fn_clinic_orcamentos_expirar() to service_role;
+
+-- ---- fim clinic (migration 8008, fork) ----
+
+-- ---- clinic: orçamento O4, pós-aceite (migration 8009, fork) ----
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 8009 · clinic — orçamento O4: pós-aceite → plano de tratamento e comanda (FORK)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/orcamento/plano.md (fase O4). Depende da 8008.
+--
+-- Quando o contrato é aceito (o orçamento vira "aprovado", gatilho da 8008),
+-- na MESMA transação e sem HTTP:
+--   1. PLANO DE TRATAMENTO (clinic_planos_tratamento + clinic_plano_sessoes,
+--      9021) com as sessões contratadas: cada item vira sessões × quantidade
+--      sessões PLANEJADAS do procedimento/tipo de serviço;
+--   2. COMANDA ABERTA (sales + sale_items, 0351) com os itens, os preços do
+--      orçamento e o desconto; comissão resolvida como na inclusão manual
+--      (pessoa+serviço → pessoa → serviço, só regra em vigor). A forma e as
+--      parcelas combinadas vão na observação: quem finaliza é o caixa (o
+--      parcelamento com recebíveis chega com a FN2, #58).
+-- A ligação com a comanda fica em clinic_orcamento_vendas (1:1) — o núcleo
+-- (sales) não ganha coluna. O plano fica em clinic_orcamentos.plano_id.
+--
+-- IDEMPOTENTE: reprocessar não duplica nada. Se algo falhar, o ACEITE NÃO SE
+-- PERDE: o erro fica em clinic_orcamentos.pos_aceite_erro e quem tem
+-- orcamentos.criar reprocessa (fn_clinic_orcamento_reprocessar). Aditiva.
+
+-- ─── colunas e a ligação com a comanda ─────────────────────────────────────
+alter table public.clinic_orcamentos add column if not exists plano_id uuid;
+alter table public.clinic_orcamentos add column if not exists pos_aceite_em timestamptz;
+alter table public.clinic_orcamentos add column if not exists pos_aceite_erro text;
+do $c$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'clinic_orcamentos_plano_fk') then
+    alter table public.clinic_orcamentos add constraint clinic_orcamentos_plano_fk
+      foreign key (organization_id, plano_id) references public.clinic_planos_tratamento (organization_id, id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'clinic_orcamentos_pos_aceite_erro') then
+    alter table public.clinic_orcamentos add constraint clinic_orcamentos_pos_aceite_erro
+      check (pos_aceite_erro is null or char_length(pos_aceite_erro) <= 300);
+  end if;
+end
+$c$;
+
+create table if not exists public.clinic_orcamento_vendas (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  orcamento_id uuid not null,
+  sale_id uuid not null references public.sales(id),
+  created_at timestamptz not null default now(),
+  constraint clinic_orcamento_vendas_orcamento_key unique (organization_id, orcamento_id),
+  constraint clinic_orcamento_vendas_sale_key unique (sale_id),
+  constraint clinic_orcamento_vendas_orcamento_fk foreign key (organization_id, orcamento_id)
+    references public.clinic_orcamentos (organization_id, id) on delete cascade
+);
+
+alter table public.clinic_orcamento_vendas enable row level security;
+drop policy if exists tenant_isolation_clinic_orcamento_vendas_all on public.clinic_orcamento_vendas;
+create policy tenant_isolation_clinic_orcamento_vendas_all on public.clinic_orcamento_vendas
+  using ((organization_id in (select public.fn_user_org_ids()))
+         and public.fn_role_at_least(organization_id, 'viewer'))
+  with check ((organization_id in (select public.fn_user_org_ids()))
+         and public.fn_role_at_least(organization_id, 'viewer'));
+drop policy if exists acesso_ler on public.clinic_orcamento_vendas;
+create policy acesso_ler on public.clinic_orcamento_vendas as restrictive for select
+  using (public.fn_has_permission(organization_id, 'orcamentos.ver'));
+revoke all on public.clinic_orcamento_vendas from anon;
+revoke insert, update, delete, truncate on public.clinic_orcamento_vendas from authenticated;
+
+-- ─── o pós-aceite (interno; idempotente) ───────────────────────────────────
+create or replace function public.fn_clinic_orcamento_pos_aceite(p_org uuid, p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v public.clinic_orcamentos;
+  it record;
+  v_plano uuid;
+  v_sale uuid;
+  v_n integer := 0;
+  v_total_sessoes integer;
+  v_numero bigint;
+  v_tentativa integer;
+  v_pct numeric;
+  v_resumo text;
+  c jsonb;
+begin
+  select * into v from public.clinic_orcamentos o
+   where o.organization_id = p_org and o.id = p_id for update;
+  if not found or v.status <> 'aprovado' then
+    raise exception 'orcamento_nao_aprovado' using errcode = '22023';
+  end if;
+
+  -- 1. plano de tratamento
+  v_plano := v.plano_id;
+  if v_plano is null then
+    select coalesce(sum(i.sessoes * i.quantidade), 0) into v_total_sessoes
+      from public.clinic_orcamento_itens i where i.organization_id = p_org and i.orcamento_id = p_id;
+    if v_total_sessoes > 500 then
+      raise exception 'orcamento_sessoes_demais' using errcode = '22023';
+    end if;
+    insert into public.clinic_planos_tratamento
+      (organization_id, contact_id, atendimento_origem_id, profissional_user_id, titulo, objetivo, inicio, status,
+       created_by, updated_by)
+    values (p_org, v.contact_id, v.atendimento_id, v.profissional_user_id,
+            left('Orçamento Nº ' || v.numero || case when v.versao > 1 then ' v' || v.versao else '' end || ' — contrato aceito', 120),
+            'Sessões contratadas no orçamento aprovado.', current_date, 'ativo', v.enviado_por, v.enviado_por)
+    returning id into v_plano;
+    for it in
+      select i.* from public.clinic_orcamento_itens i
+       where i.organization_id = p_org and i.orcamento_id = p_id order by i.posicao
+    loop
+      for k in 1..(it.sessoes * it.quantidade) loop
+        v_n := v_n + 1;
+        insert into public.clinic_plano_sessoes
+          (organization_id, plano_id, numero, descricao, event_type_id, procedure_id, updated_by)
+        values (p_org, v_plano, v_n,
+                left(it.descricao || case when it.sessoes * it.quantidade > 1
+                                          then ' (' || k || '/' || (it.sessoes * it.quantidade) || ')' else '' end, 200),
+                it.event_type_id, it.procedure_id, v.enviado_por);
+      end loop;
+    end loop;
+    update public.clinic_orcamentos set plano_id = v_plano where organization_id = p_org and id = p_id;
+  end if;
+
+  -- 2. comanda aberta
+  select ov.sale_id into v_sale from public.clinic_orcamento_vendas ov
+   where ov.organization_id = p_org and ov.orcamento_id = p_id;
+  if v_sale is null then
+    c := v.condicao_pagamento;
+    v_resumo := 'Orçamento Nº ' || v.numero || case when v.versao > 1 then ' v' || v.versao else '' end
+      || ' (contrato aceito). Pagamento combinado: '
+      || case c ->> 'forma'
+           when 'dinheiro' then 'dinheiro, à vista'
+           when 'pix' then 'Pix, à vista'
+           when 'debito' then 'cartão de débito, à vista'
+           when 'credito' then 'cartão de crédito, à vista'
+           else coalesce('entrada de R$ ' || to_char(((c -> 'entrada' ->> 'valor_cents')::numeric / 100), 'FM999999990.00')
+                         || ' (' || (c -> 'entrada' ->> 'forma') || ') + ', '')
+                || (c ->> 'parcelas') || 'x no cartão de crédito'
+         end || '.';
+    v_tentativa := 0;
+    loop
+      begin
+        perform pg_advisory_xact_lock(hashtextextended('sales_numero:' || p_org, 0));
+        select coalesce(max(s.number), 0) + 1 into v_numero from public.sales s where s.organization_id = p_org;
+        insert into public.sales (organization_id, number, contact_id, attendant_user_id, status,
+                                  discount_cents, total_cents, notes, created_by_user_id)
+        values (p_org, v_numero, v.contact_id, v.profissional_user_id, 'open',
+                v.desconto_cents, v.total_cents, left(v_resumo, 1000), v.enviado_por)
+        returning id into v_sale;
+        exit;
+      exception when unique_violation then
+        v_tentativa := v_tentativa + 1;
+        if v_tentativa >= 5 then
+          raise;
+        end if;
+      end;
+    end loop;
+    for it in
+      select i.* from public.clinic_orcamento_itens i
+       where i.organization_id = p_org and i.orcamento_id = p_id order by i.posicao
+    loop
+      -- comissão como na inclusão manual: a regra mais específica em vigor
+      select r.percent into v_pct
+        from public.commission_rules r
+       where r.organization_id = p_org and r.is_active
+         and ((r.attendant_user_id = v.profissional_user_id and r.event_type_id = it.event_type_id)
+              or (r.attendant_user_id = v.profissional_user_id and r.event_type_id is null)
+              or (r.attendant_user_id is null and r.event_type_id = it.event_type_id))
+       order by (r.attendant_user_id is not null and r.event_type_id is not null) desc,
+                (r.attendant_user_id is not null) desc
+       limit 1;
+      insert into public.sale_items (organization_id, sale_id, event_type_id, description, attendant_user_id,
+                                     quantity, unit_price_cents, discount_cents, total_cents, commission_percent)
+      values (p_org, v_sale, it.event_type_id, it.descricao, v.profissional_user_id,
+              it.quantidade, it.preco_unit_cents, 0, it.total_cents, coalesce(v_pct, 0));
+    end loop;
+    insert into public.clinic_orcamento_vendas (organization_id, orcamento_id, sale_id) values (p_org, p_id, v_sale);
+  end if;
+
+  update public.clinic_orcamentos set pos_aceite_em = coalesce(pos_aceite_em, now()), pos_aceite_erro = null
+   where organization_id = p_org and id = p_id;
+  return jsonb_build_object('plano_id', v_plano, 'sale_id', v_sale);
+end $$;
+revoke execute on function public.fn_clinic_orcamento_pos_aceite(uuid, uuid) from public, anon, authenticated;
+
+-- ─── gatilho: aprovado → pós-aceite, sem nunca derrubar o aceite ────────────
+create or replace function public.fn_clinic_orcamento_ao_aprovar()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.status = 'aprovado' and old.status is distinct from 'aprovado' then
+    begin
+      perform public.fn_clinic_orcamento_pos_aceite(new.organization_id, new.id);
+    exception when others then
+      -- O aceite é a prova jurídica: ele fica. O que faltou fica visível e reprocessável.
+      update public.clinic_orcamentos
+         set pos_aceite_erro = left('Não foi possível gerar o plano e a comanda (' || sqlerrm || '). Use "Gerar plano e comanda".', 300)
+       where organization_id = new.organization_id and id = new.id;
+    end;
+  end if;
+  return null;
+end $$;
+revoke execute on function public.fn_clinic_orcamento_ao_aprovar() from public, anon, authenticated;
+drop trigger if exists trg_clinic_orcamento_ao_aprovar on public.clinic_orcamentos;
+create trigger trg_clinic_orcamento_ao_aprovar after update of status on public.clinic_orcamentos
+  for each row execute function public.fn_clinic_orcamento_ao_aprovar();
+
+-- ─── reprocessar (botão "Gerar plano e comanda") ────────────────────────────
+create or replace function public.fn_clinic_orcamento_reprocessar(p_org uuid, p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform public.fn_clinic_orcamentos_exigir(p_org, 'orcamentos.criar');
+  if not exists (select 1 from public.clinic_orcamentos o where o.organization_id = p_org and o.id = p_id) then
+    raise exception 'orcamento_invalido' using errcode = '22023';
+  end if;
+  return public.fn_clinic_orcamento_pos_aceite(p_org, p_id);
+end $$;
+revoke execute on function public.fn_clinic_orcamento_reprocessar(uuid, uuid) from public, anon;
+grant  execute on function public.fn_clinic_orcamento_reprocessar(uuid, uuid) to authenticated;
+
+-- ---- fim clinic (migration 8009, fork) ----
+
+-- ---- clinic: orçamento O5, correções das revisões (migration 8010, fork) ----
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 8010 · clinic — orçamento O5: correções das revisões security-lgpd e
+--                 health-compliance (FORK)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Plano: docs/tarefas/orcamento/plano.md (fase O5). Depende da 8009.
+--
+--   1. DISTRATO: revogar o contrato ACEITO (aba Documentos) cancela o orçamento
+--      aprovado, deixa o plano gerado "pausado" e cancela a comanda ainda
+--      ABERTA (finalizada segue para estorno pelo caixa — o motivo diz isso);
+--   2. o plano gerado pelo aceite nasce RASCUNHO ("a confirmar pelo
+--      profissional"): sessão contratada não é indicação clínica (CFM 1.821);
+--   3. ENVIAR revalida a vigência do preço (nova versão copia itens) e confere
+--      que o texto do contrato traz o total e cada item do orçamento gravado;
+--   4. pos_aceite_erro guarda o CÓDIGO do erro, nunca a mensagem bruta do banco;
+--   5. ANONIMIZAR o paciente redige o texto livre dos orçamentos dele
+--      (observação, motivos, observação do pagamento). Itens, valores e o
+--      contrato aceito ficam: são prova da relação de consumo (LGPD art. 16, II).
+-- Gatilhos sem HTTP. Aditiva e idempotente.
+
+-- ─── 1. documento ↔ orçamento, agora com a revogação ───────────────────────
+create or replace function public.fn_clinic_orcamento_pelo_documento()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_plano uuid;
+  v_sale uuid;
+begin
+  if tg_op = 'UPDATE' and old.orcamento_id is not null and new.orcamento_id is distinct from old.orcamento_id then
+    raise exception 'documento_imutavel' using errcode = '55000';
+  end if;
+  if tg_when = 'BEFORE' then
+    return new;
+  end if;
+  if new.orcamento_id is null or new.status = old.status then
+    return null;
+  end if;
+  if old.status = 'emitido' and new.status = 'aceito' then
+    update public.clinic_orcamentos
+       set status = 'aprovado', aprovado_em = now(), updated_at = now()
+     where organization_id = new.organization_id and id = new.orcamento_id and status = 'enviado';
+  elsif old.status = 'emitido' and new.status = 'cancelado' then
+    update public.clinic_orcamentos
+       set status = 'cancelado', cancelado_em = now(), cancelado_por = auth.uid(),
+           motivo_cancelamento = left(coalesce(new.motivo, 'Contrato cancelado'), 300), updated_at = now()
+     where organization_id = new.organization_id and id = new.orcamento_id and status = 'enviado';
+  elsif old.status = 'aceito' and new.status = 'revogado' then
+    update public.clinic_orcamentos
+       set status = 'cancelado', cancelado_em = now(), cancelado_por = auth.uid(),
+           motivo_cancelamento = left('Contrato revogado (distrato). ' || coalesce(new.motivo, ''), 300), updated_at = now()
+     where organization_id = new.organization_id and id = new.orcamento_id and status = 'aprovado'
+    returning plano_id into v_plano;
+    if found then
+      update public.clinic_planos_tratamento set status = 'pausado', versao = versao + 1, updated_by = auth.uid()
+       where organization_id = new.organization_id and id = v_plano and status in ('rascunho', 'ativo');
+      select ov.sale_id into v_sale from public.clinic_orcamento_vendas ov
+       where ov.organization_id = new.organization_id and ov.orcamento_id = new.orcamento_id;
+      update public.sales set status = 'cancelled', cancelled_at = now(),
+             cancel_reason = 'Contrato do orçamento revogado (distrato).'
+       where organization_id = new.organization_id and id = v_sale and status = 'open';
+    end if;
+  end if;
+  return null;
+end $$;
+revoke execute on function public.fn_clinic_orcamento_pelo_documento() from public, anon, authenticated;
+
+-- ─── 2. pós-aceite: plano nasce rascunho ───────────────────────────────────
+create or replace function public.fn_clinic_orcamento_pos_aceite(p_org uuid, p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v public.clinic_orcamentos;
+  it record;
+  v_plano uuid;
+  v_sale uuid;
+  v_n integer := 0;
+  v_total_sessoes integer;
+  v_numero bigint;
+  v_tentativa integer;
+  v_pct numeric;
+  v_resumo text;
+  c jsonb;
+begin
+  select * into v from public.clinic_orcamentos o
+   where o.organization_id = p_org and o.id = p_id for update;
+  if not found or v.status <> 'aprovado' then
+    raise exception 'orcamento_nao_aprovado' using errcode = '22023';
+  end if;
+
+  -- 1. plano de tratamento
+  v_plano := v.plano_id;
+  if v_plano is null then
+    select coalesce(sum(i.sessoes * i.quantidade), 0) into v_total_sessoes
+      from public.clinic_orcamento_itens i where i.organization_id = p_org and i.orcamento_id = p_id;
+    if v_total_sessoes > 500 then
+      raise exception 'orcamento_sessoes_demais' using errcode = '22023';
+    end if;
+    insert into public.clinic_planos_tratamento
+      (organization_id, contact_id, atendimento_origem_id, profissional_user_id, titulo, objetivo, inicio, status,
+       created_by, updated_by)
+    values (p_org, v.contact_id, v.atendimento_id, v.profissional_user_id,
+            left('Orçamento Nº ' || v.numero || case when v.versao > 1 then ' v' || v.versao else '' end || ' — contrato aceito', 120),
+            'Sessões contratadas no orçamento aprovado. A confirmar pelo profissional (não é indicação clínica).',
+            current_date, 'rascunho', v.enviado_por, v.enviado_por)
+    returning id into v_plano;
+    for it in
+      select i.* from public.clinic_orcamento_itens i
+       where i.organization_id = p_org and i.orcamento_id = p_id order by i.posicao
+    loop
+      for k in 1..(it.sessoes * it.quantidade) loop
+        v_n := v_n + 1;
+        insert into public.clinic_plano_sessoes
+          (organization_id, plano_id, numero, descricao, event_type_id, procedure_id, updated_by)
+        values (p_org, v_plano, v_n,
+                left(it.descricao || case when it.sessoes * it.quantidade > 1
+                                          then ' (' || k || '/' || (it.sessoes * it.quantidade) || ')' else '' end, 200),
+                it.event_type_id, it.procedure_id, v.enviado_por);
+      end loop;
+    end loop;
+    update public.clinic_orcamentos set plano_id = v_plano where organization_id = p_org and id = p_id;
+  end if;
+
+  -- 2. comanda aberta
+  select ov.sale_id into v_sale from public.clinic_orcamento_vendas ov
+   where ov.organization_id = p_org and ov.orcamento_id = p_id;
+  if v_sale is null then
+    c := v.condicao_pagamento;
+    v_resumo := 'Orçamento Nº ' || v.numero || case when v.versao > 1 then ' v' || v.versao else '' end
+      || ' (contrato aceito). Pagamento combinado: '
+      || case c ->> 'forma'
+           when 'dinheiro' then 'dinheiro, à vista'
+           when 'pix' then 'Pix, à vista'
+           when 'debito' then 'cartão de débito, à vista'
+           when 'credito' then 'cartão de crédito, à vista'
+           else coalesce('entrada de R$ ' || to_char(((c -> 'entrada' ->> 'valor_cents')::numeric / 100), 'FM999999990.00')
+                         || ' (' || (c -> 'entrada' ->> 'forma') || ') + ', '')
+                || (c ->> 'parcelas') || 'x no cartão de crédito'
+         end || '.';
+    v_tentativa := 0;
+    loop
+      begin
+        perform pg_advisory_xact_lock(hashtextextended('sales_numero:' || p_org, 0));
+        select coalesce(max(s.number), 0) + 1 into v_numero from public.sales s where s.organization_id = p_org;
+        insert into public.sales (organization_id, number, contact_id, attendant_user_id, status,
+                                  discount_cents, total_cents, notes, created_by_user_id)
+        values (p_org, v_numero, v.contact_id, v.profissional_user_id, 'open',
+                v.desconto_cents, v.total_cents, left(v_resumo, 1000), v.enviado_por)
+        returning id into v_sale;
+        exit;
+      exception when unique_violation then
+        v_tentativa := v_tentativa + 1;
+        if v_tentativa >= 5 then
+          raise;
+        end if;
+      end;
+    end loop;
+    for it in
+      select i.* from public.clinic_orcamento_itens i
+       where i.organization_id = p_org and i.orcamento_id = p_id order by i.posicao
+    loop
+      -- comissão como na inclusão manual: a regra mais específica em vigor
+      select r.percent into v_pct
+        from public.commission_rules r
+       where r.organization_id = p_org and r.is_active
+         and ((r.attendant_user_id = v.profissional_user_id and r.event_type_id = it.event_type_id)
+              or (r.attendant_user_id = v.profissional_user_id and r.event_type_id is null)
+              or (r.attendant_user_id is null and r.event_type_id = it.event_type_id))
+       order by (r.attendant_user_id is not null and r.event_type_id is not null) desc,
+                (r.attendant_user_id is not null) desc
+       limit 1;
+      insert into public.sale_items (organization_id, sale_id, event_type_id, description, attendant_user_id,
+                                     quantity, unit_price_cents, discount_cents, total_cents, commission_percent)
+      values (p_org, v_sale, it.event_type_id, it.descricao, v.profissional_user_id,
+              it.quantidade, it.preco_unit_cents, 0, it.total_cents, coalesce(v_pct, 0));
+    end loop;
+    insert into public.clinic_orcamento_vendas (organization_id, orcamento_id, sale_id) values (p_org, p_id, v_sale);
+  end if;
+
+  update public.clinic_orcamentos set pos_aceite_em = coalesce(pos_aceite_em, now()), pos_aceite_erro = null
+   where organization_id = p_org and id = p_id;
+  return jsonb_build_object('plano_id', v_plano, 'sale_id', v_sale);
+end $$;
+revoke execute on function public.fn_clinic_orcamento_pos_aceite(uuid, uuid) from public, anon, authenticated;
+
+-- ─── 4. erro do pós-aceite: só o código ────────────────────────────────────
+create or replace function public.fn_clinic_orcamento_ao_aprovar()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.status = 'aprovado' and old.status is distinct from 'aprovado' then
+    begin
+      perform public.fn_clinic_orcamento_pos_aceite(new.organization_id, new.id);
+    exception when others then
+      -- O aceite é a prova jurídica: ele fica. O que faltou fica visível e
+      -- reprocessável — com o código do erro, nunca a mensagem bruta do banco.
+      update public.clinic_orcamentos
+         set pos_aceite_erro = left(case when sqlerrm ~ '^orcamento_[a-z_]+$' then sqlerrm else 'erro_' || sqlstate end, 300)
+       where organization_id = new.organization_id and id = new.id;
+    end;
+  end if;
+  return null;
+end $$;
+revoke execute on function public.fn_clinic_orcamento_ao_aprovar() from public, anon, authenticated;
+
+-- ─── 3. enviar: vigência do preço e texto conferidos ───────────────────────
+create or replace function public.fn_clinic_orcamento_enviar(
+  p_org uuid, p_id uuid, p_modelo_versao uuid, p_titulo text, p_conteudo text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v public.clinic_orcamentos;
+  v_tipo text;
+  v_doc jsonb;
+begin
+  perform public.fn_clinic_orcamentos_exigir(p_org, 'orcamentos.criar');
+  select * into v from public.clinic_orcamentos o where o.organization_id = p_org and o.id = p_id for update;
+  if not found then
+    raise exception 'orcamento_invalido' using errcode = '22023';
+  end if;
+  if v.status <> 'rascunho' then
+    raise exception 'orcamento_nao_editavel' using errcode = '55000';
+  end if;
+  if v.desconto_pendente then
+    raise exception 'orcamento_desconto_pendente' using errcode = '22023';
+  end if;
+  if v.validade_ate < current_date then
+    raise exception 'orcamento_vencido' using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.clinic_orcamento_itens i where i.organization_id = p_org and i.orcamento_id = p_id) then
+    raise exception 'orcamento_dados_invalidos' using errcode = '22023';
+  end if;
+  -- Nova versão copia itens: o preço tem de continuar o vigente e ativo.
+  if exists (
+    select 1 from public.clinic_orcamento_itens i
+      join public.clinic_precos p on p.organization_id = i.organization_id and p.id = i.preco_id
+     where i.organization_id = p_org and i.orcamento_id = p_id
+       and (not p.ativo or p.preco_cents <> i.preco_unit_cents or exists (
+             select 1 from public.clinic_precos n
+              where n.organization_id = p_org
+                and coalesce(n.procedure_id, n.event_type_id) = coalesce(p.procedure_id, p.event_type_id)
+                and n.sessoes = p.sessoes and n.vigente_desde <= now()
+                and (n.vigente_desde, n.created_at, n.id) > (p.vigente_desde, p.created_at, p.id)))) then
+    raise exception 'orcamento_preco_desatualizado' using errcode = '22023';
+  end if;
+  -- O texto que o paciente vai aceitar tem de trazer o total e cada item do
+  -- orçamento gravado (o servidor monta; a RPC não aceita um texto qualquer).
+  if position(translate(to_char(v.total_cents / 100.0, 'FM999,999,990.00'), ',.', '.,') in coalesce(p_conteudo, '')) = 0
+     or exists (select 1 from public.clinic_orcamento_itens i
+                 where i.organization_id = p_org and i.orcamento_id = p_id
+                   and position(i.descricao in coalesce(p_conteudo, '')) = 0) then
+    raise exception 'orcamento_texto_divergente' using errcode = '22023';
+  end if;
+  select m.tipo into v_tipo
+    from public.clinic_modelos_documento_versoes mv
+    join public.clinic_modelos_documento m on m.id = mv.modelo_id
+   where mv.id = p_modelo_versao and mv.organization_id = p_org;
+  if v_tipo is distinct from 'contrato' then
+    raise exception 'orcamento_modelo_invalido' using errcode = '22023';
+  end if;
+
+  -- documentos.emitir, MFA, prontuário ligado e paciente/atendimento conferidos lá dentro.
+  v_doc := public.fn_clinic_documento_emitir(p_org, v.contact_id, p_modelo_versao, p_titulo, p_conteudo,
+                                              v.atendimento_id, null, v.validade_ate);
+  update public.clinic_documentos_emitidos set orcamento_id = p_id
+   where organization_id = p_org and id = (v_doc ->> 'id')::uuid;
+  update public.clinic_orcamentos set
+    status = 'enviado',
+    enviado_em = now(),
+    enviado_por = auth.uid(),
+    documento_id = (v_doc ->> 'id')::uuid,
+    updated_by = auth.uid(),
+    updated_at = now()
+   where organization_id = p_org and id = p_id;
+  return jsonb_build_object('id', p_id, 'documento_id', v_doc ->> 'id', 'sha256', v_doc ->> 'sha256');
+end $$;
+revoke execute on function public.fn_clinic_orcamento_enviar(uuid, uuid, uuid, text, text) from public, anon;
+grant  execute on function public.fn_clinic_orcamento_enviar(uuid, uuid, uuid, text, text) to authenticated;
+
+-- ─── 5. anonimizar o paciente redige o texto livre dos orçamentos ──────────
+create or replace function public.fn_clinic_orcamentos_redigir_ao_anonimizar()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  update public.clinic_orcamentos o
+     set observacao = null,
+         motivo_cancelamento = case when o.motivo_cancelamento is null then null else '[anonimizado]' end,
+         motivo_recusa = case when o.motivo_recusa is null then null else '[anonimizado]' end,
+         condicao_pagamento = o.condicao_pagamento - 'observacao',
+         updated_at = now()
+   where o.organization_id = new.organization_id and o.contact_id = new.id;
+  return null;
+end $$;
+revoke all on function public.fn_clinic_orcamentos_redigir_ao_anonimizar() from public;
+revoke execute on function public.fn_clinic_orcamentos_redigir_ao_anonimizar() from anon, authenticated;
+drop trigger if exists trg_clinic_orcamentos_redigir_ao_anonimizar on public.contacts;
+create trigger trg_clinic_orcamentos_redigir_ao_anonimizar
+  after update of is_anonymized on public.contacts
+  for each row
+  when (new.is_anonymized = true and coalesce(old.is_anonymized, false) = false)
+  execute function public.fn_clinic_orcamentos_redigir_ao_anonimizar();
+
+-- ---- fim clinic (migration 8010, fork) ----
+
+-- ---- clinic: telefone e endereço da empresa (migration 8011, fork) ----
+
+-- 8011 · clinic (FORK) — telefone e endereço da empresa (Configurações › Organização)
+-- Colunas ADITIVAS e anuláveis em organizations (núcleo; registrado no
+-- UPSTREAM.md). O CEP preenche o resto pela mesma consulta da ficha do
+-- paciente (#86). Os CHECKs só valem quando há valor: colunas novas nascem
+-- vazias e não quebram o update.sh. Sem policy nova (leitura pela RLS de
+-- organizations; escrita pelo updateTenant, admin client com gate de admin).
+-- Sem HTTP.
+
+alter table public.organizations
+  add column if not exists contact_phone text,
+  add column if not exists address_cep text,
+  add column if not exists address_street text,
+  add column if not exists address_number text,
+  add column if not exists address_complement text,
+  add column if not exists address_district text,
+  add column if not exists address_city text,
+  add column if not exists address_uf text,
+  add column if not exists address_city_ibge_code text;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.organizations'::regclass
+                    and conname = 'organizations_contact_phone_digitos') then
+    alter table public.organizations add constraint organizations_contact_phone_digitos
+      check (contact_phone is null or contact_phone ~ '^\d{10,13}$');
+  end if;
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.organizations'::regclass
+                    and conname = 'organizations_address_cep_digitos') then
+    alter table public.organizations add constraint organizations_address_cep_digitos
+      check (address_cep is null or address_cep ~ '^\d{8}$');
+  end if;
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.organizations'::regclass
+                    and conname = 'organizations_address_uf_sigla') then
+    alter table public.organizations add constraint organizations_address_uf_sigla
+      check (address_uf is null or address_uf ~ '^[A-Z]{2}$');
+  end if;
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.organizations'::regclass
+                    and conname = 'organizations_address_ibge_digitos') then
+    alter table public.organizations add constraint organizations_address_ibge_digitos
+      check (address_city_ibge_code is null or address_city_ibge_code ~ '^\d{7}$');
+  end if;
+end $$;
+
+comment on column public.organizations.contact_phone is 'Telefone de contato da empresa, só dígitos (10 a 13, com DDI opcional). Fork clinic 8011.';
+comment on column public.organizations.address_cep is 'CEP da empresa, 8 dígitos. Preenche o endereço pela consulta de CEP (#86). Fork clinic 8011.';
+comment on column public.organizations.address_city_ibge_code is 'Código IBGE do município (7 dígitos), vindo do CEP — base da nota fiscal. Fork clinic 8011.';
+
+-- ---- fim clinic (migration 8011, fork) ----
+
+-- ---- clinic: favicon da empresa (migration 8012, fork) ----
+
+-- 8012 · clinic (FORK) — favicon da empresa (Configurações › Marca)
+-- O ícone da aba do navegador dentro de /app. O arquivo mora no bucket
+-- `brand-logos` (mesmo bucket, mesmas garantias do logo: só service_role
+-- escreve, caminho <org>/<uuid v4>.png não-enumerável, bytes farejados na rota).
+-- O ponteiro fica em settings.clinic.favicon_path, e NÃO em settings.branding:
+-- fn_definir_marca_da_organizacao (núcleo) regrava o objeto branding inteiro
+-- preservando só logo_path — um favicon ali sumiria a cada "Salvar" da marca.
+-- Aditiva; sem tabela; sem policy; sem HTTP.
+
+create or replace function public.fn_clinic_definir_favicon(
+  p_org   uuid,
+  p_actor uuid,
+  p_path  text
+) returns integer
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_linhas integer;
+  v_path   text;
+begin
+  if p_org is null or p_actor is null then
+    raise exception 'favicon_argumento_nulo' using errcode = '22023';
+  end if;
+
+  v_path := nullif(btrim(coalesce(p_path, '')), '');
+  -- Só PNG, e só dentro do prefixo da PRÓPRIA organização.
+  if v_path is not null
+     and v_path !~ ('^' || p_org::text || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.png$')
+  then
+    raise exception 'favicon_caminho_fora_do_escopo' using errcode = '22023';
+  end if;
+
+  -- Mesmo gate do logo da organização: admin ativo dela, ou dono da instalação.
+  if not exists (
+       select 1 from public.user_organizations uo
+        where uo.user_id = p_actor
+          and uo.organization_id = p_org
+          and uo.role = 'admin'
+          and uo.revoked_at is null
+     )
+     and not exists (
+       select 1 from public.platform_admins pa
+        where pa.user_id = p_actor
+          and pa.revoked_at is null
+     )
+  then
+    raise exception 'favicon_sem_permissao' using errcode = '42501';
+  end if;
+
+  update public.organizations o
+     set settings = jsonb_set(
+           coalesce(o.settings, '{}'::jsonb),
+           '{clinic}',
+           case
+             when v_path is null
+               then (case when jsonb_typeof(o.settings -> 'clinic') = 'object'
+                          then o.settings -> 'clinic' else '{}'::jsonb end) - 'favicon_path'
+             else (case when jsonb_typeof(o.settings -> 'clinic') = 'object'
+                        then o.settings -> 'clinic' else '{}'::jsonb end)
+                  || jsonb_build_object('favicon_path', v_path)
+           end,
+           true)
+   where o.id = p_org;
+  get diagnostics v_linhas = row_count;
+  return v_linhas;
+end;
+$$;
+
+comment on function public.fn_clinic_definir_favicon(uuid, uuid, text) is
+  'FORK clinic 8012 — grava (ou apaga) organizations.settings.clinic.favicon_path com merge no campo. Só PNG no prefixo da própria organização (22023 fora disso); admin da organização ou dono da instalação (42501 fora disso). Devolve linhas afetadas. Chamador: app/api/v1/clinic/marca/favicon/route.ts.';
+
+-- Definer VOLÁTIL: só o service_role (a rota, depois dos gates) executa.
+revoke execute on function public.fn_clinic_definir_favicon(uuid, uuid, text)
+  from public, anon, authenticated;
+grant  execute on function public.fn_clinic_definir_favicon(uuid, uuid, text)
+  to service_role;
+
+-- ---- fim clinic (migration 8012, fork) ----
+
+-- ---- clinic: campos do papel timbrado (migration 8013, fork) ----
+
+-- 8013 · clinic (FORK) — campos do papel timbrado (docs/padrao-documentos.md, fase D2)
+--
+-- Organização (colunas ADITIVAS e anuláveis em organizations — núcleo,
+-- registrado no UPSTREAM.md; escrita pelo updateTenant, gate de admin):
+--   website, whatsapp_phone, descriptor, technical_lead_name, technical_lead_registry.
+-- CHECKs só valem com valor: colunas novas nascem vazias e não quebram o update.sh.
+--
+-- Marca: a "cor dos filetes" (accent do papel timbrado) em
+-- settings.clinic.cor_filetes — fora de settings.branding porque
+-- fn_definir_marca_da_organizacao regrava aquele objeto inteiro. Escritor
+-- próprio, no molde do favicon (8012). Sem tabela; sem policy; sem HTTP.
+
+alter table public.organizations
+  add column if not exists website text,
+  add column if not exists whatsapp_phone text,
+  add column if not exists descriptor text,
+  add column if not exists technical_lead_name text,
+  add column if not exists technical_lead_registry text;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.organizations'::regclass and conname = 'organizations_website_formato') then
+    alter table public.organizations add constraint organizations_website_formato
+      check (website is null or (length(website) <= 200 and website ~* '^https?://[^\s/$.?#].[^\s]*$'));
+  end if;
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.organizations'::regclass and conname = 'organizations_whatsapp_digitos') then
+    alter table public.organizations add constraint organizations_whatsapp_digitos
+      check (whatsapp_phone is null or whatsapp_phone ~ '^\d{10,13}$');
+  end if;
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.organizations'::regclass and conname = 'organizations_descriptor_tamanho') then
+    alter table public.organizations add constraint organizations_descriptor_tamanho
+      check (descriptor is null or length(descriptor) <= 60);
+  end if;
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.organizations'::regclass and conname = 'organizations_technical_lead_tamanho') then
+    alter table public.organizations add constraint organizations_technical_lead_tamanho
+      check ((technical_lead_name is null or length(technical_lead_name) <= 120)
+         and (technical_lead_registry is null or length(technical_lead_registry) <= 60));
+  end if;
+end $$;
+
+create or replace function public.fn_clinic_definir_cor_filetes(
+  p_org   uuid,
+  p_actor uuid,
+  p_hex   text
+) returns integer
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_linhas integer;
+  v_hex    text;
+begin
+  if p_org is null or p_actor is null then
+    raise exception 'cor_filetes_argumento_nulo' using errcode = '22023';
+  end if;
+  v_hex := nullif(lower(btrim(coalesce(p_hex, ''))), '');
+  if v_hex is not null and v_hex !~ '^#[0-9a-f]{6}$' then
+    raise exception 'cor_filetes_invalida' using errcode = '22023';
+  end if;
+  if not exists (
+       select 1 from public.user_organizations uo
+        where uo.user_id = p_actor and uo.organization_id = p_org
+          and uo.role = 'admin' and uo.revoked_at is null)
+     and not exists (
+       select 1 from public.platform_admins pa
+        where pa.user_id = p_actor and pa.revoked_at is null)
+  then
+    raise exception 'cor_filetes_sem_permissao' using errcode = '42501';
+  end if;
+
+  update public.organizations o
+     set settings = jsonb_set(
+           coalesce(o.settings, '{}'::jsonb),
+           '{clinic}',
+           case
+             when v_hex is null
+               then (case when jsonb_typeof(o.settings -> 'clinic') = 'object'
+                          then o.settings -> 'clinic' else '{}'::jsonb end) - 'cor_filetes'
+             else (case when jsonb_typeof(o.settings -> 'clinic') = 'object'
+                        then o.settings -> 'clinic' else '{}'::jsonb end)
+                  || jsonb_build_object('cor_filetes', v_hex)
+           end,
+           true)
+   where o.id = p_org;
+  get diagnostics v_linhas = row_count;
+  return v_linhas;
+end;
+$$;
+
+comment on function public.fn_clinic_definir_cor_filetes(uuid, uuid, text) is
+  'FORK clinic 8013 — grava (ou apaga) settings.clinic.cor_filetes (#rrggbb), a cor dos filetes do papel timbrado. Admin da organização ou dono da instalação (42501); cor inválida 22023. Chamador: app/api/v1/clinic/marca/cor-filetes/route.ts.';
+
+revoke execute on function public.fn_clinic_definir_cor_filetes(uuid, uuid, text)
+  from public, anon, authenticated;
+grant  execute on function public.fn_clinic_definir_cor_filetes(uuid, uuid, text)
+  to service_role;
+
+-- ---- fim clinic (migration 8013, fork) ----
+
+-- ---- clinic: snapshot da marca do documento emitido (migration 8014, fork) ----
+
+-- 8014 · clinic (FORK) — o papel timbrado de um documento EMITIDO não muda
+-- (docs/padrao-documentos.md, fase D3).
+--
+-- clinic_documentos_emitidos ganha:
+--   marca_snapshot jsonb — os dados de Configurações › Organização e › Marca
+--                          (crus, + caminhos do logo e do favicon) com que o PDF
+--                          foi gerado pela primeira vez;
+--   layout_versao  text  — a versão do papel timbrado daquela geração.
+-- Gravados UMA vez por fn_clinic_documento_fixar_marca (definer, service_role,
+-- só quando ainda estão nulos) e travados por trg_clinic_documento_marca_fixa:
+-- depois de fixados, nenhum UPDATE os muda. A trava de conteúdo existente
+-- (trg_clinic_documento_imutavel) não muda. Aditiva; sem HTTP.
+
+alter table public.clinic_documentos_emitidos
+  add column if not exists marca_snapshot jsonb,
+  add column if not exists layout_versao text;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.clinic_documentos_emitidos'::regclass
+                    and conname = 'clinic_documentos_emitidos_marca_snapshot_forma') then
+    alter table public.clinic_documentos_emitidos add constraint clinic_documentos_emitidos_marca_snapshot_forma
+      check ((marca_snapshot is null and layout_versao is null)
+          or (jsonb_typeof(marca_snapshot) = 'object' and layout_versao ~ '^\d+\.\d+\.\d+$'));
+  end if;
+end $$;
+
+create or replace function public.fn_clinic_documento_marca_fixa()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if old.marca_snapshot is not null
+     and (new.marca_snapshot is distinct from old.marca_snapshot or new.layout_versao is distinct from old.layout_versao) then
+    raise exception 'documento_marca_fixa' using errcode = '55000';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.fn_clinic_documento_marca_fixa() from public, anon, authenticated;
+drop trigger if exists trg_clinic_documento_marca_fixa on public.clinic_documentos_emitidos;
+create trigger trg_clinic_documento_marca_fixa before update on public.clinic_documentos_emitidos
+  for each row execute function public.fn_clinic_documento_marca_fixa();
+
+create or replace function public.fn_clinic_documento_fixar_marca(
+  p_org      uuid,
+  p_doc      uuid,
+  p_snapshot jsonb,
+  p_versao   text
+) returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_linhas integer;
+begin
+  if p_org is null or p_doc is null or p_snapshot is null or jsonb_typeof(p_snapshot) <> 'object'
+     or p_versao is null or p_versao !~ '^\d+\.\d+\.\d+$' then
+    raise exception 'documento_marca_invalida' using errcode = '22023';
+  end if;
+  update public.clinic_documentos_emitidos d
+     set marca_snapshot = p_snapshot, layout_versao = p_versao
+   where d.organization_id = p_org and d.id = p_doc and d.marca_snapshot is null;
+  get diagnostics v_linhas = row_count;
+  return v_linhas = 1;
+end $$;
+
+comment on function public.fn_clinic_documento_fixar_marca(uuid, uuid, jsonb, text) is
+  'FORK clinic 8014 — fixa (uma vez) o snapshot da marca e a versão do papel timbrado de um documento emitido. Devolve false se já estava fixado. Chamador: app/api/v1/clinic/documentos/[id]/pdf e o PDF do contrato do orçamento (service role, organização da sessão).';
+
+revoke execute on function public.fn_clinic_documento_fixar_marca(uuid, uuid, jsonb, text)
+  from public, anon, authenticated;
+grant  execute on function public.fn_clinic_documento_fixar_marca(uuid, uuid, jsonb, text)
+  to service_role;
+
+-- ---- fim clinic (migration 8014, fork) ----
+
+-- ---- clinic: limite de 5 MB do conteúdo do POP (migration 8015, fork) ----
+
+-- 8015 · clinic (FORK) — o conteúdo do POP pode ter até 5 MB (issue #124).
+--
+-- O CHECK clinic_pop_versions_documento_check limitava o JSON do editor a 1 MB.
+-- Um POP de 12 mil caracteres com tabelas ocupa ~25 KB, mas o dono do produto
+-- pediu folga para POPs bem maiores. O limite da aplicação
+-- (lib/clinic/pops/documento.ts › LIMITE_DE_BYTES) subiu junto: os dois números
+-- têm de ser o mesmo, ou a tela aceita o que o banco recusa.
+--
+-- Afrouxar um CHECK não invalida linha nenhuma (todo conteúdo de ≤ 1 MB cabe em
+-- ≤ 5 MB). Idempotente: troca a regra só se ela ainda não for a nova.
+
+do $$
+begin
+  if exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.clinic_pop_versions'::regclass
+       and conname = 'clinic_pop_versions_documento_check'
+       and pg_get_constraintdef(oid) not like '%5242880%'
+  ) then
+    alter table public.clinic_pop_versions drop constraint clinic_pop_versions_documento_check;
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.clinic_pop_versions'::regclass
+       and conname = 'clinic_pop_versions_documento_check'
+  ) then
+    alter table public.clinic_pop_versions add constraint clinic_pop_versions_documento_check
+      check (jsonb_typeof(content) = 'object' and octet_length(content::text) <= 5242880);
+  end if;
+end $$;
+
+-- ---- fim clinic (migration 8015, fork) ----
+
+-- ---- clinic: procedimentos do agendamento (migration 8016, fork) ----
+-- 8016 · clinic (FORK) — procedimentos do agendamento (Agenda S3, issue #68).
+--
+-- Um agendamento pode ter N procedimentos, na ordem escolhida no painel
+-- "Novo agendamento". A duração NÃO é somada (decisão do dono): o fim do
+-- compromisso continua o escolhido. A lista alimenta:
+--   - o filtro "Procedimento" da Agenda (S2);
+--   - a reserva de estoque da véspera (fn_clinic_estoque_reservar_agenda) e a
+--     do atendimento (fn_clinic_estoque_reservar_atendimento), que antes só
+--     liam o plano de tratamento (clinic_plano_sessoes) — agora leem os dois,
+--     sem contar duas vezes o mesmo procedimento.
+-- Escrita só por fn_clinic_agendamento_procedimentos_salvar (definer,
+-- service_role; a rota confere a permissão e resolve a organização da sessão).
+-- Aditiva e idempotente; sem HTTP.
+
+create table if not exists public.clinic_agendamento_procedimentos (
+  id              uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  appointment_id  uuid not null references public.calendar_appointments(id) on delete cascade,
+  procedure_id    uuid not null references public.clinic_procedures(id) on delete restrict,
+  ordem           smallint not null default 0 check (ordem between 0 and 49),
+  created_at      timestamptz not null default now(),
+  created_by      uuid,
+  unique (appointment_id, procedure_id)
+);
+create index if not exists clinic_agendamento_procedimentos_org_ag
+  on public.clinic_agendamento_procedimentos (organization_id, appointment_id);
+create index if not exists clinic_agendamento_procedimentos_org_proc
+  on public.clinic_agendamento_procedimentos (organization_id, procedure_id);
+
+alter table public.clinic_agendamento_procedimentos enable row level security;
+drop policy if exists tenant_isolation_clinic_agendamento_procedimentos_all on public.clinic_agendamento_procedimentos;
+-- Só LEITURA pela sessão: quem escreve é fn_clinic_agendamento_procedimentos_salvar (definer).
+create policy tenant_isolation_clinic_agendamento_procedimentos_all on public.clinic_agendamento_procedimentos
+  for select using (organization_id in (select public.fn_user_org_ids()));
+revoke all on public.clinic_agendamento_procedimentos from anon;
+revoke insert, update, delete, truncate on public.clinic_agendamento_procedimentos from authenticated;
+grant select on public.clinic_agendamento_procedimentos to authenticated;
+
+create or replace function public.fn_clinic_agendamento_procedimentos_salvar(
+  p_org           uuid,
+  p_appointment   uuid,
+  p_procedimentos uuid[],
+  p_autor         uuid
+) returns integer
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $fn$
+declare
+  v_total integer;
+begin
+  if p_org is null or p_appointment is null then
+    raise exception 'agendamento_procedimentos_invalido' using errcode = '22023';
+  end if;
+  if coalesce(array_length(p_procedimentos, 1), 0) > 50 then
+    raise exception 'agendamento_procedimentos_demais' using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.calendar_appointments a where a.id = p_appointment and a.organization_id = p_org) then
+    raise exception 'agendamento_nao_encontrado' using errcode = 'P0002';
+  end if;
+  if exists (select 1 from unnest(coalesce(p_procedimentos, '{}'::uuid[])) x(id)
+              where not exists (select 1 from public.clinic_procedures p where p.id = x.id and p.organization_id = p_org)) then
+    raise exception 'procedimento_de_outra_organizacao' using errcode = '42501';
+  end if;
+
+  delete from public.clinic_agendamento_procedimentos
+   where organization_id = p_org and appointment_id = p_appointment;
+  insert into public.clinic_agendamento_procedimentos (organization_id, appointment_id, procedure_id, ordem, created_by)
+  select p_org, p_appointment, x.id, (min(x.n) - 1)::smallint, p_autor
+    from unnest(coalesce(p_procedimentos, '{}'::uuid[])) with ordinality x(id, n)
+   group by x.id;
+  get diagnostics v_total = row_count;
+  return v_total;
+end $fn$;
+
+comment on function public.fn_clinic_agendamento_procedimentos_salvar(uuid, uuid, uuid[], uuid) is
+  'FORK clinic 8016 — troca a lista de procedimentos de um agendamento (ordem = posição no array; repetido conta uma vez). Chamador: PUT /api/v1/clinic/agendamentos/[id]/procedimentos (service role, organização da sessão, permissão conferida na rota).';
+revoke execute on function public.fn_clinic_agendamento_procedimentos_salvar(uuid, uuid, uuid[], uuid) from public, anon, authenticated;
+grant  execute on function public.fn_clinic_agendamento_procedimentos_salvar(uuid, uuid, uuid[], uuid) to service_role;
+
+-- Reserva da véspera: plano de tratamento + procedimentos do agendamento.
+create or replace function public.fn_clinic_estoque_reservar_agenda()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $fn$
+declare
+  v_criadas integer;
+  v_expiradas integer;
+begin
+  update public.clinic_estoque_reservas r
+     set status = 'expirada', fechada_em = now()
+    from public.calendar_appointments ap
+   where r.status = 'ativa' and r.atendimento_id is null and ap.id = r.appointment_id
+     and (ap.status in ('cancelled', 'no_show') or ap.starts_at < now() - interval '12 hours');
+  get diagnostics v_expiradas = row_count;
+
+  insert into public.clinic_estoque_reservas (organization_id, appointment_id, product_id, local_id, quantidade)
+  select s.organization_id, s.appointment_id, k.product_id,
+         (select l.id from public.clinic_estoque_locais l
+           where l.organization_id = s.organization_id and l.padrao and l.ativo limit 1),
+         sum(k.quantidade)
+    from (select ps.organization_id, ps.appointment_id, ps.procedure_id
+            from public.clinic_plano_sessoes ps
+           where ps.status = 'agendada' and ps.appointment_id is not null
+          union
+          select ap2.organization_id, ap2.appointment_id, ap2.procedure_id
+            from public.clinic_agendamento_procedimentos ap2) s
+    join public.calendar_appointments ap on ap.id = s.appointment_id and ap.organization_id = s.organization_id
+    join public.organizations o on o.id = s.organization_id and (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb
+    join public.clinic_procedimento_kits k on k.organization_id = s.organization_id and k.procedure_id = s.procedure_id
+    join public.clinic_produto_estoque e on e.organization_id = s.organization_id and e.product_id = k.product_id
+   where ap.status in ('pending', 'confirmed')
+     and ap.starts_at between now() and now() + interval '36 hours'
+     and not exists (select 1 from public.clinic_atendimentos a where a.appointment_id = ap.id)
+   group by s.organization_id, s.appointment_id, k.product_id
+  on conflict (organization_id, appointment_id, product_id) where status = 'ativa' and atendimento_id is null
+  do update set quantidade = excluded.quantidade;
+  get diagnostics v_criadas = row_count;
+  return jsonb_build_object('reservadas', v_criadas, 'expiradas', v_expiradas);
+end $fn$;
+
+-- Reserva do atendimento: sem procedimento realizado, cai no plano + procedimentos do agendamento.
+create or replace function public.fn_clinic_estoque_reservar_atendimento(p_org uuid, p_atendimento uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_at record;
+  v_local uuid;
+  v_desejada jsonb;
+begin
+  if not coalesce((select (o.settings -> 'clinic' -> 'estoque') = 'true'::jsonb
+                     from public.organizations o where o.id = p_org), false) then
+    return;
+  end if;
+  select a.id, a.status, a.appointment_id into v_at
+    from public.clinic_atendimentos a where a.id = p_atendimento and a.organization_id = p_org;
+  if v_at.id is null or v_at.status <> 'em_andamento' then
+    return;
+  end if;
+  v_local := public.fn_clinic_estoque_local_do_atendimento(p_org, p_atendimento);
+
+  -- as reservas da véspera passam para o atendimento
+  if v_at.appointment_id is not null then
+    update public.clinic_estoque_reservas r
+       set status = 'convertida', fechada_em = now()
+     where r.organization_id = p_org and r.appointment_id = v_at.appointment_id
+       and r.atendimento_id is null and r.status = 'ativa';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object('product_id', x.product_id, 'quantidade', x.quantidade)), '[]'::jsonb)
+    into v_desejada
+    from (select k.product_id, sum(k.quantidade) as quantidade
+            from public.clinic_procedimentos_realizados p
+            join public.clinic_procedimento_kits k on k.organization_id = p_org and k.procedure_id = p.procedure_id
+            join public.clinic_produto_estoque e on e.organization_id = p_org and e.product_id = k.product_id
+           where p.organization_id = p_org and p.atendimento_id = p_atendimento and p.status = 'rascunho'
+           group by k.product_id) x;
+  if not exists (select 1 from public.clinic_procedimentos_realizados p
+                  where p.organization_id = p_org and p.atendimento_id = p_atendimento and p.status <> 'anulado')
+     and v_at.appointment_id is not null then
+    select coalesce(jsonb_agg(jsonb_build_object('product_id', x.product_id, 'quantidade', x.quantidade)), '[]'::jsonb)
+      into v_desejada
+      from (select k.product_id, sum(k.quantidade) as quantidade
+              from (select s0.procedure_id
+                      from public.clinic_plano_sessoes s0
+                     where s0.organization_id = p_org and s0.appointment_id = v_at.appointment_id and s0.status <> 'cancelada'
+                    union
+                    select ap.procedure_id
+                      from public.clinic_agendamento_procedimentos ap
+                     where ap.organization_id = p_org and ap.appointment_id = v_at.appointment_id) s
+              join public.clinic_procedimento_kits k on k.organization_id = p_org and k.procedure_id = s.procedure_id
+              join public.clinic_produto_estoque e on e.organization_id = p_org and e.product_id = k.product_id
+             group by k.product_id) x;
+  end if;
+
+  update public.clinic_estoque_reservas r
+     set status = 'liberada', fechada_em = now()
+   where r.organization_id = p_org and r.atendimento_id = p_atendimento and r.status = 'ativa'
+     and not exists (select 1 from jsonb_to_recordset(v_desejada) d(product_id uuid, quantidade numeric)
+                      where d.product_id = r.product_id);
+  update public.clinic_estoque_reservas r
+     set quantidade = d.quantidade, local_id = v_local
+    from jsonb_to_recordset(v_desejada) d(product_id uuid, quantidade numeric)
+   where r.organization_id = p_org and r.atendimento_id = p_atendimento and r.status = 'ativa'
+     and r.product_id = d.product_id
+     and (r.quantidade <> d.quantidade or r.local_id is distinct from v_local);
+  insert into public.clinic_estoque_reservas (organization_id, atendimento_id, appointment_id, product_id, local_id, quantidade)
+  select p_org, p_atendimento, v_at.appointment_id, d.product_id, v_local, d.quantidade
+    from jsonb_to_recordset(v_desejada) d(product_id uuid, quantidade numeric)
+   where not exists (select 1 from public.clinic_estoque_reservas r
+                      where r.organization_id = p_org and r.atendimento_id = p_atendimento
+                        and r.status = 'ativa' and r.product_id = d.product_id);
+end $function$;
+-- ---- fim clinic (migration 8016, fork) ----
+
+-- ---- clinic: Claude Haiku 5.5 no catálogo (migration 8017, fork) ----
+-- 8017 · clinic (FORK) — Claude Haiku 5.5 no catálogo "Anthropic direto" e na contabilidade (issue #142).
+--
+-- O Haiku 5.5 custa US$ 0,10 / 0,50 por milhão de tokens (10× abaixo do Haiku 4.5)
+-- e a chave da Anthropic já dá acesso a ele, mas o catálogo só o trazia pela
+-- OpenRouter (`anthropic/claude-haiku-5.5`, outra chave). Sem a linha
+-- `anthropic` o seletor de modelo do agente não o oferece; sem `ai_pricing` o
+-- gasto não entra na conta. O preço do motor mora em
+-- `lib/agent-engine/edge/llm/pricing.ts` (mesma tarifa).
+--
+-- Só insere; não muda linha existente nem o padrão do provedor. Idempotente.
+
+insert into public.ai_models
+  (provider, model_id, display_name, description, context_window,
+   input_price_per_million_cents, output_price_per_million_cents,
+   supports_tools, is_default_for_provider, supports_vision, source)
+values
+  ('anthropic', 'claude-haiku-5-5', 'Claude Haiku 5.5',
+   'Rápido e econômico — atendimento e vendas pelo WhatsApp. US$ 0,10 / 0,50 por milhão de tokens (prompts até 100 mil tokens).',
+   1000000, 10, 50, true, false, true, 'manual')
+on conflict (provider, model_id) do nothing;
+
+insert into public.ai_pricing
+  (model, prompt_cents_per_million_tokens, completion_cents_per_million_tokens, notes)
+values
+  ('claude-haiku-5-5', 10, 50, 'fork 8017 — prompts até 100K tokens (acima: 50/250)')
+on conflict (model) do nothing;
+-- ---- fim clinic (migration 8017, fork) ----
+
+-- ---- clinic: a ficha guarda vários telefones (migration 8018, fork) ----
+-- 8018 · clinic (FORK) — a ficha guarda vários telefones (#85, upstream #3671 / 9043).
 -- ⚠️ ANTES DA VARREDURA anon. Corpo IDÊNTICO ao da migration. Idempotente.
 --
 -- Por que o "um número, uma ficha" mora no banco e não no código: são mais de
@@ -50826,13 +53052,13 @@ begin
   );
 end;
 $$;
--- ---- fim clinic (migration 8011, fork) ----
+-- ---- fim clinic (migration 8018, fork) ----
 
--- ---- clinic: opção dos vários telefones na ficha (migration 8012, fork) ----
+-- ---- clinic: opção dos vários telefones na ficha (migration 8019, fork) ----
 
--- 8012 · clinic (FORK) — opção dos vários telefones na ficha (#85, upstream #3671)
+-- 8019 · clinic (FORK) — opção dos vários telefones na ficha (#85, upstream #3671)
 -- Liga/desliga settings.clinic.varios_telefones (nasce desligada). Ligada, a ficha
--- do paciente deixa adicionar e remover telefones extras (`contact_phones`, 8011).
+-- do paciente deixa adicionar e remover telefones extras (`contact_phones`, 8018).
 -- Desligada, a ficha só MOSTRA os extras que já existem (ex.: vindos da junção de
 -- fichas). Aditiva; sem tabela; sem HTTP.
 
@@ -50877,7 +53103,7 @@ begin
 end $$;
 revoke execute on function public.fn_clinic_definir_varios_telefones(uuid, boolean) from public, anon;
 grant  execute on function public.fn_clinic_definir_varios_telefones(uuid, boolean) to authenticated;
--- ---- fim clinic (migration 8012, fork) ----
+-- ---- fim clinic (migration 8019, fork) ----
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --

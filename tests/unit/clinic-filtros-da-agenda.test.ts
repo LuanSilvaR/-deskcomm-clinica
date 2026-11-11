@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { algumFiltroAtivo, lerFiltros, passaNosFiltros, type InfoDaClinica } from "@/lib/clinic/agenda/filtros-da-agenda";
+import { CHAVES_DOS_FILTROS, algumFiltroAtivo, filtrosExtrasAtivos, lerFiltros, passaNosFiltros, type InfoDaClinica } from "@/lib/clinic/agenda/filtros-da-agenda";
 
 const f = (qs: string) => lerFiltros(new URLSearchParams(qs));
 const ag = (id: string, hora: number, extra: Partial<{ situacao: string; responsavelId: string; origem: string }> = {}) => ({
@@ -68,5 +68,62 @@ describe("filtros da Agenda", () => {
   it("ocupação do Google some só quando o filtro de status foi mexido", () => {
     expect(passaNosFiltros(ag("g1", 9, { origem: "google_sync" }), f(""), info)).toBe(true);
     expect(passaNosFiltros(ag("g1", 9, { origem: "google_sync" }), f("status=agendado"), info)).toBe(false);
+  });
+});
+
+describe("S2 (#67): sala e + Mais filtros", () => {
+  const comSalas: InfoDaClinica = {
+    ...info,
+    compromissos: {
+      a1: { ...info.compromissos.a1!, salas: ["s1"] },
+      a2: { ...info.compromissos.a2!, salas: [] },
+    },
+    salas: [{ id: "s1", nome: "Sala 1" }],
+  };
+
+  it("sala: só passa quem reservou a sala; sem info ainda, não esconde (a grade não pisca vazia)", () => {
+    const x = f("sala=s1");
+    expect(x.sala).toBe("s1");
+    expect(algumFiltroAtivo(x)).toBe(true);
+    expect(passaNosFiltros(ag("a1", 9), x, comSalas)).toBe(true);
+    expect(passaNosFiltros(ag("a2", 9), x, comSalas)).toBe(false);
+    expect(passaNosFiltros(ag("a9", 9), x, comSalas)).toBe(false);
+    expect(passaNosFiltros(ag("a2", 9), x, null)).toBe(true);
+  });
+
+  it("padrões: fins de semana e indisponíveis visíveis, cancelados fora da grade", () => {
+    const x = f("");
+    expect(x.cancelados).toBe(false);
+    expect(x.semFimDeSemana).toBe(false);
+    expect(x.semIndisponiveis).toBe(false);
+    expect(filtrosExtrasAtivos(x)).toBe(0);
+  });
+
+  it("+ Mais filtros: cada opção liga pela URL, conta no botão e entra no Limpar filtros", () => {
+    const x = f("cancelados=1&fds=0&indisp=0");
+    expect(x.cancelados && x.semFimDeSemana && x.semIndisponiveis).toBe(true);
+    expect(filtrosExtrasAtivos(x)).toBe(3);
+    expect(algumFiltroAtivo(x)).toBe(true);
+    for (const k of ["sala", "cancelados", "fds", "indisp"]) expect(CHAVES_DOS_FILTROS).toContain(k);
+  });
+
+  it("valores estranhos na URL não ligam nada", () => {
+    const x = f("cancelados=sim&fds=1&indisp=talvez");
+    expect(filtrosExtrasAtivos(x)).toBe(0);
+  });
+});
+
+describe('S3 (#68): filtro de procedimento', () => {
+  const comProcs: InfoDaClinica = {
+    ...info,
+    compromissos: { a1: { ...info.compromissos.a1!, procedimentos: ['p1', 'p2'] }, a2: { ...info.compromissos.a2!, procedimentos: [] } },
+  };
+  it('só passa quem tem o procedimento; vai para a URL e entra no Limpar filtros', () => {
+    const x = f('proc=p2');
+    expect(x.procedimento).toBe('p2');
+    expect(algumFiltroAtivo(x)).toBe(true);
+    expect(CHAVES_DOS_FILTROS).toContain('proc');
+    expect(passaNosFiltros(ag('a1', 9), x, comProcs)).toBe(true);
+    expect(passaNosFiltros(ag('a2', 9), x, comProcs)).toBe(false);
   });
 });

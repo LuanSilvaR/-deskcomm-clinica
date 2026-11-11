@@ -1,11 +1,12 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 
 import { gerarPdfDoProntuario } from "@/lib/clinic/prontuario/pdf";
+import { montarContextoDaMarca } from "@/lib/documentos/contexto-da-marca";
 
 describe("pdf do prontuário (fumaça)", () => {
   it("gera um PDF válido com um atendimento", async () => {
     const buf = await gerarPdfDoProntuario({
-      clinica: "Clínica Teste",
       paciente: "Pessoa Fictícia",
       nascimento: "1990-01-01",
       alergias: "Dipirona",
@@ -40,7 +41,7 @@ describe("pdf do prontuário (fumaça)", () => {
       documentos: [],
       t: (s) => s,
       data: (iso) => iso,
-    });
+    }, await montarContextoDaMarca({ nomeDaMarca: "Clínica Teste" }));
     expect(buf.subarray(0, 5).toString()).toBe("%PDF-");
     expect(buf.length).toBeGreaterThan(800);
   });

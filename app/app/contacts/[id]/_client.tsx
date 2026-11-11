@@ -29,6 +29,7 @@ import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { FichaDoPaciente } from "@/components/clinic/FichaDoPaciente";
 import { AnexosDoPaciente } from "@/components/clinic/anexos/AnexosDoPaciente";
 import { DocumentosDoPaciente } from "@/components/clinic/documentos/DocumentosDoPaciente";
+import { OrcamentosDoPaciente } from "@/components/clinic/orcamentos/OrcamentosDoPaciente";
 import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
 import { ProntuarioDoPaciente } from "@/components/clinic/prontuario/ProntuarioDoPaciente";
 import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
@@ -159,6 +160,8 @@ export function ContactDetailClient({ contactId, abaInicial, variosTelefones = f
   const verProntuario = can("prontuario.ver");
   const verPlanos = can("planos.ver");
   const verDocumentos = can("documentos.ver");
+  // FORK clinic (orçamento O2): não é conteúdo clínico — a recepção vê.
+  const verOrcamentos = can("orcamentos.ver");
   const abaPedida = abaInicial ?? null;
   const q = useContact(contactId);
   const { user, activeOrg } = useAuth();
@@ -287,7 +290,7 @@ export function ContactDetailClient({ contactId, abaInicial, variosTelefones = f
         />
       )}
 
-      <Tabs defaultValue={["prontuario", "planos", "documentos", "anexos"].includes(abaPedida ?? "") ? abaPedida! : "overview"}>
+      <Tabs defaultValue={["prontuario", "planos", "documentos", "anexos", "orcamentos"].includes(abaPedida ?? "") ? abaPedida! : "overview"}>
         <TabsList>
           <TabsTrigger value="overview">{t("Visão geral")}</TabsTrigger>
           <TabsTrigger value="ficha">{t("Ficha do paciente")}</TabsTrigger>
@@ -304,6 +307,11 @@ export function ContactDetailClient({ contactId, abaInicial, variosTelefones = f
           {verDocumentos && (
             <TabsTrigger value="documentos" data-testid="aba-documentos">
               {t("Documentos")}
+            </TabsTrigger>
+          )}
+          {verOrcamentos && (
+            <TabsTrigger value="orcamentos" data-testid="aba-orcamentos">
+              {t("Orçamentos")}
             </TabsTrigger>
           )}
           {verPlanos && (
@@ -443,6 +451,13 @@ export function ContactDetailClient({ contactId, abaInicial, variosTelefones = f
           <TabsContent value="documentos" className="mt-4">
             <Card className="p-4">
               <DocumentosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
+        {verOrcamentos && (
+          <TabsContent value="orcamentos" className="mt-4">
+            <Card className="p-4">
+              <OrcamentosDoPaciente contactId={contactId} />
             </Card>
           </TabsContent>
         )}

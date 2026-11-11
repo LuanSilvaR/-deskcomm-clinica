@@ -34,7 +34,7 @@ export default async function ContactDetailPage({
   if (!(await pacienteNoEscopo(supabase, activeOrg.orgId, user.id, id))) notFound();
   // FORK clinic (prontuário F2): `?aba=prontuario` abre direto na aba.
   const { aba } = await searchParams;
-  // FORK clinic (#85): a opção dos vários telefones (8012) — editar só para quem escreve (agent+).
+  // FORK clinic (#85): a opção dos vários telefones (8019) — editar só para quem escreve (agent+).
   const { data: org } = await supabase.from("organizations").select("settings").eq("id", activeOrg.orgId).maybeSingle();
   const variosTelefones = variosTelefonesLigadoNaConfig(org?.settings) && activeOrg.role !== "viewer";
   return (

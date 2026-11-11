@@ -4,6 +4,8 @@
  * FORK clinic (melhorias da Agenda) — a barra de filtros acima da grade:
  * especialidade, status (vários), período, paciente (nome, CPF ou nascimento)
  * e "somente horários livres", com chips do que está ativo e "Limpar filtros".
+ * S2 (#67): sala e "+ Mais filtros" (fins de semana, cancelados, indisponíveis).
+ * S3 (#68): procedimento.
  * O estado mora na URL (`useFiltrosDaAgenda`) e vale na hora.
  * O filtro de pessoa continua sendo o dos avatares, do núcleo.
  */
@@ -14,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useT } from "@/hooks/i18n/useT";
-import { CHAVES_DOS_FILTROS, algumFiltroAtivo, lerFiltros, type FiltrosDaAgenda } from "@/lib/clinic/agenda/filtros-da-agenda";
+import { CHAVES_DOS_FILTROS, algumFiltroAtivo, filtrosExtrasAtivos, lerFiltros, type FiltrosDaAgenda, type ProcedimentoDaAgenda, type SalaDaAgenda } from "@/lib/clinic/agenda/filtros-da-agenda";
 import { PERIODOS_DO_DIA, ROTULO_DE_EXIBICAO, ROTULO_DO_PERIODO, STATUS_DE_EXIBICAO, type PeriodoDoDia, type StatusDeExibicao } from "@/lib/clinic/visitas/exibicao";
 import { CaretDown, MagnifyingGlass, X } from "@/lib/ui/icons";
 
@@ -51,12 +53,18 @@ export function BarraDeFiltrosDaAgenda({
   mudar,
   limpar,
   especialidades,
+  salas = [],
+  procedimentos = [],
   total,
 }: {
   filtros: FiltrosDaAgenda;
   mudar: (m: Record<string, string | null>) => void;
   limpar: () => void;
   especialidades: [string, string][];
+  /** S2 (#67): salas ativas da clínica (vazio = o filtro não aparece). */
+  salas?: SalaDaAgenda[];
+  /** S3 (#68): catálogo de procedimentos ativos (vazio = o filtro não aparece). */
+  procedimentos?: ProcedimentoDaAgenda[];
   /** Quantos compromissos a grade mostra com os filtros (lido pelo leitor de tela). */
   total: number;
 }) {
@@ -102,6 +110,13 @@ export function BarraDeFiltrosDaAgenda({
   if (filtros.periodos.length) chips.push({ chave: "periodo", rotulo: filtros.periodos.map((p) => t(ROTULO_DO_PERIODO[p])).join(", "), limpar: { periodo: null } });
   if (filtros.q) chips.push({ chave: "q", rotulo: `${t("Paciente")}: ${filtros.q}`, limpar: { q: null } });
   if (filtros.soLivres) chips.push({ chave: "livres", rotulo: t("Somente horários livres"), limpar: { livres: null } });
+  if (filtros.sala) chips.push({ chave: "sala", rotulo: `${t("Sala")}: ${salas.find((x) => x.id === filtros.sala)?.nome ?? "?"}`, limpar: { sala: null } });
+  if (filtros.procedimento)
+    chips.push({ chave: "proc", rotulo: `${t("Procedimento")}: ${procedimentos.find((x) => x.id === filtros.procedimento)?.nome ?? "?"}`, limpar: { proc: null } });
+  if (filtros.cancelados) chips.push({ chave: "cancelados", rotulo: t("Mostrando cancelados"), limpar: { cancelados: null } });
+  if (filtros.semFimDeSemana) chips.push({ chave: "fds", rotulo: t("Sem fins de semana"), limpar: { fds: null } });
+  if (filtros.semIndisponiveis) chips.push({ chave: "indisp", rotulo: t("Sem destaque de indisponíveis"), limpar: { indisp: null } });
+  const extras = filtrosExtrasAtivos(filtros);
 
   return (
     <div className="space-y-2 rounded-xl border bg-surface p-3" role="search" aria-label={t("Filtros da agenda")} data-testid="filtros-da-agenda">
@@ -140,6 +155,50 @@ export function BarraDeFiltrosDaAgenda({
               {especialidades.map(([id, nome]) => (
                 <option key={id} value={id}>
                   {nome}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : null}
+
+        {salas.length > 0 ? (
+          <>
+            <label className="sr-only block" htmlFor="filtro-sala">
+              {t("Sala")}
+            </label>
+            <select
+              id="filtro-sala"
+              data-testid="filtro-sala"
+              className="h-9 rounded-md border bg-transparent px-2 text-sm"
+              value={filtros.sala}
+              onChange={(e) => mudar({ sala: e.target.value || null })}
+            >
+              <option value="">{t("Todas as salas")}</option>
+              {salas.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.nome}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : null}
+
+        {procedimentos.length > 0 ? (
+          <>
+            <label className="sr-only block" htmlFor="filtro-procedimento">
+              {t("Procedimento")}
+            </label>
+            <select
+              id="filtro-procedimento"
+              data-testid="filtro-procedimento"
+              className="h-9 max-w-56 rounded-md border bg-transparent px-2 text-sm"
+              value={filtros.procedimento}
+              onChange={(e) => mudar({ proc: e.target.value || null })}
+            >
+              <option value="">{t("Todos os procedimentos")}</option>
+              {procedimentos.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.nome}
                 </option>
               ))}
             </select>
@@ -188,6 +247,32 @@ export function BarraDeFiltrosDaAgenda({
           <input type="checkbox" data-testid="filtro-livres" checked={filtros.soLivres} onChange={(e) => mudar({ livres: e.target.checked ? "1" : null })} />
           {t("Somente horários livres")}
         </label>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" data-testid="filtro-mais">
+              {t("+ Mais filtros")}
+              {extras ? <Badge className="ml-1">{extras}</Badge> : null}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72">
+            <fieldset className="space-y-2">
+              <legend className="mb-2 text-xs font-medium">{t("Mais filtros")}</legend>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" data-testid="filtro-fds" checked={!filtros.semFimDeSemana} onChange={(e) => mudar({ fds: e.target.checked ? null : "0" })} />
+                {t("Mostrar fins de semana")}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" data-testid="filtro-cancelados" checked={filtros.cancelados} onChange={(e) => mudar({ cancelados: e.target.checked ? "1" : null })} />
+                {t("Mostrar cancelados na grade")}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" data-testid="filtro-indisp" checked={!filtros.semIndisponiveis} onChange={(e) => mudar({ indisp: e.target.checked ? null : "0" })} />
+                {t("Destacar horários indisponíveis")}
+              </label>
+            </fieldset>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {algumFiltroAtivo(filtros) ? (

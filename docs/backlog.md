@@ -12,8 +12,8 @@ Especificação de cada item: `docs/tarefas/<id>/` (`historia.md`, `impacto.md`,
 | Pronto para iniciar | — | critérios de aceite numerados e aprovados; pode começar | dono do produto |
 | Em andamento | `status: dev` | PR aberto para `develop` com a evidência do Verify | `/tarefa` ao abrir o PR |
 | Teste | `status: test` | PR mergeado na `develop` e CI verde; rodar integração/E2E | Claude, após o merge |
-| Em integração | `status: integracao` | validado na **3001** (homologação) com a palavra do dono; promoção develop → main → VPS iniciada | Claude, com o ok do dono |
-| Concluído | `status: done` | validado na 3001 e publicado na **VPS (Hostinger KVM2)**; issue fechada | dono do produto |
+| Em integração | `status: integracao` | validado na **3002** (homologação) com a palavra do dono; promoção develop → main → VPS iniciada | Claude, com o ok do dono |
+| Concluído | `status: done` | validado na 3002 e publicado na **VPS (Hostinger KVM2)**; issue fechada | dono do produto |
 
 A label `status: dev` mantém o nome antigo para não quebrar filtros e histórico;
 a coluna do quadro é o nome que vale.
@@ -52,3 +52,21 @@ Atenção: o `gh` deste clone aponta por padrão para o upstream — use sempre 
 - Épico [#63 Agenda por profissional](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/63) —
   S1 #64, S4 #65, S5 #66 em Teste (PR #71 mergeado em 2026-11-04); S2 #67, S3 #68, S6 #69, S7 #70 no Backlog.
 - [#77 Fábrica de agentes](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/77) — Em andamento (PR #76).
+
+## Em integração (validado pelo dono; aguardando develop → main → VPS)
+
+- Épico [#115 Orçamento → Contrato](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/115) —
+  O1 #116, O2 #117, O3 #118, O4 #119, O5 #120 (PRs #106–#111, 2026-11-08).
+  Pendente do dono: cláusulas jurídicas no modelo de contrato (CNPJ e responsável técnico, cancelamento e
+  reembolso, arrependimento de 7 dias, "sem juros" ou CET). Parcelas e taxa da maquininha entram com o #58.
+- [#121 Organização: telefone e endereço com CEP](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/121) —
+  PRs #112 e #113; migration 8011.
+- [#122 Marca: tamanho ideal do logo e favicon](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/122) —
+  PR #114; migration 8012.
+- Épico [#123 Papel timbrado único](https://github.com/LuanSilvaR/-deskcomm-clinica/issues/123) —
+  D1 #124 (PR #125 + correção #134, migration 8015), D2 #126 (PR #127 + correção #135, migration 8013),
+  D3 #128 (PR #129, migration 8014), D4 #130 (PR #131). Validado em 2026-11-09 com a massa
+  `docs/tarefas/documentos-timbrado/massa-de-teste.sql`; detalhes em `docs/tarefas/documentos-timbrado/handoff.md`.
+
+## Backlog (a refinar)
+

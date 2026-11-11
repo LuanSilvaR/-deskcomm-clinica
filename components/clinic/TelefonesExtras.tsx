@@ -3,7 +3,7 @@
 /**
  * FORK clinic (#85) — adicionar e remover telefones EXTRAS da ficha do paciente.
  *
- * Só aparece com `settings.clinic.varios_telefones` ligado (8012); a rota
+ * Só aparece com `settings.clinic.varios_telefones` ligado (8019); a rota
  * `/api/v1/clinic/pacientes/{id}/telefones` cobra a mesma opção. O principal
  * continua sendo editado pelo "Editar contato". Número que já é de outra ficha
  * volta 409 com o recado — a regra "um número, uma ficha" é do banco.

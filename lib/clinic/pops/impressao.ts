@@ -1,21 +1,22 @@
 /**
- * FORK clinic (9015) — o POP para impressão: monta os dados do renderizador de
- * documento (lib/documentos/renderizar.tsx) a partir do que o BANCO sabe.
+ * FORK clinic (9015) — o POP para impressão: monta o DOCUMENTO TIMBRADO
+ * (lib/documentos/renderizar.tsx) a partir do que o BANCO sabe.
+ *
+ * Só conteúdo: tipo, número, título, metadados, avisos e corpo. Marca, cores,
+ * fontes, cabeçalho e rodapé são do motor de documentos (papel timbrado único).
  *
  * Código, versão, status, quem/quando criou, atualizou e aprovou saem daqui —
- * nunca do texto. Versão que não é a vigente leva a faixa (substituída ou
- * rascunho) no topo, no bloco da 1ª página e no rodapé de TODAS as páginas: uma
- * cópia antiga nunca passa por atual. "Impresso em" é a hora da impressão, e
- * aparece separada da aprovação.
+ * nunca do texto. Versão que não é a vigente leva o aviso no bloco de abertura
+ * e numa linha acima do rodapé de TODAS as páginas: uma cópia antiga nunca
+ * passa por atual. "Impresso em" é a hora da impressão, separada da aprovação.
  */
-import type { DadosDoDocumento, MarcaDoDocumento } from "@/lib/documentos/renderizar";
+import type { DocumentoTimbrado } from "@/lib/documentos/renderizar";
 
 import type { NoDoDocumento } from "./documento";
 
 export type StatusDaVersao = "draft" | "approved" | "superseded" | "archived";
 
 export interface EntradaDaImpressao {
-  marca: MarcaDoDocumento;
   procedimento: string;
   codigo: string;
   versao: { major: number; minor: number; status: StatusDaVersao };
@@ -30,14 +31,14 @@ export interface EntradaDaImpressao {
 }
 
 const ROTULO_DO_STATUS: Record<StatusDaVersao, string> = {
-  draft: "RASCUNHO",
-  approved: "APROVADO",
-  superseded: "SUBSTITUÍDO",
-  archived: "ARQUIVADO",
+  draft: "Rascunho",
+  approved: "Aprovado",
+  superseded: "Substituído",
+  archived: "Arquivado",
 };
 
-function dataHora(iso: string | Date | null, fuso: string, tag: string): string {
-  if (!iso) return "—";
+function dataHora(iso: string | Date | null, fuso: string, tag: string): string | null {
+  if (!iso) return null;
   try {
     return new Intl.DateTimeFormat(tag, { timeZone: fuso, dateStyle: "short", timeStyle: "short" }).format(new Date(iso));
   } catch {
@@ -53,29 +54,30 @@ export function faixaDaVersao(v: { major: number; minor: number; status: StatusD
   return null;
 }
 
-export function dadosDaImpressaoDoPop(e: EntradaDaImpressao): DadosDoDocumento {
+/** "Nome — 07/11/2026 14:30", sem o nome quando ele não existe. */
+function quemEQuando(por: string | null, em: string | null, fuso: string, tag: string): string | null {
+  const quando = dataHora(em, fuso, tag);
+  if (!quando) return null;
+  return por ? `${por} — ${quando}` : quando;
+}
+
+export function dadosDaImpressaoDoPop(e: EntradaDaImpressao): DocumentoTimbrado {
   const n = `${e.versao.major}.${e.versao.minor}`;
-  const quem = (x: string | null) => x ?? "—";
-  const impresso = dataHora(e.impressoEm, e.fuso, e.tag);
+  const faixa = faixaDaVersao(e.versao);
   return {
-    marca: e.marca,
-    titulo: "PROCEDIMENTO OPERACIONAL PADRÃO — POP",
-    subtitulo: `Procedimento: ${e.procedimento}`,
-    identificacao: [
+    tipo: "Procedimento Operacional Padrão",
+    numero: `${e.codigo} · v${n}`,
+    titulo: e.procedimento,
+    metadados: [
       ["Código", e.codigo],
-      ["Versão", n],
-      ["Status", ROTULO_DO_STATUS[e.versao.status]],
-      ["Procedimento", e.procedimento],
+      ["Versão", `${n} · ${ROTULO_DO_STATUS[e.versao.status]}`],
+      ["Criado por", quemEQuando(e.criado.por, e.criado.em, e.fuso, e.tag)],
+      ["Última atualização", quemEQuando(e.atualizado.por, e.atualizado.em, e.fuso, e.tag)],
+      ["Aprovado por", e.aprovado.em ? quemEQuando(e.aprovado.por, e.aprovado.em, e.fuso, e.tag) : null],
+      ["Impresso em", dataHora(e.impressoEm, e.fuso, e.tag)],
     ],
-    controle: [
-      ["Criado por", `${quem(e.criado.por)} — ${dataHora(e.criado.em, e.fuso, e.tag)}`],
-      ["Última atualização", `${quem(e.atualizado.por)} — ${dataHora(e.atualizado.em, e.fuso, e.tag)}`],
-      ["Aprovado por", e.aprovado.em ? quem(e.aprovado.por) : "—"],
-      ["Aprovado em", e.aprovado.em ? dataHora(e.aprovado.em, e.fuso, e.tag) : "—"],
-    ],
-    cabecalhoCompacto: [e.marca.nome, `POP — ${e.procedimento}`, `${e.codigo} | Versão ${n}`],
-    rodape: (pagina, total) => `${e.codigo} | Versão ${n} | Página ${pagina} de ${total}  ·  Impresso em ${impresso}`,
-    faixa: faixaDaVersao(e.versao),
-    conteudo: e.conteudo,
+    avisos: faixa ? [{ estado: e.versao.status === "draft" ? "atencao" : "perigo", texto: faixa, emTodasAsPaginas: true }] : [],
+    corpo: e.conteudo,
+    emitidoEm: e.impressoEm,
   };
 }

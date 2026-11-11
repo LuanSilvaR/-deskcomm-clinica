@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { EntradaDaAgenda } from "@/components/agenda/EntradaDaAgenda";
 import { EnderecoDaMarcacao } from "@/components/agenda/EnderecoDaMarcacao";
@@ -33,6 +34,10 @@ import { EscolhaDoProfissional, useRegrasDeProfissionaisLigadas } from "@/compon
 import { BarraDeFiltrosDaAgenda, useFiltrosDaAgenda } from "@/components/clinic/agenda/BarraDeFiltrosDaAgenda";
 import { ProvedorDaInfoDaClinica, useInfoDaClinica } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
 import { ListaDoDiaDaAgenda } from "@/components/clinic/agenda/ListaDoDiaDaAgenda";
+import { ProcedimentosDaMarcacao, salvarProcedimentosDoAgendamento } from "@/components/clinic/agenda/ProcedimentosDaMarcacao";
+import { EstadoDosDias } from "@/components/clinic/agenda/EstadoDosDias";
+import { JanelaDeAtalhos, useAtalhosDaAgenda, useFavoritosDaAgenda, usePreferenciasDaAgenda } from "@/components/clinic/agenda/AtalhosDaAgenda";
+import { ordenarComFavoritos, vizinho } from "@/lib/clinic/agenda/produtividade";
 import { CabecalhoDoProfissional } from "@/components/clinic/agenda/SeletorDeProfissional";
 import type { ForaDaAgendaDoDia } from "@/components/agenda/GradeDaAgenda";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -235,6 +240,8 @@ export function AgendaClient({
   // vazia) = a pessoa editou, e o tipo novo não pode devolver o que ela apagou.
   const [enderecoEditado, setEnderecoEditado] = React.useState<string | null>(null);
   const [observacao, setObservacao] = React.useState("");
+  // FORK clinic (agenda S3 #68): procedimentos do novo agendamento, na ordem escolhida.
+  const [procedimentosDaMarcacao, setProcedimentosDaMarcacao] = React.useState<string[]>([]);
   /**
    * O TÍTULO LIVRE DO COMPROMISSO (#3766) — a agenda também serve para
    * atendimento externo, e "OS 1234" ou "Atendimento fulano" é o que quem olha
@@ -316,6 +323,28 @@ export function AgendaClient({
   }, []);
   // FORK clinic (melhorias da Agenda): filtros da clínica e o modo da visão Dia.
   const { filtros, mudar: mudarFiltro, limpar: limparFiltros } = useFiltrosDaAgenda(filtrosDaUrl);
+  // FORK clinic (agenda S7 #70): favoritos, ‹ ›, preferências e atalhos.
+  const { favoritos, alternar: alternarFavorito } = useFavoritosDaAgenda(orgId ?? "", usuarioId);
+  const { prefs, lidas: prefsLidas, mudar: mudarPrefs } = usePreferenciasDaAgenda(orgId ?? "", usuarioId);
+  const [atalhosAbertos, setAtalhosAbertos] = React.useState(false);
+  const listaOrdenada = React.useMemo(() => ordenarComFavoritos(contexto.lista, favoritos), [contexto.lista, favoritos]);
+  const irParaVizinho = React.useCallback(
+    (direcao: -1 | 1) => {
+      if (!contexto.podeVerOutros) return;
+      const alvo = vizinho(listaOrdenada, contexto.profissional?.user_id ?? null, direcao);
+      if (alvo) contexto.trocar(alvo.user_id);
+    },
+    [contexto, listaOrdenada],
+  );
+  const prefsAplicadas = React.useRef(false);
+  React.useEffect(() => {
+    if (!prefsLidas || prefsAplicadas.current) return;
+    prefsAplicadas.current = true;
+    // A URL vence (link compartilhado, recarga): a preferência só vale sem ela.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- preferência do navegador, lida depois da hidratação
+    if (!contextoDaUrl.visao && prefs.visao) setVisao(prefs.visao);
+    if (!prefs.mostrarFimDeSemana && !new URLSearchParams(filtrosDaUrl).has("fds")) mudarFiltro({ fds: "0" });
+  }, [prefsLidas, prefs, contextoDaUrl.visao, filtrosDaUrl, mudarFiltro]);
   const [diaEmLista, setDiaEmLista] = React.useState(false);
   /**
    * A ÂNCORA NASCE DO RELÓGIO DA ORGANIZAÇÃO, não do navegador.
@@ -563,9 +592,10 @@ export function AgendaClient({
   // histórico, que lê `agendamentos` (cheio) e o separa sozinha em `separar()`.
   // Mesma fonte, dois recortes: a grade responde "o que está de pé", o
   // histórico responde "o que aconteceu", cancelado incluso.
+  // FORK clinic (agenda S2 #67): "+ Mais filtros › Mostrar cancelados na grade" traz o cancelado de volta.
   const agendamentosDaGrade = React.useMemo(
-    () => agendamentos.filter((a) => a.situacao !== "cancelled"),
-    [agendamentos],
+    () => (filtros.cancelados ? agendamentos : agendamentos.filter((a) => a.situacao !== "cancelled")),
+    [agendamentos, filtros.cancelados],
   );
 
   // As faixas FECHADAS em "Dias fora da rotina" — e pela MESMA pessoa isolada que
@@ -598,6 +628,20 @@ export function AgendaClient({
   );
 
   const passo = visao === "mes" ? 30 : visao === "semana" ? 7 : 1;
+  // FORK clinic (agenda S7 #70): N novo · T hoje · D/S/M visão · [ ] profissional · ? ajuda.
+  useAtalhosDaAgenda((acao) => {
+    if (acao === "novo") {
+      if (podeMarcar) {
+        setHorarioEscolhido(null);
+        setRemarcandoId(null);
+        abrirMarcacao();
+      }
+    } else if (acao === "hoje") setAncora(ancoraLocalDoDia(hojeNaOrganizacao));
+    else if (acao === "dia" || acao === "semana" || acao === "mes") setVisao(acao);
+    else if (acao === "anterior") irParaVizinho(-1);
+    else if (acao === "seguinte") irParaVizinho(1);
+    else if (acao === "ajuda") setAtalhosAbertos(true);
+  });
   // O PADRÃO de formato também muda de idioma, não só o locale: em português
   // "d 'de' MMMM" tem a preposição escrita à mão dentro do padrão, e em
   // espanhol ela também é "de" — mas quem garante isso é a chave no dicionário,
@@ -631,8 +675,17 @@ export function AgendaClient({
       ...(tituloLivreLigado && tituloLivre.trim() ? { title: tituloLivre.trim() } : {}),
       ...(encaixe ? { encaixe } : {}),
     };
+    const procedimentosEscolhidos = procedimentosDaMarcacao;
     return marcar.mutateAsync(corpo).then(
-      (r) => {
+      async (r) => {
+        // FORK clinic (agenda S3 #68): grava os procedimentos com o id que a marcação devolveu.
+        // Falhar aqui não desfaz a marcação: o agendamento existe; avisamos e seguimos.
+        if (procedimentosEscolhidos.length && r?.data?.id) {
+          await salvarProcedimentosDoAgendamento(r.data.id, procedimentosEscolhidos).catch(() => {
+            toast.error(t("O agendamento foi marcado, mas os procedimentos não foram salvos. Abra o agendamento e tente de novo."));
+          });
+        }
+        setProcedimentosDaMarcacao([]);
         setOcupado(null);
         setErroDoEncaixe(null);
         setEmailConvidado("");
@@ -825,6 +878,10 @@ export function AgendaClient({
           podeTrocar={contexto.podeVerOutros}
           carregando={contexto.carregando}
           onTrocar={contexto.trocar}
+          favoritos={favoritos}
+          onFavoritar={alternarFavorito}
+          onAnterior={() => irParaVizinho(-1)}
+          onSeguinte={() => irParaVizinho(1)}
         />
       ) : null}
 
@@ -918,8 +975,13 @@ export function AgendaClient({
               </button>
             ))}
           </div>
+          {/* FORK clinic (agenda S7 #70): atalhos e preferências. */}
+          <Button variant="ghost" size="sm" data-testid="abrir-atalhos" aria-label={t("Atalhos e preferências da agenda")} title={t("Atalhos e preferências da agenda") + " (?)"} onClick={() => setAtalhosAbertos(true)}>
+            ?
+          </Button>
         </div>
       </div>
+      <JanelaDeAtalhos aberta={atalhosAbertos} onFechar={() => setAtalhosAbertos(false)} prefs={prefs} onMudarPrefs={mudarPrefs} />
 
       {/*
         O HISTÓRICO na tela do produto, e não só na vitrine. Ele aparece mesmo
@@ -934,6 +996,8 @@ export function AgendaClient({
         mudar={mudarFiltro}
         limpar={limparFiltros}
         especialidades={especialidades}
+        salas={infoDaClinica?.salas ?? []}
+        procedimentos={infoDaClinica?.procedimentos ?? []}
         total={agendamentos.length}
       />
 
@@ -1173,6 +1237,11 @@ export function AgendaClient({
                   value={endereco}
                   onChange={setEnderecoEditado}
                 />
+                <ProcedimentosDaMarcacao
+                  catalogo={infoDaClinica?.procedimentos ?? []}
+                  valor={procedimentosDaMarcacao}
+                  onChange={setProcedimentosDaMarcacao}
+                />
                 <div>
                   <label className="block" htmlFor="observacao-do-compromisso">
                     {t("Observação")}{" "}
@@ -1219,6 +1288,18 @@ export function AgendaClient({
                 }}
               />
             </div>
+          ) : null}
+          {tipo && !remarcandoId ? (
+            // FORK clinic (agenda S3 #68): estado dos próximos dias do profissional.
+            <EstadoDosDias
+              profissional={profissionalDaMarcacao ?? tipo.donoId ?? null}
+              horariosPorDia={horariosPorDia}
+              hoje={ancoraLocalDoDia(hojeNaOrganizacao)}
+              onEscolher={(dia) => {
+                const primeiro = horariosPorDia[dia]?.[0];
+                if (primeiro) setHorarioEscolhido(primeiro);
+              }}
+            />
           ) : null}
           {tipo && (
             <div className="mt-4 lg:min-h-0 lg:flex-1">
@@ -1592,13 +1673,26 @@ export function AgendaClient({
       ) : null}
       <AgendaInterativa
         donoId={donoDaAgenda}
-        foraDaAgenda={foraDaAgenda}
+        foraDaAgenda={filtros.semIndisponiveis ? undefined : foraDaAgenda}
+        ocultarFimDeSemana={filtros.semFimDeSemana}
+        // FORK clinic (agenda S7 #70): arrastar numa faixa livre abre "Novo agendamento" com início e fim
+        // (a duração só vale com a opção "Duração na marcação"; sem ela, vale a do tipo).
+        onSelecionarFaixa={
+          podeMarcar
+            ? ({ inicio, fim }) => {
+                setRemarcandoId(null);
+                setHorarioEscolhido({ instante: inicio, rotulo: format(new Date(inicio), "HH:mm") });
+                if (duracaoNaMarcacaoLigada) setDuracaoEscolhida(Math.round((Date.parse(fim) - Date.parse(inicio)) / 60_000));
+                abrirMarcacao();
+              }
+            : undefined
+        }
         visao={visao}
         ancora={ancora}
         agora={new Date()}
         pessoas={pessoas}
         agendamentos={agendamentosDaGrade}
-        fechamentos={fechamentosDaGrade}
+        fechamentos={filtros.semIndisponiveis ? [] : fechamentosDaGrade}
         recorte={recorteDaGrade}
         tipos={tiposDoContexto.map((t) => ({ id: t.id, nome: t.nome, duracaoMin: t.duracaoMin }))}
         tipo={tipo ? { id: tipo.id, duracaoMin: tipo.duracaoMin } : null}

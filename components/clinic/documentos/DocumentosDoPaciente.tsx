@@ -235,7 +235,11 @@ function CartaoDoDocumento({
     expira_em: string;
     telefone: string | null;
   } | null>(null);
-  const recarregar = () => void qc.invalidateQueries({ queryKey: chave });
+  const recarregar = () => {
+    void qc.invalidateQueries({ queryKey: chave });
+    // FORK clinic (orçamento O3): o aceite/cancelamento do contrato muda o orçamento.
+    void qc.invalidateQueries({ queryKey: ["clinic", "orcamentos"] });
+  };
   const whatsapp = link
     ? linkDoWhatsApp(
         link.telefone,
@@ -329,6 +333,12 @@ function CartaoDoDocumento({
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="ghost" onClick={() => setAberto((v) => !v)}>
           {aberto ? t("Ocultar texto") : t("Ver texto")}
+        </Button>
+        {/* FORK clinic (papel timbrado D3) — o documento no papel timbrado, com a marca do dia da emissão. */}
+        <Button size="sm" variant="outline" asChild>
+          <a href={`/api/v1/clinic/documentos/${doc.id}/pdf`} target="_blank" rel="noopener" data-testid="documento-pdf">
+            {t("Baixar PDF")}
+          </a>
         </Button>
         {doc.status === "emitido" && dados.pode_colher_aceite ? (
           <>

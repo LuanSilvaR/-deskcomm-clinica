@@ -32,10 +32,12 @@ import { redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { marcaDaInstalacao } from "@/lib/branding/instalacao";
+import { baseDoStorage, urlPublicaDoLogo } from "@/lib/branding/logo";
 import { marcaDaOrganizacaoDeSettings } from "@/lib/branding/organizacao";
 import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { faviconDeSettings } from "@/lib/clinic/marca/favicon";
 
 import { FormularioDaMarcaDaOrganizacao } from "./_form";
 
@@ -62,6 +64,13 @@ export default async function MarcaDaOrganizacaoPage() {
     .maybeSingle();
 
   const gravada = marcaDaOrganizacaoDeSettings(data?.settings ?? null);
+  // FORK clinic (8012) — o favicon mora em settings.clinic (ver a migration).
+  const caminhoDoFavicon = faviconDeSettings(data?.settings ?? null);
+  const base = baseDoStorage();
+  const faviconUrl = caminhoDoFavicon && base ? urlPublicaDoLogo(caminhoDoFavicon, base) : null;
+  // FORK clinic (8013) — cor dos filetes do papel timbrado, em settings.clinic.
+  const corCrua = (data?.settings as { clinic?: { cor_filetes?: unknown } } | null)?.clinic?.cor_filetes;
+  const corDosFiletes = typeof corCrua === "string" && /^#[0-9a-f]{6}$/i.test(corCrua) ? corCrua : null;
   const linha = await marcaDaInstalacao();
   const idioma = user.idioma;
 
@@ -70,7 +79,7 @@ export default async function MarcaDaOrganizacaoPage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Marca", idioma)}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          {traduzir("O nome e a cor que a sua empresa mostra para quem trabalha aqui dentro.", idioma)}
+          {traduzir("O nome, a cor, o logo e o favicon que a sua empresa mostra para quem trabalha aqui dentro.", idioma)}
         </p>
       </header>
 
@@ -84,6 +93,8 @@ export default async function MarcaDaOrganizacaoPage() {
           // montagem, e a que divergisse seria a que ninguém abre.
           logo_path: gravada?.logo_path ?? null,
         }}
+        faviconUrl={faviconUrl}
+        corDosFiletes={corDosFiletes}
         // As DUAS camadas de baixo descem para o formulário, e não uma resolução
         // já pronta: a prévia ao vivo remonta a pilha inteira a cada tecla, pelo
         // mesmo caminho do servidor. Sem elas, a tela não saberia responder "e se
