@@ -7,7 +7,14 @@ vi.mock("@/lib/documentos/renderizar", () => ({
   renderizarDocumento: vi.fn(async () => Buffer.from("%PDF-fake")),
 }));
 
+vi.mock("@/lib/lgpd/pades-signer", () => ({
+  signPdfPades: vi.fn(async (b: Buffer) => ({ signed: b, sha256: "abc", signed_pades: false })),
+}));
+
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { renderizarDocumento } from "@/lib/documentos/renderizar";
+import { signPdfPades } from "@/lib/lgpd/pades-signer";
 
 import type { DadosDoAtestado } from "./atestado";
 import { contarRetidos, emitirAtestado, montarDocumentoDoAtestado } from "./emitir-atestado";
@@ -21,6 +28,8 @@ interface Cenario {
   uploadErro?: string | null;
   insertErro?: { code?: string; message: string } | null;
   contagens?: Record<string, number>;
+  contagemErro?: boolean;
+  removeLanca?: boolean;
 }
 
 function stub(c: Cenario = {}) {
@@ -56,7 +65,7 @@ function stub(c: Cenario = {}) {
     };
     b.then = (res: (v: unknown) => void) => {
       if (contagem) chamadas.filtros.push({ tabela, filtros });
-      res({ count: c.contagens?.[tabela] ?? 0, error: null });
+      res({ count: c.contagens?.[tabela] ?? 0, error: c.contagemErro ? { message: "falha na contagem" } : null });
     };
     return b;
   };
@@ -70,6 +79,7 @@ function stub(c: Cenario = {}) {
         },
         remove: async (paths: string[]) => {
           chamadas.removes.push(paths);
+          if (c.removeLanca) throw new Error("storage fora do ar");
           return { error: null };
         },
       }),
@@ -135,6 +145,38 @@ describe("emitirAtestado", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.jaExistia).toBe(true);
     expect(chamadas.removes).toHaveLength(1);
+  });
+});
+
+describe("emitirAtestado nunca lança", () => {
+  it("devolve erro quando o render lança", async () => {
+    vi.mocked(renderizarDocumento).mockRejectedValueOnce(new Error("render quebrou"));
+    const r = await emitirAtestado(stub().admin, pedido);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.erro).toContain("render quebrou");
+  });
+
+  it("devolve erro quando a assinatura lança", async () => {
+    vi.mocked(signPdfPades).mockRejectedValueOnce(new Error("assinatura quebrou"));
+    const r = await emitirAtestado(stub().admin, pedido);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.erro).toContain("assinatura quebrou");
+  });
+
+  it("devolve erro quando a contagem falha", async () => {
+    const { admin, chamadas } = stub({ contagemErro: true });
+    const r = await emitirAtestado(admin, pedido);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.erro).toContain("falha na contagem");
+    expect(chamadas.uploads).toHaveLength(0);
+  });
+
+  it("mantém jaExistia mesmo se a limpeza do arquivo lançar", async () => {
+    const { admin, chamadas } = stub({ insertErro: { code: "23505", message: "dup" }, removeLanca: true });
+    const r = await emitirAtestado(admin, pedido);
+    expect(chamadas.removes).toHaveLength(1);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.jaExistia).toBe(true);
   });
 });
 

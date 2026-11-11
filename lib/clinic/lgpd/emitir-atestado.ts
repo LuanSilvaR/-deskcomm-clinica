@@ -133,7 +133,11 @@ export async function emitirAtestado(admin: SupabaseClient, p: PedidoDeEmissao):
       versao: VERSAO_DO_ATESTADO,
     });
     if (erroInsert) {
-      await admin.storage.from(BUCKET_DO_ATESTADO).remove([caminho]);
+      try {
+        await admin.storage.from(BUCKET_DO_ATESTADO).remove([caminho]);
+      } catch {
+        // Limpeza é melhor-esforço: o resultado devolvido é sempre o da gravação.
+      }
       if (erroInsert.code === "23505") return { ok: false, erro: "ja_emitido", jaExistia: true };
       return { ok: false, erro: `gravacao_falhou:${erroInsert.message}` };
     }
