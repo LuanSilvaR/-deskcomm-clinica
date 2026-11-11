@@ -19,6 +19,7 @@ interface Props {
   ligadoInicial: boolean;
   fichaObrigatoriaInicial: boolean;
   confirmacaoInicial: boolean;
+  lembreteComReservaInicial: boolean;
   travaInicial: boolean;
   recursosInicial: boolean;
   procedimentosInicial: boolean;
@@ -42,6 +43,7 @@ export function ProfissionaisClient({
   ligadoInicial,
   fichaObrigatoriaInicial,
   confirmacaoInicial,
+  lembreteComReservaInicial,
   travaInicial,
   recursosInicial,
   procedimentosInicial,
@@ -60,6 +62,7 @@ export function ProfissionaisClient({
   const [ligado, setLigado] = useState(ligadoInicial);
   const [fichaObrigatoria, setFichaObrigatoria] = useState(fichaObrigatoriaInicial);
   const [confirmacao, setConfirmacao] = useState(confirmacaoInicial);
+  const [reserva, setReserva] = useState(lembreteComReservaInicial);
   const [trava, setTrava] = useState(travaInicial);
   const [recursos, setRecursos] = useState(recursosInicial);
   const [procedimentos, setProcedimentos] = useState(procedimentosInicial);
@@ -142,6 +145,15 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { trava_sobreposicao: boolean } }>("/api/v1/clinic/config", { trava_sobreposicao: valor }),
     onSuccess: (r) => setTrava(r.data.trava_sobreposicao),
+    onError: showApiError,
+  });
+
+  const alternarReserva = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { lembrete_com_reserva: boolean } }>("/api/v1/clinic/config", {
+        lembrete_com_reserva: valor,
+      }),
+    onSuccess: (r) => setReserva(r.data.lembrete_com_reserva),
     onError: showApiError,
   });
 
@@ -249,6 +261,28 @@ export function ProfissionaisClient({
               onClick={() => alternarConfirmacao.mutate(!confirmacao)}
             >
               {confirmacao ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${reserva ? "" : "bg-muted"}`}
+          data-testid="clinic-lembrete-reserva"
+        >
+          <div>
+            <p className="font-medium">{t("Lembrete pelo número oficial, com reserva pelo QR code")}</p>
+            <p className="text-sm text-text-muted">
+              {t("O lembrete sai primeiro pelo número oficial da Meta. Se ele não puder enviar, sai pelo número conectado por QR code.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-lembrete-reserva-alternar"
+              variant={reserva ? "outline" : "default"}
+              disabled={alternarReserva.isPending}
+              onClick={() => alternarReserva.mutate(!reserva)}
+            >
+              {reserva ? t("Desligar") : t("Ligar")}
             </Button>
           ) : null}
         </section>

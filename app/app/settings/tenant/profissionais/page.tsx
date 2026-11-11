@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { permissoesNaPagina } from "@/lib/clinic/acesso/pagina";
+import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
 import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
 import { prazoDoPacienteHoras } from "@/lib/clinic/agenda/prazo-do-paciente";
 import { recursosLigados } from "@/lib/clinic/agenda/recursos";
@@ -61,6 +62,7 @@ export default async function ProfissionaisPage() {
         ligadoInicial={clinicProfissionaisLigado(org?.settings)}
         fichaObrigatoriaInicial={fichaObrigatoriaLigada(org?.settings)}
         confirmacaoInicial={confirmacaoAutomaticaLigada(org?.settings)}
+        lembreteComReservaInicial={lembreteComReservaLigado(org?.settings)}
         travaInicial={travaSobreposicaoLigada(org?.settings)}
         recursosInicial={recursosLigados(org?.settings)}
         procedimentosInicial={procedimentosLigados(org?.settings)}

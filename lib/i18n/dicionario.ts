@@ -11856,6 +11856,13 @@ export const DICIONARIO: Traducoes = {
   "O lembrete de 12 h ou mais antes pede SIM ou NÃO. Sem resposta até 4 h antes, a recepção recebe a tarefa de ligar.": { es: "El recordatorio de 12 h o más antes pide SÍ o NO. Sin respuesta hasta 4 h antes, la recepción recibe la tarea de llamar." },
   "Ligue para o lembrete da véspera pedir SIM ou NÃO ao paciente. Vale para os tipos de atendimento com lembrete ligado.": { es: "Actívela para que el recordatorio del día anterior pida SÍ o NO al paciente. Vale para los tipos de atención con recordatorio activado." },
   "Responda *SIM* para confirmar ou *NÃO* se precisar remarcar.": { es: "Responda *SÍ* para confirmar o *NO* si necesita reprogramar." },
+  // ── FORK clinic (#83): lembrete pelo número oficial, com reserva pelo QR code ──
+  "Lembrete pelo número oficial, com reserva pelo QR code": { es: "Recordatorio por el número oficial, con respaldo por código QR" },
+  "O lembrete sai primeiro pelo número oficial da Meta. Se ele não puder enviar, sai pelo número conectado por QR code.": { es: "El recordatorio sale primero por el número oficial de Meta. Si este no puede enviarlo, sale por el número conectado por código QR." },
+  "Se a janela de 24 h já tiver fechado, mandar este modelo aprovado": { es: "Si la ventana de 24 h ya se cerró, enviar esta plantilla aprobada" },
+  "Crie um em Conexões → Modelos": { es: "Cree una en Conexiones → Plantillas" },
+  "Pelo modelo, o pedido de SIM/NÃO não é acrescentado: escreva o modelo já pedindo a confirmação.": { es: "Con la plantilla no se agrega el pedido de SÍ/NO: escriba la plantilla ya pidiendo la confirmación." },
+  "Esse modelo não pode ser usado no lembrete.": { es: "Esa plantilla no se puede usar en el recordatorio." },
   // ── FORK clinic (migration 9006): lembrete que falhou ──
   "Lembrete não chegou — ligar": { es: "El recordatorio no llegó — llamar" },
   "Lembrete não saiu — ligar": { es: "El recordatorio no se envió — llamar" },

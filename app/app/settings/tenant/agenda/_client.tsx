@@ -44,6 +44,8 @@ export interface TipoRow {
   reminder_extra_offsets_minutes: number[] | null;
   reminder_body: string | null;
   reminder_bodies: Record<string, string> | null;
+  /** #83: modelo aprovado do lembrete (janela de 24 h fechada). */
+  reminder_meta_template_id?: string | null;
   default_price_cents: number | null;
 }
 
@@ -113,7 +115,24 @@ type CartaoDeLembrete = {
   body: string;
 };
 
-function LembreteDoCompromisso({ tipo }: { tipo: TipoRow }) {
+/** Um modelo aprovado que o lembrete sabe preencher (vem da página). */
+export interface ModeloParaOLembrete {
+  id: string;
+  name: string;
+  language: string;
+}
+
+function LembreteDoCompromisso({
+  tipo,
+  reservaLigada,
+  confirmacaoAutomaticaLigada,
+  modelos,
+}: {
+  tipo: TipoRow;
+  reservaLigada: boolean;
+  confirmacaoAutomaticaLigada: boolean;
+  modelos: ModeloParaOLembrete[];
+}) {
   const t = useT();
   const [ligado, setLigado] = React.useState(tipo.reminder_enabled);
   const [cartoes, setCartoes] = React.useState<CartaoDeLembrete[]>(() =>
@@ -294,6 +313,35 @@ function LembreteDoCompromisso({ tipo }: { tipo: TipoRow }) {
           {t("Adicionar lembrete")}
         </Button>
       ) : null}
+      {reservaLigada ? (
+        <div className="grid gap-1" data-testid={`editar-lembrete-modelo-bloco-${tipo.id}`}>
+          <label className="flex flex-col gap-1 text-xs text-text-muted">
+            {t("Se a janela de 24 h já tiver fechado, mandar este modelo aprovado")}
+            <select
+              name="reminder_meta_template_id"
+              disabled={!ligado}
+              defaultValue={tipo.reminder_meta_template_id ?? ""}
+              data-testid={`editar-lembrete-modelo-${tipo.id}`}
+              className="rounded-md border border-border bg-surface p-2 text-sm text-text disabled:opacity-50"
+            >
+              <option value="">{t("Nenhum")}</option>
+              {modelos.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({m.language})
+                </option>
+              ))}
+            </select>
+          </label>
+          {modelos.length === 0 ? (
+            <p className="text-[11px] text-text-muted">{t("Crie um em Conexões → Modelos")}</p>
+          ) : null}
+          {confirmacaoAutomaticaLigada ? (
+            <p className="text-[11px] text-text-muted">
+              {t("Pelo modelo, o pedido de SIM/NÃO não é acrescentado: escreva o modelo já pedindo a confirmação.")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <p className="text-[11px] text-text-muted">
         {t("Deixe a mensagem em branco para o texto padrão. Variáveis: {{nome}}, {{titulo}}, {{dia}}, {{hora}}, {{endereco}}.")}
       </p>
@@ -311,7 +359,14 @@ export function TiposDeAgendamentoClient({
   podeLigarClientePelaAgenda,
   colegasPodemMexerNaAgendaLigado,
   podeMudarAgendaDosColegas,
+  lembreteComReservaLigado = false,
+  confirmacaoAutomaticaLigada = false,
+  modelosDoLembrete = [],
 }: {
+  /** #83: a chave da clínica; o seletor de modelo só aparece com ela ligada. */
+  lembreteComReservaLigado?: boolean;
+  confirmacaoAutomaticaLigada?: boolean;
+  modelosDoLembrete?: ModeloParaOLembrete[];
   tiposIniciais: TipoRow[];
   pessoas: Array<{ id: string; papel: string; nome: string }>;
   podeEditar: boolean;
@@ -689,6 +744,14 @@ export function TiposDeAgendamentoClient({
                               };
                             })()
                           : {}),
+                        // #83: só com a chave ligada o seletor existe; "Nenhum"
+                        // vira null (limpa). Desligado, o campo nem é enviado.
+                        ...(lembreteComReservaLigado && dados.get("reminder_enabled") === "on"
+                          ? {
+                              reminder_meta_template_id:
+                                String(dados.get("reminder_meta_template_id") ?? "") || null,
+                            }
+                          : {}),
                       }),
                     "Tipo alterado.",
                   );
@@ -751,7 +814,12 @@ export function TiposDeAgendamentoClient({
                   </span>
                   </label>
                 </div>
-                <LembreteDoCompromisso tipo={tipo} />
+                <LembreteDoCompromisso
+                  tipo={tipo}
+                  reservaLigada={lembreteComReservaLigado}
+                  confirmacaoAutomaticaLigada={confirmacaoAutomaticaLigada}
+                  modelos={modelosDoLembrete}
+                />
                 <div className="flex justify-end">
                   <Button type="submit" size="sm" data-testid={`salvar-${tipo.id}`} disabled={salvando}>
                     {salvando ? t("Salvando…") : t("Salvar")}
