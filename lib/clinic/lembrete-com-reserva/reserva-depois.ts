@@ -136,14 +136,21 @@ async function cuidarDeUma(
 
   try {
     const appointmentId = typeof lembrete.appointment_id === "string" ? lembrete.appointment_id : null;
-    const { data: compromisso } = appointmentId
+    const { data: compromisso, error: erroDoCompromisso } = appointmentId
       ? await admin
           .from("calendar_appointments")
           .select("id, starts_at, status, reminder_sent_offsets_minutes, reminder_tentativas")
           .eq("organization_id", org)
           .eq("id", appointmentId)
           .maybeSingle()
-      : { data: null };
+      : { data: null, error: null };
+    if (erroDoCompromisso) {
+      // Não sabemos o estado do compromisso: devolve a reivindicação e tenta na próxima.
+      logger.error("[reserva-depois] leitura do compromisso falhou", { error: erroDoCompromisso.message });
+      await marcar(null);
+      resumo.ignorados += 1;
+      return;
+    }
     const ap = compromisso as {
       id: string;
       starts_at: string;
@@ -170,13 +177,21 @@ async function cuidarDeUma(
     const tentativa = typeof lembrete.tentativa === "number" ? lembrete.tentativa : 1;
     if (tentativa >= MAX_TENTATIVAS_DO_LEMBRETE) return await ignorar("esgotado");
 
-    const { data: contato } = await admin
+    const { data: contato, error: erroDoContato } = await admin
       .from("contacts")
       .select("id, is_blocked")
       .eq("organization_id", org)
       .eq("id", m.contact_id)
       .maybeSingle();
-    if ((contato as { is_blocked?: boolean } | null)?.is_blocked) return await ignorar("bloqueado");
+    if (erroDoContato) {
+      // Falha fechada: sem saber se há opt-out, não envia; tenta na próxima.
+      logger.error("[reserva-depois] leitura do contato falhou", { error: erroDoContato.message });
+      await marcar(null);
+      resumo.ignorados += 1;
+      return;
+    }
+    if (!contato) return await ignorar("ambiguo");
+    if ((contato as { is_blocked?: boolean }).is_blocked) return await ignorar("bloqueado");
 
     if (!m.body?.trim()) {
       await marcar("sem_reserva");

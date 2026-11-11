@@ -31,6 +31,8 @@ interface Cenario {
   bloqueado?: boolean;
   reivindica?: boolean;
   erroNoPedido?: boolean;
+  erroNaLeitura?: "contacts" | "calendar_appointments";
+  semContato?: boolean;
 }
 
 const msg = (extra: Linha = {}, lembrete: Linha = {}): Linha => ({
@@ -80,6 +82,8 @@ function montar(c: Cenario) {
           const reivindicacao = o.tabela === "messages" && o.filtros.some(([t]) => t === "is");
           return { data: reivindicacao ? (c.reivindica === false ? [] : [{ id: "m-1" }]) : null, error: null };
         }
+        if (c.erroNaLeitura === o.tabela) return { data: null, error: { message: "falhou" } };
+        if (tabela === "contacts" && c.semContato) return { data: null, error: null };
         return { data: dados[tabela] ?? null, error: null };
       };
       q.maybeSingle = async () => resultado();
@@ -245,6 +249,28 @@ describe("reenviarLembretesQueAMetaRecusou", () => {
     expect(marcasNaMensagem(ops)).toEqual(["em_andamento", null]);
     expect(ops.some((o) => o.tabela === "calendar_appointments" && o.op === "update")).toBe(false);
     expect(r).toEqual({ reenviados: 0, semReserva: 0, ignorados: 1 });
+  });
+
+  it("erro ao ler o contato: não envia e devolve a reivindicação", async () => {
+    const { admin, ops } = montar({ erroNaLeitura: "contacts" });
+    const r = await reenviarLembretesQueAMetaRecusou(admin, AGORA);
+    expect(h.enviar).not.toHaveBeenCalled();
+    expect(marcasNaMensagem(ops)).toEqual(["em_andamento", null]);
+    expect(r.ignorados).toBe(1);
+  });
+
+  it("contato não encontrado: marca ambiguo e não envia", async () => {
+    const { admin, ops } = montar({ semContato: true });
+    await reenviarLembretesQueAMetaRecusou(admin, AGORA);
+    expect(h.enviar).not.toHaveBeenCalled();
+    expect(marcasNaMensagem(ops).at(-1)).toBe("ambiguo");
+  });
+
+  it("erro ao ler o compromisso: devolve a reivindicação, não marca consulta_passou nem envia", async () => {
+    const { admin, ops } = montar({ erroNaLeitura: "calendar_appointments" });
+    await reenviarLembretesQueAMetaRecusou(admin, AGORA);
+    expect(h.enviar).not.toHaveBeenCalled();
+    expect(marcasNaMensagem(ops)).toEqual(["em_andamento", null]);
   });
 
   it("nunca duas vezes: se a reivindicação não afeta nenhuma linha, nada é enviado", async () => {
