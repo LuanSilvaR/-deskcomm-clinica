@@ -143,3 +143,11 @@ export function descontoMaxDaConfig(settings: unknown): number {
   const v = (clinic as Record<string, unknown>).orcamentos_desconto_max_pct;
   return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100 ? v : 10;
 }
+
+/** `settings.clinic.atestado_anonimizacao` (migration 8024): atestado de anonimização LGPD (#87). Só `true` liga. */
+export function atestadoAnonimizacaoLigadoNaConfig(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).atestado_anonimizacao === true;
+}
