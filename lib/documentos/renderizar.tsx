@@ -84,6 +84,12 @@ function estilos(c: Papeis) {
     colunaDoLogo: { width: CABECALHO.colunas.logo, height: CABECALHO.alturaDoLogo, justifyContent: "center" },
     colunaDoWordmark: { width: CABECALHO.colunas.wordmark, justifyContent: "center" },
     colunaDoWordmarkSemLogo: { width: CABECALHO.colunas.logo + CABECALHO.colunas.wordmark, justifyContent: "center" },
+    colunaDoLogoHorizontal: {
+      width: CABECALHO.colunas.logo + CABECALHO.colunas.wordmark,
+      height: CABECALHO.alturaDoLogo,
+      justifyContent: "center",
+      alignItems: "flex-start",
+    },
     nomeDaMarca: {
       fontFamily: FAMILIA.titulo,
       fontWeight: CABECALHO.wordmark.peso,
@@ -102,6 +108,7 @@ function estilos(c: Papeis) {
     // header.compact
     linhaCompacta: { flexDirection: "row", alignItems: "center" },
     favicon: { width: COMPACTO.favicon, height: COMPACTO.favicon, objectFit: "contain", marginRight: 6 },
+    logoCompactoHorizontal: { flex: 1, height: COMPACTO.alturaDoLogoHorizontal, justifyContent: "center", alignItems: "flex-start" },
     nomeCompacto: { flex: 1, fontFamily: FAMILIA.titulo, fontWeight: COMPACTO.nome.peso, fontSize: COMPACTO.nome.tamanho, color: c.primary },
     descritorCompacto: { ...ui, fontWeight: COMPACTO.descritor.peso, fontSize: COMPACTO.descritor.tamanho, letterSpacing: COMPACTO.descritor.espacamento, color: c.muted },
     fileteCompacto: { borderBottomWidth: COMPACTO.filete, borderBottomColor: c.accent, marginTop: COMPACTO.antesDoFilete },
@@ -192,6 +199,13 @@ function tamanhoDoSimbolo(img: { largura: number; altura: number }) {
   return { width: altura * proporcao, height: altura };
 }
 
+/** #140 — imagem que cabe numa caixa (largura × altura máximas), com a proporção preservada. */
+function caberNaCaixa(img: { largura: number; altura: number }, larguraMaxima: number, alturaMaxima: number) {
+  const proporcao = img.largura / img.altura;
+  const altura = Math.min(alturaMaxima, larguraMaxima / proporcao);
+  return { width: altura * proporcao, height: altura };
+}
+
 /** topBand — faixa primary 3,9 mm, vão 0,6 mm, filete accent 0,7 mm, sangrada. */
 function Faixa({ s }: { s: Estilos }) {
   return (
@@ -207,15 +221,27 @@ function CabecalhoCompleto({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
   return (
     <View>
       <View style={s.linhaDoCabecalho}>
-        {ctx.simbolo ? (
-          <View style={s.colunaDoLogo}>
-            <Image style={tamanhoDoSimbolo(ctx.simbolo)} src={{ data: ctx.simbolo.data, format: ctx.simbolo.format }} />
+        {ctx.logoDoCabecalho ? (
+          // #140: logo horizontal já traz o nome — vai inteiro no espaço de símbolo + wordmark.
+          <View style={s.colunaDoLogoHorizontal}>
+            <Image
+              style={caberNaCaixa(ctx.logoDoCabecalho, CABECALHO.colunas.logo + CABECALHO.colunas.wordmark, CABECALHO.alturaDoLogo)}
+              src={{ data: ctx.logoDoCabecalho.data, format: ctx.logoDoCabecalho.format }}
+            />
           </View>
-        ) : null}
-        <View style={ctx.simbolo ? s.colunaDoWordmark : s.colunaDoWordmarkSemLogo}>
-          <Text style={s.nomeDaMarca}>{ctx.nomeDaMarca}</Text>
-          {ctx.descritor ? <Text style={s.descritor}>{ctx.descritor.toUpperCase()}</Text> : null}
-        </View>
+        ) : (
+          <>
+            {ctx.simbolo ? (
+              <View style={s.colunaDoLogo}>
+                <Image style={tamanhoDoSimbolo(ctx.simbolo)} src={{ data: ctx.simbolo.data, format: ctx.simbolo.format }} />
+              </View>
+            ) : null}
+            <View style={ctx.simbolo ? s.colunaDoWordmark : s.colunaDoWordmarkSemLogo}>
+              <Text style={s.nomeDaMarca}>{ctx.nomeDaMarca}</Text>
+              {ctx.descritor ? <Text style={s.descritor}>{ctx.descritor.toUpperCase()}</Text> : null}
+            </View>
+          </>
+        )}
         <View style={s.colunaDosContatos}>
           {ctx.site ? <Text style={s.contatoForte}>{ctx.site.exibir}</Text> : null}
           {ctx.contatos.map((l) => (
@@ -234,11 +260,24 @@ function CabecalhoCompleto({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
 /** header.compact — favicon 6 mm + nome; descritor à direita; filete accent. */
 function CabecalhoCompacto({ ctx, s }: { ctx: ContextoDaMarca; s: Estilos }) {
   const icone = ctx.favicon ?? ctx.simbolo;
+  const horizontal = ctx.logoDoCabecalho;
   return (
     <View>
       <View style={s.linhaCompacta}>
-        {icone ? <Image style={s.favicon} src={{ data: icone.data, format: icone.format }} /> : null}
-        <Text style={s.nomeCompacto}>{ctx.nomeDaMarca}</Text>
+        {horizontal ? (
+          // #140: a mesma logo horizontal da página 1, em tamanho reduzido.
+          <View style={s.logoCompactoHorizontal}>
+            <Image
+              style={caberNaCaixa(horizontal, COMPACTO.larguraMaximaDoLogoHorizontal, COMPACTO.alturaDoLogoHorizontal)}
+              src={{ data: horizontal.data, format: horizontal.format }}
+            />
+          </View>
+        ) : (
+          <>
+            {icone ? <Image style={s.favicon} src={{ data: icone.data, format: icone.format }} /> : null}
+            <Text style={s.nomeCompacto}>{ctx.nomeDaMarca}</Text>
+          </>
+        )}
         {ctx.descritor ? <Text style={s.descritorCompacto}>{ctx.descritor.toUpperCase()}</Text> : null}
       </View>
       <View style={s.fileteCompacto} />

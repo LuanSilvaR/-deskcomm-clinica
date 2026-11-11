@@ -11,7 +11,7 @@
  * `VERSAO_DO_LAYOUT` sobe a cada mudança visual: documento emitido guarda a
  * versão com que nasceu, e reimprime igual.
  */
-export const VERSAO_DO_LAYOUT = "2.0.0";
+export const VERSAO_DO_LAYOUT = "2.1.0"; // 2.1.0: logo horizontal inteira no cabeçalho (#140)
 
 /** 1 mm em pontos tipográficos (a unidade do react-pdf). */
 const MM = 72 / 25.4;
@@ -63,6 +63,13 @@ export const CABECALHO = {
 /** header.compact */
 export const COMPACTO = {
   favicon: mm(6),
+  /**
+   * #140: logo horizontal no cabeçalho compacto. Na altura do favicon (6 mm) o
+   * texto do logo fica ilegível; 10 mm cabe com folga — o corpo das páginas 2+
+   * começa em `PAGINA.margemTopo` (30 mm) e o filete desce só para ~23 mm.
+   */
+  alturaDoLogoHorizontal: mm(10),
+  larguraMaximaDoLogoHorizontal: mm(45),
   nome: { tamanho: 15, peso: 600 },
   descritor: { tamanho: 8.5, espacamento: 2, peso: 700 },
   filete: 0.75,
