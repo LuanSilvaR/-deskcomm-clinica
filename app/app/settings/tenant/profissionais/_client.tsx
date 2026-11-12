@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { AtendimentosPorEspecialidade } from "@/components/clinic/AtendimentosPorEspecialidade";
@@ -31,6 +31,8 @@ interface Props {
   tituloLivreInicial?: boolean;
   /** FORK clinic (#85): `settings.clinic.varios_telefones`. */
   variosTelefonesInicial?: boolean;
+  /** FORK clinic (#87): `settings.clinic.atestado_anonimizacao`. */
+  atestadoInicial?: boolean;
   /** FORK clinic (#80): `settings.clinic.duracao_na_marcacao`. */
   duracaoNaMarcacaoInicial?: boolean;
   /** FORK clinic (orçamento O1): `settings.clinic.orcamentos`. */
@@ -54,6 +56,7 @@ export function ProfissionaisClient({
   encaixeInicial = false,
   tituloLivreInicial = false,
   variosTelefonesInicial = false,
+  atestadoInicial = false,
   duracaoNaMarcacaoInicial = false,
   orcamentosInicial = false,
   prazoInicial,
@@ -75,6 +78,8 @@ export function ProfissionaisClient({
   const [encaixe, setEncaixe] = useState(encaixeInicial);
   const [tituloLivre, setTituloLivre] = useState(tituloLivreInicial);
   const [variosTelefones, setVariosTelefones] = useState(variosTelefonesInicial);
+  const [atestado, setAtestado] = useState(atestadoInicial);
+  const queryClient = useQueryClient();
   const [duracaoNaMarcacao, setDuracaoNaMarcacao] = useState(duracaoNaMarcacaoInicial);
   const [prazo, setPrazo] = useState(prazoInicial);
   const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
@@ -114,6 +119,16 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { varios_telefones: boolean } }>("/api/v1/clinic/config", { varios_telefones: valor }),
     onSuccess: (r) => setVariosTelefones(r.data.varios_telefones),
+    onError: showApiError,
+  });
+
+  const alternarAtestado = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { atestado_anonimizacao: boolean } }>("/api/v1/clinic/config", { atestado_anonimizacao: valor }),
+    onSuccess: (r) => {
+      setAtestado(r.data.atestado_anonimizacao);
+      queryClient.invalidateQueries({ queryKey: ["clinic-config", "atestado_anonimizacao"] });
+    },
     onError: showApiError,
   });
 
@@ -511,6 +526,29 @@ export function ProfissionaisClient({
               onClick={() => alternarVariosTelefones.mutate(!variosTelefones)}
             >
               {variosTelefones ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${atestado ? "" : "bg-muted"}`}
+          data-testid="clinic-atestado-anonimizacao"
+        >
+          <div>
+            <p className="font-medium">{t("Atestado de anonimização")}</p>
+            <p className="text-sm text-text-muted">
+              {t("Ao anonimizar um paciente, o sistema gera um atestado em PDF com data, responsável, IP, o que foi anonimizado e o que foi guardado por obrigação legal ou para defesa de direitos (prontuário, orçamentos e registros financeiros).")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-atestado-anonimizacao-alternar"
+              variant={atestado ? "outline" : "default"}
+              disabled={alternarAtestado.isPending}
+              aria-label={t("Atestado de anonimização")}
+              onClick={() => alternarAtestado.mutate(!atestado)}
+            >
+              {atestado ? t("Desligar") : t("Ligar")}
             </Button>
           ) : null}
         </section>

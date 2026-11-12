@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { AtestadosPanel } from "./AtestadosPanel";
 import { RequestsTable } from "./RequestsTable";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,7 @@ export default async function LgpdRequestsPage() {
           {t("Anonimizações e solicitações de dados de titulares. Apenas admins.")}
         </p>
       </header>
+      <AtestadosPanel />
       <RequestsTable />
     </div>
   );

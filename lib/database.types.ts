@@ -411,6 +411,73 @@ export type Database = {
           },
         ]
       }
+      clinic_atestados_anonimizacao: {
+        Row: {
+          algoritmo: string
+          anonimizado_em: string
+          codigo: string
+          codigo_curto: string
+          contact_id: string
+          emitido_em: string
+          executor: Json
+          id: string
+          ip: string | null
+          organization_id: string
+          pades: boolean
+          pdf_path: string
+          pdf_sha256: string
+          retidos: Json
+          versao: string
+        }
+        Insert: {
+          algoritmo: string
+          anonimizado_em: string
+          codigo: string
+          codigo_curto: string
+          contact_id: string
+          emitido_em?: string
+          executor: Json
+          id?: string
+          ip?: string | null
+          organization_id: string
+          pades?: boolean
+          pdf_path: string
+          pdf_sha256: string
+          retidos?: Json
+          versao: string
+        }
+        Update: {
+          algoritmo?: string
+          anonimizado_em?: string
+          codigo?: string
+          codigo_curto?: string
+          contact_id?: string
+          emitido_em?: string
+          executor?: Json
+          id?: string
+          ip?: string | null
+          organization_id?: string
+          pades?: boolean
+          pdf_path?: string
+          pdf_sha256?: string
+          retidos?: Json
+          versao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_atestados_anonimizacao_contact_id_fkey"
+            columns: ["contact_id"]
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinic_atestados_anonimizacao_organization_id_fkey"
+            columns: ["organization_id"]
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commission_rules: {
         Row: {
           attendant_user_id: string | null
@@ -8949,6 +9016,13 @@ export type Database = {
       }
     }
     Functions: {
+      fn_clinic_definir_atestado_anonimizacao: {
+        Args: {
+          p_ligado: boolean
+          p_org: string
+        }
+        Returns: Json
+      }
       fn_channel_routing_claim: {
         Args: {
           p_channel: string

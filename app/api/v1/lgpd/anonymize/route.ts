@@ -32,6 +32,10 @@ import {
   type ClienteDaCascata,
 } from "@/lib/lgpd/cascata";
 import { ok, fail } from "@/lib/api/wrappers";
+import { atestadoAnonimizacaoLigadoNaConfig } from "@/lib/clinic/flags";
+import { emitirAtestado } from "@/lib/clinic/lgpd/emitir-atestado";
+import { executorDoPedido, ipDoPedido, type AutorizadoDoPedido } from "@/lib/clinic/lgpd/executor";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/require-role";
 import { lgpdAnonymizeSchema, validateRequest } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
@@ -191,8 +195,18 @@ export async function POST(req: NextRequest): Promise<Response> {
   // conserta. Quem chama não tinha como saber que houve trabalho.
   const desfecho = !retomada ? "anonymized" : houveRedacao(redacao) ? "resumed" : "already_anonymized";
 
+  // FORK clinic (#87): atestado, só com a chave da clínica ligada. Desligada, a
+  // resposta é a de sempre (sem a chave `atestado`).
+  const atestado = await atestadoDaAnonimizacao(req, {
+    orgId: existing.organization_id,
+    contactId: existing.id,
+    anonimizadoEm: step.data.anonymized_at ?? new Date().toISOString(),
+    authz,
+  });
+
   return ok(
     {
+      ...(atestado ? { atestado } : {}),
       contact_id: existing.id,
       anonymized_at: step.data.anonymized_at,
       action: desfecho,
@@ -201,4 +215,55 @@ export async function POST(req: NextRequest): Promise<Response> {
     },
     { requestId },
   );
+}
+
+type AtestadoNaResposta =
+  | { id: string; codigo_curto: string; algoritmo: string; emitido_em: string }
+  | { erro: string };
+
+/**
+ * Emite (ou recupera) o atestado quando a chave está ligada; devolve `null`
+ * quando desligada. Nunca lança: falha vira `{ erro }` e a anonimização,
+ * já feita, segue com 200. `orgId` vem do contato lido sob RLS.
+ */
+async function atestadoDaAnonimizacao(
+  req: NextRequest,
+  p: {
+    orgId: string;
+    contactId: string;
+    anonimizadoEm: string;
+    authz: AutorizadoDoPedido;
+  },
+): Promise<AtestadoNaResposta | null> {
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+    // Sem conseguir ler a chave, vale a resposta de sempre (chave desligada).
+    const { data: org, error: erroDaChave } = await admin.from("organizations").select("settings").eq("id", p.orgId).maybeSingle();
+    if (erroDaChave || !atestadoAnonimizacaoLigadoNaConfig((org as { settings?: unknown } | null)?.settings)) return null;
+  } catch {
+    return null;
+  }
+  try {
+    const r = await emitirAtestado(admin, {
+      orgId: p.orgId,
+      contactId: p.contactId,
+      anonimizadoEm: p.anonimizadoEm,
+      executor: executorDoPedido(p.authz),
+      ip: ipDoPedido(req),
+    });
+    if (r.ok) return r.atestado;
+    if (r.jaExistia) {
+      const { data } = await admin
+        .from("clinic_atestados_anonimizacao")
+        .select("id, codigo_curto, algoritmo, emitido_em")
+        .eq("organization_id", p.orgId)
+        .eq("contact_id", p.contactId)
+        .maybeSingle();
+      if (data) return data as { id: string; codigo_curto: string; algoritmo: string; emitido_em: string };
+    }
+    return { erro: r.erro };
+  } catch (e) {
+    return { erro: e instanceof Error ? e.message : "atestado_falhou" };
+  }
 }
