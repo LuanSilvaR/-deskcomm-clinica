@@ -3917,6 +3917,63 @@ export type Database = {
           },
         ]
       }
+      contact_phones: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          organization_id: string
+          origem: string
+          phone_number: string
+          rotulo: string | null
+          tipo: string
+          updated_at: string
+          wa_lid: string | null
+          whatsapp: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          origem?: string
+          phone_number: string
+          rotulo?: string | null
+          tipo?: string
+          updated_at?: string
+          wa_lid?: string | null
+          whatsapp?: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          origem?: string
+          phone_number?: string
+          rotulo?: string | null
+          tipo?: string
+          updated_at?: string
+          wa_lid?: string | null
+          whatsapp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_phones_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_phones_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           ai_authorized_at: string | null
@@ -3952,6 +4009,8 @@ export type Database = {
           organization_id: string
           phone_lookup_at: string | null
           phone_number: string | null
+          phone_type: string | null
+          phone_whatsapp: string | null
           social_identity: string | null
           source: string
           source_metadata: Json
@@ -3993,6 +4052,8 @@ export type Database = {
           organization_id: string
           phone_lookup_at?: string | null
           phone_number?: string | null
+          phone_type?: string | null
+          phone_whatsapp?: string | null
           social_identity?: string | null
           source?: string
           source_metadata?: Json
@@ -4034,6 +4095,8 @@ export type Database = {
           organization_id?: string
           phone_lookup_at?: string | null
           phone_number?: string | null
+          phone_type?: string | null
+          phone_whatsapp?: string | null
           social_identity?: string | null
           source?: string
           source_metadata?: Json
