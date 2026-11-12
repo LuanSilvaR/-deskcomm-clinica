@@ -5,7 +5,7 @@ const h = vi.hoisted(() => ({
   user: vi.fn(), query: vi.fn(), cookie: vi.fn(), getCookie: vi.fn(),
 }));
 vi.mock("@/lib/auth/requirePlatformAdmin", () => ({ requirePlatformAdmin: h.guard }));
-vi.mock("@/lib/auth/server", () => ({ mfaEmDivida: h.mfa, loadAuthUser: h.user }));
+vi.mock("@/lib/auth/server", () => ({ mfaEmDivida: h.mfa, mfaEmDividaEstrita: h.mfa, loadAuthUser: h.user }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: h.rpc }) }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ from: h.query }) }));
 vi.mock("@/lib/audit", () => ({ audit: h.audit }));

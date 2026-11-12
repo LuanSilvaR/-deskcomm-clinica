@@ -487,6 +487,10 @@ async function upsertContact(
   // `is null` no filtro: só preenche o que está vazio. Sobrescrever apagaria
   // uma correção feita à mão na tela por um valor que a plataforma pode mandar
   // diferente entre eventos.
+  // (#85) Ficha achada pelo telefone EXTRA e sem principal: o `update` abaixo
+  // tentaria promover o extra a principal e o banco recusa com 23505 ("um
+  // número, uma ficha"). O erro é ignorado de propósito — a ficha certa já foi
+  // achada pela RPC, e o número continua guardado como extra.
   if (msg.identity.phone) {
     await admin
       .from("contacts")

@@ -36,6 +36,9 @@ export const AUDIT_ACTIONS = [
   "auth.logout",
   "auth.mfa_enrolled",
   "auth.mfa_success",
+  // #89: confiar neste dispositivo por 30 dias, e esquecer os dispositivos confiáveis.
+  "auth.mfa_device_trusted",
+  "auth.mfa_devices_forgotten",
   "auth.mfa_failed",
   "auth.recovery_code_used",
   "nuvemshop.connected",
@@ -474,6 +477,9 @@ export const AUDIT_ACTIONS = [
   "onboarding.agente_testado",
   "onboarding.agente_teste_pulado",
   "security.mfa_exigida",
+  // #89: a empresa permite (ou não) confiar no dispositivo na verificação em duas etapas.
+  "security.mfa_dispositivo_confiavel_permitido",
+  "security.mfa_dispositivo_confiavel_proibido",
   "security.mfa_dispensada",
   "security.mfa_desativada",
   // A porta recusou o provisionamento no signup, com `motivo` no metadata. Os
@@ -554,6 +560,15 @@ export const AUDIT_ACTIONS = [
   // negativa de um colega não teria explicação na trilha — nem como responder
   // "quando foi que desligaram isso?".
   "agenda.colegas_podem_mexer_alterado",
+  // O aviso de agendamento no WhatsApp do dono (migration 0753). Quatro códigos
+  // pela mesma razão dos do aviso de caso: "saiu", "não saiu em definitivo",
+  // "mudaram a configuração" e "mandaram o teste" são perguntas diferentes, e o
+  // painel filtra por `action`. SEM o texto e com o destino MASCARADO — o que
+  // entra no `api_audit_log` não sai pela cascata de LGPD.
+  "agenda.aviso_whatsapp_enviado",
+  "agenda.aviso_whatsapp_falhou",
+  "agenda.aviso_whatsapp_configurado",
+  "agenda.aviso_whatsapp_teste",
   // A rodada que AVISOU alguém do próprio compromisso. Mensagem que saiu para o
   // telefone de um cliente é efeito, e efeito audita — mas só a rodada que
   // enviou: a que varreu e não achou ninguém a avisar não é mutação.
@@ -913,6 +928,8 @@ export const AUDIT_ACTIONS = [
   "clinic.profissional_salvo",
   // FORK clinic (#97): o profissional grava o próprio registro no conselho.
   "clinic.profissional.proprios_dados",
+  // FORK clinic (#85): telefone extra adicionado/removido na ficha do paciente.
+  "clinic.paciente.telefone_extra",
   "clinic.tipo_especialidades_atualizadas",
   "clinic.bloqueio_criado",
   // FORK clinic (agenda S6b): encaixe sobre outro compromisso — autor, motivo e quem foi coberto.

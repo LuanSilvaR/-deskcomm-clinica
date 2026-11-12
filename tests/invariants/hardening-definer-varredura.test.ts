@@ -242,6 +242,20 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "função recusa tudo que não seja admin da própria organização.",
   },
   {
+    fn: "fn_definir_aviso_de_agendamento(uuid,boolean,uuid,text,boolean,boolean,text)",
+    razao:
+      "A ÚNICA porta de escrita de `config_aviso_de_agendamento` (migration 0707) — " +
+      "a tabela só tem `grant select` sob RLS de admin. PUT " +
+      "app/api/v1/agenda/aviso/route.ts chama com createClient da sessão. A função " +
+      "exige auth.uid(), fn_role_at_least(p_org,'admin'), " +
+      "fn_support_write_allowed(p_org) e fn_session_mfa_proven(); com número próprio, " +
+      "E.164, conexão DA organização e não arquivada, recusa do número da própria " +
+      "organização e de número que já é contato sem confirmação. " +
+      "tests/invariants/aviso-de-agendamento-escrita.test.ts prova agent e viewer " +
+      "recusados, admin aprovado, admin de OUTRA organização recusado, conexão do " +
+      "vizinho recusada e anon sem EXECUTE.",
+  },
+  {
     fn: "fn_vocabulario_de_tags_operar(uuid,text,text,text,text)",
     razao:
       "POST app/api/v1/tags/vocabulario/route.ts chama com createClient da " +
@@ -554,6 +568,12 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
     fn: "fn_clinic_definir_duracao_na_marcacao(uuid,boolean)",
     razao:
       "app/api/v1/clinic/config/route.ts (PATCH, opção duracao_na_marcacao) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_titulo_livre); só grava settings.clinic.duracao_na_marcacao. tests/invariants/clinic-duracao-na-marcacao-opcao.test.ts prova recusa a não-admin e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8019, pacientes #85).
+    fn: "fn_clinic_definir_varios_telefones(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, opção varios_telefones) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_duracao_na_marcacao); só grava settings.clinic.varios_telefones. tests/invariants/clinic-varios-telefones-opcao.test.ts prova recusa a não-admin e anon sem EXECUTE.",
   },
   {
     // FORK clinic (migration 8006, orçamento O1).

@@ -121,6 +121,14 @@ export function duracaoNaMarcacaoLigadaNaConfig(settings: unknown): boolean {
   return (clinic as Record<string, unknown>).duracao_na_marcacao === true;
 }
 
+/** `settings.clinic.varios_telefones` (migration 8019): a ficha adiciona e remove telefones extras (#85). Só `true` liga. */
+export function variosTelefonesLigadoNaConfig(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).varios_telefones === true;
+}
+
 /**
  * `settings.clinic.orcamentos` (migration 8006): orçamento → contrato, a começar
  * pela tabela de preços. Nasce desligado; só o booleano `true` liga.

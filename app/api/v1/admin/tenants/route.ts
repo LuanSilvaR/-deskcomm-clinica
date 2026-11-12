@@ -1,7 +1,7 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createTenantSchema } from "@/lib/schemas/tenant-creation";
 import { issueInvite } from "@/lib/auth/issue-invite";
-import { mfaEmDivida } from "@/lib/auth/server";
+import { mfaEmDividaEstrita } from "@/lib/auth/server";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
       requestId,
     });
   }
-  if (await mfaEmDivida())
+  if (await mfaEmDividaEstrita())
     return fail("mfa_required", "Confirme a verificação em duas etapas", 403, { requestId });
   const key = req.headers.get("Idempotency-Key") ?? randomUUID();
   if (!z.string().uuid().safeParse(key).success) {

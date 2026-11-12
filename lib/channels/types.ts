@@ -78,6 +78,14 @@ export interface RecipientInput {
    * `waIdentity.startsWith("lid:")` — justo o caso que a regra protege.
    */
   waLid?: string | null | undefined;
+  /**
+   * Endereço (chat) da última mensagem RECEBIDA na conversa, só quando a ficha
+   * tem telefone extra. Com dois números na mesma ficha, responder pelo principal
+   * sairia por número que a pessoa não usou nesta conversa; a resposta vai, então,
+   * pelo número que ela escreveu. Vem preenchido só nesse caso: ficha sem extra
+   * segue pela regra de sempre (`waLid`, depois o principal).
+   */
+  ultimoRecebidoChatId?: string | null;
 }
 
 /** Contato compartilhado (vcard) — só `kind: "contact"`. */
@@ -286,6 +294,14 @@ export interface ChannelAdapter {
     sessionRef: string;
     recipient: string;
   }): Promise<void>;
+
+  /**
+   * #84 — os grupos do WhatsApp em que o número desta conexão está (`chatId`
+   * termina em `@g.us`). Opcional: provider sem o método não lista grupos, e o
+   * aviso de agendamento em grupo não é oferecido para ele. LANÇA quando o
+   * transporte recusa — quem chama decide o que mostrar.
+   */
+  listGroups?(input: { sessionRef: string }): Promise<Array<{ chatId: string; subject: string | null }>>;
 
   /**
    * A conexão está de pé AGORA? Pergunta feita ao transporte, não ao banco.

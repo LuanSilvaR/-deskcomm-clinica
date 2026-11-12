@@ -2,6 +2,11 @@ import { requireAuth, isMfaEnrolled, resolveActiveOrg, requiresMfa } from "@/lib
 import { createAdminClient } from "@/lib/supabase/admin";
 import { empresaExigeMfa } from "@/lib/auth/politica-mfa";
 import { SecurityClient } from "./_client";
+import {
+  empresaPermiteDispositivoConfiavel,
+  listarDispositivosConfiaveis,
+  type DispositivoConfiavel,
+} from "@/lib/auth/dispositivo-confiavel";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +28,7 @@ export default async function SecurityPage() {
   const enrolled = await isMfaEnrolled();
 
   let empresaExige = false;
+  let empresaPermiteConfiavel = false;
   if (org) {
     const { data } = await createAdminClient()
       .from("organizations")
@@ -30,7 +36,12 @@ export default async function SecurityPage() {
       .eq("id", org.orgId)
       .maybeSingle();
     empresaExige = empresaExigeMfa(data?.settings);
+    empresaPermiteConfiavel = empresaPermiteDispositivoConfiavel(data?.settings);
   }
+  // #89: os dispositivos confiáveis desta conta. Erro de leitura = lista vazia.
+  const dispositivos: DispositivoConfiavel[] = enrolled
+    ? await listarDispositivosConfiaveis(user.id).catch(() => [])
+    : [];
 
   // A mesma função que o layout usa para decidir o bloqueio — a tela não pode
   // ter uma segunda noção de "é obrigatório", ou ofereceria desligar o que o
@@ -55,6 +66,8 @@ export default async function SecurityPage() {
         obrigatorio={obrigatorio}
         podeExigirDaEquipe={org?.role === "admin"}
         empresaExige={empresaExige}
+        empresaPermiteConfiavel={empresaPermiteConfiavel}
+        dispositivos={dispositivos}
       />
     </div>
   );

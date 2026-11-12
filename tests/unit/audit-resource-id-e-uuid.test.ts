@@ -55,6 +55,11 @@ const EXCECOES: Record<string, string> = {
   "pid": "parâmetro de rota /proposals/[pid] — é o uuid da proposta, o nome curto vem do path",
   "vid": "parâmetro de rota /versions/[vid] — uuid da versão",
   "String(lead.id)": "uuid do lead, convertido porque a origem é jsonb do webhook",
+  "string;":
+    "falso positivo do parser (#84): é a ANOTAÇÃO DE TIPO de `resourceId` nas interfaces " +
+    "`DepsDeGrupos.audit` (lib/grupos/servico.ts) e `AvisoDeAgendamentoDeps.audita` " +
+    "(lib/agenda/aviso-de-agendamento.ts), não uma chamada. As chamadas reais do aviso passam " +
+    "o uuid do agendamento; o recorte de grupos do fork não audita nada.",
   "string | null | undefined":
     "falso positivo do parser: é uma ANOTAÇÃO DE TIPO num componente, não uma chamada de audit",
 };

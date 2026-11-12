@@ -44,6 +44,7 @@ import {
   encaixeLigadoNaConfig,
   tituloLivreLigadoNaConfig,
   duracaoNaMarcacaoLigadaNaConfig,
+  variosTelefonesLigadoNaConfig,
   estoqueLigado,
   menuClinicaLigado,
   orcamentosLigado,
@@ -83,6 +84,8 @@ async function lerOpcoes(orgId: string) {
     titulo_livre: tituloLivreLigadoNaConfig(settings),
     // FORK clinic (#80)
     duracao_na_marcacao: duracaoNaMarcacaoLigadaNaConfig(settings),
+    // FORK clinic (#85)
+    varios_telefones: variosTelefonesLigadoNaConfig(settings),
     // FORK clinic (orçamento O1)
     orcamentos: orcamentosLigado(settings),
     orcamentos_desconto_max_pct: descontoMaxDaConfig(settings),
@@ -113,6 +116,7 @@ const patchSchema = z
     encaixe: z.boolean().optional(),
     titulo_livre: z.boolean().optional(),
     duracao_na_marcacao: z.boolean().optional(),
+    varios_telefones: z.boolean().optional(),
     orcamentos: z.boolean().optional(),
     orcamentos_desconto_max_pct: z.number().min(0).max(100).optional(),
   })
@@ -134,6 +138,7 @@ const FUNCAO_DA_OPCAO = {
   encaixe: "fn_clinic_definir_encaixe",
   titulo_livre: "fn_clinic_definir_titulo_livre",
   duracao_na_marcacao: "fn_clinic_definir_duracao_na_marcacao",
+  varios_telefones: "fn_clinic_definir_varios_telefones",
   orcamentos: "fn_clinic_definir_orcamentos",
 } as const;
 
@@ -226,7 +231,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "lembrete_com_reserva", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao", "orcamentos"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "lembrete_com_reserva", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao", "varios_telefones", "orcamentos"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });
