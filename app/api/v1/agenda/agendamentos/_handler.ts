@@ -1204,6 +1204,9 @@ async function fecharOLaco(
         event_type_name: args.nomeDoTipo,
         time_zone: args.fusoDoCompromisso,
         transicao: args.transicao,
+        // Quem fez ESTA mudança — a mesma régua da coluna `created_by_kind`; o aviso
+        // de agendamento (#84) diz "marcado pela IA" ou "pela equipe" a partir dele.
+        autor: autorParaCriacao(ctx.actor),
       },
       // `request_id` sem o prefixo `rule:` de propósito: ele correlaciona com o
       // audit log e NÃO aciona o anti-loop do motor, que só barra o que uma
