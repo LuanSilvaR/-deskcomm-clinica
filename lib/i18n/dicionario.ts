@@ -13174,6 +13174,12 @@ export const DICIONARIO: Traducoes = {
   "mínimo de 5 caracteres": { es: "mínimo 5 caracteres" },
   "Encaixando…": { es: "Agregando…" },
   "Confirmar encaixe": { es: "Confirmar sobrecupo" },
+  // #85 (upstream Spec 31 B1): os telefones da ficha.
+  "Principal": { es: "Principal" },
+  "Tem WhatsApp": { es: "Tiene WhatsApp" },
+  "Sem WhatsApp": { es: "Sin WhatsApp" },
+  "WhatsApp: não sabemos": { es: "WhatsApp: no sabemos" },
+  "Veio da junção de fichas": { es: "Vino de la unión de fichas" },
   "Escolha um tipo de agendamento.": { es: "Elija un tipo de cita." },
   "Escolha o paciente antes de confirmar.": { es: "Elija el paciente antes de confirmar." },
   "Escolha o paciente que será atendido.": { es: "Elija el paciente que será atendido." },
@@ -13189,6 +13195,23 @@ export const DICIONARIO: Traducoes = {
   "Permitir encaixe (marcar por cima de um horário ocupado, com motivo)": { es: "Permitir sobrecupo (agendar sobre un horario ocupado, con motivo)" },
   // FORK clinic (#80) — opção da duração escolhida na marcação.
   "Duração na marcação ligada": { es: "Duración al agendar activada" },
+  // #85 — a opção dos vários telefones e a edição na ficha.
+  "Adicionar telefone": { es: "Añadir teléfono" },
+  "Número com DDD": { es: "Número con código de área" },
+  "Trabalho, mãe, recado…": { es: "Trabajo, madre, recados…" },
+  "A opção de vários telefones na ficha está desligada.": { es: "La opción de varios teléfonos en la ficha está desactivada." },
+  "Telefone inválido. Use DDD e número.": { es: "Teléfono inválido. Use código de área y número." },
+  "Este número já é o telefone principal da ficha.": { es: "Este número ya es el teléfono principal de la ficha." },
+  "Este número já está em outra ficha.": { es: "Este número ya está en otra ficha." },
+  "Este número não está entre os telefones extras da ficha.": { es: "Este número no está entre los teléfonos adicionales de la ficha." },
+  "Telefones": { es: "Teléfonos" },
+  "Fixo": { es: "Fijo" },
+  "Celular": { es: "Celular" },
+  "Vários telefones na ficha ligados": { es: "Varios teléfonos en la ficha activados" },
+  "Vários telefones na ficha desligados": { es: "Varios teléfonos en la ficha desactivados" },
+  "Permitir guardar mais de um telefone na ficha do paciente (a mensagem de qualquer um deles cai na mesma ficha)": {
+    es: "Permitir guardar más de un teléfono en la ficha del paciente (el mensaje de cualquiera de ellos llega a la misma ficha)",
+  },
   "Duração na marcação desligada": { es: "Duración al agendar desactivada" },
   "Permitir ajustar a duração do atendimento ao marcar (o padrão continua sendo a do tipo)": {
     es: "Permitir ajustar la duración de la atención al agendar (el valor por defecto sigue siendo el del tipo)",

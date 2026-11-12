@@ -24,7 +24,7 @@ import { contarFaltas } from "@/lib/clinic/agenda/faltas";
 import { compromissosDePrimeiraVez, compromissosRemarcados } from "@/lib/clinic/agenda/primeira-vez";
 import { PERMISSAO_VER_OUTROS } from "@/lib/clinic/agenda/escopo-da-agenda";
 import type { InfoDoCompromisso, ProcedimentoDaAgenda, SalaDaAgenda } from "@/lib/clinic/agenda/filtros-da-agenda";
-import { filtrarContatosPelaBusca } from "@/lib/clinic/pacientes/busca-no-banco";
+import { filtrarContatosPelaBusca, idsPorTelefoneExtra } from "@/lib/clinic/pacientes/busca-no-banco";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
 
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       : Promise.resolve({ data: [], error: null }),
     contarFaltas(supabase, org, pacientes),
     lido.data.q && pacientes.length
-      ? filtrarContatosPelaBusca(supabase.from("contacts").select("id").eq("organization_id", org).in("id", pacientes), lido.data.q)
+      ? idsPorTelefoneExtra(supabase, org, lido.data.q).then((extras) => filtrarContatosPelaBusca(supabase.from("contacts").select("id").eq("organization_id", org).in("id", pacientes), lido.data.q!, extras))
       : Promise.resolve({ data: [], error: null }),
     // FORK clinic (agenda S4): "1ª vez" e "remarcado" — informação a mais, nunca derruba a rota.
     compromissosDePrimeiraVez(supabase, org, lista.map((a) => ({ id: a.id, contact_id: a.contact_id, inicio: a.starts_at }))),
