@@ -3,7 +3,7 @@
  * para o aviso de agendamento em grupo (#84, upstream #3460).
  *
  * O upstream tem o subsistema inteiro de grupos (a tabela que liga um grupo na
- * inbox, a chave "a IA responde neste grupo", o filtro de entrada no WAHA). O
+ * inbox, a chave "a IA responde neste grupo", o filtro de entrada do canal). O
  * fork ainda não tem nada disso: aqui fica SÓ a leitura — "em que grupos este
  * número está?" —, que é o que o aviso precisa para a tela mostrar os grupos e
  * para o servidor conferir que o grupo escolhido é desta conexão.
@@ -17,7 +17,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveSessionRef, CHANNEL_SESSION_REF_COLUMNS, type ChannelSessionRef } from "@/lib/channels/session-ref";
 import type { ChannelProvider } from "@/lib/channels/types";
-import { getWahaClient } from "@/lib/waha/client";
+import { getAdapter } from "@/lib/channels";
 
 export class GrupoError extends Error {
   constructor(
@@ -112,7 +112,16 @@ export async function listarGruposDoNumero(
   return [...daLista, ...orfaos];
 }
 
-/** As dependências de produção. Só o WAHA lista grupos no fork. */
+/** O adaptador do canal, se ele sabe listar grupos. Provider desconhecido = não sabe. */
+function listaGrupos(provider: ChannelProvider): ReturnType<typeof getAdapter> | null {
+  try {
+    const adapter = getAdapter(provider);
+    return adapter.listGroups ? adapter : null;
+  } catch {
+    return null;
+  }
+}
+
 export function criarDepsDeGrupos(admin: SupabaseClient): DepsDeGrupos {
   const naoSuportado = (): never => {
     throw new Error("grupos_na_inbox_indisponivel_no_fork");
@@ -134,7 +143,7 @@ export function criarDepsDeGrupos(admin: SupabaseClient): DepsDeGrupos {
         return {
           provider: ref.provider,
           sessionRef: resolveSessionRef(ref),
-          groupsCapability: ref.provider === "waha" ? "full" : "none",
+          groupsCapability: listaGrupos(ref.provider) ? "full" : "none",
         };
       },
       async listarLinhas() {
@@ -147,10 +156,9 @@ export function criarDepsDeGrupos(admin: SupabaseClient): DepsDeGrupos {
       definirIa: naoSuportado,
     },
     async listGroups(provider, sessionRef) {
-      if (provider !== "waha") return [];
-      const client = getWahaClient();
-      if (!client) return [];
-      return client.listarGrupos(sessionRef);
+      const adapter = listaGrupos(provider);
+      if (!adapter?.listGroups) return [];
+      return adapter.listGroups({ sessionRef });
     },
     async setGroupIntake() {
       return false;
