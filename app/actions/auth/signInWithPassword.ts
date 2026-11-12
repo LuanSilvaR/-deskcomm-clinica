@@ -4,6 +4,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { safeNext } from "@/lib/auth/safe-next";
+import { reconhecerDispositivoConfiavel } from "@/lib/auth/dispositivo-confiavel";
+import { logger } from "@/lib/logger";
 
 import { createClient } from "@/lib/supabase/server";
 import { loginSchema, type LoginInput } from "@/lib/auth/schemas";
@@ -90,14 +92,28 @@ export async function signInWithPassword(input: LoginInput, next?: string): Prom
   // complete the challenge in /login/mfa before reaching the app.
   const { data: factorsData } = await supabase.auth.mfa.listFactors();
   const verifiedTotp = factorsData?.totp?.find((f) => f.status === "verified");
-  if (verifiedTotp) {
+  // #89: este navegador é um dispositivo confiável válido (cookie + linha no banco,
+  // empresa permitindo)? Então a sessão nova é reconhecida e o código não é pedido.
+  // Falha ao reconhecer = pede o código (falha fechado).
+  const confiavel =
+    !!verifiedTotp &&
+    !!data.session &&
+    (await reconhecerDispositivoConfiavel(data.user.id, verifiedTotp.id, data.session.access_token).catch(
+      (e: unknown) => {
+        logger.error("mfa_dispositivo_confiavel_reconhecer_falhou", {
+          message: e instanceof Error ? e.message : String(e),
+        });
+        return false;
+      },
+    ));
+  if (verifiedTotp && !confiavel) {
     return { ok: false, error: "mfa_required", challengeId: verifiedTotp.id };
   }
 
   await audit({
     action: "auth.login_success",
     actorUserId: data.user.id,
-    metadata: {},
+    metadata: confiavel ? { mfa: "dispositivo_confiavel" } : {},
     requestId,
     ip,
     userAgent,

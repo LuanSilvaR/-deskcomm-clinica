@@ -36,6 +36,9 @@ export const AUDIT_ACTIONS = [
   "auth.logout",
   "auth.mfa_enrolled",
   "auth.mfa_success",
+  // #89: confiar neste dispositivo por 30 dias, e esquecer os dispositivos confiáveis.
+  "auth.mfa_device_trusted",
+  "auth.mfa_devices_forgotten",
   "auth.mfa_failed",
   "auth.recovery_code_used",
   "nuvemshop.connected",
@@ -474,6 +477,9 @@ export const AUDIT_ACTIONS = [
   "onboarding.agente_testado",
   "onboarding.agente_teste_pulado",
   "security.mfa_exigida",
+  // #89: a empresa permite (ou não) confiar no dispositivo na verificação em duas etapas.
+  "security.mfa_dispositivo_confiavel_permitido",
+  "security.mfa_dispositivo_confiavel_proibido",
   "security.mfa_dispensada",
   "security.mfa_desativada",
   // A porta recusou o provisionamento no signup, com `motivo` no metadata. Os

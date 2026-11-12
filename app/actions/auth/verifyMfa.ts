@@ -8,6 +8,12 @@ import { safeNext } from "@/lib/auth/safe-next";
 import { createClient } from "@/lib/supabase/server";
 import { audit } from "@/lib/audit";
 import { cookieSecure } from "@/lib/supabase/cookie-secure";
+import { logger } from "@/lib/logger";
+import {
+  confiarNesteDispositivo,
+  DIAS_DE_CONFIANCA,
+  dispositivoConfiavelPermitido,
+} from "@/lib/auth/dispositivo-confiavel";
 
 export type VerifyMfaResult =
   | { ok: false; error: "mfa_invalid" }
@@ -26,7 +32,7 @@ const MAX_ATTEMPTS = 3;
  * Note: per-cookie counter is MVP. Hardening = Upstash Redis sliding window
  * keyed on user_id + IP.
  */
-export async function verifyMfa(code: string, next?: string): Promise<VerifyMfaResult> {
+export async function verifyMfa(code: string, next?: string, confiar = false): Promise<VerifyMfaResult> {
   const supabase = await createClient();
   const hdrs = await headers();
   const requestId = hdrs.get("x-request-id");
@@ -107,6 +113,34 @@ export async function verifyMfa(code: string, next?: string): Promise<VerifyMfaR
     ip,
     userAgent,
   });
+
+  // #89: "confiar neste dispositivo por 30 dias". O pedido vem do navegador, mas
+  // a permissão é conferida aqui (todas as empresas do usuário precisam permitir).
+  // Falhar ao gravar não impede a entrada: só não lembra o dispositivo.
+  const lembrou =
+    confiar &&
+    (await dispositivoConfiavelPermitido(user.id)) &&
+    (await confiarNesteDispositivo(user.id, totp.id, userAgent).then(
+      () => true,
+      (e: unknown) => {
+        logger.error("mfa_dispositivo_confiavel_falhou", {
+          message: e instanceof Error ? e.message : String(e),
+        });
+        return false;
+      },
+    ));
+  if (lembrou) {
+    await audit({
+      action: "auth.mfa_device_trusted",
+      actorUserId: user.id,
+      resourceType: "user",
+      resourceId: user.id,
+      metadata: { dias: DIAS_DE_CONFIANCA },
+      requestId,
+      ip,
+      userAgent,
+    });
+  }
 
   redirect(safeNext(next, "/app"));
 }

@@ -19,9 +19,11 @@ import { MfaEnrollModal } from "@/components/auth/MfaEnrollModal";
 import { regenerateRecoveryCodes } from "@/app/actions/settings/regenerateRecoveryCodes";
 import { signOutEverywhere } from "@/app/actions/settings/signOutEverywhere";
 import {
+  definirDispositivoConfiavel,
   definirExigenciaDeMfa,
   desativarMfaDaConta,
 } from "@/app/actions/auth/politicaDeMfa";
+import { esquecerMeusDispositivosConfiaveis } from "@/app/actions/settings/esquecerDispositivosConfiaveis";
 import { PainelDeChamadaDeVoz } from "@/components/voice/PainelDeChamadaDeVoz";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -30,6 +32,8 @@ export function SecurityClient({
   obrigatorio,
   podeExigirDaEquipe,
   empresaExige,
+  empresaPermiteConfiavel = false,
+  dispositivos = [],
 }: {
   mfaEnrolled: boolean;
   /** A política obriga esta pessoa a ter a verificação? */
@@ -37,6 +41,10 @@ export function SecurityClient({
   /** Só admin muda a regra da empresa. */
   podeExigirDaEquipe: boolean;
   empresaExige: boolean;
+  /** #89: a empresa permite "confiar neste dispositivo por 30 dias". */
+  empresaPermiteConfiavel?: boolean;
+  /** #89: os dispositivos confiáveis desta conta, ainda no prazo. */
+  dispositivos?: Array<{ id: string; user_agent: string | null; created_at: string; last_used_at: string | null; expires_at: string }>;
 }) {
   const t = useT();
   const [codes, setCodes] = useState<string[] | null>(null);
@@ -157,6 +165,86 @@ export function SecurityClient({
               </span>
             </span>
           </label>
+        </Card>
+      ) : null}
+
+      {podeExigirDaEquipe ? (
+        <Card className="space-y-3 p-6">
+          <h2 className="text-sm font-semibold">{t("Confiar no dispositivo")}</h2>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={empresaPermiteConfiavel}
+              disabled={mexendo}
+              onChange={(e) => {
+                const marcar = e.target.checked;
+                startMexer(async () => {
+                  const r = await definirDispositivoConfiavel(marcar);
+                  if (!r.ok) {
+                    toast.error(t(r.erro));
+                    return;
+                  }
+                  toast.success(
+                    marcar
+                      ? t("A equipe já pode confiar no dispositivo por 30 dias.")
+                      : t("Ninguém mais pode confiar no dispositivo. Os dispositivos já confiáveis foram esquecidos."),
+                  );
+                  window.location.reload();
+                });
+              }}
+            />
+            <span>
+              {t("Permitir \"confiar neste dispositivo por 30 dias\" na verificação em duas etapas.")}
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {t(
+                  "Bom para o computador fixo da recepção: o código não é pedido de novo naquele navegador por 30 dias. Desligar faz todo mundo voltar a digitar o código no próximo acesso.",
+                )}
+              </span>
+            </span>
+          </label>
+        </Card>
+      ) : null}
+
+      {mfaEnrolled ? (
+        <Card className="space-y-3 p-6">
+          <h2 className="text-sm font-semibold">{t("Dispositivos confiáveis")}</h2>
+          {dispositivos.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t("Nenhum dispositivo confiável. O código é pedido em todo acesso.")}
+            </p>
+          ) : (
+            <>
+              <ul className="space-y-1 text-sm">
+                {dispositivos.map((d) => (
+                  <li key={d.id} className="flex flex-col">
+                    <span className="truncate">{d.user_agent ?? t("Navegador desconhecido")}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {t("Confiável até")} {new Date(d.expires_at).toLocaleDateString()}
+                      {d.last_used_at ? ` · ${t("último uso")} ${new Date(d.last_used_at).toLocaleDateString()}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                variant="outline"
+                disabled={mexendo}
+                onClick={() =>
+                  startMexer(async () => {
+                    const r = await esquecerMeusDispositivosConfiaveis();
+                    if (!r.ok) {
+                      toast.error(t(r.erro));
+                      return;
+                    }
+                    toast.success(t("Dispositivos esquecidos. O código será pedido no próximo acesso."));
+                    window.location.reload();
+                  })
+                }
+              >
+                {t("Esquecer todos os dispositivos")}
+              </Button>
+            </>
+          )}
         </Card>
       ) : null}
 

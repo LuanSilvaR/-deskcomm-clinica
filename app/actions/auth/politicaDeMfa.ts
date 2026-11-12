@@ -17,7 +17,8 @@ import { supportWriteError } from "@/lib/impersonate/support";
 import { revalidatePath } from "next/cache";
 
 import { audit } from "@/lib/audit";
-import { loadAuthUser, resolveActiveOrg, sessionAal, isMfaEnrolled, mfaEmDivida } from "@/lib/auth/server";
+import { loadAuthUser, resolveActiveOrg, sessionAal, isMfaEnrolled, mfaEmDivida, mfaEmDividaEstrita } from "@/lib/auth/server";
+import { esquecerDispositivosDaEmpresa } from "@/lib/auth/dispositivo-confiavel";
 import { empresaExigeMfa, exigeCadastroDeMfa } from "@/lib/auth/politica-mfa";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -163,5 +164,60 @@ export async function desativarMfaDaConta(): Promise<ResultadoDaPolitica> {
   });
 
   revalidatePath("/app", "layout");
+  return { ok: true };
+}
+
+/**
+ * #89 — a empresa permite (ou deixa de permitir) que seus membros marquem
+ * "confiar neste dispositivo por 30 dias" na verificação em duas etapas.
+ * Nasce DESLIGADO.
+ *
+ * Só admin. E pede o código provado NESTA sessão (`mfaEmDividaEstrita`): é uma
+ * escrita que RELAXA a segurança da empresa inteira, então quem entrou por um
+ * dispositivo confiável não pode ligá-la sem digitar o código.
+ *
+ * Desligar apaga na hora os dispositivos confiáveis dos membros: a partir dali,
+ * todo mundo volta a digitar o código no próximo login.
+ */
+export async function definirDispositivoConfiavel(permitir: boolean): Promise<ResultadoDaPolitica> {
+  const user = await loadAuthUser();
+  if (!user) return { ok: false, erro: "Sua sessão expirou. Entre de novo." };
+  if (supportWriteError(user.support)) return { ok: false, erro: "Acompanhamento somente leitura ou encerrado." };
+  const org = await resolveActiveOrg(user);
+  if (!org) return { ok: false, erro: "Nenhuma empresa ativa." };
+  if (org.role !== "admin") return { ok: false, erro: "Só um administrador pode mudar essa regra." };
+  if (await mfaEmDividaEstrita()) {
+    return { ok: false, erro: "Digite o código da verificação em duas etapas nesta sessão para mudar essa regra." };
+  }
+
+  const admin = createAdminClient();
+  const { data: atual, error: erroLeitura } = await admin
+    .from("organizations")
+    .select("settings")
+    .eq("id", org.orgId)
+    .maybeSingle();
+  if (erroLeitura) return { ok: false, erro: "Não consegui ler a configuração agora." };
+  const settings = (atual?.settings ?? {}) as Record<string, unknown>;
+  const security = (settings.security ?? {}) as Record<string, unknown>;
+  const novo = { ...settings, security: { ...security, mfa_dispositivo_confiavel: permitir } };
+  const { error } = await admin.from("organizations").update({ settings: novo }).eq("id", org.orgId);
+  if (error) return { ok: false, erro: "Não consegui salvar essa mudança agora." };
+
+  if (!permitir) {
+    try {
+      await esquecerDispositivosDaEmpresa(org.orgId);
+    } catch {
+      return { ok: false, erro: "A regra foi salva, mas não consegui apagar os dispositivos já confiáveis. Tente de novo." };
+    }
+  }
+
+  await audit({
+    action: permitir ? "security.mfa_dispositivo_confiavel_permitido" : "security.mfa_dispositivo_confiavel_proibido",
+    actorUserId: user.id,
+    organizationId: org.orgId,
+    resourceType: "organization",
+    resourceId: org.orgId,
+  });
+  revalidatePath("/app/settings/security");
   return { ok: true };
 }
