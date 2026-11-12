@@ -32,18 +32,19 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const { data, error } = await admin
     .from("clinic_atestados_anonimizacao")
-    .select("id, anonimizado_em, emitido_em, algoritmo, executor_nome:executor->>nome")
+    .select("id, contact_id, anonimizado_em, emitido_em, algoritmo, executor_nome:executor->>nome")
     .eq("organization_id", orgId)
     .eq("codigo_curto", codigo)
     .maybeSingle();
   if (error) return fail("internal_error", "Não foi possível conferir o código.", 500, { requestId });
   if (!data) return ok({ encontrado: false }, { requestId });
-  const l = data as { id: string; anonimizado_em: string; emitido_em: string; algoritmo: string; executor_nome: string | null };
+  const l = data as { id: string; contact_id: string; anonimizado_em: string; emitido_em: string; algoritmo: string; executor_nome: string | null };
   return ok(
     {
       encontrado: true,
       atestado: {
         id: l.id,
+        contact_id: l.contact_id,
         anonimizado_em: l.anonimizado_em,
         emitido_em: l.emitido_em,
         executor_nome: l.executor_nome,

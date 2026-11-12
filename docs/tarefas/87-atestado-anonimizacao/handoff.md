@@ -55,6 +55,7 @@ inexistente, e devolve a chave a **desligada**, apagando o que criou.
 | `evidence/87-atestado-anonimizacao/04-conferido.png`<br><img src="../../../evidence/87-atestado-anonimizacao/04-conferido.png" alt="foto 04" width="480"> | tela LGPD: o código digitado foi encontrado (data, autor, protocolo) |
 | `evidence/87-atestado-anonimizacao/05-nao-encontrado.png`<br><img src="../../../evidence/87-atestado-anonimizacao/05-nao-encontrado.png" alt="foto 05" width="480"> | um código inventado: "não encontrado" |
 | `evidence/87-atestado-anonimizacao/06-chave-desligada.png`<br><img src="../../../evidence/87-atestado-anonimizacao/06-chave-desligada.png" alt="foto 06" width="480"> | chave devolvida a desligada no fim do teste |
+| `evidence/87-atestado-anonimizacao/07-ficha-pelo-codigo.png`<br><img src="../../../evidence/87-atestado-anonimizacao/07-ficha-pelo-codigo.png" alt="foto 07" width="480"> | (#151) "Abrir ficha" depois de conferir o código: a ficha anonimizada, onde ficam o prontuário e os documentos guardados |
 
 Nota: ao fim do Playwright no Windows aparece `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` e o processo
 sai com 127 mesmo com "1 passed" — é um defeito conhecido do Node no Windows, não do teste.
@@ -130,6 +131,23 @@ Nenhuma impede o uso; ficam para um cartão de acabamento.
   digital real não é simulada nos testes; upload parcial não é limpo; sem marca cadastrada o atestado falha (igual ao
   prontuário). Todos os papéis saem em português; o suporte da plataforma aparece como "suporte da plataforma".
 - **Decisão:** as rotas não funcionam com a clínica suspensa (não mexemos na autenticação do núcleo para isso).
+
+## Paciente anonimizado volta e pede o prontuário (#151)
+Situação: a paciente foi anonimizada e, dias depois, volta e pede a cópia do prontuário (direito dela; o prontuário
+fica guardado). Como o nome foi apagado, buscar pelo nome não acha nada. O caminho é o **código do atestado**:
+
+1. Peça o atestado (ou só o código, ex.: `0BC8-2214-80BE-14D4`).
+2. Vá em **LGPD**, cole o código em **Conferir código** e clique em **Conferir**.
+3. Apareceu "Atestado encontrado"? Clique em **Abrir ficha**: abre a ficha anonimizada, com o prontuário,
+   os atendimentos e os documentos guardados. (Na lista "Atestados emitidos" cada linha também tem **Abrir ficha**.)
+4. O próprio PDF agora diz ao paciente: "Guarde este documento: o código acima é a forma de localizar os seus
+   registros guardados pela clínica."
+
+Limite: se a pessoa perdeu o atestado e não sabe o código, o sistema não liga a pessoa à ficha (é o preço de não
+guardar a identidade). Aí a clínica procura pela data do atendimento e pelo profissional, com a ajuda da paciente.
+A **auditoria** (Análise › Audit Log, filtro de ação `lgpd.anonymize_executed` e período) mostra quando foi, quem
+anonimizou e o início do id da ficha — mas também não guarda o nome. Por isso: **nunca escreva o nome do paciente na
+justificativa da anonimização** — a auditoria não se apaga e o nome ficaria lá para sempre.
 
 ## Massa de teste (pacientes de mentira para validar a mão)
 Arquivo: [massa-de-teste.sql](massa-de-teste.sql). Já foi aplicada no banco local; pode aplicar de novo sem duplicar nada
