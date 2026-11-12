@@ -75,6 +75,8 @@ interface Excecao {
  * linhas da OUTRA organização, não uma leitura como superusuário.
  */
 const PROVA_PROPRIA: readonly Excecao[] = [
+  { tabela: "config_aviso_de_agendamento", razao: "tests/invariants/aviso-de-agendamento-escrita.test.ts — dois tenants reais por JWT: admin lê só a própria organização, agent e viewer não leem nada, e a escrita direta por authenticated é negada nos três verbos (a única porta é fn_definir_aviso_de_agendamento, que revalida papel, suporte e MFA)" },
+  { tabela: "entregas_de_aviso_de_agendamento", razao: "tests/invariants/aviso-de-agendamento-escrita.test.ts — manager lê o histórico da própria organização e zero do vizinho; viewer lê zero; escrita direta por authenticated negada nos três verbos" },
   {
     tabela: "prospecting_settings",
     razao:

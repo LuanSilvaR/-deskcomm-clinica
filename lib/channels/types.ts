@@ -296,6 +296,14 @@ export interface ChannelAdapter {
   }): Promise<void>;
 
   /**
+   * #84 — os grupos do WhatsApp em que o número desta conexão está (`chatId`
+   * termina em `@g.us`). Opcional: provider sem o método não lista grupos, e o
+   * aviso de agendamento em grupo não é oferecido para ele. LANÇA quando o
+   * transporte recusa — quem chama decide o que mostrar.
+   */
+  listGroups?(input: { sessionRef: string }): Promise<Array<{ chatId: string; subject: string | null }>>;
+
+  /**
    * A conexão está de pé AGORA? Pergunta feita ao transporte, não ao banco.
    *
    * Existe porque o banco guarda o último estado que alguém CONTOU, e a falha

@@ -120,6 +120,10 @@ export interface ResultadoDaRetencao {
   avisos_de_caso_apagados: number;
   lotes_avisos_de_caso: number;
   avisos_de_caso_tem_resto: boolean;
+  /** O registro de entrega do aviso de agendamento no WhatsApp do dono (#84). */
+  avisos_de_agendamento_apagados: number;
+  lotes_avisos_de_agendamento: number;
+  avisos_de_agendamento_tem_resto: boolean;
   retencao_fila_dias: number;
   retencao_auditoria_dias: number;
   retencao_espelho_dias: number;
@@ -140,7 +144,8 @@ export interface PodaDb {
       | "fn_expurgar_nonces_de_oauth"
       | "fn_expurgar_conversa_do_caso_vencida"
       | "fn_expurgar_passagens_vencidas"
-      | "fn_expurgar_avisos_de_caso_vencidos",
+      | "fn_expurgar_avisos_de_caso_vencidos"
+      | "fn_expurgar_avisos_de_agendamento_vencidos",
     args: { p_retencao_dias: number; p_limite: number },
   ): Promise<{ data: number | null; error: { message: string } | null }>;
 }
@@ -154,7 +159,8 @@ async function drenar(
     | "fn_expurgar_nonces_de_oauth"
     | "fn_expurgar_conversa_do_caso_vencida"
     | "fn_expurgar_passagens_vencidas"
-    | "fn_expurgar_avisos_de_caso_vencidos",
+    | "fn_expurgar_avisos_de_caso_vencidos"
+    | "fn_expurgar_avisos_de_agendamento_vencidos",
   dias: number,
 ): Promise<{ apagadas: number; lotes: number; temResto: boolean }> {
   let apagadas = 0;
@@ -249,6 +255,9 @@ export async function podarHistorico(
   // poda aqui é volume de operação — e é a poda de horizonte mais curto das
   // sete, porque a única pergunta que a linha responde é de semanas.
   const avisosDeCaso = await drenar(db, "fn_expurgar_avisos_de_caso_vencidos", avisoDeCaso.dias);
+  // A do aviso de agendamento (#84) é a mesma pergunta de semanas sobre o mesmo
+  // canal, e por isso segue o MESMO knob e o mesmo piso do aviso de caso.
+  const avisosDeAgendamento = await drenar(db, "fn_expurgar_avisos_de_agendamento_vencidos", avisoDeCaso.dias);
 
   return {
     jobs_apagados: jobs.apagadas,
@@ -258,18 +267,21 @@ export async function podarHistorico(
     conversa_do_caso_apagada: conversas.apagadas,
     passagens_apagadas: passagens.apagadas,
     avisos_de_caso_apagados: avisosDeCaso.apagadas,
+    avisos_de_agendamento_apagados: avisosDeAgendamento.apagadas,
     lotes_fila: jobs.lotes,
     lotes_auditoria: linhas.lotes,
     lotes_espelho: eventos.lotes,
     lotes_conversa_do_caso: conversas.lotes,
     lotes_passagens: passagens.lotes,
     lotes_avisos_de_caso: avisosDeCaso.lotes,
+    lotes_avisos_de_agendamento: avisosDeAgendamento.lotes,
     fila_tem_resto: jobs.temResto,
     auditoria_tem_resto: linhas.temResto,
     espelho_tem_resto: eventos.temResto,
     conversa_do_caso_tem_resto: conversas.temResto,
     passagens_tem_resto: passagens.temResto,
     avisos_de_caso_tem_resto: avisosDeCaso.temResto,
+    avisos_de_agendamento_tem_resto: avisosDeAgendamento.temResto,
     retencao_fila_dias: fila.dias,
     retencao_auditoria_dias: auditoria.dias,
     retencao_espelho_dias: espelho.dias,
@@ -315,7 +327,9 @@ export function houveEfeito(resultado: ResultadoDaRetencao): boolean {
     // A sétima, pela MESMA razão: uma rodada que só apagou registro de entrega
     // de aviso vencido apagaria linhas e não deixaria registro — e o CLAUDE.md
     // manda auditar QUANDO HÁ EFEITO, nunca parar de auditar.
-    resultado.avisos_de_caso_apagados > 0
+    resultado.avisos_de_caso_apagados > 0 ||
+    // A do aviso de agendamento, pela mesma razão.
+    resultado.avisos_de_agendamento_apagados > 0
   );
 }
 
