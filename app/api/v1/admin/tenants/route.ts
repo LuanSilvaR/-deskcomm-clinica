@@ -8,6 +8,7 @@ import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { aplicarPacoteInicialClinica } from "@/lib/clinic/organizacao/pacote-inicial";
 import { createHash, randomUUID } from "node:crypto";
 
 // ---------------------------------------------------------------------------
@@ -206,6 +207,9 @@ export async function POST(req: NextRequest) {
     }
     return fail("internal_error", "Não foi possível criar a organização", 500, { requestId });
   }
+  // Fork clinic (#154): a clínica nasce com os módulos de clínica ligados.
+  // Só na criação de fato — a repetição idempotente não reaplica.
+  const pacoteClinica = org.created ? await aplicarPacoteInicialClinica(admin, org.id) : null;
   if (org.created) {
     await audit({
       action: "tenant.created_by_platform_admin",
@@ -247,6 +251,7 @@ export async function POST(req: NextRequest) {
       slug: org.slug,
       display_name: org.display_name,
       owner_invitation: ownerInvitation,
+      pacote_clinica_aplicado: pacoteClinica,
     },
     { status: 201, requestId },
   );
