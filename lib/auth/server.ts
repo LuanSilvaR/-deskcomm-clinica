@@ -445,5 +445,28 @@ export async function mfaEmDivida(): Promise<boolean> {
   //
   // Cadastrar e provar são perguntas diferentes. Quem TEM fator prova, sempre.
   if (!(await isMfaEnrolled())) return false;
+  if ((await sessionAal()) === "aal2") return false;
+  // #89: `aal1` com fator. Só o banco sabe se esta sessão foi reconhecida por um
+  // dispositivo confiável (`lib/auth/dispositivo-confiavel.ts`): pergunta à MESMA
+  // função que as definer cobram, para app e banco não divergirem. A exclusão do
+  // admin da plataforma também mora lá. FALHA FECHADO: qualquer erro na pergunta
+  // conta como "em dívida" — pede o código, nunca dispensa.
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_session_mfa_proven");
+    if (error) return true;
+    return data !== true;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * A mesma dívida, SEM aceitar dispositivo confiável (#89): quem tem fator precisa
+ * do `aal2` do GoTrue, o código provado nesta sessão. É a régua das rotas da
+ * PLATAFORMA (`/api/v1/admin/**`) e de quem LIGA a confiança na empresa.
+ */
+export async function mfaEmDividaEstrita(): Promise<boolean> {
+  if (!(await isMfaEnrolled())) return false;
   return (await sessionAal()) !== "aal2";
 }

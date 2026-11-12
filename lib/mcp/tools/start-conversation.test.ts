@@ -39,6 +39,16 @@ interface IdemState {
 function makeCtx(state: IdemState): McpContext {
   const supabase = {
     from: (table: string) => {
+      // Spec 31 B1 (#85): a busca do telefone extra lê `contact_phones`; sem extra na
+      // base do teste ela também volta vazia (`maybeSingle` com data nulo).
+      if (table === "contacts" || table === "contact_phones") {
+        const cadeia: Record<string, () => unknown> = {};
+        for (const metodo of ["select", "eq", "in", "is", "limit"]) {
+          cadeia[metodo] = () => cadeia;
+        }
+        cadeia["maybeSingle"] = () => Promise.resolve({ data: null, error: null });
+        return cadeia;
+      }
       if (table !== "idempotency_keys") throw new Error(`tabela inesperada: ${table}`);
       return {
         select: () => ({

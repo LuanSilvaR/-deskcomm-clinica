@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { permissoesNaPagina } from "@/lib/clinic/acesso/pagina";
+import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
 import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
 import { prazoDoPacienteHoras } from "@/lib/clinic/agenda/prazo-do-paciente";
 import { recursosLigados } from "@/lib/clinic/agenda/recursos";
@@ -18,6 +19,7 @@ import {
   tituloLivreLigadoNaConfig,
   atestadoAnonimizacaoLigadoNaConfig,
   duracaoNaMarcacaoLigadaNaConfig,
+  variosTelefonesLigadoNaConfig,
   estoqueLigado,
   orcamentosLigado,
   procedimentosLigados,
@@ -62,6 +64,7 @@ export default async function ProfissionaisPage() {
         ligadoInicial={clinicProfissionaisLigado(org?.settings)}
         fichaObrigatoriaInicial={fichaObrigatoriaLigada(org?.settings)}
         confirmacaoInicial={confirmacaoAutomaticaLigada(org?.settings)}
+        lembreteComReservaInicial={lembreteComReservaLigado(org?.settings)}
         travaInicial={travaSobreposicaoLigada(org?.settings)}
         recursosInicial={recursosLigados(org?.settings)}
         procedimentosInicial={procedimentosLigados(org?.settings)}
@@ -71,6 +74,7 @@ export default async function ProfissionaisPage() {
         tituloLivreInicial={tituloLivreLigadoNaConfig(org?.settings)}
         atestadoInicial={atestadoAnonimizacaoLigadoNaConfig(org?.settings)}
         duracaoNaMarcacaoInicial={duracaoNaMarcacaoLigadaNaConfig(org?.settings)}
+        variosTelefonesInicial={variosTelefonesLigadoNaConfig(org?.settings)}
         orcamentosInicial={orcamentosLigado(org?.settings)}
         prazoInicial={prazoDoPacienteHoras(org?.settings)}
         podeLigar={permissoes.has("configuracoes.opcoes_da_clinica")}

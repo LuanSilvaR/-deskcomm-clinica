@@ -2959,6 +2959,9 @@ export type Database = {
           owner_user_id: string | null
           reminder_sent_at: string | null
           reminder_sent_offsets_minutes: number[]
+          reminder_tentativas: Json
+          reminder_falha: string | null
+          reminder_falha_at: string | null
           rescheduled_from_id: string | null
           source: string
           starts_at: string
@@ -3025,6 +3028,9 @@ export type Database = {
           owner_user_id?: string | null
           reminder_sent_at?: string | null
           reminder_sent_offsets_minutes?: number[]
+          reminder_tentativas?: Json
+          reminder_falha?: string | null
+          reminder_falha_at?: string | null
           rescheduled_from_id?: string | null
           source?: string
           starts_at: string
@@ -3091,6 +3097,9 @@ export type Database = {
           owner_user_id?: string | null
           reminder_sent_at?: string | null
           reminder_sent_offsets_minutes?: number[]
+          reminder_tentativas?: Json
+          reminder_falha?: string | null
+          reminder_falha_at?: string | null
           rescheduled_from_id?: string | null
           source?: string
           starts_at?: string
@@ -3384,6 +3393,7 @@ export type Database = {
           reminder_enabled: boolean
           reminder_minutes_before: number
           reminder_extra_offsets_minutes: number[]
+          reminder_meta_template_id: string | null
           default_price_cents: number | null
           reminder_template_name: string | null
           requires_confirmation: boolean
@@ -3413,6 +3423,7 @@ export type Database = {
           reminder_enabled?: boolean
           reminder_minutes_before?: number
           reminder_extra_offsets_minutes?: number[]
+          reminder_meta_template_id?: string | null
           default_price_cents?: number | null
           reminder_template_name?: string | null
           requires_confirmation?: boolean
@@ -3442,6 +3453,7 @@ export type Database = {
           reminder_enabled?: boolean
           reminder_minutes_before?: number
           reminder_extra_offsets_minutes?: number[]
+          reminder_meta_template_id?: string | null
           default_price_cents?: number | null
           reminder_template_name?: string | null
           requires_confirmation?: boolean
@@ -3450,6 +3462,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "calendar_event_types_reminder_meta_template_fk"
+            columns: ["organization_id", "reminder_meta_template_id"]
+            isOneToOne: false
+            referencedRelation: "meta_templates"
+            referencedColumns: ["organization_id", "id"]
+          },
           {
             foreignKeyName: "calendar_event_types_organization_id_fkey"
             columns: ["organization_id"]
@@ -3984,6 +4003,63 @@ export type Database = {
           },
         ]
       }
+      contact_phones: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          organization_id: string
+          origem: string
+          phone_number: string
+          rotulo: string | null
+          tipo: string
+          updated_at: string
+          wa_lid: string | null
+          whatsapp: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          origem?: string
+          phone_number: string
+          rotulo?: string | null
+          tipo?: string
+          updated_at?: string
+          wa_lid?: string | null
+          whatsapp?: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          origem?: string
+          phone_number?: string
+          rotulo?: string | null
+          tipo?: string
+          updated_at?: string
+          wa_lid?: string | null
+          whatsapp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_phones_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_phones_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           ai_authorized_at: string | null
@@ -4019,6 +4095,8 @@ export type Database = {
           organization_id: string
           phone_lookup_at: string | null
           phone_number: string | null
+          phone_type: string | null
+          phone_whatsapp: string | null
           social_identity: string | null
           source: string
           source_metadata: Json
@@ -4060,6 +4138,8 @@ export type Database = {
           organization_id: string
           phone_lookup_at?: string | null
           phone_number?: string | null
+          phone_type?: string | null
+          phone_whatsapp?: string | null
           social_identity?: string | null
           source?: string
           source_metadata?: Json
@@ -4101,6 +4181,8 @@ export type Database = {
           organization_id?: string
           phone_lookup_at?: string | null
           phone_number?: string | null
+          phone_type?: string | null
+          phone_whatsapp?: string | null
           social_identity?: string | null
           source?: string
           source_metadata?: Json
@@ -9566,6 +9648,10 @@ export type Database = {
           p_pointer: string
         }
         Returns: string
+      }
+      fn_clinic_definir_lembrete_com_reserva: {
+        Args: { p_ligado: boolean; p_org: string }
+        Returns: Json
       }
       fn_role_at_least: {
         Args: { p_min: string; p_org: string }
