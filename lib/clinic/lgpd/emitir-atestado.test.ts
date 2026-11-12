@@ -223,6 +223,7 @@ describe("montarDocumentoDoAtestado", () => {
     expect(s).not.toContain("Código de autenticidade");
     expect(s).toContain("não registrado");
     expect(s).toContain("encarregado (DPO)");
+    expect(s).toContain("Guarde este documento: o código acima é a forma de localizar os seus registros");
     expect(s).not.toContain("Conferir código");
   });
 
