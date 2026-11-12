@@ -33,6 +33,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
+import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
 import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
 import { acessoPorPermissoesLigado } from "@/lib/clinic/acesso/modo";
 import { falhaDeAcesso } from "@/lib/clinic/acesso/erros-do-banco";
@@ -67,6 +68,8 @@ async function lerOpcoes(orgId: string) {
     profissionais: clinicProfissionaisLigado(settings),
     ficha_obrigatoria: fichaObrigatoriaLigada(settings),
     confirmacao_automatica: confirmacaoAutomaticaLigada(settings),
+    // FORK clinic (#83)
+    lembrete_com_reserva: lembreteComReservaLigado(settings),
     trava_sobreposicao: travaSobreposicaoLigada(settings),
     recursos: recursosLigados(settings),
     procedimentos: procedimentosLigados(settings),
@@ -101,6 +104,7 @@ const patchSchema = z
     profissionais: z.boolean().optional(),
     ficha_obrigatoria: z.boolean().optional(),
     confirmacao_automatica: z.boolean().optional(),
+    lembrete_com_reserva: z.boolean().optional(),
     trava_sobreposicao: z.boolean().optional(),
     recursos: z.boolean().optional(),
     procedimentos: z.boolean().optional(),
@@ -124,6 +128,7 @@ const FUNCAO_DA_OPCAO = {
   profissionais: "fn_clinic_definir_flag",
   ficha_obrigatoria: "fn_clinic_definir_ficha_obrigatoria",
   confirmacao_automatica: "fn_clinic_definir_confirmacao_automatica",
+  lembrete_com_reserva: "fn_clinic_definir_lembrete_com_reserva",
   trava_sobreposicao: "fn_clinic_definir_trava_sobreposicao",
   recursos: "fn_clinic_definir_recursos",
   menu_clinica: "fn_clinic_definir_menu_clinica",
@@ -226,7 +231,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao", "varios_telefones", "orcamentos"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "lembrete_com_reserva", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao", "varios_telefones", "orcamentos"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });
