@@ -11,8 +11,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ImpersonateButton } from "@/components/admin/ImpersonateButton";
+import { useAdminTenants } from "@/hooks/useAdminTenants";
+import { roleAtLeast } from "@/lib/auth/types";
+
+/** Fork #155: nome do cargo quando o administrador da plataforma é membro com cargo menor que admin. */
+const CARGO: Record<string, string> = { viewer: "Visualizador", agent: "Atendente", manager: "Gerente" };
 import { Button } from "@/components/ui/button";
 import { setActiveOrg } from "@/app/actions/shell/setActiveOrg";
 
@@ -22,6 +30,13 @@ export function TenantSwitcher() {
   const active = useActiveOrg();
   const transition = useOrganizationTransition();
   const [isPending, setPending] = useState(false);
+  // Fork #155: o administrador da plataforma acompanha qualquer organização
+  // ativa direto daqui. A lista só é buscada com o menu aberto (o conteúdo do
+  // menu só monta aberto), e o acompanhamento passa pela mesma rota da ficha
+  // (auditoria, MFA, 1 hora). O diálogo mora FORA do menu: o menu fecha ao
+  // escolher e desmontaria a confirmação junto.
+  const [alvo, setAlvo] = useState<{ id: string; nome: string } | null>(null);
+  const podeAcompanhar = user.is_platform_admin && !user.support;
   const switchTo = async (orgId: string) => {
     if (orgId === active?.orgId) return;
     flushSync(() => { setPending(true); transition.begin(t("Carregando organização…")); });
@@ -40,6 +55,7 @@ export function TenantSwitcher() {
   if (user.organizations.length <= 1 && !user.is_platform_admin) return null;
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         {/*
@@ -87,13 +103,53 @@ export function TenantSwitcher() {
             className="flex items-center justify-between"
           >
             <span className="truncate">{org.organization_name}</span>
-            {active?.orgId === org.organization_id && <span className="text-xs text-muted-foreground">✓</span>}
+            <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+              {user.is_platform_admin && !roleAtLeast(org.role, "admin") && (
+                <span data-testid={`tenant-switcher-cargo-${org.organization_id}`}>{t(CARGO[org.role] ?? org.role)}</span>
+              )}
+              {active?.orgId === org.organization_id && <span>✓</span>}
+            </span>
           </DropdownMenuItem>
         ))}
+        {podeAcompanhar && <AcompanharComoAdministrador onEscolher={setAlvo} />}
         {user.is_platform_admin && <DropdownMenuItem asChild>
           <Link href="/admin/tenants">{t("Gerenciar organizações")}</Link>
         </DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
+    {alvo && (
+      <ImpersonateButton
+        organizationId={alvo.id}
+        displayName={alvo.nome}
+        open
+        onOpenChange={(v) => { if (!v) setAlvo(null); }}
+      />
+    )}
+    </>
+  );
+}
+
+/** Fork #155: só monta para administrador da plataforma e com o menu aberto. */
+function AcompanharComoAdministrador({ onEscolher }: { onEscolher: (alvo: { id: string; nome: string }) => void }) {
+  const t = useT();
+  const tenants = useAdminTenants({ status: "active" });
+  const ativas = (tenants.data?.pages.flatMap((p) => p.data ?? []) ?? []).filter((o) => o.status === "active");
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+        {t("Acompanhar como administrador (todos os menus)")}
+      </DropdownMenuLabel>
+      {tenants.isLoading && <DropdownMenuItem disabled>{t("Carregando...")}</DropdownMenuItem>}
+      {ativas.map((o) => (
+        <DropdownMenuItem
+          key={o.id}
+          data-testid={`tenant-switcher-acompanhar-${o.id}`}
+          onClick={() => onEscolher({ id: o.id, nome: o.display_name })}
+        >
+          <span className="truncate">{o.display_name}</span>
+        </DropdownMenuItem>
+      ))}
+    </>
   );
 }

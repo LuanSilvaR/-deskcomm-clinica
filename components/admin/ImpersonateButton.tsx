@@ -33,6 +33,14 @@ interface ImpersonateButtonProps {
   displayName: string;
   disabled?: boolean;
   disabledReason?: string;
+  /** Fork #155: botão pequeno "Acompanhar" (linha da lista de tenants). */
+  compact?: boolean;
+  /**
+   * Fork #155: diálogo controlado por fora, sem botão próprio (o seletor de
+   * empresa abre a confirmação a partir de um item do menu).
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function ImpersonateButton({
@@ -40,11 +48,17 @@ export function ImpersonateButton({
   displayName,
   disabled,
   disabledReason,
+  compact,
+  open: openControlado,
+  onOpenChange,
 }: ImpersonateButtonProps) {
   const t = useT();
   const transition = useOrganizationTransition();
   const [readonly, setReadonly] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [openInterno, setOpenInterno] = useState(false);
+  const controlado = openControlado !== undefined;
+  const open = controlado ? openControlado : openInterno;
+  const setOpen = (v: boolean) => { if (!controlado) setOpenInterno(v); onOpenChange?.(v); };
   const [busy, setBusy] = useState(false);
 
   async function handleConfirm() {
@@ -83,9 +97,10 @@ export function ImpersonateButton({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
+      {!controlado && <AlertDialogTrigger asChild>
         <Button
-          className="w-full"
+          className={compact ? undefined : "w-full"}
+          size={compact ? "sm" : undefined}
           variant="outline"
           disabled={disabled}
           aria-label={
@@ -95,9 +110,9 @@ export function ImpersonateButton({
           }
           title={disabled ? disabledReason : undefined}
         >
-          {t("Acompanhar organização")}
+          {compact ? t("Acompanhar") : t("Acompanhar organização")}
         </Button>
-      </AlertDialogTrigger>
+      </AlertDialogTrigger>}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("Iniciar acompanhamento?")}</AlertDialogTitle>

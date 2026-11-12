@@ -1,5 +1,6 @@
 "use client";
 
+import { ImpersonateButton } from "@/components/admin/ImpersonateButton";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -161,7 +162,7 @@ export function TenantsTable({
               <TableHead className="w-[70px] text-right">{t("Users")}</TableHead>
               <TableHead className="w-[90px] text-right">{t("Conversas")}</TableHead>
               <TableHead className="w-[90px]">{t("Criado em")}</TableHead>
-              <TableHead className="w-[60px]" />
+              <TableHead className="w-[170px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -185,12 +186,22 @@ export function TenantsTable({
                   {formatDate(row.created_at, tagDoIdioma)}
                 </TableCell>
                 <TableCell>
-                  <Link
-                    href={`/admin/tenants/${row.id}`}
-                    className="text-xs font-medium text-accent hover:underline"
-                  >
-                    {t("Ver")}
-                  </Link>
+                  <div className="flex items-center justify-end gap-3">
+                    {/* Fork #155: acompanhar direto da lista, sem abrir a ficha. */}
+                    <ImpersonateButton
+                      compact
+                      organizationId={row.id}
+                      displayName={row.display_name}
+                      disabled={row.status !== "active"}
+                      disabledReason={row.status !== "active" ? t("Só dá para acompanhar organização ativa") : undefined}
+                    />
+                    <Link
+                      href={`/admin/tenants/${row.id}`}
+                      className="text-xs font-medium text-accent hover:underline"
+                    >
+                      {t("Ver")}
+                    </Link>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
