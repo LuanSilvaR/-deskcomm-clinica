@@ -3280,6 +3280,9 @@ export const DICIONARIO: Traducoes = {
   "Acompanhar": { es: "Dar seguimiento" },
   "Acompanhe": { es: "Da seguimiento a" },
   "Acompanhar organização": { es: "Dar seguimiento a la organización" },
+  // Fork #155: acompanhar direto da lista de tenants e do seletor de empresa.
+  "Acompanhar como administrador (todos os menus)": { es: "Dar seguimiento como administrador (todos los menús)" },
+  "Só dá para acompanhar organização ativa": { es: "Solo se puede dar seguimiento a una organización activa" },
   "Iniciar acompanhamento?": { es: "¿Iniciar seguimiento?" },
   "com sua identidade de administrador. As ações pelo aplicativo serão registradas em seu nome. O acesso dura até uma hora.": { es: "con tu identidad de administrador. Las acciones que hagas en la aplicación quedarán registradas a tu nombre. El acceso dura hasta una hora." },
   "Acompanhamento encerrado": { es: "Seguimiento finalizado" },
