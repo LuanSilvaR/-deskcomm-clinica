@@ -19,6 +19,7 @@ interface Props {
   ligadoInicial: boolean;
   fichaObrigatoriaInicial: boolean;
   confirmacaoInicial: boolean;
+  lembreteComReservaInicial: boolean;
   travaInicial: boolean;
   recursosInicial: boolean;
   procedimentosInicial: boolean;
@@ -28,6 +29,8 @@ interface Props {
   encaixeInicial?: boolean;
   /** FORK clinic (#81): `settings.clinic.titulo_livre`. */
   tituloLivreInicial?: boolean;
+  /** FORK clinic (#85): `settings.clinic.varios_telefones`. */
+  variosTelefonesInicial?: boolean;
   /** FORK clinic (#87): `settings.clinic.atestado_anonimizacao`. */
   atestadoInicial?: boolean;
   /** FORK clinic (#80): `settings.clinic.duracao_na_marcacao`. */
@@ -44,6 +47,7 @@ export function ProfissionaisClient({
   ligadoInicial,
   fichaObrigatoriaInicial,
   confirmacaoInicial,
+  lembreteComReservaInicial,
   travaInicial,
   recursosInicial,
   procedimentosInicial,
@@ -51,6 +55,7 @@ export function ProfissionaisClient({
   estoqueInicial,
   encaixeInicial = false,
   tituloLivreInicial = false,
+  variosTelefonesInicial = false,
   atestadoInicial = false,
   duracaoNaMarcacaoInicial = false,
   orcamentosInicial = false,
@@ -63,6 +68,7 @@ export function ProfissionaisClient({
   const [ligado, setLigado] = useState(ligadoInicial);
   const [fichaObrigatoria, setFichaObrigatoria] = useState(fichaObrigatoriaInicial);
   const [confirmacao, setConfirmacao] = useState(confirmacaoInicial);
+  const [reserva, setReserva] = useState(lembreteComReservaInicial);
   const [trava, setTrava] = useState(travaInicial);
   const [recursos, setRecursos] = useState(recursosInicial);
   const [procedimentos, setProcedimentos] = useState(procedimentosInicial);
@@ -71,6 +77,7 @@ export function ProfissionaisClient({
   const [orcamentos, setOrcamentos] = useState(orcamentosInicial);
   const [encaixe, setEncaixe] = useState(encaixeInicial);
   const [tituloLivre, setTituloLivre] = useState(tituloLivreInicial);
+  const [variosTelefones, setVariosTelefones] = useState(variosTelefonesInicial);
   const [atestado, setAtestado] = useState(atestadoInicial);
   const queryClient = useQueryClient();
   const [duracaoNaMarcacao, setDuracaoNaMarcacao] = useState(duracaoNaMarcacaoInicial);
@@ -105,6 +112,13 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { titulo_livre: boolean } }>("/api/v1/clinic/config", { titulo_livre: valor }),
     onSuccess: (r) => setTituloLivre(r.data.titulo_livre),
+    onError: showApiError,
+  });
+
+  const alternarVariosTelefones = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { varios_telefones: boolean } }>("/api/v1/clinic/config", { varios_telefones: valor }),
+    onSuccess: (r) => setVariosTelefones(r.data.varios_telefones),
     onError: showApiError,
   });
 
@@ -157,6 +171,15 @@ export function ProfissionaisClient({
     mutationFn: (valor: boolean) =>
       apiClient.patch<{ data: { trava_sobreposicao: boolean } }>("/api/v1/clinic/config", { trava_sobreposicao: valor }),
     onSuccess: (r) => setTrava(r.data.trava_sobreposicao),
+    onError: showApiError,
+  });
+
+  const alternarReserva = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { lembrete_com_reserva: boolean } }>("/api/v1/clinic/config", {
+        lembrete_com_reserva: valor,
+      }),
+    onSuccess: (r) => setReserva(r.data.lembrete_com_reserva),
     onError: showApiError,
   });
 
@@ -264,6 +287,28 @@ export function ProfissionaisClient({
               onClick={() => alternarConfirmacao.mutate(!confirmacao)}
             >
               {confirmacao ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${reserva ? "" : "bg-muted"}`}
+          data-testid="clinic-lembrete-reserva"
+        >
+          <div>
+            <p className="font-medium">{t("Lembrete pelo número oficial, com reserva pelo QR code")}</p>
+            <p className="text-sm text-text-muted">
+              {t("O lembrete sai primeiro pelo número oficial da Meta. Se ele não puder enviar, sai pelo número conectado por QR code.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-lembrete-reserva-alternar"
+              variant={reserva ? "outline" : "default"}
+              disabled={alternarReserva.isPending}
+              onClick={() => alternarReserva.mutate(!reserva)}
+            >
+              {reserva ? t("Desligar") : t("Ligar")}
             </Button>
           ) : null}
         </section>
@@ -458,6 +503,29 @@ export function ProfissionaisClient({
               onClick={() => alternarTituloLivre.mutate(!tituloLivre)}
             >
               {tituloLivre ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${variosTelefones ? "" : "bg-muted"}`}
+          data-testid="clinic-varios-telefones"
+        >
+          <div>
+            <p className="font-medium">{variosTelefones ? t("Vários telefones na ficha ligados") : t("Vários telefones na ficha desligados")}</p>
+            <p className="text-sm text-text-muted">
+              {t("Permitir guardar mais de um telefone na ficha do paciente (a mensagem de qualquer um deles cai na mesma ficha)")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-varios-telefones-alternar"
+              variant={variosTelefones ? "outline" : "default"}
+              disabled={alternarVariosTelefones.isPending}
+              aria-label={t("Permitir guardar mais de um telefone na ficha do paciente (a mensagem de qualquer um deles cai na mesma ficha)")}
+              onClick={() => alternarVariosTelefones.mutate(!variosTelefones)}
+            >
+              {variosTelefones ? t("Desligar") : t("Ligar")}
             </Button>
           ) : null}
         </section>

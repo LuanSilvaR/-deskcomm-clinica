@@ -6,6 +6,9 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
 import { clientePelaAgendaLigado, colegasPodemMexerNaAgendaLigado } from "@/lib/schemas/settings";
+import { modelosQueOLembreteEnvia } from "@/lib/agenda/lembrete-por-modelo";
+import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
+import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
 import { nomesDosAtendentes } from "@/lib/users/nome-do-atendente";
 
 import { TiposDeAgendamentoClient, type TipoRow } from "./_client";
@@ -51,7 +54,7 @@ export default async function TiposDeAgendamentoPage() {
     supabase
       .from("calendar_event_types")
       .select(
-        "id, name, slug, description, category, duration_minutes, location_kind, location_details, default_owner_user_id, requires_confirmation, is_active, reminder_enabled, reminder_minutes_before, reminder_extra_offsets_minutes, reminder_body, reminder_bodies, default_price_cents",
+        "id, name, slug, description, category, duration_minutes, location_kind, location_details, default_owner_user_id, requires_confirmation, is_active, reminder_enabled, reminder_minutes_before, reminder_extra_offsets_minutes, reminder_body, reminder_bodies, reminder_meta_template_id, default_price_cents",
       )
       .eq("organization_id", activeOrg.orgId)
       .order("is_active", { ascending: false })
@@ -82,6 +85,22 @@ export default async function TiposDeAgendamentoPage() {
   // declarada, e o fallback abaixo volta ao rótulo de hoje. Degrada, não some.
   const nomes = await nomesDosAtendentes((pessoas ?? []).map((p) => String(p.user_id)));
 
+  // #83: o seletor de modelo só existe com a chave da clínica ligada; sem ela
+  // nem se consulta a lista. Falha ao ler = lista vazia (a tela segue de pé).
+  const reservaLigada = lembreteComReservaLigado(org?.settings);
+  let modelosDoLembrete: Array<{ id: string; name: string; language: string }> = [];
+  if (reservaLigada) {
+    try {
+      modelosDoLembrete = (await modelosQueOLembreteEnvia(supabase, activeOrg.orgId)).map((m) => ({
+        id: m.id,
+        name: m.name,
+        language: m.language,
+      }));
+    } catch {
+      modelosDoLembrete = [];
+    }
+  }
+
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       <header>
@@ -92,6 +111,9 @@ export default async function TiposDeAgendamentoPage() {
       </header>
       <TiposDeAgendamentoClient
         tiposIniciais={(tipos ?? []) as TipoRow[]}
+        lembreteComReservaLigado={reservaLigada}
+        confirmacaoAutomaticaLigada={confirmacaoAutomaticaLigada(org?.settings)}
+        modelosDoLembrete={modelosDoLembrete}
         pessoas={(pessoas ?? []).map((p) => ({
           id: String(p.user_id),
           papel: String(p.role),

@@ -124,6 +124,8 @@ export const MODULOS_CLINICA: readonly ModuloClinica[] = [
       { href: "/app/agenda/faltas", secao: "O dia da agenda" },
       { href: "/app/agenda/indicadores", secao: "Indicadores" },
       { href: "/app/settings/tenant/agenda", secao: "Ajustes da agenda" },
+      // FORK clinic (#84): o aviso de agendamento no WhatsApp do dono e num grupo (só admin).
+      { href: "/app/agenda/avisos", secao: "Ajustes da agenda" },
     ],
   },
   {

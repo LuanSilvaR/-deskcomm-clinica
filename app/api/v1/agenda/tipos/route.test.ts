@@ -34,11 +34,13 @@ import { fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import type { AuthUser } from "@/lib/auth/types";
 import { listaTiposDeAtendimento } from "@/lib/agenda/consulta";
+import { modelosQueOLembreteEnvia } from "@/lib/agenda/lembrete-por-modelo";
 
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("@/lib/agenda/consulta", () => ({ listaTiposDeAtendimento: vi.fn() }));
+vi.mock("@/lib/agenda/lembrete-por-modelo", () => ({ modelosQueOLembreteEnvia: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -480,5 +482,90 @@ describe("GET /api/v1/agenda/tipos", () => {
     expect(corpo.data[0]?.reminder_minutes_before).toBe(180);
     expect(corpo.data[0]?.reminder_body).toBe("Oi {{nome}}, te espero {{dia}} às {{hora}}.");
     expect(corpo.data[0]?.reminder_bodies).toEqual({});
+  });
+});
+
+describe("modelo aprovado do lembrete (#83)", () => {
+  const MODELO_UTIL = "77777777-7777-4777-8777-777777777777";
+  const MODELO_DE_FORA = "88888888-8888-4888-8888-888888888888";
+
+  function modelosUtilizaveis() {
+    vi.mocked(modelosQueOLembreteEnvia).mockResolvedValue([
+      { id: MODELO_UTIL, name: "lembrete", language: "pt_BR", status: "APPROVED", channel_session_id: "s1", parameter_format: "POSITIONAL", components: [] },
+    ]);
+  }
+
+  it("aceita modelo utilizável da org, e consulta só a org da sessão", async () => {
+    authOk();
+    modelosUtilizaveis();
+    const linhas = [linha({ id: TIPO_DA_ORG, organization_id: ORG })];
+    makeAdmin(linhas);
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(req("PATCH", { id: TIPO_DA_ORG, reminder_meta_template_id: MODELO_UTIL }));
+
+    expect(res.status).toBe(200);
+    expect(linhas[0]?.reminder_meta_template_id).toBe(MODELO_UTIL);
+    expect(vi.mocked(modelosQueOLembreteEnvia).mock.calls[0]?.[1]).toBe(ORG);
+  });
+
+  it("recusa modelo de outra org ou não aprovado com 422, sem escrever", async () => {
+    authOk();
+    modelosUtilizaveis();
+    const linhas = [linha({ id: TIPO_DA_ORG, organization_id: ORG })];
+    const { escritas } = makeAdmin(linhas);
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(req("PATCH", { id: TIPO_DA_ORG, reminder_meta_template_id: MODELO_DE_FORA }));
+
+    expect(res.status).toBe(422);
+    const erro = (await corpoDeErro(res)).error;
+    expect(erro.code).toBe("validation_failed");
+    expect(erro.message).toBe("Esse modelo não pode ser usado no lembrete.");
+    expect(escritas).toHaveLength(0);
+  });
+
+  it("POST: modelo inutilizável → 422 validation_failed, sem inserir", async () => {
+    authOk();
+    modelosUtilizaveis();
+    const linhas: Linha[] = [];
+    const { escritas } = makeAdmin(linhas);
+    const { POST } = await import("./route");
+
+    const res = await POST(
+      req("POST", {
+        name: "Retorno",
+        category: "retorno",
+        duration_minutes: 15,
+        location_kind: "in_person",
+        reminder_meta_template_id: MODELO_DE_FORA,
+      }),
+    );
+
+    expect(res.status).toBe(422);
+    expect((await corpoDeErro(res)).error.code).toBe("validation_failed");
+    expect(escritas).toHaveLength(0);
+    expect(linhas).toHaveLength(0);
+  });
+
+  it("aceita null para limpar, sem consultar modelos", async () => {
+    authOk();
+    const linhas = [linha({ id: TIPO_DA_ORG, organization_id: ORG, reminder_meta_template_id: MODELO_UTIL })];
+    makeAdmin(linhas);
+    const { PATCH } = await import("./route");
+
+    const res = await PATCH(req("PATCH", { id: TIPO_DA_ORG, reminder_meta_template_id: null }));
+
+    expect(res.status).toBe(200);
+    expect(linhas[0]?.reminder_meta_template_id).toBeNull();
+    expect(modelosQueOLembreteEnvia).not.toHaveBeenCalled();
+  });
+
+  it("recusa id que não é uuid", async () => {
+    authOk();
+    makeAdmin([linha({ id: TIPO_DA_ORG, organization_id: ORG })]);
+    const { PATCH } = await import("./route");
+    const res = await PATCH(req("PATCH", { id: TIPO_DA_ORG, reminder_meta_template_id: "x" }));
+    expect(res.status).toBe(422);
   });
 });

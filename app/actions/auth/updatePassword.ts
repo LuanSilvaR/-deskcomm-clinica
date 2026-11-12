@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/auth/schemas";
 import { audit } from "@/lib/audit";
+import { esquecerDispositivosConfiaveis } from "@/lib/auth/dispositivo-confiavel";
+import { logger } from "@/lib/logger";
 
 export type UpdatePasswordResult = {
   ok: false;
@@ -84,6 +86,14 @@ export async function updatePassword(
     });
     return { ok: false, error: "update_failed" };
   }
+
+  // #89: senha nova = nenhum navegador continua confiável. Falhar aqui não desfaz a
+  // troca de senha, mas fica registrado.
+  await esquecerDispositivosConfiaveis(user.id).catch((e: unknown) => {
+    logger.error("mfa_dispositivos_nao_esquecidos_na_troca_de_senha", {
+      message: e instanceof Error ? e.message : String(e),
+    });
+  });
 
   await audit({
     action: "auth.password_reset_completed",

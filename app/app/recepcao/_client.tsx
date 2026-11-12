@@ -37,6 +37,9 @@ interface ItemDoDia {
   confirmacao: string | null;
   /** 9006: por que o paciente não pôde responder. */
   confirmacao_falha: string | null;
+  /** #83: motivo do lembrete com reserva; só vem com a chave da clínica ligada. */
+  lembrete_falha?: string | null;
+  lembrete_tentativas?: number;
 }
 
 const CHAVE_BASE = ["clinic", "recepcao"] as const;
@@ -158,7 +161,7 @@ export function PainelDaRecepcao({
                       <div className="flex items-center justify-between gap-2">
                         <span className="flex flex-wrap items-center gap-1">
                           <SeloDaVisita status={i.status} />
-                          {coluna === "agendado" ? <SeloDaConfirmacao status={i.confirmacao} falha={i.confirmacao_falha} /> : null}
+                          {coluna === "agendado" ? <SeloDaConfirmacao status={i.confirmacao} falha={i.confirmacao_falha} falhaDoLembrete={i.lembrete_falha} tentativasDoLembrete={i.lembrete_tentativas} /> : null}
                         </span>
                         {min !== null && coluna !== "agendado" && coluna !== "finalizado" ? (
                           <span className="text-xs text-text-muted">

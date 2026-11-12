@@ -67,6 +67,24 @@ export interface ContactSnapshot {
   last_activity_at: string | null;
   /** Primeiro atendimento marcado. Sobrevive à anonimização: é registro de operação. */
   first_service_at: string | null;
+  /**
+   * Os telefones EXTRAS da ficha (#85, upstream Spec 31 B1), com o `lid` do
+   * WhatsApp de cada número. Ausente quando a ficha não tem extra: o `data.json`
+   * dela sai como saía antes (a chave só aparece quando há o que entregar).
+   */
+  additional_phones?: ContactPhoneSnapshot[];
+}
+
+/** Um telefone extra da ficha, como o titular o recebe (#85). */
+export interface ContactPhoneSnapshot {
+  phone_number: string;
+  tipo: string;
+  whatsapp: string;
+  rotulo: string | null;
+  origem: string;
+  /** O `lid` do WhatsApp DAQUELE número. */
+  wa_lid: string | null;
+  created_at: string;
 }
 
 export interface ConsentRow {
@@ -723,6 +741,33 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
         first_service_at: data.first_service_at ?? null,
       };
     }
+  }
+
+  // (#85) Os telefones extras da ficha, com o `lid` de cada número. A consulta
+  // filtra organização e ficha: o cliente é o administrador (sem RLS).
+  if (contactId) {
+    const { data, error } = await admin
+      .from("contact_phones")
+      .select("phone_number, tipo, whatsapp, rotulo, origem, wa_lid, created_at")
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: true });
+    if (error) {
+      logger.warn("[lgpd-export-worker] contact phones load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    }
+    const telefonesExtras: ContactPhoneSnapshot[] = (data ?? []).map((t) => ({
+      phone_number: t.phone_number,
+      tipo: t.tipo,
+      whatsapp: t.whatsapp,
+      rotulo: t.rotulo ?? null,
+      origem: t.origem,
+      wa_lid: t.wa_lid ?? null,
+      created_at: t.created_at,
+    }));
+    if (contact && telefonesExtras.length > 0) contact.additional_phones = telefonesExtras;
   }
 
   // No `consents` table in current schema; legal basis is in contacts.consent JSONB.

@@ -26,6 +26,8 @@ import {
   interpretarResposta,
   type RespostaDeConfirmacao,
 } from "./resposta";
+import { aguardaAReservaDaMeta } from "../lembrete-com-reserva/falha-avisada-depois";
+import { lembreteComReservaLigado } from "../lembrete-com-reserva/regra";
 import type { StatusDaConfirmacao } from "./status";
 
 type Admin = SupabaseClient;
@@ -295,6 +297,27 @@ export function tipoPedeConfirmacao(tipo: {
   return degrauPedeConfirmacao([tipo.reminder_minutes_before ?? 0, ...(tipo.reminder_extra_offsets_minutes ?? [])]);
 }
 
+interface MensagemDoLembrete {
+  status: string;
+  external_id: string | null;
+  created_at: string;
+  metadata: { lembrete?: { reserva?: string | null } } | null;
+  canal?: { provider: string } | { provider: string }[] | null;
+}
+
+function mensagemDe(l: { mensagem?: MensagemDoLembrete | MensagemDoLembrete[] | null }): MensagemDoLembrete | null {
+  const m = l.mensagem;
+  if (!m) return null;
+  return Array.isArray(m) ? (m[0] ?? null) : m;
+}
+
+/** Entrega ao predicado único (falha-avisada-depois.ts) o que o select trouxe. */
+function paraOPredicado(m: MensagemDoLembrete | null) {
+  if (!m) return null;
+  const canal = Array.isArray(m.canal) ? m.canal[0] : m.canal;
+  return { ...m, provider: canal?.provider };
+}
+
 /**
  * FORK clinic (9006) — o lembrete SAIU, mas a mensagem terminou `failed`. A
  * tarefa de ligar abre na hora: esperar as 4 h seria esperar uma resposta que
@@ -309,7 +332,7 @@ export async function marcarLembretesQueFalharam(
     .from("clinic_confirmation_requests")
     .select(
       "id, organization_id, contact_id, appointment_id, task_id, status, " +
-        "mensagem:messages!clinic_confirmation_requests_reminder_message_id_fkey!inner(status), " +
+        "mensagem:messages!clinic_confirmation_requests_reminder_message_id_fkey!inner(status, external_id, created_at, metadata, canal:channel_sessions(provider)), " +
         "calendar_appointments!inner(starts_at, status, title, owner_user_id, contact_id)",
     )
     .eq("status", "aguardando")
@@ -319,11 +342,41 @@ export async function marcarLembretesQueFalharam(
     .limit(limite);
   if (error) throw new Error(`varrer lembretes que falharam: ${error.message}`);
 
+  const linhas = (data ?? []) as unknown as (PedidoAberto & {
+    organization_id: string;
+    contact_id: string | null;
+    mensagem?: MensagemDoLembrete | MensagemDoLembrete[] | null;
+  })[];
+
+  // Carência (#83): numa organização com a chave ligada, a reserva ainda pode
+  // reenviar o lembrete que a Meta recusou depois. Enquanto `reserva` é nula,
+  // a tarefa de ligar espera. Só vale para mensagem da Meta (a varredura da
+  // reserva só olha esse canal).
+  const esperandoReserva = linhas.filter((l) => {
+    const m = mensagemDe(l);
+    return m?.metadata?.lembrete?.reserva === "bloqueado" || aguardaAReservaDaMeta(paraOPredicado(m), agora);
+  });
+  let orgsComReserva = new Set<string>();
+  if (esperandoReserva.length > 0) {
+    const { data: ligadas } = await admin
+      .from("organizations")
+      .select("id")
+      .in("id", [...new Set(esperandoReserva.map((l) => l.organization_id))])
+      .eq("settings->clinic->>lembrete_com_reserva", "true");
+    orgsComReserva = new Set(((Array.isArray(ligadas) ? ligadas : []) as { id: string }[]).map((o) => o.id));
+  }
+
   let marcados = 0;
   let falhas = 0;
-  for (const linha of (data ?? []) as unknown as (PedidoAberto & { organization_id: string; contact_id: string | null })[]) {
+  for (const linha of linhas) {
     const agendamento = agendamentoDe(linha);
     if (!agendamento) continue;
+    if (orgsComReserva.has(linha.organization_id)) {
+      const m = mensagemDe(linha);
+      // Opt-out (reserva 'bloqueado') não abre a tarefa de ligar.
+      if (m?.metadata?.lembrete?.reserva === "bloqueado") continue;
+      if (aguardaAReservaDaMeta(paraOPredicado(m), agora)) continue;
+    }
     try {
       const tarefa = await abrirTarefa(admin, {
         organizationId: linha.organization_id,
@@ -379,7 +432,7 @@ export async function marcarLembretesQueNaoSairam(
 ): Promise<{ marcados: number; falhas: number }> {
   const { data: orgs, error: e1 } = await admin
     .from("organizations")
-    .select("id")
+    .select("id, settings")
     .eq("settings->clinic->>confirmacao_automatica", "true")
     .limit(500);
   if (e1) throw new Error(`listar organizações com confirmação: ${e1.message}`);
@@ -389,7 +442,7 @@ export async function marcarLembretesQueNaoSairam(
   let marcados = 0;
   let falhas = 0;
 
-  for (const { id: org } of (orgs ?? []) as { id: string }[]) {
+  for (const { id: org, settings } of (orgs ?? []) as { id: string; settings?: unknown }[]) {
     const { data: ags, error: e2 } = await admin
       .from("calendar_appointments")
       .select(
@@ -407,11 +460,31 @@ export async function marcarLembretesQueNaoSairam(
       falhas += 1;
       continue;
     }
-    const candidatos = ((ags ?? []) as unknown as AgendamentoSemPedido[]).filter((a) => {
+    let candidatos = ((ags ?? []) as unknown as AgendamentoSemPedido[]).filter((a) => {
       const t = Array.isArray(a.calendar_event_types) ? a.calendar_event_types[0] : a.calendar_event_types;
       return !!t && tipoPedeConfirmacao(t);
     });
     if (candidatos.length === 0) continue;
+
+    // #83: com a chave ligada, quem pediu para não receber mensagem não ganha tarefa de ligar.
+    if (lembreteComReservaLigado(settings)) {
+      const { data: bloqueados, error: eb } = await admin
+        .from("contacts")
+        .select("id")
+        .eq("organization_id", org)
+        .eq("is_blocked", true)
+        .in(
+          "id",
+          candidatos.map((a) => a.contact_id),
+        );
+      if (eb) {
+        falhas += 1;
+        continue;
+      }
+      const fora = new Set(((bloqueados ?? []) as { id: string }[]).map((c) => c.id));
+      candidatos = candidatos.filter((a) => !fora.has(a.contact_id));
+      if (candidatos.length === 0) continue;
+    }
 
     const { data: existentes } = await admin
       .from("clinic_confirmation_requests")

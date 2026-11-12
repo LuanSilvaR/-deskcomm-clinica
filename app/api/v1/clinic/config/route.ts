@@ -33,6 +33,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { requirePermission } from "@/lib/clinic/acesso/require-permission";
+import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
 import { confirmacaoAutomaticaLigada } from "@/lib/clinic/confirmacao/servidor";
 import { acessoPorPermissoesLigado } from "@/lib/clinic/acesso/modo";
 import { falhaDeAcesso } from "@/lib/clinic/acesso/erros-do-banco";
@@ -43,6 +44,7 @@ import {
   encaixeLigadoNaConfig,
   tituloLivreLigadoNaConfig,
   duracaoNaMarcacaoLigadaNaConfig,
+  variosTelefonesLigadoNaConfig,
   estoqueLigado,
   menuClinicaLigado,
   orcamentosLigado,
@@ -67,6 +69,8 @@ async function lerOpcoes(orgId: string) {
     profissionais: clinicProfissionaisLigado(settings),
     ficha_obrigatoria: fichaObrigatoriaLigada(settings),
     confirmacao_automatica: confirmacaoAutomaticaLigada(settings),
+    // FORK clinic (#83)
+    lembrete_com_reserva: lembreteComReservaLigado(settings),
     trava_sobreposicao: travaSobreposicaoLigada(settings),
     recursos: recursosLigados(settings),
     procedimentos: procedimentosLigados(settings),
@@ -81,6 +85,8 @@ async function lerOpcoes(orgId: string) {
     titulo_livre: tituloLivreLigadoNaConfig(settings),
     // FORK clinic (#80)
     duracao_na_marcacao: duracaoNaMarcacaoLigadaNaConfig(settings),
+    // FORK clinic (#85)
+    varios_telefones: variosTelefonesLigadoNaConfig(settings),
     // FORK clinic (orçamento O1)
     orcamentos: orcamentosLigado(settings),
     orcamentos_desconto_max_pct: descontoMaxDaConfig(settings),
@@ -101,6 +107,7 @@ const patchSchema = z
     profissionais: z.boolean().optional(),
     ficha_obrigatoria: z.boolean().optional(),
     confirmacao_automatica: z.boolean().optional(),
+    lembrete_com_reserva: z.boolean().optional(),
     trava_sobreposicao: z.boolean().optional(),
     recursos: z.boolean().optional(),
     procedimentos: z.boolean().optional(),
@@ -112,6 +119,7 @@ const patchSchema = z
     encaixe: z.boolean().optional(),
     titulo_livre: z.boolean().optional(),
     duracao_na_marcacao: z.boolean().optional(),
+    varios_telefones: z.boolean().optional(),
     orcamentos: z.boolean().optional(),
     atestado_anonimizacao: z.boolean().optional(),
     orcamentos_desconto_max_pct: z.number().min(0).max(100).optional(),
@@ -124,6 +132,7 @@ const FUNCAO_DA_OPCAO = {
   profissionais: "fn_clinic_definir_flag",
   ficha_obrigatoria: "fn_clinic_definir_ficha_obrigatoria",
   confirmacao_automatica: "fn_clinic_definir_confirmacao_automatica",
+  lembrete_com_reserva: "fn_clinic_definir_lembrete_com_reserva",
   trava_sobreposicao: "fn_clinic_definir_trava_sobreposicao",
   recursos: "fn_clinic_definir_recursos",
   menu_clinica: "fn_clinic_definir_menu_clinica",
@@ -133,6 +142,7 @@ const FUNCAO_DA_OPCAO = {
   encaixe: "fn_clinic_definir_encaixe",
   titulo_livre: "fn_clinic_definir_titulo_livre",
   duracao_na_marcacao: "fn_clinic_definir_duracao_na_marcacao",
+  varios_telefones: "fn_clinic_definir_varios_telefones",
   orcamentos: "fn_clinic_definir_orcamentos",
   atestado_anonimizacao: "fn_clinic_definir_atestado_anonimizacao",
 } as const;
@@ -226,7 +236,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       });
     }
   }
-  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao", "orcamentos", "atestado_anonimizacao"] as const) {
+  for (const opcao of ["profissionais", "ficha_obrigatoria", "confirmacao_automatica", "lembrete_com_reserva", "trava_sobreposicao", "recursos", "menu_clinica", "procedimentos", "prontuario", "estoque", "encaixe", "titulo_livre", "duracao_na_marcacao", "varios_telefones", "orcamentos", "atestado_anonimizacao"] as const) {
     const valor = lido.data[opcao];
     if (valor === undefined) continue;
     const { data, error } = await supabase.rpc(FUNCAO_DA_OPCAO[opcao], { p_org: authz.org.orgId, p_ligado: valor });

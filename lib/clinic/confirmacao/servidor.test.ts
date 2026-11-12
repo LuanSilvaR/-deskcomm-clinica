@@ -12,6 +12,7 @@ import {
   deveAnexarPedido,
   marcarSemResposta,
 } from "./servidor";
+import { PROVIDER_PREFERIDO_DO_LEMBRETE as OFICIAL, PROVIDER_DE_RESERVA_DO_LEMBRETE as QR } from "@/lib/channels/lembrete";
 
 /**
  * Cliente falso: cada `from(tabela)` devolve um construtor encadeável que
@@ -212,6 +213,97 @@ describe("FORK clinic (9006): o lembrete que falhou", () => {
     expect(req?.valores).toEqual({ status: "sem_resposta", falha: "envio_falhou", task_id: "t-falhou" });
   });
 
+  describe("carência enquanto a reserva do lembrete (#83) decide", () => {
+    const comMensagem = (
+      reserva: string | null,
+      provider = OFICIAL,
+      extra: { external_id?: string | null; created_at?: string } = {},
+    ) => ({
+      ...pedido(),
+      organization_id: "org-3",
+      contact_id: "c3",
+      mensagem: {
+        status: "failed",
+        external_id: "wamid.x",
+        created_at: "2026-09-30T08:00:00Z",
+        ...extra,
+        metadata: { lembrete: { appointment_id: "ag-1", degraus: [1440], tentativa: 1, reserva } },
+        canal: { provider },
+      },
+    });
+    const AGORA = new Date("2026-09-30T12:00:00Z");
+
+    it("9006 espera a reserva quando a chave está ligada", async () => {
+      const { cliente, chamadas } = falso({
+        clinic_confirmation_requests: { select: { data: [comMensagem(null)] } },
+        organizations: { select: { data: [{ id: "org-3" }] } },
+        crm_tasks: { insert: { data: { id: "t-x" } } },
+      });
+      expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 0, falhas: 0 });
+      expect(chamadas.some((c) => c.tabela === "crm_tasks")).toBe(false);
+      const org = chamadas.find((c) => c.tabela === "organizations");
+      expect(org?.filtros).toContainEqual(["eq", "settings->clinic->>lembrete_com_reserva", "true"]);
+    });
+
+    it("9006 abre a tarefa depois de sem_reserva", async () => {
+      for (const reserva of ["sem_reserva", "esgotado", "ambiguo"]) {
+        const { cliente, chamadas } = falso({
+          clinic_confirmation_requests: { select: { data: [comMensagem(reserva)] } },
+          organizations: { select: { data: [{ id: "org-3" }] } },
+          crm_tasks: { insert: { data: { id: "t-y" } } },
+        });
+        expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 1, falhas: 0 });
+        expect(chamadas.some((c) => c.tabela === "crm_tasks" && c.op === "insert")).toBe(true);
+      }
+    });
+
+    it("9006 igual a hoje com a chave desligada", async () => {
+      const { cliente } = falso({
+        clinic_confirmation_requests: { select: { data: [comMensagem(null)] } },
+        organizations: { select: { data: [] } },
+        crm_tasks: { insert: { data: { id: "t-z" } } },
+      });
+      expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 1, falhas: 0 });
+    });
+
+    it("reserva bloqueado (opt-out) não abre a tarefa de ligar", async () => {
+      const { cliente, chamadas } = falso({
+        clinic_confirmation_requests: { select: { data: [comMensagem("bloqueado")] } },
+        organizations: { select: { data: [{ id: "org-3" }] } },
+        crm_tasks: { insert: { data: { id: "t-b" } } },
+      });
+      expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 0, falhas: 0 });
+      expect(chamadas.some((c) => c.tabela === "crm_tasks")).toBe(false);
+    });
+
+    it("falha velha (3 dias) com reserva nula: a 9006 abre a tarefa", async () => {
+      const { cliente } = falso({
+        clinic_confirmation_requests: { select: { data: [comMensagem(null, OFICIAL, { created_at: "2026-09-27T08:00:00Z" })] } },
+        organizations: { select: { data: [{ id: "org-3" }] } },
+        crm_tasks: { insert: { data: { id: "t-v" } } },
+      });
+      expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 1, falhas: 0 });
+    });
+
+    it("recusa síncrona (sem external_id) com reserva nula: a 9006 abre a tarefa", async () => {
+      const { cliente } = falso({
+        clinic_confirmation_requests: { select: { data: [comMensagem(null, OFICIAL, { external_id: null })] } },
+        organizations: { select: { data: [{ id: "org-3" }] } },
+        crm_tasks: { insert: { data: { id: "t-s" } } },
+      });
+      expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 1, falhas: 0 });
+    });
+
+    it("mensagem de canal por QR com reserva nula não fica presa", async () => {
+      const { cliente } = falso({
+        clinic_confirmation_requests: { select: { data: [comMensagem(null, QR)] } },
+        organizations: { select: { data: [{ id: "org-3" }] } },
+        crm_tasks: { insert: { data: { id: "t-w" } } },
+      });
+      expect(await marcarLembretesQueFalharam(cliente, AGORA)).toEqual({ marcados: 1, falhas: 0 });
+    });
+  });
+
   it("lembrete que não saiu: cria o pedido em sem_resposta com a tarefa, na organização dele", async () => {
     const { cliente, chamadas } = falso({
       organizations: { select: { data: [{ id: "org-4" }] } },
@@ -270,5 +362,37 @@ describe("FORK clinic (9006): o lembrete que falhou", () => {
     const tarefas = chamadas.filter((c) => c.tabela === "crm_tasks" && c.op === "insert");
     expect(tarefas).toHaveLength(1);
     expect(tarefas[0]?.valores).toMatchObject({ title: "O lembrete não saiu — ligar para confirmar", contact_id: "c4" });
+  });
+  describe("lembrete que não saiu — contato bloqueado (#83)", () => {
+    const ag = (id: string, contato: string) => ({
+      id,
+      title: "Consulta",
+      starts_at: "2026-10-01T13:00:00Z",
+      contact_id: contato,
+      calendar_event_types: { reminder_enabled: true, reminder_minutes_before: 1440, reminder_extra_offsets_minutes: null },
+    });
+    const cenario = (settings: unknown) =>
+      falso({
+        organizations: { select: { data: [{ id: "org-5", settings }] } },
+        calendar_appointments: { select: { data: [ag("ag-bloq", "c-bloq"), ag("ag-ok", "c-ok")] } },
+        clinic_confirmation_requests: { select: { data: [] } },
+        contacts: { select: { data: [{ id: "c-bloq" }] } },
+        crm_tasks: { insert: { data: { id: "t-x" } } },
+      });
+    const agora = new Date("2026-10-01T10:00:00Z");
+
+    it("com a chave ligada, contato bloqueado não ganha tarefa de ligar", async () => {
+      const { cliente, chamadas } = cenario({ clinic: { lembrete_com_reserva: true } });
+      expect(await marcarLembretesQueNaoSairam(cliente, agora)).toEqual({ marcados: 1, falhas: 0 });
+      const inserido = chamadas.filter((c) => c.tabela === "clinic_confirmation_requests" && c.op === "insert");
+      expect(inserido).toHaveLength(1);
+      expect(inserido[0]?.valores).toMatchObject({ appointment_id: "ag-ok", contact_id: "c-ok" });
+    });
+
+    it("com a chave desligada, segue como sempre (nem consulta contatos)", async () => {
+      const { cliente, chamadas } = cenario({});
+      expect(await marcarLembretesQueNaoSairam(cliente, agora)).toEqual({ marcados: 2, falhas: 0 });
+      expect(chamadas.some((c) => c.tabela === "contacts")).toBe(false);
+    });
   });
 });
