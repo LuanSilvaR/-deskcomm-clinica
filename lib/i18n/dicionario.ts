@@ -13223,6 +13223,7 @@ export const DICIONARIO: Traducoes = {
     es: "La historia clínica, los anexos, los términos, los planes de tratamiento, los presupuestos y los registros financieros (valores y fechas) se conservan durante el plazo legal o para la defensa de derechos.",
   },
   "Baixar atestado": { es: "Descargar certificado" },
+  "Abrir ficha": { es: "Abrir ficha" },
   "Gerar atestado": { es: "Generar certificado" },
   "Código do atestado": { es: "Código del certificado" },
   "Atestado gerado — código": { es: "Certificado generado — código" },

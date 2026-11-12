@@ -204,7 +204,14 @@ describe("POST conferir", () => {
     const r = await conferir("abcd ef01 2345 6789");
     expect(r.corpo.data).toEqual({
       encontrado: true,
-      atestado: { id: ID, anonimizado_em: QUANDO, emitido_em: QUANDO, executor_nome: "Ana Teste", algoritmo: "hmac-sha256" },
+      atestado: {
+        id: ID,
+        contact_id: CONTATO,
+        anonimizado_em: QUANDO,
+        emitido_em: QUANDO,
+        executor_nome: "Ana Teste",
+        algoritmo: "hmac-sha256",
+      },
     });
   });
 

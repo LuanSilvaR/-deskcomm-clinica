@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { format } from "date-fns";
 import { useMutation } from "@tanstack/react-query";
 
@@ -19,7 +20,7 @@ interface Conferido {
     | { encontrado: false }
     | {
         encontrado: true;
-        atestado: { id: string; anonimizado_em: string; emitido_em: string; executor_nome: string | null; algoritmo: string };
+        atestado: { id: string; contact_id: string; anonimizado_em: string; emitido_em: string; executor_nome: string | null; algoritmo: string };
       };
 }
 
@@ -66,6 +67,11 @@ export function AtestadosPanel() {
               : t("Nenhum atestado com este código")}
           </p>
         ) : null}
+        {r?.encontrado ? (
+          <Button asChild size="sm" data-testid="atestado-abrir-ficha">
+            <Link href={`/app/contacts/${r.atestado.contact_id}`}>{t("Abrir ficha")}</Link>
+          </Button>
+        ) : null}
       </Card>
 
       <Card className="space-y-3 p-4" data-testid="atestados-emitidos">
@@ -86,7 +92,10 @@ export function AtestadosPanel() {
                   <TableCell>{dia(a.emitido_em)}</TableCell>
                   <TableCell className="font-mono">{a.codigo_curto}</TableCell>
                   <TableCell>{a.executor_nome ?? "—"}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="space-x-2 text-right">
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/app/contacts/${a.contact_id}`}>{t("Abrir ficha")}</Link>
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => void baixarAtestado(a.id)}>
                       {t("Baixar atestado")}
                     </Button>

@@ -96,6 +96,14 @@ test("atestado de anonimização: gerar, baixar e conferir — pela tela", async
     await foto(page, "04-conferido");
     await expect(page.getByTestId("atestados-emitidos").getByText(codigo)).toBeVisible();
 
+    // ── 5b. #151: o código leva à ficha anonimizada (prontuário guardado) ──
+    await page.getByTestId("atestado-abrir-ficha").click();
+    await expect(page).toHaveURL(new RegExp(`/app/contacts/${contatoId}`), { timeout: 20_000 });
+    await expect(page.getByRole("heading", { name: /Contato Anonimizado/ })).toBeVisible({ timeout: 30_000 });
+    await foto(page, "07-ficha-pelo-codigo");
+    await page.goto("/app/lgpd/requests");
+    await expect(page.getByTestId("atestados-panel")).toBeVisible({ timeout: 20_000 });
+
     // ── 6. código que não existe ───────────────────────────────────────────
     await page.getByLabel("Código do atestado").fill("0000-0000-0000-0000");
     await page.getByTestId("atestado-conferir-botao").click();

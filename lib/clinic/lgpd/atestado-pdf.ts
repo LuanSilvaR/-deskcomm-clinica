@@ -48,6 +48,7 @@ export function montarDocumentoDoAtestado(
     rotulado("Data de emissão", dataHoraNoFuso(d.emitido_em, d.fuso)),
     rotulado(rotuloDoCodigo, codigo.curto),
     paragrafo("A autenticidade deste código pode ser confirmada pela clínica, mediante solicitação ao seu encarregado (DPO)."),
+    paragrafo("Guarde este documento: o código acima é a forma de localizar os seus registros guardados pela clínica."),
   ];
 
   return {
