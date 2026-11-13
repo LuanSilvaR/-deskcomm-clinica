@@ -999,6 +999,13 @@ export const AUDIT_ACTIONS = [
   "cobranca.plano_salvo",
   // FORK (card #159): plano arquivado — sai do cadastro; quem já assina segue nele.
   "cobranca.plano_arquivado",
+  // FORK (card #160a): o provedor/credencial da cobrança conectado ou trocado
+  // em /admin/cobranca › Conexão (só os 4 últimos da chave vão no metadata),
+  // inclusive a tentativa recusada por ser de outra conta e a gravação incompleta.
+  "cobranca.provedor_conectado",
+  // FORK (card #160a): a chave de teste trocada pela de produção (publicação):
+  // quantas empresas que assinaram em teste voltaram ao teste grátis.
+  "cobranca.modo_publicado",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

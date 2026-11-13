@@ -4,7 +4,8 @@
  * TypeScript dos CHECKs de `cobranca_planos` e `cobranca_assinaturas`. Valor
  * novo entra no CHECK (migration + apêndice do baseline) e aqui, no MESMO commit.
  *
- * Os avisos da régua e os erros de leitura do provedor chegam com o card #160.
+ * Card #160a: os erros de leitura do provedor e os avisos da régua (estes
+ * passam a ser usados no 160c).
  */
 
 export const ESTADOS_DA_ASSINATURA = ["trial", "ativa", "em_atraso", "cancelada"] as const;
@@ -22,6 +23,17 @@ export type Intervalo = (typeof INTERVALOS)[number];
 /** O Asaas não tem moeda e o boleto da Stripe é só BRL. Alargar = alargar o CHECK. */
 export const MOEDAS = ["BRL"] as const;
 export type Moeda = (typeof MOEDAS)[number];
+
+export const AVISOS_DA_REGUA = ["trial_acabando", "venceu", "suspende_em_breve", "suspensa"] as const;
+export type AvisoDaRegua = (typeof AVISOS_DA_REGUA)[number];
+
+export const ERROS_DE_LEITURA = [
+  "credencial_invalida",
+  "provedor_fora",
+  "pagamento_de_assinatura_cancelada",
+  "leitura_invalida",
+] as const;
+export type ErroDeLeitura = (typeof ERROS_DE_LEITURA)[number];
 
 /**
  * O RECURSO DO PLANO: onde o teto é guardado (`cobranca_planos.<coluna>`), o

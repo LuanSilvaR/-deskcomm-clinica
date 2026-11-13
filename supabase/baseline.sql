@@ -14250,8 +14250,9 @@ alter table public.webhook_events_log
   drop constraint if exists webhook_events_log_provider_check;
 alter table public.webhook_events_log
   add constraint webhook_events_log_provider_check check (provider in (
-    'waha', 'nuvemshop', 'generic', 'meta_cloud', 'zernio', 'datafy'
+    'waha', 'nuvemshop', 'generic', 'meta_cloud', 'zernio', 'datafy', 'stripe', 'asaas'
   ));
+-- (FORK 8027, card #160a: 'stripe' e 'asaas' — provedores da cobrança da plataforma.)
 
 -- ---- a marca da instalação sai do .env e vai para o banco (migration 0155) ----
 --
@@ -54228,6 +54229,42 @@ grant execute on function public.fn_create_tenant_with_owner(uuid, uuid, jsonb, 
 notify pgrst, 'reload schema';
 
 -- ---- fim cobrança (migration 8026, fork) ----
+
+-- ---- cobrança: aviso do provedor (webhook) e trava da exclusão (migration 8027, fork; origem upstream 0601 §B/§G) ----
+-- §A (provedores stripe/asaas) está no bloco único de webhook_events_log_provider_check, acima.
+-- ── B ──────────────────────────────────────────────────────────────────────
+create unique index if not exists uniq_webhook_events_log_cobranca
+  on public.webhook_events_log (provider, external_id)
+  where provider in ('stripe', 'asaas');
+
+-- ── G ──────────────────────────────────────────────────────────────────────
+create or replace function public.fn_cobranca_trava_exclusao_com_assinatura_viva()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if exists (
+    select 1 from public.cobranca_assinaturas a
+     where a.organization_id = old.id
+       and a.provedor is not null
+       and (a.assinaturas_vivas > 1 or (a.assinaturas_vivas = 1 and not a.cancela_no_fim))
+  ) then
+    raise exception 'organizacao_com_assinatura_viva' using errcode = 'PT409';
+  end if;
+  return old;
+end;
+$$;
+
+revoke execute on function public.fn_cobranca_trava_exclusao_com_assinatura_viva() from public, anon, authenticated;
+grant execute on function public.fn_cobranca_trava_exclusao_com_assinatura_viva() to service_role;
+
+drop trigger if exists trg_cobranca_trava_exclusao_com_assinatura_viva on public.organizations;
+create trigger trg_cobranca_trava_exclusao_com_assinatura_viva
+  before delete on public.organizations
+  for each row execute function public.fn_cobranca_trava_exclusao_com_assinatura_viva();
+-- ---- fim cobrança (migration 8027, fork) ----
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
