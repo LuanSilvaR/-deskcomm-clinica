@@ -471,6 +471,12 @@ const schema = z.object({
    * `healthy` com 100% das requisições em 500. Valor irreconhecível degrada em
    * `lib/auth/politica-de-cadastro.ts`, com erro no log.
    */
+  // FORK (card #160a; origem upstream): endereço de TESTE da API do provedor de
+  // cobrança. Existe só para o dublê de bancada/e2e. Quem lê é
+  // `baseDeTesteDaCobranca()` (lib/cobranca/provedores/base-de-teste.ts), que só
+  // a aceita em loopback E com o próprio app em loopback: numa VPS é ignorada,
+  // com log. Vazio = as URLs oficiais do provedor.
+  COBRANCA_API_BASE_URL_TESTE: z.string().optional().default(""),
   SIGNUP_MODE: z.string().optional().default(""),
 
   /**

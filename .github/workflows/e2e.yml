@@ -1102,6 +1102,7 @@ jobs:
         extensoes-da-instalacao.spec.ts
         admin-credencial-google.spec.ts
         admin-cobranca-planos.spec.ts
+        admin-cobranca-conexao.spec.ts
         agenda-primeira-pintura-no-fuso.spec.ts
         agenda-portao-de-hidratacao.spec.ts
         qa-l12-inbox.spec.ts
