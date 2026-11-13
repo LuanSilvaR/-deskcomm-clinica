@@ -1017,6 +1017,14 @@ export const AUDIT_ACTIONS = [
   "cobranca.assinatura_cancelada",
   // FORK (#160b): o preço no provedor diverge do preço do plano (só auditado).
   "cobranca.preco_divergente",
+  // FORK (card #160c): a régua suspendeu a empresa por falta de pagamento
+  // (suspensão tipada `cobranca`, migration 8028).
+  "cobranca.org_suspensa",
+  // FORK (#160c): o pagamento foi confirmado e a régua reativou a empresa.
+  "cobranca.org_reativada",
+  // FORK (#160c): uma rodada do cron da cobrança (quantas relidas, avisadas,
+  // suspensas, reativadas) — o rastro de que a régua está rodando.
+  "cobranca.rodada",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

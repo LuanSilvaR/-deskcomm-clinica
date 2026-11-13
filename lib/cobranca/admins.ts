@@ -11,7 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * DECIDE um dado (o e-mail gravado no provedor) tem de lançar, senão a falha
  * vira "esse admin não existe" e o próximo da fila ocupa o lugar dele.
  */
-async function emailsDe(admin: SupabaseClient, ids: readonly string[], estrito = false): Promise<string[]> {
+export async function emailsDe(admin: SupabaseClient, ids: readonly string[], estrito = false): Promise<string[]> {
   const lidos = await Promise.all(
     ids.map(async (id) => {
       const { data, error } = await admin.auth.admin.getUserById(id);

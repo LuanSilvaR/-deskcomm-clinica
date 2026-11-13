@@ -13581,6 +13581,32 @@ export const DICIONARIO: Traducoes = {
   "Teste grátis": { es: "Prueba gratis" },
   "Em dia": { es: "Al día" },
   "Em atraso": { es: "Atrasada" },
+  // FORK (card #160c): avisos e e-mails da régua da cobrança (origem upstream).
+  "A empresa volta a funcionar sozinha, na hora, assim que o pagamento for confirmado.": { es: "La empresa vuelve a funcionar sola, al instante, en cuanto se confirme el pago." },
+  "A suspensão acontece se o pagamento não for confirmado até lá. Pague pelo link para evitar.": { es: "La suspensión ocurre si el pago no se confirma hasta entonces. Paga por el enlace para evitarla." },
+  "Abrir plano e cobrança": { es: "Abrir plan y facturación" },
+  "Assine em Plano e cobrança para continuar usando sem interrupção.": { es: "Suscríbete en Plan y facturación para seguir usando sin interrupción." },
+  "Assine em Plano e cobrança para continuar usando. Sem a assinatura, a conta é suspensa em alguns dias.": { es: "Suscríbete en Plan y facturación para seguir usando. Sin la suscripción, la cuenta se suspende en unos días." },
+  "Conta suspensa por falta de pagamento": { es: "Cuenta suspendida por falta de pago" },
+  "Conta suspensa: o teste grátis terminou": { es: "Cuenta suspendida: terminó la prueba gratis" },
+  "Neste mês a empresa já usou US$ {gasto} de US$ {teto} incluídos no plano. Ao chegar ao limite, as conversas passam para a equipe. Para aumentar, troque de plano em Plano e cobrança.": { es: "Este mes la empresa ya usó US$ {gasto} de US$ {teto} incluidos en el plan. Al llegar al límite, las conversaciones pasan al equipo. Para aumentarlo, cambia de plan en Plan y facturación." },
+  "Não identificamos o pagamento de {data}": { es: "No identificamos el pago del {data}" },
+  "O uso de IA do plano chegou a 80%": { es: "El uso de IA del plan llegó al 80%" },
+  "Recebemos o pagamento e tudo voltou a funcionar. As conversas que chegaram durante a suspensão estão na Central, para revisão.": { es: "Recibimos el pago y todo volvió a funcionar. Las conversaciones que llegaron durante la suspensión están en la Central, para revisión." },
+  "Se você pagou por boleto, aguarde a compensação (até 1 dia útil). Se ainda não pagou, use o link de pagamento.": { es: "Si pagaste con boleto, espera la compensación (hasta 1 día hábil). Si aún no pagaste, usa el enlace de pago." },
+  "Seu teste grátis acabou em {data}": { es: "Tu prueba gratis terminó el {data}" },
+  "Seu teste grátis acabou sem pagamento, então a conta foi suspensa. Assine em Plano e cobrança para reativar na hora.": { es: "Tu prueba gratis terminó sin pago, así que la cuenta fue suspendida. Suscríbete en Plan y facturación para reactivarla al instante." },
+  "Seu teste grátis termina em {data}": { es: "Tu prueba gratis termina el {data}" },
+  "Seu teste grátis terminou e não identificamos pagamento. Assine em Plano e cobrança até a data da suspensão para manter a conta ativa.": { es: "Tu prueba gratis terminó y no identificamos ningún pago. Suscríbete en Plan y facturación antes de la fecha de suspensión para mantener la cuenta activa." },
+  "Sua conta foi liberada": { es: "Tu cuenta fue liberada" },
+  "Sua conta será suspensa em {data}": { es: "Tu cuenta será suspendida el {data}" },
+  "Você cancelou a assinatura. Assine de novo em Plano e cobrança para continuar usando.": { es: "Cancelaste la suscripción. Suscríbete de nuevo en Plan y facturación para seguir usando." },
+  "Você recebe este aviso porque administra esta empresa.": { es: "Recibes este aviso porque administras esta empresa." },
+  // FORK (card #160c): hub de conta suspensa por cobrança.
+  "A conta foi suspensa por falta de pagamento. O acesso é reavaliado após a confirmação do pagamento.": { es: "La cuenta fue suspendida por falta de pago. El acceso se reevalúa tras la confirmación del pago." },
+  // FORK (card #160c): aviso `cobranca` na Central.
+  "Plano e cobrança da empresa precisam de atenção": { es: "El plan y la facturación de la empresa necesitan atención" },
+  "Abra Plano e cobrança: lá estão o link para pagar e a troca do cartão. Só quem administra a empresa vê essa tela.": { es: "Abra Plan y cobro: allí están el enlace para pagar y el cambio de tarjeta. Solo quien administra la empresa ve esa pantalla." },
 };
 
 /**

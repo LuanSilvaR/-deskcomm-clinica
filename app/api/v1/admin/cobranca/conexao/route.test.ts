@@ -1,7 +1,3 @@
-/**
- * FORK (card #160a; origem upstream). E-mail aos donos e régua chegam no 160c:
- * aqui a troca de chave fica só na auditoria.
- */
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,10 +18,12 @@ const h = vi.hoisted(() => ({
   confirmar: vi.fn(),
   desfazer: vi.fn(),
   gravar: vi.fn(),
+  regua: vi.fn(),
+  donos: vi.fn(),
   audit: vi.fn(),
   banco: undefined as unknown as BancoFalso,
 }));
-// FORK (#160a): a guarda é `guardaDaCobranca` (admin de plataforma full + MFA + módulo ligado).
+// FORK (#160): a guarda é `guardaDaCobranca` (admin de plataforma full + MFA + módulo ligado).
 vi.mock("@/lib/cobranca/guarda", async () => {
   const { fail } = await import("@/lib/api/wrappers");
   return {
@@ -65,6 +63,8 @@ vi.mock("@/lib/crypto/aes_gcm", () => ({
     return {};
   },
 }));
+vi.mock("@/lib/cobranca/sincronizar", () => ({ aplicarRegua: h.regua }));
+vi.mock("@/lib/cobranca/emails", () => ({ avisarTrocaDeChave: h.donos }));
 vi.mock("@/lib/audit", () => ({ audit: h.audit }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => h.banco.cliente }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: async () => null }));
@@ -80,15 +80,11 @@ interface Mundo {
   deTeste: Array<{ organization_id: string; plano_id: string }>;
 }
 let m: Mundo;
-let falharConversao = false;
 
 function responder(c: Cadeia): Resposta {
   if (c.tabela === "cobranca_planos") return { data: [{ id: "plano-a", trial_dias: 14 }] };
   const op = operacao(c);
-  if (op === "update") {
-    if (falharConversao) return { error: { code: "XX000", message: "boom" } };
-    return { data: { organization_id: valorDoFiltro(c, "eq", "organization_id") } };
-  }
+  if (op === "update") return { data: { organization_id: valorDoFiltro(c, "eq", "organization_id") } };
   if (valorDoFiltro(c, "eq", "modo") === "teste") return { data: m.deTeste };
   return { data: m.comProvedor };
 }
@@ -115,7 +111,7 @@ beforeEach(() => {
   h.ad.clienteExiste.mockResolvedValue(true);
   h.ad.removerWebhooks.mockResolvedValue(1);
   h.voltar.mockResolvedValue({ ok: true });
-  falharConversao = false;
+  h.regua.mockReset();
   h.confirmar.mockResolvedValue(undefined);
   h.desfazer.mockResolvedValue(undefined);
   h.gravar.mockResolvedValue({ ok: true });
@@ -128,7 +124,7 @@ describe("conexão da cobrança", () => {
     expect(h.ad.testarChave).not.toHaveBeenCalled();
   });
 
-  it("⭐ conecta em teste: testa a chave DIGITADA, registra o aviso, grava cifrado e audita sem a chave", async () => {
+  it("⭐ conecta em teste: testa a chave DIGITADA, registra o aviso, grava cifrado e avisa os donos sem a chave", async () => {
     const res = await conectar();
     expect((await res.json()).data).toEqual({ modo: "teste", webhook: "automatico", publicadas: 0 });
     expect(await h.chaveUsada?.()).toBe(CHAVE);
@@ -142,6 +138,7 @@ describe("conexão da cobrança", () => {
       action: "cobranca.provedor_conectado", metadata: { provedor: "stripe", modo: "teste", last4_antigo: "9999", last4_novo: "0001", webhook: "automatico" },
     }));
     expect(JSON.stringify(h.audit.mock.calls)).not.toContain(CHAVE);
+    expect(h.donos).toHaveBeenCalledWith(expect.anything(), { antigo: "9999", novo: "0001" });
     // Os endpoints antigos só saem DEPOIS de o segredo novo estar gravado.
     expect(h.confirmar).toHaveBeenCalledOnce();
     expect(Math.max(...h.gravar.mock.invocationCallOrder)).toBeLessThan(h.confirmar.mock.invocationCallOrder[0]!);
@@ -177,6 +174,7 @@ describe("conexão da cobrança", () => {
     // A chave nova (1ª gravação) não fica no banco: sem anterior, volta ao ambiente; nada auditado nem avisado, nada mudou.
     expect(h.voltar).toHaveBeenCalledWith("STRIPE_SECRET_KEY");
     expect(h.audit).not.toHaveBeenCalled();
+    expect(h.donos).not.toHaveBeenCalled();
   });
 
   it("⭐ gravação falha no meio: a chave nova NÃO fica com o segredo velho (volta ao valor anterior; sem anterior, ao ambiente)", async () => {
@@ -199,19 +197,22 @@ describe("conexão da cobrança", () => {
       metadata: expect.objectContaining({ resultado: "gravacao_incompleta", last4_novo: CHAVE.slice(-4) }),
     }));
     expect(JSON.stringify(h.audit.mock.calls)).not.toContain(CHAVE);
+    expect(h.donos).toHaveBeenCalledWith(expect.anything(), { antigo: "9999", novo: "0001" });
   });
 
-  it("⭐ publicar falha depois das gravações: 500, mas a troca de chave já foi auditada", async () => {
+  it("⭐ publicar falha depois das gravações: 500, mas a troca de chave já foi auditada e os donos avisados", async () => {
     h.ad.testarChave.mockResolvedValue({ ok: true, modo: "producao" });
     m.comProvedor = [{ provedor: "stripe", modo: "teste" }];
     m.deTeste = [{ organization_id: "org-1", plano_id: "plano-a" }];
-    falharConversao = true;
+    h.regua.mockRejectedValue(new Error("regua caiu"));
     const res = await conectar({ provedor: "stripe", chave: CHAVE, confirmar_publicacao: true });
     expect(res.status).toBe(500);
     expect(h.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "cobranca.provedor_conectado" }));
+    expect(h.donos).toHaveBeenCalledOnce();
+    // A org-1 foi convertida antes de a régua cair: o 500 também deixa rastro, com quantas mudaram.
     expect(h.audit).toHaveBeenCalledWith(expect.objectContaining({
       action: "cobranca.modo_publicado",
-      metadata: { provedor: "stripe", convertidas: 0, resultado: "publicacao_incompleta" },
+      metadata: { provedor: "stripe", convertidas: 1, resultado: "publicacao_incompleta" },
     }));
   });
 
@@ -264,6 +265,7 @@ describe("conexão da cobrança", () => {
     expect((await res.json()).data).toMatchObject({ modo: "producao", publicadas: 2 });
     const zeradas = h.banco.cadeias.filter((c) => c.tabela === "cobranca_assinaturas" && operacao(c) === "update");
     expect(argumentos(zeradas[0]!, "update")?.[0]).toMatchObject({ estado: "trial", provedor: null, modo: null, provedor_cliente_id: null, ultimo_aviso: null });
+    expect(h.regua.mock.calls.map((c) => c[1])).toEqual(["org-1", "org-2"]);
     expect(h.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "cobranca.modo_publicado", metadata: { provedor: "stripe", convertidas: 2 } }));
   });
 

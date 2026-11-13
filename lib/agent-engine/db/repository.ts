@@ -28,6 +28,8 @@ export type { InboxRefKind } from '@/lib/ai/inbox-destino';
 export type InboxKind =
   | 'case_stale'
   | 'canal_mudo_sem_numero'
+  // FORK (card #160c, migration 8028): avisos da régua da cobrança e o de 80% do teto de IA.
+  | 'cobranca'
   | 'appointment_outcome_required'
   | 'appointment_recovery_review'
   | 'qr_rescan'
