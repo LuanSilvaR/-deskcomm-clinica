@@ -98,6 +98,10 @@ CRONS="
 # FORK clinic (orçamento O3, 8008): orçamento enviado com a validade vencida vira
 # "expirado" e o contrato ainda não respondido é cancelado. A validade é por dia.
 41 * * * *|60|api/v1/cron/orcamentos-expirar
+# FORK (card #160c): A COBRANCA DA PLATAFORMA. De hora em hora: a reativacao
+# chega pelo aviso do provedor, em segundos, e a hora so pesa na regua, que conta
+# em dias. Minuto 43, longe das outras varreduras horarias. Chave desligada: sai na hora.
+43 * * * *|120|api/v1/cron/cobranca
 */15 * * * *|60|api/v1/cron/risk-watcher
 # O CASO PARADO. De hora em hora, e não a cada 5 minutos: o prazo é de 24h, e
 # uma varredura mais frequente só gastaria consulta para descobrir o mesmo nada.

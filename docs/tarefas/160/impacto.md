@@ -57,3 +57,25 @@ https pública para o aviso e da chave `$aact_hmlg_…` cadastrada pela tela Con
 - Dispatcher do fork sem `naOrgParada`: o handler roda sempre. `requireRole` do fork sem `permiteOrgSuspensa`.
 - `uso.ts`: a constante do canal pareado por QR entra em `lib/channels/capabilities.ts` (aditivo, como no upstream — a cerca
   `lint:channels` proíbe nome de provider fora de `lib/channels/`); o caso que confere os gatilhos de limite volta com o #162.
+
+## 160c — o que entrou
+
+- Migration **8028** (upstream 0501 essencial + 0601 §C/§D/§E): `organizations.suspended_kind` (administrativa | cobranca;
+  backfill administrativa), `fn_suspender_organizacao`/`fn_reativar_organizacao` (tipadas — a régua nunca desfaz a
+  suspensão do dono), kind `cobranca` na Central, `fn_cobranca_registrar_aviso`, `fn_cobranca_suspender_se_devendo`,
+  `fn_cobranca_reconciliaveis`.
+- `lib/cobranca/{regua,avisos,rodada,emails,hub}.ts`, `lib/email/templates/cobranca.ts`; `aplicarRegua` de verdade em
+  `sincronizar` (avisa na Central + e-mail, suspende por cobrança quem ainda deve, reativa quem pagou).
+- `GET/POST /api/v1/cron/cobranca` (de hora em hora no scheduler, minuto 43): relê no provedor quem precisa e aplica a régua.
+- `/account-suspended`: suspensa por cobrança + quem administra → painel e "Pagar/Já paguei" (volta sozinha).
+- Rotas do admin: suspender grava `administrativa`; reativar uma suspensão por cobrança dá 7 dias de prazo extra.
+- Conexão: o e-mail "a chave de cobrança mudou" aos donos e a régua na publicação (como no upstream).
+
+## 160c — diferenças em relação ao upstream
+
+- Sem o descarte da fila na suspensão (0501 §C0) e sem o claim do follow-up que ignora org parada (0501 §F/§G): a rota do
+  fork nunca descartou; fica para card próprio. Sem o item `org_reativada` na Central.
+- Sem `lib/auth/cache-curto` (o fork não tem cache curto de autorização): nada a invalidar.
+- Sem a aba "Régua" no admin: a tolerância vale o padrão (7 dias; mínimo 5), lida de `COBRANCA_TOLERANCIA_DIAS` se gravada.
+- O aviso de 80% do teto de IA do plano (`fn_cobranca_avisar_teto_de_ia`) entrou: a rodada do cron o usa. O BLOQUEIO no
+  teto (e os limites de pessoas/números) vem com o #162.

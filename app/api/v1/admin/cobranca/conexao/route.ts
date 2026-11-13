@@ -1,10 +1,8 @@
 /**
  * POST /api/v1/admin/cobranca/conexao — a ÚNICA escritora do provedor e das
- * credenciais da cobrança. FORK (card #160a; origem upstream, spec da cobrança
- * do revendedor §7a, §10). No fork: a guarda é `guardaDaCobranca` (admin de
- * plataforma `full` + MFA + módulo ligado); o e-mail "a chave mudou" e a régua
- * chegam no 160c — aqui a troca fica na AUDITORIA. A chave real só entra pela
- * tela, cifrada; o modo de teste é o padrão do épico (nada real sem homologação).
+ * credenciais da cobrança (spec da cobrança do revendedor §7a, §10).
+ * FORK (card #160; origem upstream): a guarda é `guardaDaCobranca` (admin de
+ * plataforma `full` + MFA + módulo ligado). Comece pelo modo de teste.
  *
  * Ordem, e o porquê de cada passo vir antes do seguinte:
  *   1. portões (escrita de platform admin, chave ligada, corpo);
@@ -32,10 +30,12 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { chaveDoProvedor, provedorDaInstalacao, segredoDoWebhook } from "@/lib/cobranca/configuracao";
+import { avisarTrocaDeChave } from "@/lib/cobranca/emails";
 import { guardaDaCobranca } from "@/lib/cobranca/guarda";
 import { adaptador, modoDoProvedor } from "@/lib/cobranca/provedores";
 import { baseDeTesteDaCobranca } from "@/lib/cobranca/provedores/base-de-teste";
 import { ErroDoProvedor } from "@/lib/cobranca/provedores/contrato";
+import { aplicarRegua } from "@/lib/cobranca/sincronizar";
 import { urlDoWebhookDaCobranca } from "@/lib/cobranca/url";
 import { PROVEDORES_DE_COBRANCA, type ProvedorDeCobranca } from "@/lib/cobranca/vocabulario";
 import { encryptKey } from "@/lib/crypto/aes_gcm";
@@ -231,7 +231,7 @@ export async function POST(req: NextRequest) {
         void audit({ actorUserId: ctx.user.id, actingAsPlatformAdmin: true, bypassedRls: true, resourceType: "platform_config", requestId,
           action: "cobranca.provedor_conectado",
           metadata: { provedor, modo: teste.modo, resultado: "gravacao_incompleta", last4_antigo: last4Antigo, last4_novo: chave.slice(-4) } });
-        // 160c: e-mail "a chave mudou" aos donos. Até lá, a auditoria acima é o rastro.
+        await avisarTrocaDeChave(admin, { antigo: last4Antigo, novo: chave.slice(-4) });
       }
       // Com tudo restaurado, o antigo, com o segredo que voltou ao banco, segue valendo: some só o novo.
       await automatico?.desfazer().catch((e: unknown) =>
@@ -279,6 +279,7 @@ export async function POST(req: NextRequest) {
     action: "cobranca.provedor_conectado",
     metadata: { provedor, modo: teste.modo, last4_antigo: last4Antigo, last4_novo: chave.slice(-4), webhook: automatico ? "automatico" : "manual" },
   });
+  await avisarTrocaDeChave(admin, { antigo: last4Antigo, novo: chave.slice(-4) });
 
   const publicacao = { convertidas: 0 };
   if (teste.modo === "producao" && deTeste > 0) {
@@ -335,7 +336,7 @@ async function contarAssinaturasComProvedor(
 }
 
 /**
- * D-7: quem assinou em teste volta ao teste grátis com os dias do plano.
+ * D-7: quem assinou em teste volta ao teste grátis com os dias do plano; a régua reativa quem estava suspensa.
  * Conta em `feito` a cada conversão, para que uma falha no meio ainda diga quantas mudaram.
  */
 async function publicar(admin: SupabaseClient, provedor: ProvedorDeCobranca, feito: { convertidas: number }): Promise<void> {
@@ -373,6 +374,6 @@ async function publicar(admin: SupabaseClient, provedor: ProvedorDeCobranca, fei
     if (erroDaConversao) throw new Error(`conversão falhou (${erroDaConversao.code ?? "sem_codigo"})`);
     if (!feita) continue;
     feito.convertidas += 1;
-    // 160c: `aplicarRegua` (reativa quem estava suspensa). O fork ainda não suspende.
+    await aplicarRegua(admin, l.organization_id);
   }
 }

@@ -11,16 +11,20 @@
  * O `service_role` ignora RLS: toda cadeia filtra `organization_id`, que vem do
  * evento ou da sessão — nunca de um corpo de requisição.
  *
- * ── O que fica de fora no 160b ──────────────────────────────────────────────
- * A RÉGUA (avisos, suspensão e reativação por cobrança, e-mails, itens da
- * Central) chega no 160c: aqui `aplicarRegua` não age (`"nada"`), e por isso
- * ninguém é suspenso por esta leitura. A troca de plano com ajuste proporcional
- * (upstream `troca.ts`) também não entrou.
+ * ── A régua (160c) ─────────────────────────────────────────────────────────────
+ * `aplicarRegua` decide (`lib/cobranca/regua.ts`, pura) e age só por funções
+ * SQL idempotentes (migration 8028): avisa (Central + e-mail), suspende POR
+ * COBRANÇA quem ainda deve e reativa quem pagou — nunca mexe na suspensão
+ * administrativa. A troca de plano com ajuste proporcional (upstream `troca.ts`)
+ * não entrou no fork.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { audit } from "@/lib/audit";
 import type { AuditAction } from "@/lib/audit/actions";
+import { textoDoAviso, type TextoDoAviso } from "@/lib/cobranca/avisos";
+import { toleranciaDias } from "@/lib/cobranca/configuracao";
+import { enviarAvisoAosAdmins } from "@/lib/cobranca/emails";
 import { aplicarLeitura } from "@/lib/cobranca/estado";
 import { adaptador as adaptadorPadrao } from "@/lib/cobranca/provedores";
 import {
@@ -30,21 +34,23 @@ import {
   type ProvedorDeCobranca,
   type Situacao,
 } from "@/lib/cobranca/provedores/contrato";
+import { decidirRegua, type AcaoDaRegua } from "@/lib/cobranca/regua";
 import type { AvisoDaRegua, ErroDeLeitura, EstadoDaAssinatura } from "@/lib/cobranca/vocabulario";
+import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import type { TipoDeSuspensao } from "@/lib/organizacao/operante";
 import { logger } from "@/lib/logger";
-
-/** O que a régua fez depois da leitura. No 160b ela ainda não age: sempre `"nada"`. */
-export type AcaoDaRegua = "nada";
 
 export interface DependenciasDaCobranca {
   adaptador?: (id: ProvedorDeCobranca) => AdaptadorDeCobranca;
   agora?: () => Date;
+  tolerancia?: () => Promise<number>;
+  enviarAviso?: typeof enviarAvisoAosAdmins;
 }
 
 export type ResultadoDaSincronizacao =
   | { tipo: "isenta" }
-  | { tipo: "sem_provedor"; acao: AcaoDaRegua }
-  | { tipo: "aplicada"; estado: EstadoDaAssinatura; mudou: boolean; acao: AcaoDaRegua }
+  | { tipo: "sem_provedor"; acao: AcaoDaRegua["tipo"] }
+  | { tipo: "aplicada"; estado: EstadoDaAssinatura; mudou: boolean; acao: AcaoDaRegua["tipo"] }
   | { tipo: "descartada" }
   | { tipo: "falhou"; erro: ErroDeLeitura; transitorio: boolean };
 
@@ -87,6 +93,10 @@ interface Linha {
   updated_at: string;
 }
 
+const SUSPENSAO_DE_COBRANCA: TipoDeSuspensao = "cobranca";
+const MOTIVO_DA_SUSPENSAO = "Falta de pagamento";
+/** Plano com entrada paga (teste de 0 dia) ainda sem o 1º pagamento: não é inadimplência. */
+const primeiroPagamentoPendente = (l: { pagamento_inicial_pendente: boolean }) => l.pagamento_inicial_pendente;
 const emData = (v: string | null) => (v === null ? null : new Date(v));
 const emTexto = (d: Date | null) => (d === null ? null : d.toISOString());
 
@@ -215,6 +225,7 @@ export async function sincronizar(
       if (r.planoAplicado) {
         auditar("cobranca.plano_trocado", orgId, { de: linha.plano_id, para: r.planoId, quando: "aplicado" });
       }
+      if (r.zerarAviso) await fecharAvisosDaRegua(admin, orgId);
       // #2609: a releitura também CONFERE o preço — é a única hora em que o
       // provedor foi lido, então é aqui ou nunca.
       await conferirPreco(admin, orgId, {
@@ -260,12 +271,152 @@ async function conferirPreco(
   });
 }
 
-/**
- * A RÉGUA ainda não age no fork (160c): sem aviso, sem suspensão, sem reativação.
- * Mantida como ponto único para o 160c preencher sem mexer em quem chama.
- */
-export async function aplicarRegua(_admin: SupabaseClient, _orgId: string, _deps: DependenciasDaCobranca = {}): Promise<AcaoDaRegua> {
-  return "nada";
+/** Pagou: os avisos da régua na Central saem de "abertos" (o problema acabou). */
+async function fecharAvisosDaRegua(admin: SupabaseClient, orgId: string): Promise<void> {
+  const { error } = await admin
+    .from("agent_inbox_items")
+    .update({ status: "resolved", resolved_at: new Date().toISOString() })
+    .eq("organization_id", orgId)
+    .eq("kind", "cobranca")
+    .is("ref_kind", null)
+    .eq("status", "open");
+  if (error) logger.warn("cobranca.avisos_nao_fechados", { organization_id: orgId, codigo: error.code ?? null });
+}
+
+async function registrarAviso(
+  admin: SupabaseClient,
+  orgId: string,
+  aviso: AvisoDaRegua,
+  desde: Date | null,
+  texto: TextoDoAviso,
+): Promise<boolean> {
+  const { data, error } = await admin.rpc("fn_cobranca_registrar_aviso", {
+    p_org: orgId,
+    p_aviso: aviso,
+    p_desde: emTexto(desde),
+    p_titulo: texto.titulo,
+    p_corpo: texto.corpo,
+    p_severidade: texto.severidade,
+  });
+  if (error) throw new Error(`cobranca: aviso não registrado (${error.code ?? "sem_codigo"})`);
+  return data === true;
+}
+
+const mudou = (data: unknown) => (data as { changed?: unknown } | null)?.changed === true;
+
+export async function aplicarRegua(
+  admin: SupabaseClient,
+  orgId: string,
+  deps: DependenciasDaCobranca = {},
+): Promise<AcaoDaRegua["tipo"]> {
+  const agora = (deps.agora ?? (() => new Date()))();
+  const linha = await lerLinha(admin, orgId);
+  if (!linha) return "nada";
+  const { data: orgLida, error: erroDaOrg } = await admin
+    .from("organizations")
+    .select("status, suspended_kind, locale, timezone")
+    .eq("id", orgId)
+    .maybeSingle();
+  if (erroDaOrg) throw new Error(`cobranca: leitura da empresa falhou (${erroDaOrg.code ?? "sem_codigo"})`);
+  const org = orgLida as { status: string; suspended_kind: string | null; locale: string | null; timezone: string | null } | null;
+  if (!org) return "nada";
+
+  const decisao = decidirRegua(
+    {
+      estado: linha.estado,
+      temProvedor: linha.provedor !== null,
+      cancelaNoFim: linha.cancela_no_fim,
+      assinaturasVivas: linha.assinaturas_vivas,
+      trialAte: emData(linha.trial_ate),
+      vencidaDesde: emData(linha.vencida_desde),
+      proximoVencimento: emData(linha.proximo_vencimento),
+      prazoExtraAte: emData(linha.prazo_extra_ate),
+      ultimoAviso: linha.ultimo_aviso,
+      ultimoAvisoEm: emData(linha.ultimo_aviso_em),
+      relidaEm: emData(linha.relida_em),
+      entradaPendente: primeiroPagamentoPendente(linha),
+    },
+    { status: org.status, suspendedKind: org.suspended_kind },
+    agora,
+    await (deps.tolerancia ?? toleranciaDias)(),
+  );
+
+  if (decisao.estado !== linha.estado || decisao.gravarVencidaDesde !== null) {
+    // Compare-and-set no estado lido: se alguém mudou a linha no meio, a próxima rodada decide de novo.
+    const { data: gravou, error } = await admin
+      .from("cobranca_assinaturas")
+      .update({
+        estado: decisao.estado,
+        ...(decisao.gravarVencidaDesde ? { vencida_desde: decisao.gravarVencidaDesde.toISOString() } : {}),
+        updated_at: agora.toISOString(),
+      })
+      .eq("organization_id", orgId)
+      .eq("estado", linha.estado)
+      .select("organization_id")
+      .maybeSingle();
+    if (error) throw new Error(`cobranca: transição de tempo não gravada (${error.code ?? "sem_codigo"})`);
+    if (!gravou) return "nada";
+    if (decisao.estado !== linha.estado) {
+      auditar("cobranca.estado_mudou", orgId, { de: linha.estado, para: decisao.estado, status_bruto: "regua:fim_do_teste" });
+    }
+  }
+
+  const idioma = normalizarIdioma(org.locale);
+  const contexto = { idioma, fuso: org.timezone };
+  const enviar = deps.enviarAviso ?? enviarAvisoAosAdmins;
+  const acao = decisao.acao;
+  switch (acao.tipo) {
+    case "nada":
+      return "nada";
+    case "reativar": {
+      const { data, error } = await admin.rpc("fn_reativar_organizacao", {
+        p_org: orgId,
+        p_kind_exigido: SUSPENSAO_DE_COBRANCA,
+        p_ator: null,
+      });
+      if (error) throw new Error(`cobranca: reativação falhou (${error.code ?? "sem_codigo"})`);
+      if (!mudou(data)) return "nada";
+      auditar("cobranca.org_reativada", orgId, { motivo: "pagamento_confirmado" });
+      await enviar(admin, { id: orgId, idioma }, textoDoAviso("liberada", { ...contexto, data: null, origem: "atraso" }), null);
+      return "reativar";
+    }
+    case "suspender": {
+      // A decisão veio da linha lida acima; um pagamento pode ter sido gravado
+      // no meio. A função trava a linha e só suspende quem AINDA deve.
+      const { data, error } = await admin.rpc("fn_cobranca_suspender_se_devendo", {
+        p_org: orgId,
+        p_motivo: MOTIVO_DA_SUSPENSAO,
+      });
+      if (error) throw new Error(`cobranca: suspensão falhou (${error.code ?? "sem_codigo"})`);
+      if (!mudou(data)) return "nada";
+      auditar("cobranca.org_suspensa", orgId, { debito_desde: acao.debitoDesde.toISOString() });
+      // A origem importa aqui: quem foi suspenso no fim do teste grátis não tem
+      // pagamento esperando, e a frase diz "assine", não "aguarde a confirmação".
+      const texto = textoDoAviso("suspensa", { ...contexto, data: null, origem: acao.origem });
+      if (await registrarAviso(admin, orgId, "suspensa", acao.debitoDesde, texto)) {
+        await enviar(admin, { id: orgId, idioma }, texto, linha.link_de_pagamento);
+      }
+      return "suspender";
+    }
+    case "avisar": {
+      const texto = textoDoAviso(acao.aviso, { ...contexto, data: acao.data, origem: acao.origem });
+      if (!(await registrarAviso(admin, orgId, acao.aviso, acao.debitoDesde, texto))) return "nada";
+      await enviar(admin, { id: orgId, idioma }, texto, linha.link_de_pagamento);
+      return "avisar";
+    }
+    case "cancelar_no_provedor": {
+      if (linha.provedor === null || linha.provedor_assinatura_id === null) return "nada";
+      // HTTP antes da escrita curta, fora de transação (§7, regra comum).
+      await (deps.adaptador ?? adaptadorPadrao)(linha.provedor).cancelarNoFim(linha.provedor_assinatura_id);
+      const { error } = await admin
+        .from("cobranca_assinaturas")
+        .update({ cancela_no_fim: true, updated_at: agora.toISOString() })
+        .eq("organization_id", orgId);
+      if (error) throw new Error(`cobranca: cancelamento não gravado (${error.code ?? "sem_codigo"})`);
+      auditar("cobranca.assinatura_cancelada", orgId, { motivo: "org_redigida" });
+      return "cancelar_no_provedor";
+    }
+  }
 }
 
 function reservaEmAndamento(linha: Linha, agora: Date): boolean {

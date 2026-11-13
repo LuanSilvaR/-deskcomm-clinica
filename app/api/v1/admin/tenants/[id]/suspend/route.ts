@@ -72,6 +72,9 @@ export async function POST(
     .from("organizations")
     .update({
       status: "suspended",
+      // FORK (card #160c, migration 8028): suspensão TIPADA. A do admin é
+      // administrativa — a régua da cobrança nunca a desfaz.
+      suspended_kind: "administrativa",
       suspended_at: now,
       suspended_reason: body.reason,
       suspended_by: adminCtx.user.id,
