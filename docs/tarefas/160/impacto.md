@@ -55,5 +55,5 @@ https pública para o aviso e da chave `$aact_hmlg_…` cadastrada pela tela Con
 - **Sem `/cobranca/contratar`** (continuação do cadastro com intenção assinada): o fork cria clínica pelo admin da
   plataforma; a contratação pelo próprio cliente fica para quando houver cadastro aberto com plano.
 - Dispatcher do fork sem `naOrgParada`: o handler roda sempre. `requireRole` do fork sem `permiteOrgSuspensa`.
-- `uso.ts`: a constante do canal pareado por QR mora local (não mexe em `lib/channels/capabilities.ts`); o caso que confere
-  os gatilhos de limite volta com o #162.
+- `uso.ts`: a constante do canal pareado por QR entra em `lib/channels/capabilities.ts` (aditivo, como no upstream — a cerca
+  `lint:channels` proíbe nome de provider fora de `lib/channels/`); o caso que confere os gatilhos de limite volta com o #162.

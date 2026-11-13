@@ -19,12 +19,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { CHANNEL_PROVIDER_WAHA, type ChannelProvider } from "@/lib/channels/capabilities";
-
-// FORK (#160b): no upstream esta constante mora em `lib/channels/capabilities.ts`;
-// aqui fica local para não mexer no núcleo de canais. Só o pareado por QR (WAHA)
-// tem o número como identidade da conexão.
-const PROVIDER_EM_QUE_O_NUMERO_E_A_CONEXAO: ChannelProvider = CHANNEL_PROVIDER_WAHA;
+import { PROVIDER_EM_QUE_O_NUMERO_E_A_CONEXAO } from "@/lib/channels/capabilities";
 
 export interface UsoDaOrganizacao {
   assentos: number;

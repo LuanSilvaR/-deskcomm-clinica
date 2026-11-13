@@ -1,12 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 
+import { PROVIDER_EM_QUE_O_NUMERO_E_A_CONEXAO as QR } from "@/lib/channels/capabilities";
 import { bancoFalso, filtros } from "@/tests/helpers/banco-falso-da-cobranca";
 
 import { excedenteDoPlano, lerUsoDaOrganizacao } from "./uso";
-
-// FORK (#160b): a constante mora local em lib/cobranca/uso.ts (canal pareado por QR).
-const QR = "waha";
 
 describe("excedenteDoPlano — quanto remover para caber (D-4)", () => {
   it.each([
