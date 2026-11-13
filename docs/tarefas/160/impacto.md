@@ -36,3 +36,24 @@ Fatiado em 3 PRs empilhados (decisão do dono, 2026-11-13):
 Nada real: toda a suíte usa HTTP falso e o dublê de bancada (`COBRANCA_API_BASE_URL_TESTE`, só em loopback). O critério
 "no sandbox do Asaas: assinar, pagar, atrasar, suspender e reativar" só fecha depois do 160c, na homologação (precisa de URL
 https pública para o aviso e da chave `$aact_hmlg_…` cadastrada pela tela Conexão — nunca no código ou no `.env`).
+
+## 160b — o que entrou
+
+- `lib/cobranca/sincronizar.ts` (releitura no provedor, compare-and-set em `updated_at`/`relida_em`, leitura que falha
+  grava só `ultimo_erro`), `estado.ts`, `sinal.handler.ts` registrado no dispatcher; o webhook passa a emitir
+  `cobranca.sinal` e fechar o ponteiro (`processed`).
+- `lib/cobranca/checkout.ts` e as rotas `/api/v1/cobranca/assinatura/{checkout,sincronizar,gerenciar,cancelar}` (admin da
+  empresa, org da sessão, `Idempotency-Key`, CPF/CNPJ vai direto ao provedor e não é guardado).
+- `/cobranca/volta` (ponte: o redirect do provedor NÃO confirma pagamento — a tela relê), `/app/settings/billing` com o
+  painel e as ações (Assinar, Pagar agora, Já paguei, Gerenciar, Cancelar), faixa da cobrança no topo do `/app`.
+
+## 160b — diferenças em relação ao upstream
+
+- **Sem a régua** em `sincronizar` (`aplicarRegua` devolve `"nada"`): avisos, suspensão/reativação por cobrança, e-mails e
+  itens da Central chegam no 160c. Ninguém é suspenso por esta leitura.
+- **Sem a troca de plano** com ajuste proporcional (`troca.ts`, rota `/assinatura/plano`, UI de "Trocar de plano").
+- **Sem `/cobranca/contratar`** (continuação do cadastro com intenção assinada): o fork cria clínica pelo admin da
+  plataforma; a contratação pelo próprio cliente fica para quando houver cadastro aberto com plano.
+- Dispatcher do fork sem `naOrgParada`: o handler roda sempre. `requireRole` do fork sem `permiteOrgSuspensa`.
+- `uso.ts`: a constante do canal pareado por QR entra em `lib/channels/capabilities.ts` (aditivo, como no upstream — a cerca
+  `lint:channels` proíbe nome de provider fora de `lib/channels/`); o caso que confere os gatilhos de limite volta com o #162.

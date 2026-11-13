@@ -1,13 +1,8 @@
 /**
  * POST /api/v1/webhooks/cobranca/[provedor] — o aviso do provedor de pagamento.
- * FORK (card #160a; origem upstream, spec da cobrança do revendedor §7c, §2.4).
- *
- * ── No fork, nesta etapa (160a) ─────────────────────────────────────────────
- * O aviso é conferido, deduplicado e guardado como PONTEIRO (`received`), mas
- * ainda NÃO emite `cobranca.sinal`: o consumidor que relê no provedor
- * (`sincronizar`) chega no 160b, e evento sem consumidor é anti-padrão. O
- * ponteiro `received` é exatamente o que o 160b reprocessa. Nada aqui confirma
- * pagamento.
+ * FORK (card #160; origem upstream, spec da cobrança do revendedor §7c, §2.4).
+ * 160a trouxe a conferência e o ponteiro; 160b liga a emissão de
+ * `cobranca.sinal` (consumidor: `lib/cobranca/sinal.handler.ts`).
  *
  * O aviso só ACORDA a leitura: a rota confere a assinatura no corpo CRU, grava
  * um ponteiro (`{id,type}`, org nula, sem cabeçalhos — invisível ao tenant pela
@@ -165,8 +160,23 @@ export async function POST(req: NextRequest, { params }: Rota) {
     return ok({ ignorado: "cliente_desconhecido" }, { requestId });
   }
 
-  // 160b: emitir `cobranca.sinal` para `org` e marcar `processed`. Até lá o
-  // ponteiro fica `received` — o provedor recebe 200 e não reentrega à toa.
+  const { error: erroDoSinal } = await admin.rpc("emit_event", {
+    p_event_type: "cobranca.sinal",
+    p_entity_kind: "organization",
+    p_entity_id: org,
+    p_payload: { provedor, evento_id: sinal.eventoId, tipo: sinal.tipo },
+    p_metadata: { origem: "webhook_cobranca" },
+    p_organization_id: org,
+  });
+  if (erroDoSinal) {
+    logger.error("cobranca.sinal_nao_emitido", { organization_id: org, provedor, codigo: erroDoSinal.code ?? null });
+    return fail("unavailable", "Tente de novo em instantes.", 503, { requestId });
+  }
+  await admin
+    .from("webhook_events_log")
+    .update({ status: "processed", processed_at: agora, error_message: null })
+    .eq("id", linha.id)
+    .is("organization_id", null);
   return ok({ recebido: true }, { requestId });
 }
 

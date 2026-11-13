@@ -1103,6 +1103,7 @@ jobs:
         admin-credencial-google.spec.ts
         admin-cobranca-planos.spec.ts
         admin-cobranca-conexao.spec.ts
+        cobranca-plano-da-empresa.spec.ts
         agenda-primeira-pintura-no-fuso.spec.ts
         agenda-portao-de-hidratacao.spec.ts
         qa-l12-inbox.spec.ts
