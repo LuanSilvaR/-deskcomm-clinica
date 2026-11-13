@@ -1,7 +1,3 @@
-/**
- * FORK (card #160a; origem upstream). Nesta etapa a rota NÃO emite `cobranca.sinal`
- * (o consumidor chega no 160b): o válido de cliente conhecido fica `received`.
- */
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -110,15 +106,18 @@ describe("webhook da cobrança", () => {
     expect(emits()).toEqual([]);
   });
 
-  it("⭐ válido: ponteiro sem org, sem cabeçalhos e com corpo {id,type}; fica received, sem emitir (160b)", async () => {
+  it("⭐ válido: ponteiro sem org, sem cabeçalhos e com corpo {id,type}; emite o sinal e fecha a linha", async () => {
     const res = await pedido();
     expect(res.status).toBe(200);
     expect(gravado()).toEqual({
       organization_id: null, provider: "stripe", raw_body: '{"id":"evt_1","type":"invoice.paid"}', headers: null,
       signature_header: "t=1,v1=ab", valid_signature: true, external_id: "evt_1", event_type: "invoice.paid", status: "received",
     });
-    expect(emits()).toEqual([]);
-    expect(doLog("update")).toEqual([]);
+    expect(emits()[0]?.args).toEqual({
+      p_event_type: "cobranca.sinal", p_entity_kind: "organization", p_entity_id: ORG,
+      p_payload: { provedor: "stripe", evento_id: "evt_1", tipo: "invoice.paid" }, p_metadata: { origem: "webhook_cobranca" }, p_organization_id: ORG,
+    });
+    expect(argumentos(doLog("update")[0]!, "update")?.[0]).toMatchObject({ status: "processed" });
   });
 
   it("⭐ duplicado já processado: 200 sem emitir", async () => {
@@ -128,11 +127,11 @@ describe("webhook da cobrança", () => {
     expect(emits()).toEqual([]);
   });
 
-  it("⭐ duplicado ainda received: 200, nenhuma linha nova e nada emitido (repetido não duplica)", async () => {
+  it("⭐ duplicado ainda received (o emit anterior falhou): emite de novo e fecha a linha", async () => {
     m.duplicado = true;
     expect((await pedido()).status).toBe(200);
-    expect(doLog("insert")).toHaveLength(1);
-    expect(emits()).toEqual([]);
+    expect(emits()).toHaveLength(1);
+    expect(argumentos(doLog("update")[0]!, "update")?.[0]).toMatchObject({ status: "processed" });
   });
 
   it("cliente desconhecido: linha error com o motivo, 200 e nenhum sinal (a reconciliação cura)", async () => {
@@ -140,6 +139,12 @@ describe("webhook da cobrança", () => {
     expect((await pedido()).status).toBe(200);
     expect(argumentos(doLog("update")[0]!, "update")?.[0]).toMatchObject({ status: "error", error_message: "cliente_desconhecido" });
     expect(emits()).toEqual([]);
+  });
+
+  it("emit que falha: 503 e a linha fica received (o provedor reentrega)", async () => {
+    m.emit = { data: null, error: { code: "XX000", message: "boom" } };
+    expect((await pedido()).status).toBe(503);
+    expect(doLog("update")).toEqual([]);
   });
 
   it("⭐ a leitura da empresa falha: 500 com o ponteiro received e o motivo, o erro no log, e sem emitir", async () => {
@@ -174,12 +179,12 @@ describe("webhook da cobrança", () => {
     expect(emits()).toEqual([]);
   });
 
-  it("⭐ a reentrega depois da falha de leitura volta à MESMA linha (índice de idempotência), sem linha nova", async () => {
+  it("⭐ a reentrega depois da falha de leitura fecha a mesma linha e apaga o motivo", async () => {
     m.duplicado = true;
     m.statusExistente = "received";
     expect((await pedido()).status).toBe(200);
-    expect(doLog("insert")).toHaveLength(1);
-    expect(emits()).toEqual([]);
+    expect(emits()).toHaveLength(1);
+    expect(argumentos(doLog("update")[0]!, "update")?.[0]).toMatchObject({ status: "processed", error_message: null });
   });
 
   it.each([

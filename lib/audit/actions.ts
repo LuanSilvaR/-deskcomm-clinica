@@ -1006,6 +1006,17 @@ export const AUDIT_ACTIONS = [
   // FORK (card #160a): a chave de teste trocada pela de produção (publicação):
   // quantas empresas que assinaram em teste voltaram ao teste grátis.
   "cobranca.modo_publicado",
+  // FORK (card #160b): a empresa abriu o checkout do provedor (plano e modo).
+  "cobranca.checkout_iniciado",
+  // FORK (#160b): a releitura no provedor mudou o estado da assinatura
+  // (trial/ativa/em_atraso/cancelada) — com o status bruto do provedor.
+  "cobranca.estado_mudou",
+  // FORK (#160b): o plano agendado virou o plano da assinatura na renovação.
+  "cobranca.plano_trocado",
+  // FORK (#160b): o admin da empresa pediu o cancelamento no fim do período.
+  "cobranca.assinatura_cancelada",
+  // FORK (#160b): o preço no provedor diverge do preço do plano (só auditado).
+  "cobranca.preco_divergente",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

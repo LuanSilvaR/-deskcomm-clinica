@@ -22,6 +22,9 @@ import {
   ImpersonateBanner,
 } from "@/components/app/ImpersonateBanner";
 import { ConexaoCaidaBanner } from "@/components/app/ConexaoCaidaBanner";
+import { FaixaDaCobranca } from "@/components/cobranca/FaixaDaCobranca";
+import { faixaDaCobranca, type FaixaDaCobranca as Faixa } from "@/lib/cobranca/faixa";
+import { logger } from "@/lib/logger";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { listarConexoesCaidas, type ConexaoCaida } from "@/lib/channels/health";
 import { VoiceCallProvider } from "@/components/voice/VoiceCallContext";
@@ -73,6 +76,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // EPIC-02: gate /app/* on completed onboarding.
   // EPIC-11: gate /app/* on org not being suspended (S-11.08).
   let conexoesCaidas: ConexaoCaida[] = [];
+  // FORK (card #160b): a faixa da cobrança (teste grátis, atraso, cancelamento).
+  let faixa: Faixa = null;
+  let orgFuso: string | null = null;
   let enrolled = false;
   let needsMfaGate = false;
 
@@ -105,7 +111,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const [orgRes, conexoes, isEnrolled, mfaRequired, modulos] = await Promise.all([
       admin
         .from("organizations")
-        .select("onboarded_at, status, settings")
+        .select("onboarded_at, status, settings, timezone")
         .eq("id", activeOrg.orgId)
         .maybeSingle(),
       listarConexoesCaidas(admin, activeOrg.orgId),
@@ -193,6 +199,26 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (Object.keys(marcaDoTenant).length > 0) {
       activeOrg = { ...activeOrg, marca: marcaDoTenant };
     }
+
+    // FORK (card #160b; origem upstream): a faixa da cobrança. Uma consulta a mais
+    // SÓ com o módulo `cobranca` ligado (quem não administra só vê o atraso). Falha
+    // aberta na INFORMAÇÃO: sem a leitura, nenhuma faixa — ela não trava nada.
+    if (modulos.includes("cobranca")) {
+      const { data, error } = await admin
+        .from("cobranca_assinaturas")
+        .select("estado, trial_ate, vencida_desde, cancela_no_fim, proximo_vencimento, link_de_pagamento, provedor")
+        .eq("organization_id", activeOrg.orgId)
+        .maybeSingle();
+      if (error) {
+        logger.warn("app: assinatura ilegível — sem faixa da cobrança", {
+          organization_id: activeOrg.orgId,
+          codigo: error.code,
+        });
+      } else {
+        orgFuso = (orgRow as { timezone?: string | null } | null)?.timezone ?? null;
+        faixa = faixaDaCobranca(data, new Date(), roleAtLeast(activeOrg.role, "admin"));
+      }
+    }
   } else {
     const [isEnrolled, mfaRequired] = await Promise.all([
       isMfaEnrolled(),
@@ -268,6 +294,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <EstiloDaMarcaDaOrganizacao css={cssDaOrganizacao} />
         <ImpersonateBanner impersonating={impersonating} />
         <ConexaoCaidaBanner caidas={conexoesCaidas} />
+        {faixa !== null && <FaixaDaCobranca faixa={faixa} fuso={orgFuso} />}
         {needsMfaGate ? (
           // Gate always mounted for MFA-required roles; it latches the blocking
           // decision client-side so the enroll Server Action's revalidation

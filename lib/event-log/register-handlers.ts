@@ -28,6 +28,8 @@ import { conversaoDeVendaHandler } from "@/lib/conversoes/envio.handler";
 import { avisoDeCasoAoSuporteHandler } from "@/lib/escalacao/aviso-ao-suporte.handler";
 import { avisoDeAgendamentoNoWhatsAppHandler } from "@/lib/agenda/aviso-de-agendamento.handler";
 import { registerHandler } from "@/lib/event-log/dispatcher";
+// FORK (card #160b): o aviso do provedor de cobrança acorda a releitura.
+import { cobrancaSinalHandler } from "@/lib/cobranca/sinal.handler";
 
 let _registered = false;
 
@@ -71,6 +73,8 @@ export function ensureHandlersRegistered(): void {
   // O aviso de agendamento ao dono (#84) sai por rede de terceiro e consome os
   // mesmos `appointment.*` das automações, que escrevem no banco.
   registerHandler(avisoDeAgendamentoNoWhatsAppHandler);
+  // FORK (card #160b): `cobranca.sinal` → `sincronizar` (relê a assinatura no provedor).
+  registerHandler(cobrancaSinalHandler);
   // Por último: reportar a venda ao anúncio é o consumidor mais externo do
   // fechamento — depende de rede de terceiro e não pode atrasar quem escreve
   // no banco. Falha dele nunca segura os handlers acima.
