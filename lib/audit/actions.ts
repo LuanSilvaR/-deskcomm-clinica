@@ -993,6 +993,12 @@ export const AUDIT_ACTIONS = [
   "clinic.dados_confirmados",
   // FORK clinic (agenda S5): o profissional reabriu o próprio atendimento no mesmo dia
   "clinic.atendimento_complementado",
+  // FORK (card #159, migration 8026): plano de cobrança da plataforma criado,
+  // editado (preço, limites, teste grátis, plano do cadastro) ou desarquivado.
+  // Toda mudança de preço é auditada: a linha guarda o estado, não o histórico.
+  "cobranca.plano_salvo",
+  // FORK (card #159): plano arquivado — sai do cadastro; quem já assina segue nele.
+  "cobranca.plano_arquivado",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

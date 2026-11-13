@@ -440,6 +440,11 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); configuração do produto.",
   },
   {
+    tabela: "cobranca_assinaturas",
+    razao:
+      "tests/invariants/cobranca-planos-e-assinaturas.test.ts (FORK, migration 8026, card #159): 2 orgs, só o admin da própria org lê; agente lê 0; ninguém escreve pela sessão (só service_role e as funções definer).",
+  },
+  {
     tabela: "clinic_orcamento_vendas",
     razao:
       "tests/invariants/clinic-orcamentos-pos-aceite.test.ts (FORK clinic, migration 8009): 2 orgs, quem é da outra empresa lê 0 linhas; ninguém escreve direto (só o pós-aceite); 1:1 orçamento ↔ comanda.",

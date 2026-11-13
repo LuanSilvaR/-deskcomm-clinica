@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Lock,
   PuzzlePiece,
+  Receipt,
 } from "@/lib/ui/icons";
 import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
@@ -99,14 +100,23 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/extensoes", label: "Extensões", icon: PuzzlePiece },
 ];
 
+/**
+ * FORK (card #159): a porta da cobrança da plataforma (planos e assinaturas).
+ * Só aparece com o módulo `cobranca` ligado em /admin/sistema — desligado, a
+ * tela responde 404 e o menu não mostra uma porta que não abre.
+ */
+const ITEM_COBRANCA: NavItem = { href: "/admin/cobranca", label: "Cobrança", icon: Receipt };
+
 interface AdminSidebarProps {
   userEmail: string;
   /** "mobile" = conteúdo desta MESMA navegação dentro do drawer que `AdminShell`
    * abre abaixo de `lg` — mesmo padrão de `components/shell/Sidebar.tsx`. */
   variant?: "desktop" | "mobile";
+  /** FORK (card #159): o módulo `cobranca` da instalação está ligado. */
+  cobrancaLigada?: boolean;
 }
 
-export function AdminSidebar({ userEmail, variant = "desktop" }: AdminSidebarProps) {
+export function AdminSidebar({ userEmail, variant = "desktop", cobrancaLigada = false }: AdminSidebarProps) {
   const t = useT();
   const isMobile = variant === "mobile";
   const pathname = usePathname();
@@ -137,7 +147,10 @@ export function AdminSidebar({ userEmail, variant = "desktop" }: AdminSidebarPro
         </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-2" aria-label={t("Navegação plataforma")}>
-        {NAV_ITEMS.map((item) => {
+        {(cobrancaLigada
+          ? [...NAV_ITEMS.slice(0, 3), ITEM_COBRANCA, ...NAV_ITEMS.slice(3)]
+          : NAV_ITEMS
+        ).map((item) => {
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;

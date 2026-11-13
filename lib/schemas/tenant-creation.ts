@@ -14,6 +14,10 @@ export const tenantCreationFields = {
   plan: z.enum(["standard", "pro", "enterprise"]),
   owner_interface_settings: interfaceSettingsSchema.optional(),
   owner_email: z.string().trim().email(),
+  // FORK (card #159): o plano de cobrança em que a clínica nasce em teste grátis.
+  // Só vale com o módulo `cobranca` ligado; desligado, o banco recusa
+  // (`cobranca_desligada`). Ausente = a clínica nasce sem assinatura (isenta).
+  plano_id: z.string().uuid().optional(),
 };
 export const createTenantSchema = z
   .object({ ...tenantCreationFields, plan: tenantCreationFields.plan.default("standard") })
