@@ -200,6 +200,12 @@ export async function POST(req: NextRequest) {
     p_hash: createHash("sha256").update(JSON.stringify(request)).digest("hex"),
   });
   if (error) {
+    // FORK (card #159): o plano de cobrança recusado tem nome próprio — não é
+    // slug repetido. `cobranca_desligada` = módulo desligado; `plano_invalido` =
+    // plano arquivado ou inexistente.
+    if (error.code === "22023" && (error.message === "cobranca_desligada" || error.message === "plano_invalido")) {
+      return fail(error.message, "Plano de cobrança inválido ou cobrança desligada", 422, { requestId });
+    }
     if (error.code === "23505" || error.code === "22023") {
       return fail("conflict", "Slug já existe ou a chave foi usada com outros dados", 409, {
         requestId,
@@ -224,6 +230,7 @@ export async function POST(req: NextRequest) {
         slug: org.slug,
         display_name: org.display_name,
         plan: request.plan,
+        plano_id: request.plano_id ?? null,
         creator_role: "admin",
       },
     });
