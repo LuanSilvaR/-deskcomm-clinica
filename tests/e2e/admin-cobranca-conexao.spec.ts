@@ -5,7 +5,7 @@
  * entrega aviso de pagamento num endereço https público. Na bancada do e2e o
  * app roda em http://localhost, então a tela diz isso antes do clique e o botão
  * "Testar e conectar" fica travado — nenhuma chave sai para provedor nenhum.
- * Asaas é o padrão (Pix e boleto). Banco compartilhado: liga e desliga o módulo.
+ * Stripe é o padrão (decisão do dono, card #161). Banco compartilhado: liga e desliga o módulo.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -39,15 +39,15 @@ test.describe("Cobrança — Conexão com o provedor (#160a)", () => {
   });
   test.afterAll(desligar);
 
-  test("sem https público, a tela avisa antes do clique e não deixa conectar", async ({ page }) => {
+  test("Stripe é o padrão; sem https público, a tela avisa antes do clique e não deixa conectar", async ({ page }) => {
     test.setTimeout(90_000);
     await loginComoDono(page, lerCreds());
     await page.goto("/admin/cobranca");
     const conexao = page.getByTestId("conexao-da-cobranca");
     await expect(conexao).toBeVisible();
-    await expect(page.locator("#provedor")).toHaveValue("asaas");
+    await expect(page.locator("#provedor")).toHaveValue("stripe");
     await expect(conexao.getByRole("alert")).toContainText(/endereço https público/i);
-    await page.locator("#chave-secreta").fill("$aact_hmlg_chave_de_teste_que_nao_sai_daqui");
+    await page.locator("#chave-secreta").fill("sk_test_chave_de_teste_que_nao_sai_daqui");
     await expect(page.getByRole("button", { name: /testar e conectar/i })).toBeDisabled();
     await page.screenshot({ path: evidencia("1-conexao-sem-https.png"), fullPage: true });
   });

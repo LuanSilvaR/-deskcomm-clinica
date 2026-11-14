@@ -1,8 +1,9 @@
 "use client";
 /**
- * FORK (card #160a; origem upstream `_conexao.tsx`). Asaas é o padrão (épico #158:
- * Pix e boleto, clientes no Brasil). Comece SEMPRE pela chave de sandbox: nada
- * real em produção sem homologação e autorização do dono.
+ * FORK (card #160a; origem upstream `_conexao.tsx`). Stripe é o padrão desde a
+ * decisão do dono no card #161 (docs/tarefas/161/decisao-e-checklist.md); o Asaas
+ * segue disponível no seletor. Comece SEMPRE pela chave de teste: nada real em
+ * produção sem homologação e autorização do dono.
  */
 
 import { useRouter } from "next/navigation";
@@ -70,7 +71,7 @@ export function ConexaoDaCobranca({
 }) {
   const t = useT();
   const router = useRouter();
-  const [escolhido, setEscolhido] = useState<ProvedorDeCobranca>(provedor === "stripe" ? "stripe" : "asaas");
+  const [escolhido, setEscolhido] = useState<ProvedorDeCobranca>(provedor === "asaas" ? "asaas" : "stripe");
   const [chave, setChave] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [aPublicar, setAPublicar] = useState<number | null>(null);
@@ -140,19 +141,19 @@ export function ConexaoDaCobranca({
           value={escolhido}
           onChange={(e) => setEscolhido(e.target.value === "asaas" ? "asaas" : "stripe")}
         >
-          <option value="asaas">Asaas</option>
           <option value="stripe">Stripe</option>
+          <option value="asaas">Asaas</option>
         </select>
         <ul className="space-y-1 pt-1 text-sm text-muted-foreground">
-          <li>
-            <span className="font-medium text-foreground">Asaas</span>
-            {" — "}
-            {t("todo mês o cliente recebe a cobrança e paga por Pix, boleto ou cartão: o jeito que o brasileiro paga. Pede o CPF ou CNPJ. Recomendado se seus clientes estão no Brasil.")}
-          </li>
           <li>
             <span className="font-medium text-foreground">Stripe</span>
             {" — "}
             {t("cobra o cartão sozinho todo mês e aceita boleto, mas não tem Pix.")}
+          </li>
+          <li>
+            <span className="font-medium text-foreground">Asaas</span>
+            {" — "}
+            {t("todo mês o cliente recebe a cobrança e paga por Pix, boleto ou cartão: o jeito que o brasileiro paga. Pede o CPF ou CNPJ. Recomendado se seus clientes estão no Brasil.")}
           </li>
         </ul>
       </div>
