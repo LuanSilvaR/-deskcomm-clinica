@@ -16,6 +16,8 @@ import { lgpdRedactHandler } from "@/workers/lgpd-redact-worker.handler";
 import { automationRulesHandler } from "@/lib/automation/engine.handler";
 import { followupReactivityHandler } from "@/lib/followup/reactivity.handler";
 import { campanhaRespostaHandler } from "@/lib/campanhas/resposta.handler";
+import { clinicConfirmacaoRespostaHandler } from "@/lib/clinic/confirmacao/resposta.handler";
+import { clinicEstoqueConsumoHandler } from "@/lib/clinic/estoque/consumo.handler";
 import { followupGatilhoEtapaHandler } from "@/lib/followup/gatilho-etapa.handler";
 import { followupGatilhoLeadHandler } from "@/lib/followup/gatilho-lead.handler";
 import { followupGatilhoCasoHandler } from "@/lib/followup/gatilho-caso.handler";
@@ -24,7 +26,10 @@ import { mediaDeriveHandler } from "@/workers/media-derive-worker.handler";
 import { webPushInboundHandler } from "@/lib/notifications/push.handler";
 import { conversaoDeVendaHandler } from "@/lib/conversoes/envio.handler";
 import { avisoDeCasoAoSuporteHandler } from "@/lib/escalacao/aviso-ao-suporte.handler";
+import { avisoDeAgendamentoNoWhatsAppHandler } from "@/lib/agenda/aviso-de-agendamento.handler";
 import { registerHandler } from "@/lib/event-log/dispatcher";
+// FORK (card #160b): o aviso do provedor de cobrança acorda a releitura.
+import { cobrancaSinalHandler } from "@/lib/cobranca/sinal.handler";
 
 let _registered = false;
 
@@ -37,6 +42,8 @@ export function ensureHandlersRegistered(): void {
   // LLM, pelo mesmo motivo dela — é escrita curta no banco, sem rede de
   // terceiro, e não pode ficar atrás de um consumidor que pode estourar.
   registerHandler(campanhaRespostaHandler);
+  // FORK clinic (9004): SIM/NÃO do paciente ao pedido de confirmação.
+  registerHandler(clinicConfirmacaoRespostaHandler);
   // Mesmo critério: o gatilho do cliente que volta é escrita curta no banco e
   // precisa rodar antes do LLM. Depois da reatividade, para o match_reply dos
   // fluxos já vivos ler a mensagem primeiro.
@@ -55,12 +62,19 @@ export function ensureHandlersRegistered(): void {
   registerHandler(mediaPersistHandler);
   registerHandler(mediaDeriveHandler);
   registerHandler(webPushInboundHandler);
+  // FORK clinic (9022): insumos de procedimento confirmado → porta de estoque.
+  registerHandler(clinicEstoqueConsumoHandler);
   // Penúltimo, pelo MESMO critério do último: o aviso ao suporte sai por rede de
   // terceiro (o transporte de WhatsApp) e nunca pode atrasar quem escreve no
   // banco — inclusive o `followupGatilhoCasoHandler`, que consome o MESMO evento
   // e cuja falha custa um follow-up perdido. Ele também é o único handler que
   // adia a si mesmo quando o dreno está rodando dentro de uma requisição.
   registerHandler(avisoDeCasoAoSuporteHandler);
+  // O aviso de agendamento ao dono (#84) sai por rede de terceiro e consome os
+  // mesmos `appointment.*` das automações, que escrevem no banco.
+  registerHandler(avisoDeAgendamentoNoWhatsAppHandler);
+  // FORK (card #160b): `cobranca.sinal` → `sincronizar` (relê a assinatura no provedor).
+  registerHandler(cobrancaSinalHandler);
   // Por último: reportar a venda ao anúncio é o consumidor mais externo do
   // fechamento — depende de rede de terceiro e não pode atrasar quem escreve
   // no banco. Falha dele nunca segura os handlers acima.

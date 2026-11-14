@@ -10,10 +10,11 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { useHorariosLivres } from "@/hooks/agenda/useHorariosLivres";
 import { useRemarcarAgendamento } from "@/hooks/agenda/useRemarcarAgendamento";
+import type { FechamentoDaGrade } from "@/lib/agenda/fechamentos-na-grade";
 import type { MotivoDaGradeTravada } from "@/lib/agenda/grade-interativa";
 import { cn } from "@/lib/utils";
 
-import { GradeDaAgenda } from "./GradeDaAgenda";
+import { GradeDaAgenda, type ForaDaAgendaDoDia } from "./GradeDaAgenda";
 import type { Agendamento, Pessoa, VisaoDaAgenda } from "./tipos";
 
 /**
@@ -45,20 +46,41 @@ export function AgendaInterativa({
   agora,
   pessoas,
   agendamentos,
+  fechamentos,
   recorte,
   tipos,
   tipo,
   onEscolherTipo,
   onMarcarEm,
   onAbrirAgendamento,
+  donoId,
+  foraDaAgenda,
+  ocultarFimDeSemana = false,
+  onSelecionarFaixa,
+  podeRemarcar = true,
+  etiquetas,
   className,
 }: {
+  /**
+   * FORK clinic (agenda por profissional): de QUEM é a agenda desenhada. Os
+   * horários livres são os dele — sem isto a rota resolvia o dono padrão do
+   * tipo, e a grade oferecia a vaga de uma pessoa na agenda de outra.
+   */
+  donoId?: string | null;
+  /** FORK clinic: jornada e bloqueios de `donoId`, por dia. */
+  foraDaAgenda?: Record<string, ForaDaAgendaDoDia>;
+  /** FORK clinic (agenda S2 #67): repassado à grade. */
+  ocultarFimDeSemana?: boolean;
+  /** FORK clinic (agenda S7 #70): arrastar sobre horários livres seleciona uma faixa. */
+  onSelecionarFaixa?: (faixa: { inicio: string; fim: string }) => void;
   visao: VisaoDaAgenda;
   ancora: Date;
   /** INJETADO, como na grade: relógio lido aqui dentro daria dois relógios ao teste. */
   agora: Date;
   pessoas: Pessoa[];
   agendamentos: Agendamento[];
+  /** As faixas de "Dias fora da rotina", repassadas à grade como vieram. */
+  fechamentos?: FechamentoDaGrade[];
   /** A MESMA janela que a grade desenha — vem de quem já a calcula, sem recontá-la. */
   recorte: { de: string; ate: string };
   /**
@@ -98,12 +120,19 @@ export function AgendaInterativa({
    */
   onMarcarEm?: (instante: string) => void;
   onAbrirAgendamento?: (id: string) => void;
+  /**
+   * FORK clinic (agenda S6a): `false` = sem arrastar card para remarcar (quem não
+   * tem `agenda.remarcar`). Default `true` = comportamento do upstream inalterado.
+   */
+  podeRemarcar?: boolean;
+  /** FORK clinic (agenda S6b): id -> rótulo (ex.: "Encaixe"). Ausente = nada muda. */
+  etiquetas?: Record<string, string>;
   className?: string;
 }) {
   const localeDaData = useLocaleDeData();
   const t = useT();
   const { data: horarios, isError: horariosFalharam } = useHorariosLivres(
-    tipo ? { event_type_id: tipo.id, de: recorte.de, ate: recorte.ate } : null,
+    tipo ? { event_type_id: tipo.id, de: recorte.de, ate: recorte.ate, ...(donoId ? { owner_user_id: donoId } : {}) } : null,
   );
 
   const horariosPorDia = React.useMemo(() => {
@@ -169,15 +198,18 @@ export function AgendaInterativa({
     }
   }, [agendamentos, otimista]);
 
-  const desenhados = React.useMemo(
-    () =>
-      otimista
-        ? agendamentos.map((a) =>
-            a.id === otimista.id ? { ...a, comeca: otimista.comeca, termina: otimista.termina } : a,
-          )
-        : agendamentos,
-    [agendamentos, otimista],
-  );
+  const desenhados = React.useMemo(() => {
+    const base = otimista
+      ? agendamentos.map((a) =>
+          a.id === otimista.id ? { ...a, comeca: otimista.comeca, termina: otimista.termina } : a,
+        )
+      : agendamentos;
+    // FORK clinic (agenda S6b): a etiqueta viaja no próprio agendamento.
+    return etiquetas ? base.map((a) => {
+      const rotulo = etiquetas[a.id];
+      return rotulo ? { ...a, etiqueta: t(rotulo) } : a;
+    }) : base;
+  }, [agendamentos, otimista, etiquetas, t]);
 
   const confirmar = React.useCallback(() => {
     if (!pendente) return;
@@ -327,7 +359,10 @@ export function AgendaInterativa({
         agora={agora}
         pessoas={pessoas}
         agendamentos={desenhados}
+        fechamentos={fechamentos}
         onAbrirAgendamento={onAbrirAgendamento}
+        foraDaAgenda={foraDaAgenda}
+        ocultarFimDeSemana={ocultarFimDeSemana}
         className="min-h-0 flex-1"
         interacao={
           tipo && onMarcarEm
@@ -336,7 +371,8 @@ export function AgendaInterativa({
                 motivo,
                 duracaoMin: tipo.duracaoMin,
                 onMarcarEm,
-                onArrastarPara: ({ instante, razao, id }) => {
+                onSelecionarFaixa,
+                onArrastarPara: !podeRemarcar ? undefined : ({ instante, razao, id }) => {
                   if (!instante) {
                     // RECUSA EXPLÍCITA, sem tocar no servidor: o destino não
                     // está na disponibilidade publicada. Remarcar assim mesmo

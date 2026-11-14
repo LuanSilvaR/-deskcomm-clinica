@@ -11,6 +11,7 @@
  * `agenda/tipos`, e a razão é igual: o passado não se reescreve porque alguém
  * parou de usar uma forma de pagamento.
  */
+import { exigeChaveNoNucleo } from "@/lib/clinic/acesso/chave-no-nucleo";
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
@@ -53,6 +54,12 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
   const authz = await requireRole("viewer", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
 
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.ver", requestId);
+
+  if (semChave) return semChave;
+
   const supabase = await createClient();
   // `inativos=1` para quem precisa ver o que saiu de uso — a tela normal não
   // mostra, mas o histórico existe e alguém vai perguntar por ele.
@@ -80,6 +87,12 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   const authz = await requireRole("manager", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.configurar", requestId);
+
+  if (semChave) return semChave;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
   const lido = SCHEMA_POR_ENTIDADE[e.tipo].safeParse(await req.json().catch(() => ({})));
@@ -143,6 +156,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   const authz = await requireRole("manager", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.configurar", requestId);
+
+  if (semChave) return semChave;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
   const corpo = await req.json().catch(() => ({}));
@@ -204,6 +223,12 @@ export async function DELETE(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   const authz = await requireRole("manager", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.configurar", requestId);
+
+  if (semChave) return semChave;
   const t = (texto: string) => traduzir(texto, authz.user.idioma);
 
   const lido = z

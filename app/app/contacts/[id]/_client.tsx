@@ -21,15 +21,30 @@ import { ROLE_RANK } from "@/lib/auth/types";
 import { TimelineView } from "@/components/contacts/TimelineView";
 import { EditContactDialog } from "@/components/contacts/EditContactDialog";
 import { AnonymizeDialog } from "@/components/contacts/AnonymizeDialog";
+import { AtestadoDoPaciente } from "@/components/clinic/lgpd/AtestadoDoPaciente";
 import { PropostasDeDado } from "@/components/contacts/PropostasDeDado";
 import { ConversaNoDossie } from "@/components/kanban/ConversaNoDossie";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { origemDoContato } from "@/lib/leads/origem-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
+import { FichaDoPaciente } from "@/components/clinic/FichaDoPaciente";
+import { AnexosDoPaciente } from "@/components/clinic/anexos/AnexosDoPaciente";
+import { DocumentosDoPaciente } from "@/components/clinic/documentos/DocumentosDoPaciente";
+import { OrcamentosDoPaciente } from "@/components/clinic/orcamentos/OrcamentosDoPaciente";
+import { PlanosDoPaciente } from "@/components/clinic/planos/PlanosDoPaciente";
+import { ProntuarioDoPaciente } from "@/components/clinic/prontuario/ProntuarioDoPaciente";
+import { usePermissoes } from "@/lib/clinic/acesso/use-permissoes";
+import { HistoricoDeAtendimentos } from "@/components/clinic/HistoricoDeAtendimentos";
 import { DialButton } from "@/components/voice/DialButton";
+import type { Contact } from "@/lib/types/contacts";
+import { NovoTelefoneExtra, RemoverTelefoneExtra } from "@/components/clinic/TelefonesExtras";
 
 interface Props {
   contactId: string;
+  /** FORK clinic (prontuário F2): `?aba=` da URL, lido pela página (servidor). */
+  abaInicial?: string;
+  /** FORK clinic (#85): `settings.clinic.varios_telefones` — adicionar/remover telefones extras. */
+  variosTelefones?: boolean;
 }
 
 /**
@@ -50,9 +65,105 @@ function NivelDaOrigem({ rotulo, valor }: { rotulo: string; valor: string | null
   );
 }
 
-export function ContactDetailClient({ contactId }: Props) {
+/**
+ * Rótulos do tipo e do WhatsApp de um telefone (#85, upstream Spec 31 B1). Cada ramo traz o
+ * `t("...")` LITERAL: o guardião de espanhol só enxerga texto escrito na tela, e
+ * `t(variavel)` escapa dele.
+ */
+function textoDoTipoDoTelefone(tipo: string | null | undefined, t: (texto: string) => string): string | null {
+  if (tipo === "fixo") return t("Fixo");
+  if (tipo === "celular") return t("Celular");
+  if (tipo === "outro") return t("Outro");
+  return null;
+}
+
+function textoDoWhatsappDoTelefone(
+  whatsapp: string | null | undefined,
+  t: (texto: string) => string,
+): string | null {
+  if (whatsapp === "sim") return t("Tem WhatsApp");
+  if (whatsapp === "nao") return t("Sem WhatsApp");
+  if (whatsapp === "nao_sei") return t("WhatsApp: não sabemos");
+  return null;
+}
+
+/**
+ * O bloco "Telefones" da ficha (Spec 31, B1), SÓ LEITURA: o principal e cada
+ * extra, com tipo, WhatsApp, rótulo e, quando a fusão trouxe o número, a origem.
+ * Editar é a próxima entrega (B2). Só aparece com extra; sem extra a ficha segue
+ * como hoje, com o tipo ao lado do número.
+ */
+function BlocoDeTelefones({
+  contato,
+  t,
+  editavel = false,
+}: {
+  contato: Contact;
+  t: (texto: string) => string;
+  /** FORK clinic (#85): com a opção ligada, remover cada extra e adicionar um novo. */
+  editavel?: boolean;
+}) {
+  const extras = contato.additional_phones ?? [];
+  return (
+    <div className="md:col-span-2">
+      <dt className="text-xs uppercase text-muted-foreground">{t("Telefones")}</dt>
+      <dd className="mt-1">
+        <ul className="flex flex-col gap-2">
+          {contato.phone_number && (
+            <li className="flex flex-wrap items-center gap-2">
+              <span>{phoneForDisplay(contato.phone_number)}</span>
+              <Badge variant="secondary">{t("Principal")}</Badge>
+              {textoDoTipoDoTelefone(contato.phone_type, t) && (
+                <span className="text-xs text-muted-foreground">
+                  {textoDoTipoDoTelefone(contato.phone_type, t)}
+                </span>
+              )}
+              {textoDoWhatsappDoTelefone(contato.phone_whatsapp, t) && (
+                <span className="text-xs text-muted-foreground">
+                  {textoDoWhatsappDoTelefone(contato.phone_whatsapp, t)}
+                </span>
+              )}
+            </li>
+          )}
+          {extras.map((extra) => (
+            <li key={extra.phone_number} className="flex flex-wrap items-center gap-2">
+              <span>{phoneForDisplay(extra.phone_number)}</span>
+              {textoDoTipoDoTelefone(extra.type, t) && (
+                <span className="text-xs text-muted-foreground">
+                  {textoDoTipoDoTelefone(extra.type, t)}
+                </span>
+              )}
+              {textoDoWhatsappDoTelefone(extra.whatsapp, t) && (
+                <span className="text-xs text-muted-foreground">
+                  {textoDoWhatsappDoTelefone(extra.whatsapp, t)}
+                </span>
+              )}
+              {extra.label && <span className="text-xs text-muted-foreground">{extra.label}</span>}
+              {extra.origin === "fusao" && (
+                <span className="text-xs text-muted-foreground">{t("Veio da junção de fichas")}</span>
+              )}
+              {editavel && <RemoverTelefoneExtra contactId={contato.id} telefone={extra.phone_number} />}
+            </li>
+          ))}
+        </ul>
+        {editavel && <NovoTelefoneExtra contactId={contato.id} />}
+      </dd>
+    </div>
+  );
+}
+
+export function ContactDetailClient({ contactId, abaInicial, variosTelefones = false }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  // FORK clinic (prontuário F2): a aba Prontuário só existe para quem tem
+  // `prontuario.ver` — administrar o sistema não é ver conteúdo clínico.
+  const { can } = usePermissoes();
+  const verProntuario = can("prontuario.ver");
+  const verPlanos = can("planos.ver");
+  const verDocumentos = can("documentos.ver");
+  // FORK clinic (orçamento O2): não é conteúdo clínico — a recepção vê.
+  const verOrcamentos = can("orcamentos.ver");
+  const abaPedida = abaInicial ?? null;
   const q = useContact(contactId);
   const { user, activeOrg } = useAuth();
   const clientesLigado = activeOrg?.cliente_pela_agenda === true;
@@ -91,7 +202,7 @@ export function ContactDetailClient({ contactId }: Props) {
   if (q.isError || !q.data) {
     return (
       <div className="p-6">
-        <Card className="p-6 text-center text-sm text-error-fg">{t("Erro ao carregar contato.")}</Card>
+        <Card className="p-6 text-center text-sm text-error-fg">{t("Erro ao carregar paciente.")}</Card>
       </div>
     );
   }
@@ -128,7 +239,7 @@ export function ContactDetailClient({ contactId }: Props) {
         >
           <ShieldCheck size={18} weight="duotone" aria-hidden />
           <span>
-            {t("Contato anonimizado (LGPD)")}
+            {t("Paciente anonimizado (LGPD)")}
             {contact.anonymized_at &&
               ` em ${format(new Date(contact.anonymized_at), "dd/MM/yyyy", { locale: localeDaData })}`}
             {t(" — edição bloqueada.")}
@@ -180,9 +291,35 @@ export function ContactDetailClient({ contactId }: Props) {
         />
       )}
 
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={["prontuario", "planos", "documentos", "anexos", "orcamentos"].includes(abaPedida ?? "") ? abaPedida! : "overview"}>
         <TabsList>
           <TabsTrigger value="overview">{t("Visão geral")}</TabsTrigger>
+          <TabsTrigger value="ficha">{t("Ficha do paciente")}</TabsTrigger>
+          {verProntuario && (
+            <TabsTrigger value="prontuario" data-testid="aba-prontuario">
+              {t("Prontuário")}
+            </TabsTrigger>
+          )}
+          {verProntuario && (
+            <TabsTrigger value="anexos" data-testid="aba-anexos">
+              {t("Fotos e anexos")}
+            </TabsTrigger>
+          )}
+          {verDocumentos && (
+            <TabsTrigger value="documentos" data-testid="aba-documentos">
+              {t("Documentos")}
+            </TabsTrigger>
+          )}
+          {verOrcamentos && (
+            <TabsTrigger value="orcamentos" data-testid="aba-orcamentos">
+              {t("Orçamentos")}
+            </TabsTrigger>
+          )}
+          {verPlanos && (
+            <TabsTrigger value="planos" data-testid="aba-planos">
+              {t("Planos")}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           {isAdmin && <TabsTrigger value="lgpd">LGPD</TabsTrigger>}
         </TabsList>
@@ -202,12 +339,25 @@ export function ContactDetailClient({ contactId }: Props) {
                 <dt className="text-xs uppercase text-muted-foreground">Email</dt>
                 <dd className="mt-1">{contact.email ?? "—"}</dd>
               </div>
-              <div>
-                <dt className="text-xs uppercase text-muted-foreground">{t("Telefone")}</dt>
-                <dd className="mt-1">
-                  {contact.phone_number ? phoneForDisplay(contact.phone_number) : "—"}
-                </dd>
-              </div>
+              {/*
+                Com telefone extra, o bloco lista o principal e os extras (Spec 31,
+                B1). Sem extra, a linha segue como hoje; o tipo do número vai ao lado.
+              */}
+              {variosTelefones || (contact.additional_phones && contact.additional_phones.length > 0) ? (
+                <BlocoDeTelefones contato={contact} t={t} editavel={variosTelefones} />
+              ) : (
+                <div>
+                  <dt className="text-xs uppercase text-muted-foreground">{t("Telefone")}</dt>
+                  <dd className="mt-1">
+                    {contact.phone_number ? phoneForDisplay(contact.phone_number) : "—"}
+                    {contact.phone_number && textoDoTipoDoTelefone(contact.phone_type, t) && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {textoDoTipoDoTelefone(contact.phone_type, t)}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
               {/*
                 A origem sai do `source_metadata` quando ele tem algo melhor a
                 dizer, e cai na coluna `source` quando não tem. Antes esta linha
@@ -281,7 +431,55 @@ export function ContactDetailClient({ contactId }: Props) {
           </Card>
         </TabsContent>
 
-        <TabsContent value="timeline" className="mt-4">
+        {/* FORK clinic (migration 9002): a ficha cadastral do paciente. */}
+        <TabsContent value="ficha" className="mt-4">
+          <Card className="p-4">
+            <FichaDoPaciente
+              contactId={contactId}
+              podeEditar={Boolean(activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent)}
+            />
+          </Card>
+        </TabsContent>
+
+        {verProntuario && (
+          <TabsContent value="anexos" className="mt-4">
+            <Card className="p-4">
+              <AnexosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
+        {verDocumentos && (
+          <TabsContent value="documentos" className="mt-4">
+            <Card className="p-4">
+              <DocumentosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
+        {verOrcamentos && (
+          <TabsContent value="orcamentos" className="mt-4">
+            <Card className="p-4">
+              <OrcamentosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
+        {verPlanos && (
+          <TabsContent value="planos" className="mt-4">
+            <Card className="p-4">
+              <PlanosDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
+        {verProntuario && (
+          <TabsContent value="prontuario" className="mt-4">
+            <Card className="p-4">
+              <ProntuarioDoPaciente contactId={contactId} />
+            </Card>
+          </TabsContent>
+        )}
+
+        <TabsContent value="timeline" className="mt-4 space-y-4">
+          {/* FORK clinic (migration 9003): agendamentos e atendimentos do paciente. */}
+          <HistoricoDeAtendimentos contactId={contactId} />
           <TimelineView contactId={contactId} />
         </TabsContent>
 
@@ -297,15 +495,18 @@ export function ContactDetailClient({ contactId }: Props) {
                 </p>
               </div>
               {contact.is_anonymized ? (
-                <p className="text-sm text-muted-foreground">
-                  {t("Este contato já foi anonimizado")}
-                  {contact.anonymized_at &&
-                    ` em ${format(new Date(contact.anonymized_at), "dd/MM/yyyy HH:mm", { locale: localeDaData })}`}
-                  .
-                </p>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {t("Este paciente já foi anonimizado")}
+                    {contact.anonymized_at &&
+                      ` em ${format(new Date(contact.anonymized_at), "dd/MM/yyyy HH:mm", { locale: localeDaData })}`}
+                    .
+                  </p>
+                  <AtestadoDoPaciente contactId={contactId} />
+                </div>
               ) : (
                 <Button variant="destructive" onClick={() => setAnonOpen(true)}>
-                  {t("Anonimizar contato")}
+                  {t("Anonimizar paciente")}
                 </Button>
               )}
             </Card>

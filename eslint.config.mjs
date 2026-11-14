@@ -32,6 +32,14 @@ export default defineConfig([
     },
   },
   {
+    // FORK clinic (prontuário F0): dado de saúde não pode vazar para log por
+    // descuido. No código clínico, `console.log/info/debug` REPROVA o lint (erro,
+    // não aviso); só `console.error/warn` ficam, para falha operacional sem
+    // conteúdo. Log estruturado sem PII: lib/logger.ts.
+    files: ["lib/clinic/**", "app/api/v1/clinic/**", "components/clinic/**", "app/app/atendimentos/**"],
+    rules: { "no-console": ["error", { allow: ["warn", "error"] }] },
+  },
+  {
     // Script CLI do gov-loop (roda via tsx, fora do bundle) — require() ok.
     files: ["loop/**/*.ts"],
     rules: { "@typescript-eslint/no-require-imports": "off" },

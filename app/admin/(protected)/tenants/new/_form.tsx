@@ -28,6 +28,19 @@ import { ApiError } from "@/lib/api/types";
 import { useT } from "@/hooks/i18n/useT";
 import { useIdioma } from "@/lib/i18n/IdiomaProvider";
 import { copyToClipboard } from "@/lib/clipboard";
+import { formatarReais } from "@/lib/clinic/orcamentos/precos";
+
+/** FORK (card #159): um plano de cobrança que o cadastro pode oferecer. */
+export interface PlanoParaCadastro {
+  id: string;
+  nome: string;
+  preco_cents: number;
+  intervalo: "mes" | "ano";
+  trial_dias: number;
+  padrao_no_cadastro: boolean;
+}
+
+const SEM_PLANO = "sem-plano";
 
 // ---------------------------------------------------------------------------
 // Schema (mirrors server Zod; client keeps it in sync)
@@ -69,7 +82,7 @@ function maskCnpj(value: string): string {
 // Form component
 // ---------------------------------------------------------------------------
 
-export function NewTenantForm() {
+export function NewTenantForm({ planosDeCobranca = null }: { planosDeCobranca?: PlanoParaCadastro[] | null }) {
   const t = useT();
   const idioma = useIdioma();
   const router = useRouter();
@@ -77,6 +90,9 @@ export function NewTenantForm() {
   const [ownerInterface, setOwnerInterface] = useState(INTERFACE_COMPLETA);
   const [slugLocked, setSlugLocked] = useState(false);
   const [created, setCreated] = useState<CreateTenantResponse["data"] | null>(null);
+  const [planoDeCobranca, setPlanoDeCobranca] = useState<string>(
+    planosDeCobranca?.find((p) => p.padrao_no_cadastro)?.id ?? SEM_PLANO,
+  );
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -125,12 +141,17 @@ export function NewTenantForm() {
         plan: values.plan,
         owner_email: values.owner_email,
         owner_interface_settings: ownerInterface,
+        ...(planosDeCobranca && planoDeCobranca !== SEM_PLANO ? { plano_id: planoDeCobranca } : {}),
       });
 
       toast.success(t("Tenant criado com sucesso!"));
       setCreated(result.data);
     } catch (err) {
       if (err instanceof ApiError) {
+        if (err.code === "plano_invalido" || err.code === "cobranca_desligada") {
+          toast.error(t("O plano de cobrança escolhido não está mais disponível. Recarregue a página."));
+          return;
+        }
         if (err.code === "conflict") {
           form.setError("slug", { message: t("Este slug já está em uso") });
           return;
@@ -298,6 +319,29 @@ export function NewTenantForm() {
                 <p className="text-xs text-error-fg">{t(errors.plan.message ?? "")}</p>
               )}
             </div>
+
+            {/* FORK (card #159): plano de cobrança — só com o módulo ligado */}
+            {planosDeCobranca && (
+              <div className="space-y-1.5">
+                <Label htmlFor="plano_de_cobranca">{t("Plano de cobrança")}</Label>
+                <Select value={planoDeCobranca} onValueChange={setPlanoDeCobranca}>
+                  <SelectTrigger id="plano_de_cobranca" aria-label={t("Plano de cobrança")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SEM_PLANO}>{t("Sem assinatura (isenta)")}</SelectItem>
+                    {planosDeCobranca.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {`${p.nome} · ${formatarReais(p.preco_cents)}/${p.intervalo === "ano" ? t("ano") : t("mês")} · ${p.trial_dias} ${t("dias de teste grátis")}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-text-muted">
+                  {t("A clínica nasce em teste grátis neste plano. Nenhuma cobrança real acontece nesta etapa.")}
+                </p>
+              </div>
+            )}
 
             {/* owner_email */}
             <div className="space-y-1.5">

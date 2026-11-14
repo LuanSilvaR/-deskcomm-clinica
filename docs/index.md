@@ -38,6 +38,8 @@ de menor precedência e registre.
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Como contribuir |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Mudanças por versão (SemVer). **Quem roda VPS lê antes de `update.sh`** — mudança que exige ação manual aparece sob "⚠️ Requer atenção" |
 | [`docs/current-state.md`](current-state.md) | **O que está pronto, incompleto e quebrado hoje** |
+| [`docs/funcionalidades.md`](funcionalidades.md) | **Inventário do fork de clínicas: 53 features por módulo, flags, migrations, PRs e testes** |
+| [`docs/curso-deskcomm/`](curso-deskcomm/README.md) | **Curso oficial do núcleo (v1.94.0) em texto: 85 módulos, 333 lições, 1444 passos e 30 jornadas por nicho** |
 | [`.agents/skills/`](../.agents/skills/deskcomm-instalar/SKILL.md) | **Guias do assistente** — instalar, montar cliente por nicho, métricas, prompt, contribuir. Skills lidas por Claude Code, Codex, Cursor, OpenCode e Antigravity (não confundir com as *Skills* do agente de IA, na tela IA › Skills) |
 
 ## 2. Produto e intenção

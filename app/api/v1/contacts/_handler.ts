@@ -18,7 +18,7 @@ import type { Idioma } from "@/lib/i18n/idiomas";
 import { roleAtLeast } from "@/lib/auth/types";
 import { canonicalPhoneBR, phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { encontrarContatoPorTelefone } from "@/lib/channels/contato-por-telefone";
-import { hashCpf, encryptCpfSql } from "@/lib/contacts/cpf";
+import { cifrarCpf, decifrarCpf, hashCpf } from "@/lib/contacts/cpf";
 import type { Contact } from "@/lib/types/contacts";
 import { ensureConversation, sessaoProntaParaEnvio } from "@/lib/automation/start-conversation";
 import type {
@@ -91,6 +91,9 @@ export async function listContactsHandler(
   supabase: SB,
   ctx: HandlerCtx,
   raw: ContactListQueryParams,
+  // FORK clinic (agenda S5): `null`/ausente = sem recorte; lista = só estes
+  // contatos (o profissional sem `pacientes.ver_todos` vê os da própria agenda).
+  somenteIds?: readonly string[] | null,
 ): Promise<ListContactsResult> {
   const q: ContactListQuery = contactListQuerySchema.parse(raw);
   const sortCol = q.order_by;
@@ -159,9 +162,34 @@ export async function listContactsHandler(
         !digits.startsWith("55") && (digits.length === 10 || digits.length === 11)
           ? `55${digits}`
           : digits;
+      // Os critérios de TELEFONE do principal, reaproveitados para o extra abaixo.
+      const criteriosDeTelefone = [`phone_number.imatch.${s}`];
       for (const v of phoneLookupVariants(base)) {
         const d = v.replace(/\D/g, "");
-        if (d && d !== digits) orParts.push(`phone_number.ilike.%${d}%`);
+        if (d && d !== digits) {
+          orParts.push(`phone_number.ilike.%${d}%`);
+          criteriosDeTelefone.push(`phone_number.ilike.%${d}%`);
+        }
+      }
+      // Ficha cujo TELEFONE EXTRA casa o termo também entra na busca: sem isto, o
+      // número que não é o principal não acharia a pessoa que o tem. A consulta
+      // aos extras é do mesmo jeito filtrada por organização; a ficha continua
+      // passando pelo filtro de lápide e de pessoal da listagem.
+      //
+      // Só quando o termo TEM CARA DE TELEFONE (dígitos e a pontuação de número):
+      // texto com letras e dígitos ("a,organization_id.eq.000…") não é busca de
+      // número, e uma consulta a mais por termo hostil é o que a cerca da busca
+      // (`busca-de-contatos-normaliza-termo`) conta.
+      if (/^[\d\s()+.-]+$/.test(q.search.trim())) {
+        const { data: extras } = await supabase
+          .from("contact_phones")
+          .select("contact_id")
+          .eq("organization_id", ctx.organization_id)
+          .or(criteriosDeTelefone.join(","));
+        const idsDeExtras = [
+          ...new Set(((extras ?? []) as { contact_id: string }[]).map((r) => r.contact_id)),
+        ];
+        if (idsDeExtras.length > 0) orParts.push(`id.in.(${idsDeExtras.join(",")})`);
       }
     }
     if (digits.length === 11) {
@@ -169,6 +197,7 @@ export async function listContactsHandler(
     }
     query = query.or(orParts.join(","));
   }
+  if (somenteIds) query = query.in("id", somenteIds.length ? [...somenteIds] : ["00000000-0000-0000-0000-000000000000"]);
   if (q.tag) query = query.contains("tags", [q.tag]);
   if (q.source) query = query.eq("source", q.source);
 
@@ -323,14 +352,13 @@ export async function getContactHandler(
     if (!roleAtLeast(role, "manager")) {
       cpfDecryptDenied = true;
     } else {
-      const { data: dec, error: decErr } = await supabase.rpc("decrypt_cpf", {
-        p_contact_id: input.contactId,
-      });
-      if (decErr) {
-        console.warn("[contacts.get] decrypt_cpf RPC unavailable", decErr.message);
-      } else if (typeof dec === "string") {
-        cpfDecrypted = dec;
-      }
+      const { data: cifra } = await supabase
+        .from("contacts")
+        .select("cpf_encrypted")
+        .eq("id", input.contactId)
+        .eq("organization_id", contact.organization_id)
+        .maybeSingle();
+      cpfDecrypted = await decifrarCpf(supabase, (cifra as { cpf_encrypted?: unknown } | null)?.cpf_encrypted);
       const a = actorAuditPayload(ctx.actor);
       await audit({
         action: "contact.updated",
@@ -395,9 +423,12 @@ export async function createContactHandler(
   };
 
   if (input.cpf) {
-    insertRow.cpf_hash = hashCpf(input.cpf);
-    const enc = await encryptCpfSql(supabase, input.cpf);
-    if (enc) insertRow.cpf_encrypted = enc;
+    // O par (hash + cifra) ou nada: o CHECK contacts_cpf_consistency recusa metade.
+    const par = await cifrarCpf(supabase, input.cpf);
+    if (!par) {
+      throw new ApiError(500, "internal_error", undefined, ctx.requestId, "Não foi possível proteger o CPF agora.");
+    }
+    Object.assign(insertRow, par);
   }
 
   const { data: created, error: insErr } = await supabase
@@ -566,9 +597,11 @@ export async function patchContactHandler(
     patch.consent = { ...anterior, ...input.consent };
   }
   if (input.cpf !== undefined) {
-    patch.cpf_hash = hashCpf(input.cpf);
-    const enc = await encryptCpfSql(supabase, input.cpf);
-    if (enc) patch.cpf_encrypted = enc;
+    const par = await cifrarCpf(supabase, input.cpf);
+    if (!par) {
+      throw new ApiError(500, "internal_error", undefined, ctx.requestId, "Não foi possível proteger o CPF agora.");
+    }
+    Object.assign(patch, par);
   }
 
   if (Object.keys(patch).length === 0) {

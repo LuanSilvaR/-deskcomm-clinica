@@ -9,6 +9,7 @@
  * Depois de finalizada, o caminho é o ESTORNO. O guard abaixo é o que separa os
  * dois casos, e sem ele o mesmo verbo apagaria história.
  */
+import { exigeChaveNoNucleo } from "@/lib/clinic/acesso/chave-no-nucleo";
 import { randomUUID } from "node:crypto";
 
 import type { NextRequest } from "next/server";
@@ -30,6 +31,12 @@ export async function DELETE(_req: NextRequest, ctx: Ctx): Promise<Response> {
 
   const authz = await requireRole("agent", { requestId, resource: "financeiro" });
   if (!authz.ok) return authz.response;
+
+  // FORK clinic (agenda S5): além do papel, a chave da clínica.
+
+  const semChave = await exigeChaveNoNucleo(await createClient(), authz.org.orgId, "financeiro.lancar", requestId);
+
+  if (semChave) return semChave;
 
   const { id, itemId } = await ctx.params;
   const supabase = await createClient();

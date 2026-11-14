@@ -75,6 +75,12 @@ import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { moldeDoDegrau } from "@/lib/agenda/lembretes";
 import { autorizaCron } from "@/lib/auth/cron-auth";
+import { deveAnexarPedido, registrarPedido } from "@/lib/clinic/confirmacao/servidor";
+import { PEDIDO_DE_CONFIRMACAO } from "@/lib/clinic/confirmacao/resposta";
+import { enviarLembreteComReserva } from "@/lib/clinic/lembrete-com-reserva/enviar";
+import { gravarDesfechoNoCompromisso } from "@/lib/clinic/lembrete-com-reserva/desfecho";
+import { reenviarLembretesQueAMetaRecusou } from "@/lib/clinic/lembrete-com-reserva/reserva-depois";
+import { lembreteComReservaLigado } from "@/lib/clinic/lembrete-com-reserva/regra";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +99,7 @@ interface TipoDoCompromisso {
   reminder_body: string | null;
   reminder_bodies: Record<string, string> | null;
   location_details: string | null;
+  reminder_meta_template_id: string | null;
 }
 
 interface CompromissoAVencer {
@@ -103,6 +110,7 @@ interface CompromissoAVencer {
   starts_at: string;
   location_details: string | null;
   reminder_sent_offsets_minutes: number[] | null;
+  reminder_tentativas: Record<string, number> | null;
   calendar_event_types: TipoDoCompromisso | TipoDoCompromisso[] | null;
 }
 
@@ -136,6 +144,24 @@ export function aplicarMoldeDoLembrete(
   });
 }
 
+/** O dia e a hora do compromisso, no fuso e no idioma da organização. */
+function diaEHora(quando: Date, timezone: string, idioma: Idioma): { dia: string; hora: string } {
+  const etiqueta = tagDeIdioma(idioma);
+  const dia = new Intl.DateTimeFormat(etiqueta, {
+    timeZone: timezone,
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(quando);
+  const hora = new Intl.DateTimeFormat(etiqueta, {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(quando);
+  return { dia, hora };
+}
+
 export function montarLembrete(input: {
   nomeDoContato: string | null;
   titulo: string;
@@ -163,20 +189,8 @@ export function montarLembrete(input: {
 }): string {
   const idioma = input.idioma ?? IDIOMA_PADRAO;
   const t = (texto: string) => traduzir(texto, idioma);
-  const etiqueta = tagDeIdioma(idioma);
 
-  const dia = new Intl.DateTimeFormat(etiqueta, {
-    timeZone: input.timezone,
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-  }).format(input.quando);
-  const hora = new Intl.DateTimeFormat(etiqueta, {
-    timeZone: input.timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(input.quando);
+  const { dia, hora } = diaEHora(input.quando, input.timezone, idioma);
 
   const nome = input.nomeDoContato?.trim() ?? "";
   const pecas: Record<string, string> = {
@@ -259,14 +273,24 @@ async function handle(req: NextRequest): Promise<Response> {
   const admin = createAdminClient();
   const agora = new Date();
 
+  // A Meta aceita o envio e só depois avisa que falhou (#83): a reserva dessas
+  // mensagens roda ANTES do laço e nunca derruba a rodada.
+  const reservas = await reenviarLembretesQueAMetaRecusou(admin, agora).catch((err: unknown) => {
+    logger.error("[agenda-reminder] varredura da reserva falhou", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId,
+    });
+    return { reenviados: 0, semReserva: 0, ignorados: 0 };
+  });
+
   // `!inner` no tipo: só interessa compromisso cujo TIPO pede lembrete. O corte
   // por `starts_at` usa a maior antecedência possível — o corte fino, que depende
   // do `reminder_minutes_before` de cada linha, é `estaNaHora` logo abaixo.
   const { data, error } = await admin
     .from("calendar_appointments")
     .select(
-      "id, organization_id, contact_id, title, starts_at, location_details, reminder_sent_offsets_minutes, " +
-        "calendar_event_types!inner(name, reminder_enabled, reminder_minutes_before, reminder_extra_offsets_minutes, reminder_template_name, reminder_body, reminder_bodies, location_details)",
+      "id, organization_id, contact_id, title, starts_at, location_details, reminder_sent_offsets_minutes, reminder_tentativas, " +
+        "calendar_event_types!inner(name, reminder_enabled, reminder_minutes_before, reminder_extra_offsets_minutes, reminder_template_name, reminder_body, reminder_bodies, location_details, reminder_meta_template_id)",
     )
     .eq("status", "confirmed")
     .eq("calendar_event_types.reminder_enabled", true)
@@ -341,6 +365,21 @@ async function handle(req: NextRequest): Promise<Response> {
       continue;
     }
 
+    // Lido UMA vez por compromisso, antes do canal: a chave do lembrete com
+    // reserva (#83) decide qual dos dois caminhos segue daqui.
+    const { data: organizacao } = await admin
+      .from("organizations")
+      .select("timezone, locale, settings")
+      .eq("id", org)
+      .maybeSingle();
+
+    if (lembreteComReservaLigado(organizacao?.settings)) {
+      const r = await lembrarComReserva(admin, { linha, tipo, pendentes, contato, organizacao, requestId });
+      if (r.resultado === "enviado") enviados += 1;
+      else pular(r.motivo);
+      continue;
+    }
+
     const { data: canal } = await admin
       .from("channel_sessions")
       .select("id")
@@ -360,34 +399,7 @@ async function handle(req: NextRequest): Promise<Response> {
       continue;
     }
 
-    const { data: organizacao } = await admin
-      .from("organizations")
-      .select("timezone, locale")
-      .eq("id", org)
-      .maybeSingle();
-
-    let molde = moldeDoDegrau(tipo, Math.min(...pendentes));
-    if (!molde && tipo.reminder_template_name) {
-      const { data: modelo } = await admin
-        .from("message_templates")
-        .select("body")
-        .eq("organization_id", org)
-        .or(`shortcut.eq.${tipo.reminder_template_name},title.eq.${tipo.reminder_template_name}`)
-        .limit(1)
-        .maybeSingle();
-      if (modelo?.body) molde = modelo.body;
-    }
-
-    const corpo = montarLembrete({
-      nomeDoContato: nomeDoContato(contato),
-      titulo: linha.title,
-      quando: new Date(linha.starts_at),
-      timezone: organizacao?.timezone ?? "America/Sao_Paulo",
-      local: linha.location_details ?? tipo.location_details ?? null,
-      idioma: normalizarIdioma(organizacao?.locale),
-      molde,
-      tipoNome: tipo.name,
-    });
+    const { corpo, pedeConfirmacao } = await montarCorpo(admin, { linha, tipo, pendentes, contato, organizacao });
 
     await espacarEnvio(canal.id);
 
@@ -397,7 +409,7 @@ async function handle(req: NextRequest): Promise<Response> {
       // o mesmo que `lib/followup/enviar-texto-fixo.ts` usa. O `id` é o
       // compromisso, para o audit da mensagem correlacionar com a linha que a
       // originou.
-      await sendMessageHandler(
+      const mensagem = await sendMessageHandler(
         admin,
         {
           organization_id: org,
@@ -424,6 +436,23 @@ async function handle(req: NextRequest): Promise<Response> {
         .eq("id", linha.id)
         .eq("organization_id", org);
       enviados += 1;
+      if (pedeConfirmacao) {
+        // O lembrete já saiu; falhar aqui só perde o registro do pedido, e a
+        // resposta do paciente continua no inbox.
+        await registrarPedido(admin, {
+          organizationId: org,
+          appointmentId: linha.id,
+          contactId: contato.id,
+          conversationId: conversaId,
+          reminderMessageId: mensagem.id,
+        }).catch((err: unknown) =>
+          logger.error("[agenda-reminder] pedido de confirmação não registrado", {
+            appointmentId: linha.id,
+            error: err instanceof Error ? err.message : String(err),
+            requestId,
+          }),
+        );
+      }
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : String(err);
       logger.error("[agenda-reminder] envio falhou", { appointmentId: linha.id, error: mensagem, requestId });
@@ -434,16 +463,166 @@ async function handle(req: NextRequest): Promise<Response> {
   // Rodada que não avisou ninguém NÃO é mutação, e não audita — a lei está no
   // CLAUDE.md §Audit log, e `tests/unit/cron-audita-so-quando-ha-efeito.test.ts`
   // varre o AST de toda rota deste diretório atrás de `audit` incondicional.
-  if (enviados > 0) {
+  if (enviados > 0 || reservas.reenviados > 0) {
     await audit({
       action: "agenda.lembrete_enviado",
       resourceType: "calendar_appointment",
       requestId,
-      metadata: { enviados, pulados, motivos },
+      metadata: { enviados, pulados, motivos, reservas },
     });
   }
 
-  return ok({ examinados: linhas.length, enviados, pulados, motivos }, { requestId });
+  return ok({ examinados: linhas.length, enviados, pulados, motivos, reservas }, { requestId });
+}
+
+type Admin = ReturnType<typeof createAdminClient>;
+
+interface OrganizacaoDoLembrete {
+  timezone: string | null;
+  locale: string | null;
+  settings: unknown;
+}
+
+interface ContatoDoLembrete {
+  id: string;
+  name: string | null;
+  display_name: string | null;
+}
+
+interface EntradaDoCorpo {
+  linha: CompromissoAVencer;
+  tipo: TipoDoCompromisso;
+  pendentes: number[];
+  contato: ContatoDoLembrete;
+  organizacao: OrganizacaoDoLembrete | null;
+}
+
+/** O texto livre do lembrete (com o pedido SIM/NÃO quando a clínica liga a confirmação). */
+async function montarCorpo(
+  admin: Admin,
+  { linha, tipo, pendentes, contato, organizacao }: EntradaDoCorpo,
+): Promise<{ corpo: string; pedeConfirmacao: boolean; idioma: Idioma }> {
+  const org = linha.organization_id;
+  let molde = moldeDoDegrau(tipo, Math.min(...pendentes));
+  if (!molde && tipo.reminder_template_name) {
+    const { data: modelo } = await admin
+      .from("message_templates")
+      .select("body")
+      .eq("organization_id", org)
+      .or(`shortcut.eq.${tipo.reminder_template_name},title.eq.${tipo.reminder_template_name}`)
+      .limit(1)
+      .maybeSingle();
+    if (modelo?.body) molde = modelo.body;
+  }
+
+  const idioma = normalizarIdioma(organizacao?.locale);
+  const corpoDoLembrete = montarLembrete({
+    nomeDoContato: nomeDoContato(contato),
+    titulo: linha.title,
+    quando: new Date(linha.starts_at),
+    timezone: organizacao?.timezone ?? "America/Sao_Paulo",
+    local: linha.location_details ?? tipo.location_details ?? null,
+    idioma,
+    molde,
+    tipoNome: tipo.name,
+  });
+
+  // FORK clinic (9004): o lembrete da véspera pede SIM/NÃO quando a clínica
+  // ligou a confirmação automática. A resposta é lida por
+  // lib/clinic/confirmacao/resposta.handler.ts.
+  const pedeConfirmacao = await deveAnexarPedido(admin, {
+    organizationId: org,
+    appointmentId: linha.id,
+    settings: organizacao?.settings,
+    degraus: pendentes,
+  });
+  const corpo = pedeConfirmacao
+    ? `${corpoDoLembrete}\n\n${traduzir(PEDIDO_DE_CONFIRMACAO, idioma)}`
+    : corpoDoLembrete;
+  return { corpo, pedeConfirmacao, idioma };
+}
+
+/**
+ * O ramo da chave `lembrete_com_reserva` ligada (#83): a orquestração escolhe
+ * o caminho (Meta, depois QR) e este código só traduz o desfecho em carimbo.
+ * O contato bloqueado já foi barrado por quem chama, sem gravar falha.
+ */
+async function lembrarComReserva(
+  admin: Admin,
+  e: EntradaDoCorpo & { requestId: string },
+): Promise<{ resultado: "enviado" } | { resultado: "pulado"; motivo: string }> {
+  const { linha, tipo, pendentes, contato, organizacao, requestId } = e;
+  const org = linha.organization_id;
+  try {
+    const { corpo, pedeConfirmacao, idioma } = await montarCorpo(admin, e);
+    const { dia, hora } = diaEHora(
+      new Date(linha.starts_at),
+      organizacao?.timezone ?? "America/Sao_Paulo",
+      idioma,
+    );
+    const nome = nomeDoContato(contato)?.trim() ?? "";
+    const tentativas = linha.reminder_tentativas ?? {};
+    const tentativa = Math.max(0, ...pendentes.map((d) => tentativas[String(d)] ?? 0)) + 1;
+
+    const r = await enviarLembreteComReserva(admin, {
+      org,
+      appointmentId: linha.id,
+      contatoId: contato.id,
+      degraus: pendentes,
+      textoLivre: corpo,
+      pecasDoModelo: {
+        primeiro_nome: nome.split(/\s+/)[0] ?? "",
+        quando: `${dia} ${traduzir("às", idioma)} ${hora}`,
+        titulo: linha.title,
+        endereco: (linha.location_details ?? tipo.location_details ?? "").trim(),
+      },
+      modeloDoTipoId: tipo.reminder_meta_template_id ?? null,
+      tentativa,
+    });
+
+    const gravado = await gravarDesfechoNoCompromisso(
+      admin,
+      {
+        org,
+        appointmentId: linha.id,
+        degraus: pendentes,
+        jaEnviados: linha.reminder_sent_offsets_minutes,
+        tentativas,
+        tentativa,
+      },
+      r,
+    );
+    if (r.desfecho === "enviado" && pedeConfirmacao) {
+      // O lembrete já saiu; falhar aqui só perde o registro do pedido.
+      const { data: msg } = await admin
+        .from("messages")
+        .select("conversation_id")
+        .eq("id", r.mensagemId)
+        .eq("organization_id", org)
+        .maybeSingle();
+      await registrarPedido(admin, {
+        organizationId: org,
+        appointmentId: linha.id,
+        contactId: contato.id,
+        conversationId: (msg as { conversation_id: string } | null)?.conversation_id ?? null,
+        reminderMessageId: r.mensagemId,
+      }).catch((err: unknown) =>
+        logger.error("[agenda-reminder] pedido de confirmação não registrado", {
+          appointmentId: linha.id,
+          error: err instanceof Error ? err.message : String(err),
+          requestId,
+        }),
+      );
+    }
+    return gravado;
+  } catch (err) {
+    logger.error("[agenda-reminder] envio falhou", {
+      appointmentId: linha.id,
+      error: err instanceof Error ? err.message : String(err),
+      requestId,
+    });
+    return { resultado: "pulado", motivo: "erro_no_envio" };
+  }
 }
 
 export const GET = handle;

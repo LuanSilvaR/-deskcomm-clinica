@@ -100,7 +100,7 @@ describe("NewContactDialog · onCriado", () => {
     );
 
     await user.type(screen.getByLabelText(/Telefone/i), "+5511999998888");
-    await user.click(screen.getByRole("button", { name: /Criar contato/i }));
+    await user.click(screen.getByRole("button", { name: /Criar paciente/i }));
 
     await waitFor(() => expect(onCriado).toHaveBeenCalledTimes(1));
 
@@ -130,7 +130,7 @@ describe("NewContactDialog · onCriado", () => {
     envolver(<NewContactDialog open onOpenChange={vi.fn()} onCriado={onCriado} />);
 
     await user.type(screen.getByLabelText(/Telefone/i), "+5511999998888");
-    await user.click(screen.getByRole("button", { name: /Criar contato/i }));
+    await user.click(screen.getByRole("button", { name: /Criar paciente/i }));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     expect(onCriado).not.toHaveBeenCalled();

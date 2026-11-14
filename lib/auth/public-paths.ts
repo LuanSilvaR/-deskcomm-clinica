@@ -39,6 +39,12 @@ export const PUBLIC_PATHS: RegExp[] = [
   // Heartbeat do agente do host (bearer INTERNAL_SECRET/INTERNAL_CRON_SECRET,
   // checado dentro da própria rota) — sem cookie de sessão, igual /cron/.
   /^\/api\/v1\/system\/agent$/,
+  // FORK clinic (prontuário F6, 9023): o termo aberto pelo LINK de aceite. Quem
+  // chega é o paciente, sem conta nossa. A identidade é o TOKEN (32 bytes, só o
+  // hash no banco, uso único, com prazo), checado dentro da rota, com limite por
+  // IP. Ancorado no formato exato do token: nenhum sub-path nasce público.
+  /^\/termo\/[A-Za-z0-9_-]{43}$/,
+  /^\/api\/v1\/publico\/termos\/[A-Za-z0-9_-]{43}$/,
   // Provisionamento de organização por sistema externo: Bearer do segredo da
   // instalação (`TENANT_PROVISIONING_SECRET`), checado dentro da rota, que
   // responde 404 enquanto o segredo não existe. Sem cookie, igual /cron/.

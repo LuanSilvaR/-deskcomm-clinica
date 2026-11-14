@@ -54,7 +54,7 @@ export async function POST(
   // Load tenant — service role bypasses RLS intentionally
   const { data: org, error: orgError } = await admin
     .from("organizations")
-    .select("id, slug, display_name, status")
+    .select("id, slug, display_name, status, suspended_kind")
     .eq("id", tenantId)
     .maybeSingle();
 
@@ -77,6 +77,7 @@ export async function POST(
     .from("organizations")
     .update({
       status: "active",
+      suspended_kind: null,
       suspended_at: null,
       suspended_reason: null,
       suspended_by: null,
@@ -86,6 +87,22 @@ export async function POST(
 
   if (updateError) {
     return fail("internal_error", "Failed to reactivate tenant", 500, { requestId });
+  }
+
+  // FORK (card #160c): reativar à mão uma suspensão POR COBRANÇA é dar PRAZO —
+  // sem isto a régua suspenderia de novo na rodada seguinte. 7 dias de prazo
+  // extra; o pagamento (ou a releitura) resolve antes disso.
+  const kind = (org as { suspended_kind?: string | null }).suspended_kind ?? null;
+  let prazoExtraAte: string | null = null;
+  if (kind === "cobranca") {
+    prazoExtraAte = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    const { error: prazoError } = await admin
+      .from("cobranca_assinaturas")
+      .update({ prazo_extra_ate: prazoExtraAte, updated_at: now })
+      .eq("organization_id", tenantId);
+    if (prazoError) {
+      return fail("internal_error", "Reactivated, but the payment grace period was not recorded", 500, { requestId });
+    }
   }
 
   // Audit (fire-and-forget)
@@ -99,6 +116,8 @@ export async function POST(
     resourceId: tenantId,
     requestId,
     metadata: {
+      suspended_kind: kind,
+      prazo_extra_ate: prazoExtraAte,
       tenant_id: tenantId,
       tenant_slug: org.slug,
       reactivated_by: adminCtx.user.id,

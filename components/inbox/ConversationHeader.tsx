@@ -355,7 +355,7 @@ export function ConversationHeader({ conversation }: Props) {
         {c?.id && (
           <Button asChild size="sm" variant="ghost" className="xl:hidden">
             <Link href={`/app/contacts/${c.id}`} className="flex items-center gap-1">
-              {t("Ver contato")}
+              {t("Ver paciente")}
               <ArrowRight size={12} weight="regular" aria-hidden />
             </Link>
           </Button>

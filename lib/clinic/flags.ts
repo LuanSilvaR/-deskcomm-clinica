@@ -1,0 +1,161 @@
+/**
+ * Flag do módulo clinic: `organizations.settings.clinic.profissionais`.
+ *
+ * Nasce DESLIGADA. Só o booleano `true` liga — mesma régua de
+ * `clientePelaAgendaLigado` (lib/schemas/settings.ts): ausente, `false`, a
+ * string "true" ou lixo é desligado. Quem liga é `fn_clinic_definir_flag`
+ * (migration 9001), nunca UPDATE direto em organizations.
+ *
+ * Mora fora de `settings.agenda` de propósito: `fn_agenda_settings` reescreve
+ * aquele objeto inteiro e recusa chave desconhecida.
+ */
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export function clinicProfissionaisLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).profissionais === true;
+}
+
+/**
+ * Lê a flag da organização. Nunca lança: erro de leitura = desligado, que é o
+ * lado que preserva o comportamento original da agenda.
+ */
+export async function clinicProfissionaisDaOrg(
+  supabase: SupabaseClient,
+  organizationId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("organizations")
+      .select("settings")
+      .eq("id", organizationId)
+      .maybeSingle();
+    if (error || !data) return false;
+    return clinicProfissionaisLigado((data as { settings?: unknown }).settings);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `organizations.settings.clinic.trava_sobreposicao` (migration 9005): o banco
+ * recusa compromisso que cruza outro na agenda do mesmo profissional. Mesma
+ * régua: só o booleano `true` liga.
+ */
+export function travaSobreposicaoLigada(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).trava_sobreposicao === true;
+}
+
+/**
+ * `organizations.settings.clinic.menu_clinica` (migration 9014): a casca desenha
+ * o menu por módulos da clínica. É apresentação — não concede nem tira acesso.
+ * Mesma régua: só o booleano `true` liga.
+ */
+export function menuClinicaLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).menu_clinica === true;
+}
+
+/**
+ * `organizations.settings.clinic.procedimentos` (migration 9015): o módulo de
+ * procedimentos e POP. Mesma régua: só o booleano `true` liga.
+ */
+export function procedimentosLigados(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).procedimentos === true;
+}
+
+/**
+ * `organizations.settings.clinic.prontuario` (migration 9016): o módulo de
+ * atendimento clínico e prontuário. Nasce desligado; só o booleano `true` liga.
+ */
+export function prontuarioLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).prontuario === true;
+}
+
+/**
+ * `organizations.settings.clinic.estoque` (migration 9028): o módulo de
+ * estoque (saldos por lote e local, movimentos). Nasce desligado; só o
+ * booleano `true` liga.
+ */
+export function estoqueLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).estoque === true;
+}
+
+/** `settings.clinic.encaixe` (migration 9046): marcar por cima de horário ocupado, com motivo. Só `true` liga. */
+export function encaixeLigadoNaConfig(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).encaixe === true;
+}
+
+/** `settings.clinic.titulo_livre` (migration 8003): título digitado no compromisso (upstream #3775). Só `true` liga. */
+export function tituloLivreLigadoNaConfig(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).titulo_livre === true;
+}
+
+/** `settings.clinic.duracao_na_marcacao` (migration 8005): duração escolhida ao marcar (upstream #3714). Só `true` liga. */
+export function duracaoNaMarcacaoLigadaNaConfig(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).duracao_na_marcacao === true;
+}
+
+/** `settings.clinic.varios_telefones` (migration 8019): a ficha adiciona e remove telefones extras (#85). Só `true` liga. */
+export function variosTelefonesLigadoNaConfig(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).varios_telefones === true;
+}
+
+/**
+ * `settings.clinic.orcamentos` (migration 8006): orçamento → contrato, a começar
+ * pela tabela de preços. Nasce desligado; só o booleano `true` liga.
+ */
+export function orcamentosLigado(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).orcamentos === true;
+}
+
+/**
+ * `settings.clinic.orcamentos_desconto_max_pct` (migration 8007): o desconto
+ * que dispensa aprovação, em %. Ausente ou inválido = 10 (o padrão do banco).
+ */
+export function descontoMaxDaConfig(settings: unknown): number {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return 10;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return 10;
+  const v = (clinic as Record<string, unknown>).orcamentos_desconto_max_pct;
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100 ? v : 10;
+}
+
+/** `settings.clinic.atestado_anonimizacao` (migration 8024): atestado de anonimização LGPD (#87). Só `true` liga. */
+export function atestadoAnonimizacaoLigadoNaConfig(settings: unknown): boolean {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
+  const clinic = (settings as Record<string, unknown>).clinic;
+  if (!clinic || typeof clinic !== "object" || Array.isArray(clinic)) return false;
+  return (clinic as Record<string, unknown>).atestado_anonimizacao === true;
+}

@@ -75,20 +75,83 @@ interface Excecao {
  * linhas da OUTRA organização, não uma leitura como superusuário.
  */
 const PROVA_PROPRIA: readonly Excecao[] = [
-  { tabela: "prospecting_settings", razao: "tests/invariants/prospecting.test.ts — tabela exclusiva do servidor, ACL e RLS verificadas; FK composta e comandos autenticados cercam a organização." },
-  { tabela: "prospecting_campaigns", razao: "tests/invariants/prospecting.test.ts — tabela exclusiva do servidor, ACL e RLS verificadas; FK composta e comandos autenticados cercam a organização." },
-  { tabela: "prospecting_candidates", razao: "tests/invariants/prospecting.test.ts — tabela exclusiva do servidor, ACL e RLS verificadas; FK composta e comandos autenticados cercam a organização." },
-  { tabela: "channel_integrations", razao: "tests/invariants/social-native.test.ts — credencial exclusiva do servidor: SELECT com JWT authenticated recusado para as duas organizações, além de ACL e RLS habilitada." },
-  { tabela: "config_aviso_de_caso", razao: "tests/invariants/aviso-de-caso-escrita.test.ts — dois tenants reais por JWT: admin lê só a própria organização, agent e viewer não leem nada, e a escrita direta por authenticated é negada (a única porta é fn_definir_aviso_de_caso, que revalida papel, suporte e MFA)" },
-  { tabela: "entregas_de_aviso_de_caso", razao: "tests/invariants/aviso-de-caso-escrita.test.ts — manager lê o histórico da própria organização e zero do vizinho; viewer lê zero; escrita direta por authenticated negada nos três verbos, e apagar a channel_sessions apontada não falha e deixa a configuração desligada" },
-  { tabela: "organization_extensions", razao: "tests/invariants/extensoes-declarativas.test.ts — dois tenants com vínculos reais: leitura positiva local/negativa cruzada por JWT, revogação de membership e escrita direta negada" },
-  { tabela: "extension_operations", razao: "tests/invariants/extensoes-declarativas.test.ts — recibo de instância fechado a anon/authenticated, inclusive configure com organização; RPCs service-only revalidam ator e papel" },
-  { tabela: "channel_routing_policies", razao: "tests/invariants/channel-routing.test.ts — dois tenants reais, leitura positiva local e negativa cruzada por JWT; FK composta rejeita canal de outra org" },
-  { tabela: "channel_routing_responsibles", razao: "tests/invariants/channel-routing.test.ts — JWT do tenant B não lê responsáveis de A; revogação remove vínculo e claim revalida membro ativo" },
-  { tabela: "channel_connection_requests", razao: "tests/invariants/channel-routing.test.ts — recibo privado sem SELECT authenticated; reserva admin com MFA e finalização service-only cercada por org e lease" },
-  { tabela: "appointment_recovery_receipts", razao: "tests/invariants/agenda-presenca-acl.test.ts — leitura/escrita direta anon/authenticated negadas, escrita service_role negada e RPC service-only valida a tupla org/evento nos dois sentidos A/B" },
-  { tabela: "event_service_origins", razao: "tests/invariants/service-event-origin.test.ts — recibo server-only, authenticated sem leitura/escrita, RPC rejeita tenant B real" },
-  { tabela: "platform_support_sessions", razao: "tests/invariants/suporte-temporario.test.ts — grant por sessão, readonly e nenhuma escrita direta authenticated" },
+  { tabela: "config_aviso_de_agendamento", razao: "tests/invariants/aviso-de-agendamento-escrita.test.ts — dois tenants reais por JWT: admin lê só a própria organização, agent e viewer não leem nada, e a escrita direta por authenticated é negada nos três verbos (a única porta é fn_definir_aviso_de_agendamento, que revalida papel, suporte e MFA)" },
+  { tabela: "entregas_de_aviso_de_agendamento", razao: "tests/invariants/aviso-de-agendamento-escrita.test.ts — manager lê o histórico da própria organização e zero do vizinho; viewer lê zero; escrita direta por authenticated negada nos três verbos" },
+  {
+    tabela: "clinic_atestados_anonimizacao",
+    razao:
+      "tests/invariants/clinic-atestado-anonimizacao.test.ts — isolamento com JWT authenticated: admin da A lê 1 linha da A e 0 da B.",
+  },
+  {
+    tabela: "prospecting_settings",
+    razao:
+      "tests/invariants/prospecting.test.ts — tabela exclusiva do servidor, ACL e RLS verificadas; FK composta e comandos autenticados cercam a organização.",
+  },
+  {
+    tabela: "prospecting_campaigns",
+    razao:
+      "tests/invariants/prospecting.test.ts — tabela exclusiva do servidor, ACL e RLS verificadas; FK composta e comandos autenticados cercam a organização.",
+  },
+  {
+    tabela: "prospecting_candidates",
+    razao:
+      "tests/invariants/prospecting.test.ts — tabela exclusiva do servidor, ACL e RLS verificadas; FK composta e comandos autenticados cercam a organização.",
+  },
+  {
+    tabela: "channel_integrations",
+    razao:
+      "tests/invariants/social-native.test.ts — credencial exclusiva do servidor: SELECT com JWT authenticated recusado para as duas organizações, além de ACL e RLS habilitada.",
+  },
+  {
+    tabela: "config_aviso_de_caso",
+    razao:
+      "tests/invariants/aviso-de-caso-escrita.test.ts — dois tenants reais por JWT: admin lê só a própria organização, agent e viewer não leem nada, e a escrita direta por authenticated é negada (a única porta é fn_definir_aviso_de_caso, que revalida papel, suporte e MFA)",
+  },
+  {
+    tabela: "entregas_de_aviso_de_caso",
+    razao:
+      "tests/invariants/aviso-de-caso-escrita.test.ts — manager lê o histórico da própria organização e zero do vizinho; viewer lê zero; escrita direta por authenticated negada nos três verbos, e apagar a channel_sessions apontada não falha e deixa a configuração desligada",
+  },
+  {
+    tabela: "organization_extensions",
+    razao:
+      "tests/invariants/extensoes-declarativas.test.ts — dois tenants com vínculos reais: leitura positiva local/negativa cruzada por JWT, revogação de membership e escrita direta negada",
+  },
+  {
+    tabela: "extension_operations",
+    razao:
+      "tests/invariants/extensoes-declarativas.test.ts — recibo de instância fechado a anon/authenticated, inclusive configure com organização; RPCs service-only revalidam ator e papel",
+  },
+  {
+    tabela: "channel_routing_policies",
+    razao:
+      "tests/invariants/channel-routing.test.ts — dois tenants reais, leitura positiva local e negativa cruzada por JWT; FK composta rejeita canal de outra org",
+  },
+  {
+    tabela: "channel_routing_responsibles",
+    razao:
+      "tests/invariants/channel-routing.test.ts — JWT do tenant B não lê responsáveis de A; revogação remove vínculo e claim revalida membro ativo",
+  },
+  {
+    tabela: "channel_connection_requests",
+    razao:
+      "tests/invariants/channel-routing.test.ts — recibo privado sem SELECT authenticated; reserva admin com MFA e finalização service-only cercada por org e lease",
+  },
+  {
+    tabela: "appointment_recovery_receipts",
+    razao:
+      "tests/invariants/agenda-presenca-acl.test.ts — leitura/escrita direta anon/authenticated negadas, escrita service_role negada e RPC service-only valida a tupla org/evento nos dois sentidos A/B",
+  },
+  {
+    tabela: "event_service_origins",
+    razao:
+      "tests/invariants/service-event-origin.test.ts — recibo server-only, authenticated sem leitura/escrita, RPC rejeita tenant B real",
+  },
+  {
+    tabela: "platform_support_sessions",
+    razao:
+      "tests/invariants/suporte-temporario.test.ts — grant por sessão, readonly e nenhuma escrita direta authenticated",
+  },
   {
     tabela: "webhook_lead_captures",
     razao:
@@ -101,14 +164,14 @@ const PROVA_PROPRIA: readonly Excecao[] = [
   {
     tabela: "meta_templates",
     razao:
-      "tests/invariants/meta-templates-rls.test.ts (\"membro da org B NÃO vê " +
-      "o template da org A\") prova isolamento com `countAs` real.",
+      'tests/invariants/meta-templates-rls.test.ts ("membro da org B NÃO vê ' +
+      'o template da org A") prova isolamento com `countAs` real.',
   },
   {
     tabela: "webhook_sources",
     razao:
-      "tests/invariants/webhooks-rls.test.ts (\"manager B (org B) NÃO vê " +
-      "webhook_source/automation_rule da org A\") prova isolamento com " +
+      'tests/invariants/webhooks-rls.test.ts ("manager B (org B) NÃO vê ' +
+      'webhook_source/automation_rule da org A") prova isolamento com ' +
       "`countAs` real.",
   },
   {
@@ -118,8 +181,8 @@ const PROVA_PROPRIA: readonly Excecao[] = [
   {
     tabela: "automation_rule_runs",
     razao:
-      "tests/invariants/webhooks-rls.test.ts (\"service_role insere " +
-      "automation_rule_runs na org A; manager B não vê, manager A vê\").",
+      'tests/invariants/webhooks-rls.test.ts ("service_role insere ' +
+      'automation_rule_runs na org A; manager B não vê, manager A vê").',
   },
   {
     tabela: "calendar_event_types",
@@ -139,8 +202,8 @@ const PROVA_PROPRIA: readonly Excecao[] = [
     tabela: "calendar_connections",
     razao:
       "tests/invariants/agenda-rls.test.ts — TABELAS_DA_AGENDA prova o " +
-      "isolamento cross-org, e o describe seguinte (\"o gate de papel que as " +
-      "outras cinco não têm\") ainda prova o gate de dono/role por cima.",
+      'isolamento cross-org, e o describe seguinte ("o gate de papel que as ' +
+      'outras cinco não têm") ainda prova o gate de dono/role por cima.',
   },
   {
     tabela: "calendar_connection_calendars",
@@ -158,7 +221,7 @@ const PROVA_PROPRIA: readonly Excecao[] = [
     tabela: "followup_flow_versions",
     razao:
       "tests/invariants/followup-schema.test.ts — `FOLLOWUP_TABLES`, com " +
-      "\"user of org A reads 0 rows of org B\" por tabela (mesmo molde de " +
+      '"user of org A reads 0 rows of org B" por tabela (mesmo molde de ' +
       "rls-isolation.test.ts).",
   },
   {
@@ -176,8 +239,8 @@ const PROVA_PROPRIA: readonly Excecao[] = [
   {
     tabela: "user_organizations",
     razao:
-      "tests/invariants/gov-1b-team-manager-read.test.ts (\"cross-org: " +
-      "manager da org A NÃO lê linhas da org B (0 rows)\") prova isolamento " +
+      'tests/invariants/gov-1b-team-manager-read.test.ts ("cross-org: ' +
+      'manager da org A NÃO lê linhas da org B (0 rows)") prova isolamento ' +
       "com `countAs` real, além do self-read do agent.",
   },
   {
@@ -270,6 +333,331 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "tests/invariants/captura-de-clique-e-server-side.test.ts — mesmo " +
       "`describe.each`. Guarda as UTMs de cada clique no botão da landing " +
       "page e o ref curto que as liga à mensagem do WhatsApp.",
+  },
+  {
+    tabela: "clinic_patient_profiles",
+    razao:
+      "tests/invariants/clinic-ficha-do-paciente.test.ts (FORK clinic, migration 9002): 2 orgs, quem é da A lê 0 linhas da B, atendente escreve e visualizador não, e anonimizar o contato apaga a ficha.",
+  },
+  {
+    tabela: "clinic_modelos_formulario",
+    razao:
+      "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9018/9019): 2 orgs, quem é da A lê 0 modelos da B; ninguém escreve direto.",
+  },
+  {
+    tabela: "clinic_modelos_formulario_versoes",
+    razao:
+      "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9018/9019): 2 orgs, quem é da A lê 0 versões da B; versões imutáveis.",
+  },
+  {
+    tabela: "clinic_formularios_preenchidos",
+    razao:
+      "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9018/9019): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; imutável após finalizar.",
+  },
+  {
+    tabela: "clinic_evolucoes",
+    razao:
+      "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9018/9019): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; imutável após finalizar.",
+  },
+  {
+    tabela: "clinic_adendos",
+    razao:
+      "tests/invariants/clinic-prontuario-registros.test.ts (FORK clinic, migrations 9018/9019): 2 orgs, quem é da A lê 0 linhas da B; append-only.",
+  },
+  {
+    tabela: "clinic_requisitos_finalizacao",
+    razao:
+      "tests/invariants/clinic-requisitos-e-modelos.test.ts (FORK clinic, migration 9020): 2 orgs, quem é da A lê 0 linhas da B; ninguém escreve direto.",
+  },
+  {
+    tabela: "clinic_condutas",
+    razao:
+      "tests/invariants/clinic-conduta-e-planos.test.ts (FORK clinic, migration 9021): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; imutável após finalizar.",
+  },
+  {
+    tabela: "clinic_planos_tratamento",
+    razao:
+      "tests/invariants/clinic-conduta-e-planos.test.ts (FORK clinic, migration 9021): 2 orgs, quem é da A lê 0 linhas da B; sem planos.ver lê 0; ninguém escreve direto.",
+  },
+  {
+    tabela: "clinic_plano_sessoes",
+    razao:
+      "tests/invariants/clinic-conduta-e-planos.test.ts (FORK clinic, migration 9021): 2 orgs, quem é da A lê 0 linhas da B; sem planos.ver lê 0; coerência planejada/agendada/realizada.",
+  },
+  {
+    tabela: "clinic_procedimentos_realizados",
+    razao:
+      "tests/invariants/clinic-procedimentos-realizados.test.ts (FORK clinic, migration 9022): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; imutável após finalizar.",
+  },
+  {
+    tabela: "clinic_procedimento_insumos",
+    razao:
+      "tests/invariants/clinic-procedimentos-realizados.test.ts (FORK clinic, migration 9022): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; imutável após finalizar.",
+  },
+  {
+    tabela: "clinic_modelos_documento",
+    razao:
+      "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): 2 orgs, quem é da A lê 0 linhas da B; ninguém escreve direto.",
+  },
+  {
+    tabela: "clinic_modelos_documento_versoes",
+    razao:
+      "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): 2 orgs, quem é da A lê 0 linhas da B; imutável até para service role.",
+  },
+  {
+    tabela: "clinic_documentos_emitidos",
+    razao:
+      "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): 2 orgs, quem é da A lê 0 linhas da B; sem documentos.ver lê 0; conteúdo imutável.",
+  },
+  {
+    tabela: "clinic_documento_aceites",
+    razao:
+      "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): 2 orgs, quem é da A lê 0 linhas da B; append-only.",
+  },
+  {
+    tabela: "clinic_documento_links",
+    razao:
+      "tests/invariants/clinic-documentos-e-aceites.test.ts (FORK clinic, migration 9023): ninguém lê pela API (policy false); só funções com o hash do token.",
+  },
+  {
+    tabela: "clinic_anexos",
+    razao:
+      "tests/invariants/clinic-anexos-e-fotos.test.ts (FORK clinic, migration 9024): 2 orgs, quem é da A lê 0 linhas da B; sem fotos.ver/anexos.ver lê 0; ninguém escreve direto; imutável.",
+  },
+  {
+    tabela: "clinic_prontuarios",
+    razao:
+      "tests/invariants/clinic-cabecalho-e-anulacao.test.ts (FORK clinic, migration 9026): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver lê 0; ninguém escreve direto.",
+  },
+  {
+    tabela: "clinic_prontuario_alteracoes",
+    razao:
+      "tests/invariants/clinic-cabecalho-e-anulacao.test.ts (FORK clinic, migration 9026): 2 orgs, quem é da A lê 0 linhas da B; append-only.",
+  },
+  {
+    tabela: "clinic_produto_estoque",
+    razao:
+      "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); configuração do produto.",
+  },
+  {
+    tabela: "cobranca_assinaturas",
+    razao:
+      "tests/invariants/cobranca-planos-e-assinaturas.test.ts (FORK, migration 8026, card #159): 2 orgs, só o admin da própria org lê; agente lê 0; ninguém escreve pela sessão (só service_role e as funções definer).",
+  },
+  {
+    tabela: "clinic_orcamento_vendas",
+    razao:
+      "tests/invariants/clinic-orcamentos-pos-aceite.test.ts (FORK clinic, migration 8009): 2 orgs, quem é da outra empresa lê 0 linhas; ninguém escreve direto (só o pós-aceite); 1:1 orçamento ↔ comanda.",
+  },
+  {
+    tabela: "clinic_orcamentos",
+    razao:
+      "tests/invariants/clinic-orcamentos-rascunho.test.ts (FORK clinic, migration 8007): 2 orgs, quem é da outra empresa lê 0 linhas e não grava; sem orcamentos.ver lê 0; ninguém escreve direto (só fn_clinic_orcamento_*); não se apaga fora da cascata.",
+  },
+  {
+    tabela: "clinic_orcamento_itens",
+    razao:
+      "tests/invariants/clinic-orcamentos-rascunho.test.ts (FORK clinic, migration 8007): 2 orgs, quem é da outra empresa lê 0 linhas e não grava; sem orcamentos.ver lê 0; ninguém escreve direto (só fn_clinic_orcamento_*); itens só mudam em rascunho.",
+  },
+  {
+    tabela: "clinic_precos",
+    razao:
+      "tests/invariants/clinic-orcamentos-precos.test.ts (FORK clinic, migration 8006): 2 orgs, quem é da outra empresa lê 0 linhas e não publica; sem orcamentos.ver lê 0; ninguém escreve direto (só fn_clinic_preco_publicar); só acrescenta.",
+  },
+  {
+    tabela: "clinic_estoque_locais",
+    razao:
+      "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); locais.",
+  },
+  {
+    tabela: "clinic_estoque_lotes",
+    razao:
+      "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); lotes.",
+  },
+  {
+    tabela: "clinic_estoque_operacoes",
+    razao:
+      "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); só acrescenta (UPDATE/DELETE recusados até para service role).",
+  },
+  {
+    tabela: "clinic_estoque_movimentos",
+    razao:
+      "tests/invariants/clinic-estoque-base.test.ts (FORK clinic, migration 9028): 2 orgs, quem é da outra empresa lê 0 linhas; sem estoque.ver lê 0; ninguém escreve direto (só funções); só acrescenta (UPDATE/DELETE recusados até para service role).",
+  },
+  {
+    tabela: "clinic_estoque_pendencias",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-consumo.test.ts: admin de outra empresa lê 0 pendências e não resolve pendência alheia (estoque_pendencia_invalida); quem só tem estoque.ver lê mas não resolve; ninguém escreve direto (UPDATE recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_procedimento_kits",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-kits-reservas.test.ts: admin de outra empresa lê 0 kits e não grava kit em procedimento alheio; ninguém escreve direto (INSERT recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_estoque_reservas",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-kits-reservas.test.ts: admin de outra empresa lê 0 reservas; ninguém escreve direto (INSERT recusado por permission denied); reservas só nascem pelos gatilhos e pela função da véspera.",
+  },
+  {
+    tabela: "clinic_estoque_frascos",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-frascos.test.ts: admin de outra empresa lê 0 frascos (também pela view clinic_estoque_frascos_abertos), não abre com lote alheio nem encerra frasco alheio; ninguém escreve direto (INSERT recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_estoque_fornecedores",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 fornecedores; ninguém escreve direto.",
+  },
+  {
+    tabela: "clinic_estoque_fornecedor_produtos",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 linhas de de/para; só nasce ao lançar.",
+  },
+  {
+    tabela: "clinic_estoque_nfe",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 notas e não confere, lança nem cancela nota alheia; ninguém escreve direto (INSERT recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_estoque_nfe_itens",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-nfe.test.ts: admin de outra empresa lê 0 itens e não confere item alheio.",
+  },
+  {
+    tabela: "clinic_estoque_inventarios",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-inventario.test.ts: admin de outra empresa lê 0 inventários e não cancela inventário alheio; ninguém escreve direto (INSERT recusado por permission denied).",
+  },
+  {
+    tabela: "clinic_estoque_inventario_itens",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-inventario.test.ts: admin de outra empresa lê 0 itens de inventário.",
+  },
+  {
+    tabela: "clinic_estoque_alertas",
+    razao:
+      "Prova própria em tests/invariants/clinic-estoque-alertas.test.ts: admin de outra empresa lê 0 alertas e não dispensa alerta alheio; ninguém escreve direto (INSERT recusado por permission denied); só a varredura (service role) cria.",
+  },
+  {
+    tabela: "clinic_atendimentos",
+    razao:
+      "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; sem prontuario.ver (admin sem papel clínico, recepção) lê 0 linhas; ninguém escreve direto, só pelas funções.",
+  },
+  {
+    tabela: "clinic_atendimento_eventos",
+    razao:
+      "tests/invariants/clinic-atendimentos.test.ts (FORK clinic, migration 9017): 2 orgs, quem é da A lê 0 linhas da B; append-only (UPDATE/DELETE recusados).",
+  },
+  {
+    tabela: "clinic_appointment_visits",
+    razao:
+      "tests/invariants/clinic-status-da-visita.test.ts (FORK clinic, migration 9003): 2 orgs, quem é da A lê 0 linhas da B, atendente muda status e visualizador não, e o histórico não aceita UPDATE nem DELETE.",
+  },
+  {
+    tabela: "clinic_appointment_visit_events",
+    razao:
+      "tests/invariants/clinic-status-da-visita.test.ts (FORK clinic, migration 9003): 2 orgs, quem é da A lê 0 linhas da B, atendente muda status e visualizador não, e o histórico não aceita UPDATE nem DELETE.",
+  },
+  {
+    tabela: "clinic_resources",
+    razao:
+      "tests/invariants/clinic-salas-e-equipamentos.test.ts (FORK clinic, migration 9007): 2 orgs, quem é da A lê 0 linhas da B; configuração a partir de gerente; alocação só pelo trigger.",
+  },
+  {
+    tabela: "clinic_event_type_resources",
+    razao:
+      "tests/invariants/clinic-salas-e-equipamentos.test.ts (FORK clinic, migration 9007): 2 orgs, quem é da A lê 0 linhas da B; configuração a partir de gerente; alocação só pelo trigger.",
+  },
+  {
+    tabela: "clinic_appointment_resources",
+    razao:
+      "tests/invariants/clinic-salas-e-equipamentos.test.ts (FORK clinic, migration 9007): 2 orgs, quem é da A lê 0 linhas da B; configuração a partir de gerente; alocação só pelo trigger.",
+  },
+  {
+    tabela: "clinic_roles",
+    razao:
+      "tests/invariants/clinic-papeis-de-acesso.test.ts (FORK clinic, ACL, migrations 9009-9011): 2 orgs, quem é da A lê 0 linhas da B; ninguém escreve direto (só pelas funções fn_acesso_*).",
+  },
+  {
+    tabela: "clinic_role_permissions",
+    razao:
+      "tests/invariants/clinic-papeis-de-acesso.test.ts (FORK clinic, ACL, migrations 9009-9011): 2 orgs, quem é da A lê 0 linhas da B; ninguém escreve direto (só pelas funções fn_acesso_*).",
+  },
+  {
+    tabela: "clinic_member_roles",
+    razao:
+      "tests/invariants/clinic-papeis-de-acesso.test.ts (FORK clinic, ACL, migrations 9009-9011): 2 orgs, quem é da A lê 0 linhas da B; ninguém escreve direto (só pelas funções fn_acesso_*).",
+  },
+  {
+    tabela: "clinic_confirmation_requests",
+    razao:
+      "tests/invariants/clinic-confirmacao-de-consulta.test.ts (FORK clinic, migration 9004): 2 orgs, quem é da A lê 0 linhas da B, atendente escreve e visualizador não.",
+  },
+  {
+    tabela: "clinic_specialties",
+    razao:
+      "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
+  },
+  {
+    tabela: "clinic_professionals",
+    razao:
+      "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
+  },
+  {
+    tabela: "clinic_professional_specialties",
+    razao:
+      "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
+  },
+  {
+    tabela: "clinic_event_type_specialties",
+    razao:
+      "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
+  },
+  {
+    tabela: "clinic_procedures",
+    razao:
+      "tests/invariants/clinic-procedimentos-e-pop.test.ts (FORK clinic, migration 9015): 2 orgs, quem é da A lê 0 linhas da B; escrita só com a permissão (procedimentos.gerenciar / pops.editar); vínculo entre empresas recusado pela FK composta.",
+  },
+  {
+    tabela: "clinic_procedure_specialties",
+    razao:
+      "tests/invariants/clinic-procedimentos-e-pop.test.ts (FORK clinic, migration 9015): 2 orgs, quem é da A lê 0 linhas da B; escrita só com a permissão (procedimentos.gerenciar / pops.editar); vínculo entre empresas recusado pela FK composta.",
+  },
+  {
+    tabela: "clinic_procedure_professionals",
+    razao:
+      "tests/invariants/clinic-procedimentos-e-pop.test.ts (FORK clinic, migration 9015): 2 orgs, quem é da A lê 0 linhas da B; escrita só com a permissão (procedimentos.gerenciar / pops.editar); vínculo entre empresas recusado pela FK composta.",
+  },
+  {
+    tabela: "clinic_pops",
+    razao:
+      "tests/invariants/clinic-procedimentos-e-pop.test.ts (FORK clinic, migration 9015): 2 orgs, quem é da A lê 0 linhas da B; escrita só com a permissão (procedimentos.gerenciar / pops.editar); vínculo entre empresas recusado pela FK composta.",
+  },
+  {
+    tabela: "clinic_pop_versions",
+    razao:
+      "tests/invariants/clinic-procedimentos-e-pop.test.ts (FORK clinic, migration 9015): 2 orgs, quem é da A lê 0 linhas da B; escrita só com a permissão (procedimentos.gerenciar / pops.editar); vínculo entre empresas recusado pela FK composta.",
+  },
+  {
+    tabela: "clinic_agenda_blocks",
+    razao:
+      "tests/invariants/clinic-profissionais-rls.test.ts (FORK clinic, migration 9001) — `TABELAS_CLINIC`: 2 orgs, quem é da A lê 0 linhas da B e ≥1 da A, mais os gates de papel (agent não escreve cadastro, não bloqueia colega nem a clínica toda).",
+  },
+  {
+    tabela: "clinic_agenda_encaixes",
+    razao:
+      "Prova própria em tests/invariants/clinic-agenda-encaixe.test.ts: agente de outra empresa lê 0 encaixes; a sessão não insere nem apaga (só fn_clinic_agenda_encaixar da 9045 escreve).",
+  },
+  {
+    tabela: "clinic_agendamento_procedimentos",
+    razao:
+      "Prova própria em tests/invariants/clinic-agendamento-procedimentos.test.ts (FORK clinic, migration 8016, agenda S3 #68): cada sessão lê só a própria empresa (2 orgs); a sessão não insere (só fn_clinic_agendamento_procedimentos_salvar escreve, service_role); procedimento/agendamento de outra empresa recusados.",
+  },
+  {
+    tabela: "clinic_agenda_historico",
+    razao:
+      "Prova própria em tests/invariants/clinic-fluxo-operacional.test.ts: agente de outra empresa lê 0 marcos; a sessão não insere nem apaga (só o trigger da 9043 escreve).",
   },
 ];
 
@@ -461,7 +849,10 @@ describe("varredura: completude de RLS sobre toda tabela com organization_id", (
     const porTabela = new Map(inventario().map((t) => [t.tabela, t]));
     for (const { tabela } of DEBITO_CONHECIDO) {
       const achada = porTabela.get(tabela);
-      expect(achada, `DEBITO_CONHECIDO cita tabela inexistente: ${tabela} — remova a entrada`).toBeDefined();
+      expect(
+        achada,
+        `DEBITO_CONHECIDO cita tabela inexistente: ${tabela} — remova a entrada`,
+      ).toBeDefined();
       expect(
         achada?.rlsLigada,
         `${tabela} está em DEBITO_CONHECIDO mas perdeu RLS — isto não é mais só falta de teste, é tabela exposta`,

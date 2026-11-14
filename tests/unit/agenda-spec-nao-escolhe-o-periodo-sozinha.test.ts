@@ -76,6 +76,12 @@ const CHAMADAS = [
  * período nenhum.
  */
 const DISPENSADAS: Record<string, string> = {
+  "clinic-proximo-livre.spec.ts":
+    "FORK clinic (E1.3). Não escolhe dia nem bloco da GRADE: o horário vem da lista " +
+    "\"Próximos horários livres\", que a rota calcula nos 30 dias seguintes a partir de agora " +
+    "(a mesma consulta de horários livres), e a spec compara com essa consulta no mesmo " +
+    "instante. Não depende de haver vaga hoje nem da hora do dia. ⚠️ A dispensa VENCE se " +
+    "ela passar a clicar num dia ou bloco da grade.",
   "agenda-primeira-pintura-no-fuso.spec.ts":
     "não escolhe dia nem bloco — mede QUAL SEMANA o servidor pinta antes da hidratação, e " +
     "por isso não pode navegar: `irParaASemanaSeguinte` precisa da página viva, que esta " +

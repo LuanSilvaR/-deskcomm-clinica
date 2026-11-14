@@ -1,3 +1,4 @@
+import { exigePermissaoNaPagina } from "@/lib/clinic/acesso/pagina";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -13,6 +14,9 @@ export default async function InboxPage({
 }: {
   searchParams: Promise<{ id?: string }>;
 }) {
+  // FORK clinic (agenda S5): tela administrativa — sem a chave, "acesso não autorizado" (o menu já a esconde).
+  const negado = await exigePermissaoNaPagina("conversas.ver");
+  if (negado) return negado;
   const user = await loadAuthUser();
   if (!user) redirect("/login");
   const activeOrg = await resolveActiveOrg(user);

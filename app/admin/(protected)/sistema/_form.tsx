@@ -183,21 +183,44 @@ export function FormularioDeComportamento({ inicial }: { inicial: ComportamentoD
  */
 export function FormularioDeModulos({ ligados }: { ligados: readonly ModuloOpcional[] }) {
   const t = useT();
-  const [bancoExterno, setBancoExterno] = useState(ligados.includes("banco_externo"));
+  const [estado, setEstado] = useState<Record<ModuloOpcional, boolean>>({
+    banco_externo: ligados.includes("banco_externo"),
+    cobranca: ligados.includes("cobranca"),
+  });
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, startTransition] = useTransition();
 
-  function trocar(valor: boolean) {
+  function trocar(modulo: ModuloOpcional, valor: boolean) {
     setErro(null);
-    setBancoExterno(valor);
+    setEstado((e) => ({ ...e, [modulo]: valor }));
     startTransition(async () => {
-      const r = await updateModuloDaInstalacao({ modulo: "banco_externo", ligado: valor });
+      const r = await updateModuloDaInstalacao({ modulo, ligado: valor });
       if (!r.ok) {
-        setBancoExterno(!valor);
+        setEstado((e) => ({ ...e, [modulo]: !valor }));
         setErro(t("Não deu para salvar. Tente de novo em instantes."));
       }
     });
   }
+
+  // FORK (card #159): a cobrança da plataforma entra ao lado do banco externo.
+  const modulos: Array<{ id: ModuloOpcional; htmlId: string; rotulo: string; descricao: string }> = [
+    {
+      id: "banco_externo",
+      htmlId: "modulo-banco-externo",
+      rotulo: t("Banco de dados externo"),
+      descricao: t(
+        "Ligado, cada empresa pode conectar o banco de outro sistema (um ERP, outro CRM) para o agente consultar. Isso guarda a senha daquele banco neste servidor e abre conexão com ele. Desligado, a tela, o menu e as ferramentas do agente somem.",
+      ),
+    },
+    {
+      id: "cobranca",
+      htmlId: "modulo-cobranca",
+      rotulo: t("Cobrança da plataforma"),
+      descricao: t(
+        "Ligado, você cadastra os planos em Admin › Cobrança e cada clínica nova nasce em teste grátis no plano escolhido. Desligado, nada muda: as clínicas seguem sem assinatura.",
+      ),
+    },
+  ];
 
   return (
     <Card>
@@ -210,25 +233,23 @@ export function FormularioDeModulos({ ligados }: { ligados: readonly ModuloOpcio
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
-          <div className="space-y-1">
-            <Label htmlFor="modulo-banco-externo" className="text-base">
-              {t("Banco de dados externo")}
-            </Label>
-            <p className="text-sm text-muted-foreground">
-              {t(
-                "Ligado, cada empresa pode conectar o banco de outro sistema (um ERP, outro CRM) para o agente consultar. Isso guarda a senha daquele banco neste servidor e abre conexão com ele. Desligado, a tela, o menu e as ferramentas do agente somem.",
-              )}
-            </p>
+        {modulos.map((m) => (
+          <div key={m.id} className="flex items-start justify-between gap-4 rounded-lg border p-4">
+            <div className="space-y-1">
+              <Label htmlFor={m.htmlId} className="text-base">
+                {m.rotulo}
+              </Label>
+              <p className="text-sm text-muted-foreground">{m.descricao}</p>
+            </div>
+            <Switch
+              id={m.htmlId}
+              checked={estado[m.id]}
+              onCheckedChange={(v) => trocar(m.id, v)}
+              disabled={pendente}
+              aria-label={m.rotulo}
+            />
           </div>
-          <Switch
-            id="modulo-banco-externo"
-            checked={bancoExterno}
-            onCheckedChange={trocar}
-            disabled={pendente}
-            aria-label={t("Banco de dados externo")}
-          />
-        </div>
+        ))}
 
         {erro && (
           <p className="text-sm text-destructive" role="alert">

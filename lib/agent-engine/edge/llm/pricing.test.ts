@@ -140,3 +140,20 @@ describe("costCents — a conversa real que originou este PR", () => {
     expect(costCents("claude-sonnet-5", turnoReal)).toBeLessThan(24);
   });
 });
+
+describe("#142 — Claude Haiku 5.5", () => {
+  it("tem preço (10× abaixo do Haiku 4.5) e o turno deixa de sair com custo nulo", () => {
+    expect(precoDoModelo("claude-haiku-5-5")).toEqual({ input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite5m: 0.125, cacheWrite1h: 0.2 });
+    // Turno medido na prova da Sofia: 33k de entrada (15k lidos do cache, 1,6k gravados), 657 de saída.
+    const turno: TokenUsage = { inputTokens: 33_000, outputTokens: 657, cacheReadTokens: 15_000, cacheWriteTokens: 1_600 };
+    const novo = costCents("claude-haiku-5-5", turno);
+    const antigo = costCents("claude-haiku-4-5", turno);
+    expect(novo).not.toBeNull();
+    expect(novo! * 10).toBeCloseTo(antigo!, 10);
+  });
+
+  it("não é confundido com o 4.5 nem casa id parecido", () => {
+    expect(precoDoModelo("claude-haiku-5")).toBeUndefined();
+    expect(precoDoModelo("claude-haiku-5-50")).toBeUndefined();
+  });
+});

@@ -80,9 +80,9 @@ interface Definicao {
  * Postgres vence a ÚLTIMA aplicada — e é ela que este teste cobra, porque é ela
  * que fica instalada na VPS de quem atualiza.
  */
-function definicoesDe(texto: string): Definicao[] {
+function definicoesDe(texto: string, nome: "fn_decrypt_oauth" | "decrypt_cpf" = "fn_decrypt_oauth"): Definicao[] {
   const out: Definicao[] = [];
-  const re = /create\s+or\s+replace\s+function\s+("?public"?\s*\.\s*)?"?fn_decrypt_oauth"?\s*\(/gi;
+  const re = new RegExp(`create\\s+or\\s+replace\\s+function\\s+("?public"?\\s*\\.\\s*)?"?${nome}"?\\s*\\(`, "gi");
   for (const m of texto.matchAll(re)) {
     const inicio = m.index ?? 0;
     const abre = texto.indexOf("$$", inicio);
@@ -94,6 +94,12 @@ function definicoesDe(texto: string): Definicao[] {
 }
 
 const DEFINICOES_BASELINE = definicoesDe(BASELINE);
+/**
+ * FORK clinic (migration 9002): `decrypt_cpf` é a segunda cifra do schema —
+ * "cifra nova, guarda nova". Ela entra no teste 3 como dona legítima de
+ * `pgp_sym_decrypt` e o teste 1b cobra dela as mesmas três guardas.
+ */
+const DEFINICOES_CPF = definicoesDe(BASELINE, "decrypt_cpf");
 const EFETIVA = DEFINICOES_BASELINE[DEFINICOES_BASELINE.length - 1];
 // A régua inteira assume que fn_decrypt_oauth está no baseline (é o que ela
 // vigia). Sem a definição não há o que medir: falhar aqui, com o motivo, é mais
@@ -129,6 +135,20 @@ describe("credencial de enfeite não derruba a leitura (#754)", () => {
     expect(pisoNoSql?.[1], "piso ausente ou diferente do medido").toBe(String(PISO_MEDIDO));
   });
 
+  it("1b. decrypt_cpf (fork, 9002) tem as mesmas três guardas, na ordem, antes de decifrar", () => {
+    const efetiva = DEFINICOES_CPF[DEFINICOES_CPF.length - 1];
+    expect(efetiva, "decrypt_cpf não aparece no baseline").toBeDefined();
+    const corpo = efetiva!.corpo;
+    const iNull = corpo.indexOf("p_ciphertext is null");
+    const iTamanho = corpo.search(/octet_length\s*\(\s*p_ciphertext\s*\)\s*<\s*66/);
+    const iPacote = corpo.search(/get_byte\s*\(\s*p_ciphertext\s*,\s*0\s*\)\s*<\s*128/);
+    const iDecifra = corpo.indexOf("pgp_sym_decrypt");
+    expect(iNull, "falta o NULL").toBeGreaterThan(-1);
+    expect(iNull).toBeLessThan(iTamanho);
+    expect(iTamanho).toBeLessThan(iPacote);
+    expect(iPacote).toBeLessThan(iDecifra);
+  });
+
   it("2. o apêndice do baseline e a migration 0240 são o MESMO corpo (quem instala e quem atualiza recebem igual)", () => {
     const naMigration = definicoesDe(MIGRATION);
     expect(naMigration.length, "a migration não redefine fn_decrypt_oauth").toBe(1);
@@ -142,7 +162,7 @@ describe("credencial de enfeite não derruba a leitura (#754)", () => {
     const ocorrencias = [...BASELINE.matchAll(/pgp_sym_decrypt\s*\(/g)].map((m) => m.index ?? 0);
     expect(ocorrencias.length, "sumiu o pgp_sym_decrypt do baseline?").toBeGreaterThan(0);
     for (const i of ocorrencias) {
-      const dona = DEFINICOES_BASELINE.find((d) => d.inicio < i && i < d.fim);
+      const dona = [...DEFINICOES_BASELINE, ...DEFINICOES_CPF].find((d) => d.inicio < i && i < d.fim);
       expect(
         dona,
         `há um pgp_sym_decrypt() fora de fn_decrypt_oauth (offset ${i}) — cifra nova, guarda nova`,

@@ -1,3 +1,4 @@
+import { exigePermissaoNaPagina } from "@/lib/clinic/acesso/pagina";
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
@@ -23,6 +24,9 @@ export const dynamic = "force-dynamic";
  * Quem atende não define plano de contas.
  */
 export default async function Page() {
+  // FORK clinic (agenda S5): tela administrativa — sem a chave, "acesso não autorizado" (o menu já a esconde).
+  const negado = await exigePermissaoNaPagina("financeiro.ver");
+  if (negado) return negado;
   const user = await requireAuth();
   const org = await resolveActiveOrg(user);
   // Sem organização ativa não há catálogo — mesmo caminho da tela irmã de

@@ -123,7 +123,7 @@ test("interface por membro atualiza ao vivo, preserva formulário e convite apli
     await member.waitForURL("**/app/products");
     await nav(member).getByRole("link", { name: "Ver tudo em CRM" }).click();
     await expect(member.getByRole("link", { name: /Produtos/ }).last()).toBeVisible();
-    await expect(member.getByRole("link", { name: /Contatos/ })).toHaveCount(0);
+    await expect(member.getByRole("link", { name: /Pacientes/ })).toHaveCount(0);
     await member.keyboard.press("ControlOrMeta+k");
     await expect(member.getByRole("option").filter({ hasText: "Produtos" })).toBeVisible();
     await expect(member.getByRole("option").filter({ hasText: "Inbox" })).toHaveCount(0);

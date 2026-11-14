@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { useT } from "@/hooks/i18n/useT";
 import { ArrowBendUpLeft, Check, Checks, Robot, WarningOctagon } from "@/lib/ui/icons";
@@ -57,6 +58,13 @@ export function MessageBubble({
 }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  // Relógio de 60 s do upstream (#2133): é ele que tira da tela o
+  // "Transcrevendo…" vencido do áudio (MediaRenderer).
+  const [agora, setAgora] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setAgora(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const isOutbound = message.direction === "outbound";
   const time = format(new Date(message.sent_at), "HH:mm", { locale: localeDaData });
   const isFailed = message.status === "failed";
@@ -113,7 +121,7 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        "group flex w-full items-center gap-1 px-4 py-1",
+        "group flex w-full min-w-0 items-center gap-1 px-4 py-1",
         isOutbound ? "justify-end" : "justify-start",
       )}
     >
@@ -159,7 +167,7 @@ export function MessageBubble({
         // fez a spec achar que havia mensagem onde não havia (issue #1318).
         data-testid="message-bubble"
         className={cn(
-          "max-w-[75%] text-sm",
+          "max-w-[75%] min-w-0 text-sm",
           isBareSticker
             ? "px-0 py-0"
             : cn(
@@ -199,7 +207,7 @@ export function MessageBubble({
               continuava legível dentro de cada resposta que a citou. O fio
               permanece (a citação some, não a resposta); o conteúdo, não.
             */}
-            <div className={cn("line-clamp-2 opacity-70", citada.revoked_at && "italic")}>
+            <div className={cn("line-clamp-2 wrap-anywhere opacity-70", citada.revoked_at && "italic")}>
               {citada.revoked_at
                 ? t("Esta mensagem foi apagada")
                 : citada.body?.trim() || t("(sem texto)")}
@@ -219,14 +227,14 @@ export function MessageBubble({
           // Nem corpo nem mídia: o anexo apagado também sai. Em itálico e
           // esmaecido porque não é texto de ninguém — é o CRM narrando o que
           // aconteceu com aquele lugar da conversa.
-          <p className="whitespace-pre-wrap break-words italic leading-snug opacity-60">
+          <p className="whitespace-pre-wrap wrap-anywhere italic leading-snug opacity-60">
             {t("Esta mensagem foi apagada")}
           </p>
         ) : (
           <>
             {hasMedia && (
               <div className={cn(message.body && "mb-1")}>
-                <MediaRenderer message={message} />
+                <MediaRenderer message={message} agora={agora} />
               </div>
             )}
 
@@ -237,7 +245,7 @@ export function MessageBubble({
             )}
 
             {message.body && !isContact && (
-              <p className="whitespace-pre-wrap break-words leading-snug">{message.body}</p>
+              <p className="whitespace-pre-wrap wrap-anywhere leading-snug">{message.body}</p>
             )}
           </>
         )}

@@ -23,6 +23,7 @@ import {
   type ContactCreate,
 } from "@/lib/schemas";
 import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
+import { contatosDoEscopo } from "@/lib/clinic/pacientes/escopo-de-pacientes";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -51,7 +52,7 @@ export const dynamic = "force-dynamic";
  * do proxy antes de chegar neste arquivo. Ver o comentário lá.
  */
 type ContactsAuth =
-  | { ok: true; organizationId: string; actor: Actor; supabase: SupabaseClient; idioma?: Idioma }
+  | { ok: true; organizationId: string; actor: Actor; supabase: SupabaseClient; idioma?: Idioma; sessao?: boolean }
   | { ok: false; response: Response };
 
 async function resolveContactsAuth(req: NextRequest, requestId: string): Promise<ContactsAuth> {
@@ -106,6 +107,7 @@ async function resolveContactsAuth(req: NextRequest, requestId: string): Promise
     actor: { type: "user", id: authz.user.id },
     supabase: await createClient(),
     idioma: authz.user.idioma,
+    sessao: true,
   };
 }
 
@@ -114,7 +116,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const auth = await resolveContactsAuth(req, requestId);
   if (!auth.ok) return auth.response;
-  const { organizationId, actor, supabase, idioma } = auth;
+  const { organizationId, actor, supabase, idioma, sessao } = auth;
   const t = (texto: string) => traduzir(texto, idioma ?? "pt-BR");
 
   const url = new URL(req.url);
@@ -134,6 +136,10 @@ export async function GET(req: NextRequest): Promise<Response> {
     });
   }
 
+  // FORK clinic (agenda S5): na sessão, sem `pacientes.ver_todos` só os
+  // pacientes da própria agenda. O token (MCP) segue o escopo dele.
+  const escopo = sessao ? await contatosDoEscopo(supabase, organizationId, actor.id) : null;
+
   try {
     const { contacts, cursor, has_more } = await listContactsHandler(
       supabase,
@@ -144,6 +150,7 @@ export async function GET(req: NextRequest): Promise<Response> {
         idioma,
       },
       qsParsed.data,
+      escopo,
     );
     return ok(contacts, { requestId, meta: { cursor, has_more } });
   } catch (err) {

@@ -14,6 +14,7 @@ describe("createDefaultRegistry", () => {
       "anthropic",
       "deepseek",
       "google",
+      "groq",
       "openai",
       "openrouter",
     ]);
@@ -25,6 +26,7 @@ describe("createDefaultRegistry", () => {
     expect(() => reg.google!("k", "gemini-2.5-pro")).not.toThrow();
     expect(() => reg.openrouter!("k", "meta-llama/llama-3.3-70b-instruct")).not.toThrow();
     expect(() => reg.deepseek!("k", "deepseek-flash")).not.toThrow();
+    expect(() => reg.groq!("k", "llama-3.3-70b-versatile")).not.toThrow();
     // Endpoint próprio (gateway compatível, ou modelo local no roteiro).
     expect(() => reg.openrouter!("k", "x/y", "https://gateway.exemplo/v1")).not.toThrow();
     expect(() => reg.deepseek!("k", "deepseek-flash", "https://gateway.exemplo/v1")).not.toThrow();

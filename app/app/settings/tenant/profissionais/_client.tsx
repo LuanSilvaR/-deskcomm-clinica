@@ -1,0 +1,655 @@
+"use client";
+
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+
+import { AtendimentosPorEspecialidade } from "@/components/clinic/AtendimentosPorEspecialidade";
+import { Bloqueios } from "@/components/clinic/Bloqueios";
+import { Especialidades } from "@/components/clinic/Especialidades";
+import { MeusDados } from "@/components/clinic/MeusDados";
+import { Profissionais } from "@/components/clinic/Profissionais";
+import { SalasEEquipamentos } from "@/components/clinic/SalasEEquipamentos";
+import { showApiError } from "@/components/feedback/ApiErrorToast";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useT } from "@/hooks/i18n/useT";
+import { apiClient } from "@/lib/api/client";
+
+interface Props {
+  ligadoInicial: boolean;
+  fichaObrigatoriaInicial: boolean;
+  confirmacaoInicial: boolean;
+  lembreteComReservaInicial: boolean;
+  travaInicial: boolean;
+  recursosInicial: boolean;
+  procedimentosInicial: boolean;
+  prontuarioInicial: boolean;
+  estoqueInicial: boolean;
+  /** FORK clinic (agenda S6b) */
+  encaixeInicial?: boolean;
+  /** FORK clinic (#81): `settings.clinic.titulo_livre`. */
+  tituloLivreInicial?: boolean;
+  /** FORK clinic (#85): `settings.clinic.varios_telefones`. */
+  variosTelefonesInicial?: boolean;
+  /** FORK clinic (#87): `settings.clinic.atestado_anonimizacao`. */
+  atestadoInicial?: boolean;
+  /** FORK clinic (#80): `settings.clinic.duracao_na_marcacao`. */
+  duracaoNaMarcacaoInicial?: boolean;
+  /** FORK clinic (orçamento O1): `settings.clinic.orcamentos`. */
+  orcamentosInicial?: boolean;
+  prazoInicial: number;
+  podeLigar: boolean;
+  ehGerencia: boolean;
+  usuarioAtualId: string;
+}
+
+export function ProfissionaisClient({
+  ligadoInicial,
+  fichaObrigatoriaInicial,
+  confirmacaoInicial,
+  lembreteComReservaInicial,
+  travaInicial,
+  recursosInicial,
+  procedimentosInicial,
+  prontuarioInicial,
+  estoqueInicial,
+  encaixeInicial = false,
+  tituloLivreInicial = false,
+  variosTelefonesInicial = false,
+  atestadoInicial = false,
+  duracaoNaMarcacaoInicial = false,
+  orcamentosInicial = false,
+  prazoInicial,
+  podeLigar,
+  ehGerencia,
+  usuarioAtualId,
+}: Props) {
+  const t = useT();
+  const [ligado, setLigado] = useState(ligadoInicial);
+  const [fichaObrigatoria, setFichaObrigatoria] = useState(fichaObrigatoriaInicial);
+  const [confirmacao, setConfirmacao] = useState(confirmacaoInicial);
+  const [reserva, setReserva] = useState(lembreteComReservaInicial);
+  const [trava, setTrava] = useState(travaInicial);
+  const [recursos, setRecursos] = useState(recursosInicial);
+  const [procedimentos, setProcedimentos] = useState(procedimentosInicial);
+  const [prontuario, setProntuario] = useState(prontuarioInicial);
+  const [estoque, setEstoque] = useState(estoqueInicial);
+  const [orcamentos, setOrcamentos] = useState(orcamentosInicial);
+  const [encaixe, setEncaixe] = useState(encaixeInicial);
+  const [tituloLivre, setTituloLivre] = useState(tituloLivreInicial);
+  const [variosTelefones, setVariosTelefones] = useState(variosTelefonesInicial);
+  const [atestado, setAtestado] = useState(atestadoInicial);
+  const queryClient = useQueryClient();
+  const [duracaoNaMarcacao, setDuracaoNaMarcacao] = useState(duracaoNaMarcacaoInicial);
+  const [prazo, setPrazo] = useState(prazoInicial);
+  const [prazoDigitado, setPrazoDigitado] = useState(String(prazoInicial));
+
+  const salvarPrazo = useMutation({
+    mutationFn: (horas: number) =>
+      apiClient.patch<{ data: { prazo_paciente_horas: number } }>("/api/v1/clinic/config", { prazo_paciente_horas: horas }),
+    onSuccess: (r) => {
+      setPrazo(r.data.prazo_paciente_horas);
+      setPrazoDigitado(String(r.data.prazo_paciente_horas));
+    },
+    onError: showApiError,
+  });
+
+  const alternarProcedimentos = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { procedimentos: boolean } }>("/api/v1/clinic/config", { procedimentos: valor }),
+    onSuccess: (r) => setProcedimentos(r.data.procedimentos),
+    onError: showApiError,
+  });
+
+  const alternarEncaixe = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { encaixe: boolean } }>("/api/v1/clinic/config", { encaixe: valor }),
+    onSuccess: (r) => setEncaixe(r.data.encaixe),
+    onError: showApiError,
+  });
+
+  const alternarTituloLivre = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { titulo_livre: boolean } }>("/api/v1/clinic/config", { titulo_livre: valor }),
+    onSuccess: (r) => setTituloLivre(r.data.titulo_livre),
+    onError: showApiError,
+  });
+
+  const alternarVariosTelefones = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { varios_telefones: boolean } }>("/api/v1/clinic/config", { varios_telefones: valor }),
+    onSuccess: (r) => setVariosTelefones(r.data.varios_telefones),
+    onError: showApiError,
+  });
+
+  const alternarAtestado = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { atestado_anonimizacao: boolean } }>("/api/v1/clinic/config", { atestado_anonimizacao: valor }),
+    onSuccess: (r) => {
+      setAtestado(r.data.atestado_anonimizacao);
+      queryClient.invalidateQueries({ queryKey: ["clinic-config", "atestado_anonimizacao"] });
+    },
+    onError: showApiError,
+  });
+
+  const alternarDuracaoNaMarcacao = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { duracao_na_marcacao: boolean } }>("/api/v1/clinic/config", { duracao_na_marcacao: valor }),
+    onSuccess: (r) => setDuracaoNaMarcacao(r.data.duracao_na_marcacao),
+    onError: showApiError,
+  });
+
+  const alternarOrcamentos = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { orcamentos: boolean } }>("/api/v1/clinic/config", { orcamentos: valor }),
+    onSuccess: (r) => setOrcamentos(r.data.orcamentos),
+    onError: showApiError,
+  });
+
+  const alternarEstoque = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { estoque: boolean } }>("/api/v1/clinic/config", { estoque: valor }),
+    onSuccess: (r) => setEstoque(r.data.estoque),
+    onError: showApiError,
+  });
+
+  const alternarProntuario = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { prontuario: boolean } }>("/api/v1/clinic/config", { prontuario: valor }),
+    onSuccess: (r) => setProntuario(r.data.prontuario),
+    onError: showApiError,
+  });
+
+  const alternarRecursos = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { recursos: boolean } }>("/api/v1/clinic/config", { recursos: valor }),
+    onSuccess: (r) => setRecursos(r.data.recursos),
+    onError: showApiError,
+  });
+
+  const alternarTrava = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { trava_sobreposicao: boolean } }>("/api/v1/clinic/config", { trava_sobreposicao: valor }),
+    onSuccess: (r) => setTrava(r.data.trava_sobreposicao),
+    onError: showApiError,
+  });
+
+  const alternarReserva = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { lembrete_com_reserva: boolean } }>("/api/v1/clinic/config", {
+        lembrete_com_reserva: valor,
+      }),
+    onSuccess: (r) => setReserva(r.data.lembrete_com_reserva),
+    onError: showApiError,
+  });
+
+  const alternarConfirmacao = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { confirmacao_automatica: boolean } }>("/api/v1/clinic/config", {
+        confirmacao_automatica: valor,
+      }),
+    onSuccess: (r) => setConfirmacao(r.data.confirmacao_automatica),
+    onError: showApiError,
+  });
+
+  const alternarFicha = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { ficha_obrigatoria: boolean } }>("/api/v1/clinic/config", { ficha_obrigatoria: valor }),
+    onSuccess: (r) => setFichaObrigatoria(r.data.ficha_obrigatoria),
+    onError: showApiError,
+  });
+
+  const alternar = useMutation({
+    mutationFn: (valor: boolean) =>
+      apiClient.patch<{ data: { profissionais: boolean } }>("/api/v1/clinic/config", { profissionais: valor }),
+    onSuccess: (r) => setLigado(r.data.profissionais),
+    onError: showApiError,
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* #97: as opções valem para a clínica toda; o profissional vai direto aos próprios dados. */}
+      {ehGerencia || podeLigar ? (
+        <>
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${ligado ? "" : "bg-muted"}`}
+          data-testid="clinic-modulo"
+        >
+          <div>
+            <p className="font-medium">
+              {ligado ? t("Regras de profissionais ligadas") : t("Regras de profissionais desligadas")}
+            </p>
+            <p className="text-sm text-text-muted">
+              {ligado
+                ? t("A agenda só oferece quem tem a especialidade exigida e respeita os bloqueios abaixo.")
+                : t("Você pode cadastrar tudo agora. A agenda só passa a usar especialidades e bloqueios quando isto for ligado.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-modulo-alternar"
+              variant={ligado ? "outline" : "default"}
+              disabled={alternar.isPending}
+              onClick={() => alternar.mutate(!ligado)}
+            >
+              {ligado ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : (
+            <span className="text-sm text-text-muted">{t("Só quem administra a empresa liga ou desliga.")}</span>
+          )}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${fichaObrigatoria ? "" : "bg-muted"}`}
+          data-testid="clinic-ficha-obrigatoria"
+        >
+          <div>
+            <p className="font-medium">
+              {fichaObrigatoria ? t("Ficha do paciente exigida na chegada") : t("Ficha do paciente não é exigida")}
+            </p>
+            <p className="text-sm text-text-muted">
+              {fichaObrigatoria
+                ? t("\"Paciente chegou\" e \"Compareceu\" só são registrados com a ficha cadastral completa.")
+                : t("Ligue para exigir a ficha cadastral completa ao registrar a chegada e o comparecimento.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-ficha-obrigatoria-alternar"
+              variant={fichaObrigatoria ? "outline" : "default"}
+              disabled={alternarFicha.isPending}
+              onClick={() => alternarFicha.mutate(!fichaObrigatoria)}
+            >
+              {fichaObrigatoria ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${confirmacao ? "" : "bg-muted"}`}
+          data-testid="clinic-confirmacao"
+        >
+          <div>
+            <p className="font-medium">
+              {confirmacao ? t("Confirmação automática ligada") : t("Confirmação automática desligada")}
+            </p>
+            <p className="text-sm text-text-muted">
+              {confirmacao
+                ? t("O lembrete de 12 h ou mais antes pede SIM ou NÃO. Sem resposta até 4 h antes, a recepção recebe a tarefa de ligar.")
+                : t("Ligue para o lembrete da véspera pedir SIM ou NÃO ao paciente. Vale para os tipos de atendimento com lembrete ligado.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-confirmacao-alternar"
+              variant={confirmacao ? "outline" : "default"}
+              disabled={alternarConfirmacao.isPending}
+              onClick={() => alternarConfirmacao.mutate(!confirmacao)}
+            >
+              {confirmacao ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${reserva ? "" : "bg-muted"}`}
+          data-testid="clinic-lembrete-reserva"
+        >
+          <div>
+            <p className="font-medium">{t("Lembrete pelo número oficial, com reserva pelo QR code")}</p>
+            <p className="text-sm text-text-muted">
+              {t("O lembrete sai primeiro pelo número oficial da Meta. Se ele não puder enviar, sai pelo número conectado por QR code.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-lembrete-reserva-alternar"
+              variant={reserva ? "outline" : "default"}
+              disabled={alternarReserva.isPending}
+              onClick={() => alternarReserva.mutate(!reserva)}
+            >
+              {reserva ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${trava ? "" : "bg-muted"}`}
+          data-testid="clinic-trava"
+        >
+          <div>
+            <p className="font-medium">
+              {trava ? t("Trava de horário duplicado ligada") : t("Trava de horário duplicado desligada")}
+            </p>
+            <p className="text-sm text-text-muted">
+              {trava
+                ? t("O banco recusa dois atendimentos que se cruzam na agenda do mesmo profissional, mesmo marcados no mesmo instante pela recepção e pelo agente de IA.")
+                : t("Ligue para o banco recusar atendimentos que se cruzam na agenda do mesmo profissional. O espelho do Google Agenda não é afetado.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-trava-alternar"
+              variant={trava ? "outline" : "default"}
+              disabled={alternarTrava.isPending}
+              onClick={() => alternarTrava.mutate(!trava)}
+            >
+              {trava ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${recursos ? "" : "bg-muted"}`}
+          data-testid="clinic-recursos"
+        >
+          <div>
+            <p className="font-medium">
+              {recursos ? t("Salas e equipamentos ligados") : t("Salas e equipamentos desligados")}
+            </p>
+            <p className="text-sm text-text-muted">
+              {recursos
+                ? t("A agenda só oferece horário com a sala e o equipamento que o atendimento exige livres, e reserva os dois ao marcar.")
+                : t("Ligue para a agenda considerar salas e equipamentos. Você pode cadastrá-los antes na aba Salas e equipamentos.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-recursos-alternar"
+              variant={recursos ? "outline" : "default"}
+              disabled={alternarRecursos.isPending}
+              onClick={() => alternarRecursos.mutate(!recursos)}
+            >
+              {recursos ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${procedimentos ? "" : "bg-muted"}`}
+          data-testid="clinic-procedimentos"
+        >
+          <div>
+            <p className="font-medium">{procedimentos ? t("Procedimentos e POP ligados") : t("Procedimentos e POP desligados")}</p>
+            <p className="text-sm text-text-muted">
+              {procedimentos
+                ? t("A clínica cadastra os procedimentos, liga cada um às especialidades e profissionais, e mantém o POP versionado e imprimível.")
+                : t("Ligue para cadastrar os procedimentos da clínica com o POP de cada um (versões, aprovação e impressão).")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-procedimentos-alternar"
+              variant={procedimentos ? "outline" : "default"}
+              disabled={alternarProcedimentos.isPending}
+              onClick={() => alternarProcedimentos.mutate(!procedimentos)}
+            >
+              {procedimentos ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${prontuario ? "" : "bg-muted"}`}
+          data-testid="clinic-prontuario"
+        >
+          <div>
+            <p className="font-medium">{prontuario ? t("Prontuário ligado") : t("Prontuário desligado")}</p>
+            <p className="text-sm text-text-muted">
+              {prontuario
+                ? t("Os profissionais atendem pela fila (Meus atendimentos) e registram anamnese, evolução, fotos e termos. Só profissionais ativos ou papéis clínicos veem o conteúdo clínico; o administrador sozinho não vê.")
+                : t("Ligue para atender pela fila e registrar o prontuário do paciente. Só profissionais ativos ou papéis clínicos veem o conteúdo clínico.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-prontuario-alternar"
+              variant={prontuario ? "outline" : "default"}
+              disabled={alternarProntuario.isPending}
+              onClick={() => alternarProntuario.mutate(!prontuario)}
+            >
+              {prontuario ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${estoque ? "" : "bg-muted"}`}
+          data-testid="clinic-estoque"
+        >
+          <div>
+            <p className="font-medium">{estoque ? t("Estoque ligado") : t("Estoque desligado")}</p>
+            <p className="text-sm text-text-muted">
+              {estoque
+                ? t("Saldo por lote, validade e local; entradas, transferências, perdas e ajustes ficam registrados e o saldo é sempre a soma deles.")
+                : t("Ligue para controlar o estoque por lote, validade e local. Ao ligar, o sistema cria o local \"Estoque central\".")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-estoque-alternar"
+              variant={estoque ? "outline" : "default"}
+              disabled={alternarEstoque.isPending}
+              onClick={() => alternarEstoque.mutate(!estoque)}
+            >
+              {estoque ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${orcamentos ? "" : "bg-muted"}`}
+          data-testid="clinic-orcamentos"
+        >
+          <div>
+            <p className="font-medium">{orcamentos ? t("Orçamentos ligados") : t("Orçamentos desligados")}</p>
+            <p className="text-sm text-text-muted">
+              {orcamentos
+                ? t("A tabela de preços está em Configurações › Tabela de preços. Mudar um preço não altera orçamentos já enviados.")
+                : t("Ligue para montar a tabela de preços dos procedimentos e pacotes, base dos orçamentos e contratos.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-orcamentos-alternar"
+              variant={orcamentos ? "outline" : "default"}
+              disabled={alternarOrcamentos.isPending}
+              onClick={() => alternarOrcamentos.mutate(!orcamentos)}
+            >
+              {orcamentos ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${encaixe ? "" : "bg-muted"}`}
+          data-testid="clinic-encaixe"
+        >
+          <div>
+            <p className="font-medium">{encaixe ? t("Encaixe ligado") : t("Encaixe desligado")}</p>
+            <p className="text-sm text-text-muted">
+              {t("Permitir encaixe (marcar por cima de um horário ocupado, com motivo)")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-encaixe-alternar"
+              variant={encaixe ? "outline" : "default"}
+              disabled={alternarEncaixe.isPending}
+              aria-label={t("Permitir encaixe (marcar por cima de um horário ocupado, com motivo)")}
+              onClick={() => alternarEncaixe.mutate(!encaixe)}
+            >
+              {encaixe ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${tituloLivre ? "" : "bg-muted"}`}
+          data-testid="clinic-titulo-livre"
+        >
+          <div>
+            <p className="font-medium">{tituloLivre ? t("Título livre ligado") : t("Título livre desligado")}</p>
+            <p className="text-sm text-text-muted">
+              {t("Permitir digitar o título do compromisso ao marcar (aparece na agenda e no lembrete ao paciente)")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-titulo-livre-alternar"
+              variant={tituloLivre ? "outline" : "default"}
+              disabled={alternarTituloLivre.isPending}
+              aria-label={t("Permitir digitar o título do compromisso ao marcar (aparece na agenda e no lembrete ao paciente)")}
+              onClick={() => alternarTituloLivre.mutate(!tituloLivre)}
+            >
+              {tituloLivre ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${variosTelefones ? "" : "bg-muted"}`}
+          data-testid="clinic-varios-telefones"
+        >
+          <div>
+            <p className="font-medium">{variosTelefones ? t("Vários telefones na ficha ligados") : t("Vários telefones na ficha desligados")}</p>
+            <p className="text-sm text-text-muted">
+              {t("Permitir guardar mais de um telefone na ficha do paciente (a mensagem de qualquer um deles cai na mesma ficha)")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-varios-telefones-alternar"
+              variant={variosTelefones ? "outline" : "default"}
+              disabled={alternarVariosTelefones.isPending}
+              aria-label={t("Permitir guardar mais de um telefone na ficha do paciente (a mensagem de qualquer um deles cai na mesma ficha)")}
+              onClick={() => alternarVariosTelefones.mutate(!variosTelefones)}
+            >
+              {variosTelefones ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${atestado ? "" : "bg-muted"}`}
+          data-testid="clinic-atestado-anonimizacao"
+        >
+          <div>
+            <p className="font-medium">{t("Atestado de anonimização")}</p>
+            <p className="text-sm text-text-muted">
+              {t("Ao anonimizar um paciente, o sistema gera um atestado em PDF com data, responsável, IP, o que foi anonimizado e o que foi guardado por obrigação legal ou para defesa de direitos (prontuário, orçamentos e registros financeiros).")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-atestado-anonimizacao-alternar"
+              variant={atestado ? "outline" : "default"}
+              disabled={alternarAtestado.isPending}
+              aria-label={t("Atestado de anonimização")}
+              onClick={() => alternarAtestado.mutate(!atestado)}
+            >
+              {atestado ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${duracaoNaMarcacao ? "" : "bg-muted"}`}
+          data-testid="clinic-duracao-na-marcacao"
+        >
+          <div>
+            <p className="font-medium">{duracaoNaMarcacao ? t("Duração na marcação ligada") : t("Duração na marcação desligada")}</p>
+            <p className="text-sm text-text-muted">
+              {t("Permitir ajustar a duração do atendimento ao marcar (o padrão continua sendo a do tipo)")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <Button
+              data-testid="clinic-duracao-na-marcacao-alternar"
+              variant={duracaoNaMarcacao ? "outline" : "default"}
+              disabled={alternarDuracaoNaMarcacao.isPending}
+              aria-label={t("Permitir ajustar a duração do atendimento ao marcar (o padrão continua sendo a do tipo)")}
+              onClick={() => alternarDuracaoNaMarcacao.mutate(!duracaoNaMarcacao)}
+            >
+              {duracaoNaMarcacao ? t("Desligar") : t("Ligar")}
+            </Button>
+          ) : null}
+        </section>
+
+        <section
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${prazo > 0 ? "" : "bg-muted"}`}
+          data-testid="clinic-prazo"
+        >
+          <div>
+            <p className="font-medium">
+              {prazo > 0 ? `${t("Prazo para o paciente desmarcar pelo WhatsApp")}: ${prazo} h` : t("Sem prazo para o paciente desmarcar pelo WhatsApp")}
+            </p>
+            <p className="text-sm text-text-muted">
+              {t("Dentro do prazo antes da consulta, o agente de IA não desmarca nem remarca: ele avisa que a recepção vai entrar em contato. A equipe continua podendo tudo. 0 = sem prazo.")}
+            </p>
+          </div>
+          {podeLigar ? (
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const n = Number(prazoDigitado);
+                if (Number.isInteger(n) && n >= 0 && n <= 168) salvarPrazo.mutate(n);
+              }}
+            >
+              <input
+                type="number"
+                min={0}
+                max={168}
+                aria-label={t("Horas de antecedência")}
+                data-testid="clinic-prazo-horas"
+                className="w-20 rounded-md border bg-surface p-1.5"
+                value={prazoDigitado}
+                onChange={(e) => setPrazoDigitado(e.target.value)}
+              />
+              <Button type="submit" variant="outline" data-testid="clinic-prazo-salvar" disabled={salvarPrazo.isPending}>
+                {t("Salvar")}
+              </Button>
+            </form>
+          ) : null}
+        </section>
+        </>
+      ) : null}
+
+      <Tabs defaultValue={ehGerencia ? "profissionais" : "meus-dados"}>
+        <TabsList>
+          {/* #97: sem a gerência, o profissional cuida só dos próprios dados. */}
+          {ehGerencia ? null : <TabsTrigger value="meus-dados">{t("Meus dados")}</TabsTrigger>}
+          {ehGerencia ? <TabsTrigger value="profissionais">{t("Profissionais")}</TabsTrigger> : null}
+          {ehGerencia ? <TabsTrigger value="especialidades">{t("Especialidades")}</TabsTrigger> : null}
+          {ehGerencia ? <TabsTrigger value="atendimentos">{t("Atendimentos")}</TabsTrigger> : null}
+          {ehGerencia ? <TabsTrigger value="recursos">{t("Salas e equipamentos")}</TabsTrigger> : null}
+          <TabsTrigger value="bloqueios">{t("Bloqueios")}</TabsTrigger>
+        </TabsList>
+        {ehGerencia ? (
+          <>
+            <TabsContent value="profissionais">
+              <Profissionais podeEditar={ehGerencia} />
+            </TabsContent>
+            <TabsContent value="especialidades">
+              <Especialidades podeEditar={ehGerencia} />
+            </TabsContent>
+            <TabsContent value="atendimentos">
+              <AtendimentosPorEspecialidade podeEditar={ehGerencia} />
+            </TabsContent>
+            <TabsContent value="recursos">
+              <SalasEEquipamentos podeEditar={ehGerencia} />
+            </TabsContent>
+          </>
+        ) : (
+          <TabsContent value="meus-dados">
+            <MeusDados usuarioAtualId={usuarioAtualId} />
+          </TabsContent>
+        )}
+        <TabsContent value="bloqueios">
+          <Bloqueios usuarioAtualId={usuarioAtualId} ehGerencia={ehGerencia} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

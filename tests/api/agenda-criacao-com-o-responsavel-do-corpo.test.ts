@@ -70,6 +70,7 @@ const DONO = "00000000-0000-4000-8000-0000000000aa";
 const OUTRO = "00000000-0000-4000-8000-0000000000bb";
 const TIPO = "00000000-0000-4000-8000-0000000000dd";
 const INICIO = "2026-09-21T13:00:00.000Z";
+const PACIENTE = "00000000-0000-4000-8000-0000000000cc";
 
 const tipoDe = (donoPadrao: string | null) => ({
   id: TIPO,
@@ -113,7 +114,7 @@ function sbDeTeste(
         order: () => q,
         limit: () => q,
         maybeSingle: async () => ({
-          data: tabela === "calendar_event_types" ? tipo : null,
+          data: tabela === "calendar_event_types" ? tipo : tabela === "contacts" ? { id: PACIENTE } : null,
           error: null,
         }),
         single: async () => ({ data: criado, error: null }),
@@ -153,7 +154,7 @@ const ctxDaIA = (): HandlerCtx =>
     actor: { type: "ai_agent", id: "run-1", role: "agent" },
   }) as unknown as HandlerCtx;
 
-const pedido = { event_type_id: TIPO, starts_at: INICIO } as const;
+const pedido = { event_type_id: TIPO, contact_id: PACIENTE, starts_at: INICIO } as const;
 
 beforeEach(() => {
   vi.resetAllMocks();

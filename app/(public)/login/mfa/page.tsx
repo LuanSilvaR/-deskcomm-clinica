@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { MfaForm } from "@/components/auth/MfaForm";
+import { dispositivoConfiavelPermitido } from "@/lib/auth/dispositivo-confiavel";
 import { idiomaDoVisitante } from "@/lib/i18n/idiomaAnonimo";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -23,6 +24,10 @@ export default async function MfaChallengePage({
   const hasVerified = !!factorsData?.totp?.some((f) => f.status === "verified");
   if (!hasVerified) redirect("/app");
 
+  // #89: a caixa "confiar neste dispositivo" só aparece se todas as empresas da
+  // pessoa permitirem. Erro de leitura = não aparece.
+  const podeConfiar = await dispositivoConfiavelPermitido(user.id).catch(() => false);
+
   const idioma = await idiomaDoVisitante(
     (user.user_metadata?.locale as string | undefined) ?? null,
   );
@@ -36,7 +41,7 @@ export default async function MfaChallengePage({
           {t("Digite o código de 6 dígitos do seu autenticador.")}
         </p>
       </div>
-      <MfaForm next={next} />
+      <MfaForm next={next} podeConfiar={podeConfiar} />
     </div>
   );
 }

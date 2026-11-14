@@ -6,11 +6,21 @@ import { toast } from "sonner";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/types";
 
 export interface NovoAgendamento {
   event_type_id: string;
   /** ISO-8601 com offset. */
   starts_at: string;
+  /**
+   * A duração escolhida na tela, em minutos — ausente, a do serviço (#3709).
+   *
+   * É o comprimento do bloco (`ends_at = starts_at + duration_minutes`) e o que
+   * a rota confere como horário livre: a lista de horários já veio calculada
+   * para esta duração, e mandar outra aqui faria a tela marcar um horário que a
+   * regra não ofereceu.
+   */
+  duration_minutes?: number;
   owner_user_id?: string;
   contact_id?: string;
   conversation_id?: string;
@@ -25,6 +35,8 @@ export interface NovoAgendamento {
    * Google quando existe. Vazio ou ausente não convida outra pessoa.
    */
   guest_email?: string;
+  /** FORK clinic (agenda S6b): marcar POR CIMA de horário ocupado, com motivo (5–500). */
+  encaixe?: { motivo: string };
 }
 
 /**
@@ -52,6 +64,10 @@ export function useMarcarAgendamento() {
       toast.success(t("Agendamento criado."));
       void qc.invalidateQueries({ queryKey: ["agenda"] });
     },
-    onError: (err) => showApiError(err),
+    // FORK clinic (agenda S6b): o 409 de horário ocupado é tratado pelo painel (lista + encaixe), sem toast.
+    onError: (err) => {
+      if (err instanceof ApiError && err.status === 409 && err.code === "agenda_horario_ocupado") return;
+      showApiError(err);
+    },
   });
 }

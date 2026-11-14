@@ -69,6 +69,15 @@ const DIVIDA_LGPD_CONHECIDA: Record<string, string> = {
     "estão aqui, as duas também já cobertas por trigger. Sai no dia em que " +
     "`tabelasNaCascata()` passar a derivar do catálogo também os triggers de " +
     "`contacts`, ou no dia em que a função ganhar o passo.",
+  clinic_patient_profiles:
+    "FORK clinic (migration 9002): ficha cadastral do paciente (endereço, emergência, " +
+    "responsável com CPF cifrado). ⚠️ JÁ ESTÁ PROTEGIDA, como crm_tasks: o trigger " +
+    "`trg_contacts_anonimizado_limpa_ficha_clinic` APAGA a linha na transição " +
+    "`is_anonymized false → true` — que os três caminhos de anonimização atravessam — e " +
+    "`tests/invariants/clinic-ficha-do-paciente.test.ts` (\"a ficha da org A some; a da " +
+    "org B fica\") prova o efeito pelo comportamento. A entrada existe só porque este " +
+    "instrumento lê uma função e não enxerga trigger. Sai junto com crm_tasks, no dia em " +
+    "que `tabelasNaCascata()` derivar também os triggers de `contacts`.",
   webhook_lead_captures:
     "captured_name, captured_email e captured_phone — o payload cru de captação. " +
     "A própria migration 0174 escreveu que 'o cascade de anonimização precisa alcançar esta tabela' " +

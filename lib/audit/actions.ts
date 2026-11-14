@@ -36,6 +36,9 @@ export const AUDIT_ACTIONS = [
   "auth.logout",
   "auth.mfa_enrolled",
   "auth.mfa_success",
+  // #89: confiar neste dispositivo por 30 dias, e esquecer os dispositivos confiáveis.
+  "auth.mfa_device_trusted",
+  "auth.mfa_devices_forgotten",
   "auth.mfa_failed",
   "auth.recovery_code_used",
   "nuvemshop.connected",
@@ -474,6 +477,9 @@ export const AUDIT_ACTIONS = [
   "onboarding.agente_testado",
   "onboarding.agente_teste_pulado",
   "security.mfa_exigida",
+  // #89: a empresa permite (ou não) confiar no dispositivo na verificação em duas etapas.
+  "security.mfa_dispositivo_confiavel_permitido",
+  "security.mfa_dispositivo_confiavel_proibido",
   "security.mfa_dispensada",
   "security.mfa_desativada",
   // A porta recusou o provisionamento no signup, com `motivo` no metadata. Os
@@ -554,6 +560,15 @@ export const AUDIT_ACTIONS = [
   // negativa de um colega não teria explicação na trilha — nem como responder
   // "quando foi que desligaram isso?".
   "agenda.colegas_podem_mexer_alterado",
+  // O aviso de agendamento no WhatsApp do dono (migration 0753). Quatro códigos
+  // pela mesma razão dos do aviso de caso: "saiu", "não saiu em definitivo",
+  // "mudaram a configuração" e "mandaram o teste" são perguntas diferentes, e o
+  // painel filtra por `action`. SEM o texto e com o destino MASCARADO — o que
+  // entra no `api_audit_log` não sai pela cascata de LGPD.
+  "agenda.aviso_whatsapp_enviado",
+  "agenda.aviso_whatsapp_falhou",
+  "agenda.aviso_whatsapp_configurado",
+  "agenda.aviso_whatsapp_teste",
   // A rodada que AVISOU alguém do próprio compromisso. Mensagem que saiu para o
   // telefone de um cliente é efeito, e efeito audita — mas só a rodada que
   // enviou: a que varreu e não achou ninguém a avisar não é mutação.
@@ -857,6 +872,159 @@ export const AUDIT_ACTIONS = [
   "registration.requested",
   "registration.approved",
   "registration.rejected",
+
+  // ── FORK clinic (migration 9001): profissionais, especialidades, bloqueios ─
+  // Quem liga o módulo, quem habilita quem para cada atendimento e quem fechou
+  // a agenda de alguém (ou da clínica toda) são as perguntas de depois.
+  "clinic.flag_alterada",
+  // FORK clinic (9015): procedimentos e POP.
+  "clinic.procedimento_criado",
+  // FORK clinic (8006): tabela de preços — id, sessões e valores; sem paciente.
+  "clinic.preco_publicado",
+  // FORK clinic (8007): orçamento — ids, número e valores; nunca texto clínico.
+  "clinic.orcamento_salvo",
+  "clinic.orcamento_desconto_aprovado",
+  "clinic.orcamento_cancelado",
+  // FORK clinic (8008): envio/contrato — ids, sha256 e contagens; nunca o texto nem o motivo.
+  "clinic.orcamento_enviado",
+  "clinic.orcamento_recusado",
+  "clinic.orcamento_nova_versao",
+  "clinic.orcamento_contrato_baixado",
+  "clinic.documento_pdf_baixado",
+  "clinic.orcamentos_expirados",
+  // FORK clinic (8009): pós-aceite reprocessado — ids apenas.
+  "clinic.orcamento_pos_aceite_reprocessado",
+  // FORK clinic (9028): estoque — ids e o tipo da ação, nunca dado de paciente.
+  "clinic.estoque_produto_configurado",
+  "clinic.estoque_local_salvo",
+  "clinic.estoque_movimentado",
+  "clinic.estoque_estornado",
+  "clinic.estoque_pendencia_resolvida",
+  "clinic.estoque_kit_salvo",
+  "clinic.estoque_reservas_varridas",
+  "clinic.estoque_nfe_importada",
+  "clinic.estoque_nfe_conferida",
+  "clinic.estoque_nfe_lancada",
+  "clinic.estoque_nfe_cancelada",
+  "clinic.estoque_inventario_aberto",
+  "clinic.estoque_inventario_fechado",
+  "clinic.estoque_inventario_cancelado",
+  "clinic.estoque_alertas_varridos",
+  "clinic.estoque_alerta_dispensado",
+  "clinic.estoque_rastreio_consultado",
+  "clinic.estoque_lote_bloqueado",
+  "clinic.procedimento_alterado",
+  "clinic.procedimento_ativado",
+  "clinic.procedimento_desativado",
+  "clinic.procedimento_vinculos_alterados",
+  "clinic.pop_criado",
+  "clinic.pop_rascunho_alterado",
+  "clinic.pop_aprovado",
+  "clinic.pop_nova_versao",
+  "clinic.pop_rascunho_descartado",
+  "clinic.pop_impresso",
+  "clinic.especialidade_criada",
+  "clinic.especialidade_alterada",
+  "clinic.profissional_salvo",
+  // FORK clinic (#97): o profissional grava o próprio registro no conselho.
+  "clinic.profissional.proprios_dados",
+  // FORK clinic (#85): telefone extra adicionado/removido na ficha do paciente.
+  "clinic.paciente.telefone_extra",
+  "clinic.tipo_especialidades_atualizadas",
+  "clinic.bloqueio_criado",
+  // FORK clinic (agenda S6b): encaixe sobre outro compromisso — autor, motivo e quem foi coberto.
+  "clinic.agenda.encaixe",
+  "clinic.bloqueio_removido",
+  // FORK clinic (migration 9002): a ficha do paciente e a chegada à clínica.
+  "clinic.ficha_salva",
+  "clinic.chegada_registrada",
+  // FORK clinic (migration 9003): cada mudança do status da visita (e correção).
+  "clinic.visita_status_alterado",
+  // FORK clinic (9004): confirmação de consulta
+  "clinic.confirmacao_sem_resposta",
+  // FORK clinic (9007): salas e equipamentos
+  "clinic.recurso_salvo",
+  "clinic.tipo_recursos_atualizados",
+  // FORK clinic (9017): atendimento clínico — metadados só (nunca conteúdo)
+  "clinic.atendimento_iniciado",
+  "clinic.atendimento_finalizado",
+  "clinic.atendimento_visto",
+  // FORK clinic (9018/9019): registros do prontuário — metadados só
+  "clinic.registro_criado",
+  "clinic.adendo_criado",
+  "clinic.prontuario_visto",
+  // FORK clinic (9020): configuração clínica — sem dado de paciente
+  "clinic.modelo_criado",
+  "clinic.modelo_versao_publicada",
+  "clinic.modelo_atualizado",
+  "clinic.requisitos_definidos",
+  // FORK clinic (9021): planos de tratamento — metadados só
+  "clinic.plano_criado",
+  "clinic.plano_atualizado",
+  "clinic.plano_sessoes_adicionadas",
+  "clinic.plano_sessao_alterada",
+  // FORK clinic (9022): procedimento lançado por engano — metadados só
+  "clinic.procedimento_anulado",
+  // FORK clinic (9023): documentos e termos — metadados só
+  "clinic.documento_modelo_salvo",
+  "clinic.documento_emitido",
+  "clinic.documento_aceito",
+  "clinic.documento_link_criado",
+  "clinic.documento_revogado",
+  "clinic.documento_cancelado",
+  // FORK clinic (9024): anexos e fotos — metadados só
+  "clinic.anexo_enviado",
+  "clinic.anexo_visto",
+  "clinic.anexo_anulado",
+  "clinic.foto_divulgacao",
+  // FORK clinic (F8): reabertura e exportação — metadados só
+  "clinic.atendimento_reaberto",
+  "clinic.prontuario_exportado",
+  // FORK clinic (F9): cabeçalho clínico e anulação — metadados só
+  "clinic.cabecalho_alterado",
+  "clinic.atendimento_anulado",
+  // FORK clinic (ACL): papéis de acesso e permissões
+  "acesso.papel_criado",
+  "acesso.papel_alterado",
+  "acesso.papel_excluido",
+  "acesso.papeis_do_membro_alterados",
+  "acesso.modo_permissoes_alterado",
+  // FORK clinic (agenda S4): a recepção conferiu telefone e e-mail do paciente
+  "clinic.dados_confirmados",
+  // FORK clinic (agenda S5): o profissional reabriu o próprio atendimento no mesmo dia
+  "clinic.atendimento_complementado",
+  // FORK (card #159, migration 8026): plano de cobrança da plataforma criado,
+  // editado (preço, limites, teste grátis, plano do cadastro) ou desarquivado.
+  // Toda mudança de preço é auditada: a linha guarda o estado, não o histórico.
+  "cobranca.plano_salvo",
+  // FORK (card #159): plano arquivado — sai do cadastro; quem já assina segue nele.
+  "cobranca.plano_arquivado",
+  // FORK (card #160a): o provedor/credencial da cobrança conectado ou trocado
+  // em /admin/cobranca › Conexão (só os 4 últimos da chave vão no metadata),
+  // inclusive a tentativa recusada por ser de outra conta e a gravação incompleta.
+  "cobranca.provedor_conectado",
+  // FORK (card #160a): a chave de teste trocada pela de produção (publicação):
+  // quantas empresas que assinaram em teste voltaram ao teste grátis.
+  "cobranca.modo_publicado",
+  // FORK (card #160b): a empresa abriu o checkout do provedor (plano e modo).
+  "cobranca.checkout_iniciado",
+  // FORK (#160b): a releitura no provedor mudou o estado da assinatura
+  // (trial/ativa/em_atraso/cancelada) — com o status bruto do provedor.
+  "cobranca.estado_mudou",
+  // FORK (#160b): o plano agendado virou o plano da assinatura na renovação.
+  "cobranca.plano_trocado",
+  // FORK (#160b): o admin da empresa pediu o cancelamento no fim do período.
+  "cobranca.assinatura_cancelada",
+  // FORK (#160b): o preço no provedor diverge do preço do plano (só auditado).
+  "cobranca.preco_divergente",
+  // FORK (card #160c): a régua suspendeu a empresa por falta de pagamento
+  // (suspensão tipada `cobranca`, migration 8028).
+  "cobranca.org_suspensa",
+  // FORK (#160c): o pagamento foi confirmado e a régua reativou a empresa.
+  "cobranca.org_reativada",
+  // FORK (#160c): uma rodada do cron da cobrança (quantas relidas, avisadas,
+  // suspensas, reativadas) — o rastro de que a régua está rodando.
+  "cobranca.rodada",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

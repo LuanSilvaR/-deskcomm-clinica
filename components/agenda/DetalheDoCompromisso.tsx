@@ -10,6 +10,10 @@ import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
+import { VisitaDoPaciente } from "@/components/clinic/VisitaDoPaciente";
+import { DetalheDoEncaixe } from "@/components/clinic/agenda/DetalheDoEncaixe";
+import { HistoricoDoAgendamento } from "@/components/clinic/agenda/HistoricoDoAgendamento";
+import { ProcedimentosDoAgendamento } from "@/components/clinic/agenda/ProcedimentosDaMarcacao";
 import { rotuloDoLocal } from "@/lib/agenda/locais";
 
 type Detalhe = {
@@ -50,10 +54,20 @@ export function DetalheDoCompromisso({
   id,
   onClose,
   podeEditar = true,
+  onRemarcar,
+  acoes,
 }: {
   id: string | null;
   onClose: () => void;
   podeEditar?: boolean;
+  /**
+   * FORK clinic (agenda S6a): o que a pessoa pode fazer, chave a chave
+   * (`agenda.marcar`/`cancelar`/`registrar_desfecho`). Ausente = tudo que
+   * `podeEditar` libera, como no upstream.
+   */
+  acoes?: { marcar: boolean; cancelar: boolean; desfecho: boolean };
+  /** FORK clinic (agenda S4): abre o painel de remarcar da Agenda para este compromisso. */
+  onRemarcar?: (id: string) => void;
 }) {
   const t = useT();
   const tagDoIdioma = useTagDeIdioma();
@@ -182,9 +196,27 @@ export function DetalheDoCompromisso({
               )}
             </p>
             {a.contact_id ? (
-              <Link href={`/app/contacts/${a.contact_id}`} className="underline">
-                {t("Ver contato")}
-              </Link>
+              <div className="flex flex-wrap items-center gap-3">
+                <Link href={`/app/contacts/${a.contact_id}`} className="underline">
+                  {t("Ver paciente")}
+                </Link>
+              </div>
+            ) : null}
+            {a.contact_id ? (
+              /* FORK clinic (migrations 9002/9003): status da visita; a chegada exige a ficha. */
+              <VisitaDoPaciente
+                appointmentId={a.id}
+                contactId={a.contact_id}
+                statusDoAgendamento={a.status}
+                podeMudar={podeEditar}
+              />
+            ) : null}
+            {/* FORK clinic (agenda S6b): motivo e autor do encaixe, quando houver. */}
+            <DetalheDoEncaixe appointmentId={a.id} />
+            {/* FORK clinic (agenda S3 #68): procedimentos do agendamento (8016). */}
+            <ProcedimentosDoAgendamento appointmentId={a.id} />
+            {a.contact_id ? (
+              <HistoricoDoAgendamento appointmentId={a.id} />
             ) : (
               <p>{t("Compromisso pessoal, sem cliente vinculado.")}</p>
             )}
@@ -250,8 +282,10 @@ export function DetalheDoCompromisso({
                 </Button>
               </div>
             ) : null}
-            {podeEditar && a.status !== "cancelled" ? (
+            {podeEditar && a.status !== "cancelled" && (!acoes || acoes.marcar || acoes.cancelar || acoes.desfecho || onRemarcar) ? (
               <div className="space-y-4">
+                {!acoes || acoes.desfecho ? (
+                <>
                 <label className="block">
                   {t("Mensagem do cliente usada como evidência (opcional)")}
                   <select
@@ -300,6 +334,8 @@ export function DetalheDoCompromisso({
                     </Button>
                   ))}
                 </div>
+                </>
+                ) : null}
                 {/*
                   O SIM que faltava. `pending` é pré-reserva: o horário já está
                   segurado, e só vira compromisso quando alguém aprova. A rota
@@ -308,7 +344,7 @@ export function DetalheDoCompromisso({
                   negócio com `requires_confirmation` o pedido ou é confirmado
                   pelo cliente via IA, ou expira em `agenda-expira-pendentes`.
                 */}
-                {a.status === "pending" ? (
+                {a.status === "pending" && (!acoes || acoes.marcar) ? (
                   <Button
                     data-testid="confirmar-compromisso"
                     disabled={mutation.isPending || staleDraft}
@@ -317,7 +353,16 @@ export function DetalheDoCompromisso({
                     {t("Confirmar horário")}
                   </Button>
                 ) : null}
-                {["pending", "confirmed"].includes(a.status) ? (
+                {onRemarcar && ["pending", "confirmed"].includes(a.status) ? (
+                  <Button
+                    variant="outline"
+                    data-testid="detalhe-remarcar"
+                    onClick={() => onRemarcar(a.id)}
+                  >
+                    {t("Remarcar")}
+                  </Button>
+                ) : null}
+                {["pending", "confirmed"].includes(a.status) && (!acoes || acoes.marcar) ? (
                   <Button
                     variant="outline"
                     disabled={mutation.isPending || staleDraft}
@@ -330,6 +375,8 @@ export function DetalheDoCompromisso({
                     {t("Lembrar em uma hora")}
                   </Button>
                 ) : null}
+                {!acoes || acoes.cancelar ? (
+                <>
                 <label className="block">
                   {t("Motivo do cancelamento")}
                   <input
@@ -348,6 +395,8 @@ export function DetalheDoCompromisso({
                 >
                   {t("Cancelar agendamento")}
                 </Button>
+                </>
+                ) : null}
               </div>
             ) : null}
           </div>

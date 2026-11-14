@@ -109,6 +109,13 @@ export const wahaAdapter: ChannelAdapter = {
     return resolvePhoneJidDigitsForCall(client, input.sessionRef, input.phone);
   },
 
+  /** #84: os grupos do número (para o aviso de agendamento em grupo). Sem transporte = lista vazia. */
+  async listGroups(input: { sessionRef: string }): Promise<Array<{ chatId: string; subject: string | null }>> {
+    const client = getWahaClient();
+    if (!client) return [];
+    return client.listarGrupos(input.sessionRef);
+  },
+
   /**
    * "digitando…" no aparelho do cliente, antes da 1ª bolha do turno da IA.
    *

@@ -537,6 +537,19 @@ export const PONTOS_DE_IA: readonly PontoDeIa[] = [
       "O sistema erra a hora de resumir a conversa: resume cedo demais e perde contexto, ou tarde demais e a resposta é recusada.",
     registraEm: "nenhum",
   },
+  // FORK clinic (estoque E9): sugestão de produto para itens da NF-e.
+  {
+    id: "estoque_nfe_depara",
+    rotulo: "Sugerir o produto dos itens da nota fiscal",
+    oQueFaz:
+      "Ao importar o XML de uma compra, sugere qual produto da clínica é cada item que o código de barras e o histórico não reconheceram. É só sugestão: quem compra confere item a item. Só funciona depois que você escolhe o modelo deste ponto.",
+    papel: "entender",
+    exige: {},
+    emissor: "lib/clinic/estoque/nfe/ia.ts",
+    sintomaDeFalha:
+      "Os itens novos da nota chegam sem produto sugerido e precisam ser escolhidos à mão na conferência.",
+    registraEm: "llm_calls",
+  },
 ] as const;
 
 /** Índice por id, para quem resolve um binding. */

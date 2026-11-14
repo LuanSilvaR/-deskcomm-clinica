@@ -91,15 +91,14 @@ export const CHANNEL_CAPABILITIES: Record<ProviderDeMensagem, ChannelCapabilitie
   // (host, token), não o que o WhatsApp permite — então o perfil é o do canal
   // oficial.
   //
-  // `canManageTemplates: false` é o recorte desta primeira entrega: enviar,
-  // receber e saúde funcionam, a gestão de modelos deste canal vem na fatia
-  // seguinte. Declarar `true` antes mostraria uma tela que não salva.
-  // `requiresTemplates: true` continua porque a regra da Meta é real: fora da
-  // janela, só modelo aprovado passa.
+  // `canManageTemplates: true`: os modelos são os da Cloud API e o parceiro
+  // expõe os mesmos endpoints de catálogo; a tela cria e sincroniza por lá.
+  // `requiresTemplates: true` porque a regra da Meta é real: fora da janela de
+  // 24h, só modelo aprovado passa.
   datafy: {
     freeformOutsideWindow: false,
     requiresTemplates: true,
-    canManageTemplates: false,
+    canManageTemplates: true,
     banRisk: false,
     minIntervalMs: 6000,
     voiceNote: "opus-only",
@@ -125,6 +124,15 @@ export const DEFAULT_CHANNEL_PROVIDER: ChannelProvider = "waha";
  * módulo precise escrever a string — é o que o `scripts/lint-channels.ts` cobra.
  */
 export const CHANNEL_PROVIDER_WAHA: ChannelProvider = "waha";
+
+/**
+ * FORK (card #160b; origem upstream): o provider em que o NÚMERO é a conexão —
+ * pareado por QR, a linha só vira conexão quando um aparelho lê o código. A
+ * linha morta (`FAILED`/`STOPPED`) sem número, ali, é QR que ninguém leu e não
+ * ocupa a vaga do plano; nos outros provedores o número não identifica a
+ * conexão. Quem lê: `lib/cobranca/uso.ts` (uso do plano).
+ */
+export const PROVIDER_EM_QUE_O_NUMERO_E_A_CONEXAO: ChannelProvider = CHANNEL_PROVIDER_WAHA;
 export const CHANNEL_PROVIDER_META: ChannelProvider = "meta_cloud";
 export const CHANNEL_PROVIDER_SOCIAL: ChannelProvider = "zernio_social";
 export const CHANNEL_PROVIDER_ZERNIO: ChannelProvider = "zernio";

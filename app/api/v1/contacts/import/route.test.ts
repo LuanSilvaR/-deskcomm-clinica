@@ -35,7 +35,11 @@ function banco(opcoes: {
   pais?: string | null;
 } = {}) {
   const tentativas: Record<string, unknown>[] = [];
-  const rpc = vi.fn().mockResolvedValue({ error: null });
+  // encrypt_cpf devolve uma cifra (migration 9002): o documento só é gravado
+  // com o PAR hash + cifra — o CHECK contacts_cpf_consistency recusa metade.
+  const rpc = vi.fn(async (nome: string) =>
+    nome === "encrypt_cpf" ? { data: "\\xdeadbeef", error: null } : { error: null },
+  );
   const from = vi.fn((tabela: string) => {
     // A régua do documento vem do PAÍS da organização (issue #1033): a rota lê a
     // organização UMA vez, na entrada. O dublê libera só essa leitura e segue
@@ -45,6 +49,15 @@ function banco(opcoes: {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn(async () => ({ data: { country: opcoes.pais ?? null }, error: null })),
+      };
+    }
+    // Spec 31 B1: a pré-checagem de telefone extra lê `contact_phones`. Sem
+    // extra no banco do teste a lista volta vazia — o mesmo que a base antiga.
+    if (tabela === "contact_phones") {
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn(async () => ({ data: [], error: null })),
       };
     }
     expect(tabela).toBe("contacts");
@@ -91,6 +104,7 @@ async function importar(linhas: string[]): Promise<Resumo> {
 }
 
 beforeEach(() => {
+  vi.stubEnv("CPF_ENCRYPTION_KEY", "chave-de-teste-do-import-32-caracteres");
   vi.clearAllMocks();
   vi.mocked(requireSupportWrite).mockResolvedValue(null);
   vi.mocked(requireRole).mockResolvedValue({
@@ -106,6 +120,10 @@ beforeEach(() => {
     },
     org: { orgId: ORG, name: "Org", role: "agent" },
   });
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("POST /api/v1/contacts/import — desfecho por linha", () => {

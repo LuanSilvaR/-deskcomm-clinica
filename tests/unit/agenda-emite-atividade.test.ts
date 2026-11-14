@@ -370,20 +370,15 @@ describe("a agenda grava na timeline", () => {
     });
   });
 
-  it("marcar SEM contato não inventa atividade — o par que prova que a sonda enxerga", async () => {
-    // CONTROLE DE VACUIDADE do caso acima. Sem este par, um dublê que gravasse
-    // linha por conta própria (ou uma sonda apontada para a tabela errada)
-    // passaria nos dois lados sem ninguém perceber.
-    await marcarAgendamentoHandler(cliente(), ctx, { event_type_id: TIPO, starts_at: HORARIO });
+  it("marcar SEM paciente é recusado antes de gravar — nem compromisso nem atividade (FORK clinic)", async () => {
+    // Era o CONTROLE DE VACUIDADE do caso acima: o compromisso sem contato nascia
+    // e não gerava atividade. Na clínica ele não nasce: `agenda_sem_paciente`.
+    await expect(
+      marcarAgendamentoHandler(cliente(), ctx, { event_type_id: TIPO, starts_at: HORARIO }),
+    ).rejects.toMatchObject({ status: 422, code: "agenda_sem_paciente" });
 
-    expect(
-      atividades(),
-      "nasceu atividade para um compromisso sem contato: a timeline de alguém recebeu um agendamento que não é dele",
-    ).toHaveLength(0);
-    expect(
-      banco.inserido["calendar_appointments"],
-      "o compromisso sem contato nem chegou a ser criado — a sonda está medindo um caminho que não aconteceu",
-    ).toHaveLength(1);
+    expect(atividades()).toHaveLength(0);
+    expect(banco.inserido["calendar_appointments"] ?? []).toHaveLength(0);
   });
 
   it("cancelar nasce como `appointment_cancelled` — é a operação que alguém pode querer negar ter feito", async () => {

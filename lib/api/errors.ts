@@ -32,6 +32,8 @@ export const ApiErrorCodes = {
   // 403 — authz
   forbidden: "forbidden",
   forbidden_role: "forbidden_role",
+  // FORK clinic (ACL): falta a permissão pedida (lib/clinic/acesso/require-permission.ts).
+  forbidden_permission: "forbidden_permission",
   forbidden_tenant: "forbidden_tenant",
   lgpd_anonymization_irreversible: "lgpd_anonymization_irreversible",
 
@@ -45,9 +47,26 @@ export const ApiErrorCodes = {
   // wire sem passar por lista nenhuma, e o consumidor do outro lado nunca sabe
   // que ele existe. Quem confia que a união protege está lendo o arquivo errado.
   agenda_horario_indisponivel: "agenda_horario_indisponivel",
+  // FORK clinic (migration 9008): o agente de IA não desmarca dentro do prazo do paciente.
+  agenda_fora_do_prazo: "agenda_fora_do_prazo",
   agenda_fora_da_jornada: "agenda_fora_da_jornada",
   agenda_tipo_desativado: "agenda_tipo_desativado",
   agenda_sem_responsavel: "agenda_sem_responsavel",
+  // FORK clinic (migration 9001): o dono não tem a especialidade que o tipo exige.
+  profissional_nao_habilitado: "profissional_nao_habilitado",
+  // FORK clinic (migration 9002): a ficha cadastral do paciente está incompleta
+  // e a organização exige a ficha na chegada / no "Compareceu".
+  ficha_incompleta: "ficha_incompleta",
+  // FORK clinic (migration 9017): atendimento clínico.
+  // O módulo de prontuário está desligado nesta empresa.
+  prontuario_desligado: "prontuario_desligado",
+  // A visita tem atendimento aberto: quem conclui é o profissional, pela fila.
+  atendimento_em_andamento: "atendimento_em_andamento",
+  // Atendimento já finalizado (ou anulado) não é reiniciado.
+  atendimento_ja_encerrado: "atendimento_ja_encerrado",
+  // FORK clinic (9019): registro finalizado só aceita adendo; finalizar exige o mínimo.
+  prontuario_imutavel: "prontuario_imutavel",
+  requisitos_pendentes: "requisitos_pendentes",
   agenda_disponibilidade_invalida: "agenda_disponibilidade_invalida",
   agenda_ja_cancelado: "agenda_ja_cancelado",
   agenda_listagem_sem_recorte: "agenda_listagem_sem_recorte",

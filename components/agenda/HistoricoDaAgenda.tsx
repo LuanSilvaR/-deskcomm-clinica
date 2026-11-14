@@ -1,4 +1,5 @@
 "use client";
+import { StatusNaLinha } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
 import Link from "next/link";
 
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
@@ -100,11 +101,15 @@ export function HistoricoDaAgenda({
   onRealizado,
   onFaltou,
   onConfirmar,
+  ocultarAcoesAusentes = false,
+  etiquetas,
   className,
 }: {
   agendamentos: Agendamento[];
   pessoas: Pessoa[];
   agora: Date;
+  /** FORK clinic (agenda S6b): id -> rótulo (ex.: "Encaixe"). Ausente = nada muda. */
+  etiquetas?: Record<string, string>;
   onRemarcar?: (id: string) => void;
   onCancelar?: (id: string) => void;
   /**
@@ -128,6 +133,11 @@ export function HistoricoDaAgenda({
    * menos quem deveria.
    */
   onConfirmar?: (id: string) => void;
+  /**
+   * FORK clinic (agenda S6a): sem a permissão, o botão NÃO aparece (em vez de
+   * cinza). Default `false` = comportamento do upstream inalterado.
+   */
+  ocultarAcoesAusentes?: boolean;
   className?: string;
 }) {
   const localeDaData = useLocaleDeData();
@@ -238,6 +248,14 @@ export function HistoricoDaAgenda({
                   <Badge variant={variante} className="shrink-0">
                     {t(ROTULO_DA_SITUACAO[a.situacao])}
                   </Badge>
+                  {/* FORK clinic (agenda S6b): etiqueta de encaixe. */}
+                  {etiquetas?.[a.id] ? (
+                    <Badge variant="warning" className="shrink-0" data-testid="etiqueta-do-compromisso">
+                      {t(etiquetas[a.id] ?? "")}
+                    </Badge>
+                  ) : null}
+                  {/* FORK clinic: status da visita, confirmação e faltas. */}
+                  <StatusNaLinha agendamento={a} />
                   <div className="flex shrink-0 items-center gap-1">
                     {/*
                       Ação por aba, e a lista de CADA aba tem razão própria.
@@ -247,7 +265,7 @@ export function HistoricoDaAgenda({
                       e eu o generalizei para todas — errado: o passado tem as
                       duas ações mais importantes do histórico.
                     */}
-                    {aba === "aguardando" && (
+                    {aba === "aguardando" && (onConfirmar || !ocultarAcoesAusentes) && (
                       // PRIMEIRO na ordem, e é deliberado: confirmar é o que se
                       // faz com a maioria dos pedidos, e o que a pessoa procura
                       // ao abrir esta aba. Remarcar e cancelar são a exceção.
@@ -263,6 +281,7 @@ export function HistoricoDaAgenda({
                     )}
                     {(aba === "proximos" || aba === "aguardando") && (
                       <>
+                        {(onRemarcar || !ocultarAcoesAusentes) && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -277,6 +296,8 @@ export function HistoricoDaAgenda({
                         >
                           {t("Remarcar")}
                         </Button>
+                        )}
+                        {(onCancelar || !ocultarAcoesAusentes) && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -291,6 +312,7 @@ export function HistoricoDaAgenda({
                         >
                           {t("Cancelar")}
                         </Button>
+                        )}
                       </>
                     )}
                     {aba === "passados" &&
@@ -312,15 +334,20 @@ export function HistoricoDaAgenda({
                           Se um dia o botão puder ficar cinza de novo, o motivo
                           tem de ser verdadeiro.
                         */}
+                          {/* FORK clinic (agenda S4): sem quem possa registrar (na
+                              clínica, só o profissional do agendamento), o botão não
+                              aparece — cinza sem motivo seria controle decorativo. */}
+                          {onRealizado ? (
                           <Button
                             variant="ghost"
                             size="sm"
                             data-testid={`realizado-${a.id}`}
-                            disabled={!onRealizado}
-                            onClick={() => onRealizado?.(a.id)}
+                            onClick={() => onRealizado(a.id)}
                           >
                             {t("Realizado")}
                           </Button>
+                          ) : null}
+                          {(onFaltou || !ocultarAcoesAusentes) && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -330,6 +357,7 @@ export function HistoricoDaAgenda({
                           >
                             {t("Faltou")}
                           </Button>
+                          )}
                         </>
                       )}
                   </div>

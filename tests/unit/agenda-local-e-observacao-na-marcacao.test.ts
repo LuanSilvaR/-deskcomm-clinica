@@ -37,8 +37,9 @@ describe("endereço e observação existem na marcação e chegam ao compromisso
   });
 
   it("o POST manda location_details e description — não notes", () => {
-    const inicio = tela.indexOf("return marcar");
-    const bloco = tela.slice(inicio, tela.indexOf(".then((r) => {", inicio));
+    // FORK clinic (agenda S6b): o corpo do POST passou a ser montado em `marcarEm` (reusado pelo encaixe).
+    const inicio = tela.indexOf("const corpo: NovoAgendamento");
+    const bloco = tela.slice(inicio, tela.indexOf("return marcar.mutateAsync(corpo)", inicio));
     expect(bloco).toContain("location_details:");
     expect(bloco).toContain("description:");
     expect(bloco, "observação em notes nunca chega ao calendário").not.toContain("notes:");

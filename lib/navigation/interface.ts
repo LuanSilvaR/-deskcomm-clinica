@@ -73,9 +73,18 @@ export function permitidos(
   platform: boolean,
   role: Role | null,
   modulos?: readonly ModuloOpcional[],
+  /** FORK clinic (ACL-008): as permissões efetivas, só com o modo por permissões ligado. */
+  permissoes?: readonly string[],
 ): NavMetadata[] {
   return (NAV_CATALOG as readonly NavMetadata[]).filter(
-    (d) => canSee(d, platform, role) && (!modulos || !d.modulo || modulos.includes(d.modulo)),
+    (d) =>
+      canSee(d, platform, role) &&
+      (!modulos || !d.modulo || modulos.includes(d.modulo)) &&
+      (platform ||
+        !permissoes ||
+        !d.permissao ||
+        permissoes.includes(d.permissao) ||
+        (!!d.permissaoAlternativa && permissoes.includes(d.permissaoAlternativa))),
   );
 }
 /** Leitura tolera versões antigas/removidas sem lançar no layout. */
@@ -104,9 +113,10 @@ export function destinosDaInterface(
   platform: boolean,
   role: Role | null,
   modulos?: readonly ModuloOpcional[],
+  permissoes?: readonly string[],
 ): NavMetadata[] {
   const { settings } = lerInterface(raw);
-  const allowed = permitidos(platform, role, modulos);
+  const allowed = permitidos(platform, role, modulos, permissoes);
   const chosen =
     settings.destinos ?? (settings.preset === "simplificada" ? SIMPLIFICADA : undefined);
   return allowed.filter(
@@ -120,9 +130,17 @@ export function interfaceTemDestino(
 ): boolean {
   return destinosDaInterface(settings, platform, role).some((d) => !essencial(d, role, platform));
 }
-export function homeDaInterface(raw: unknown, platform: boolean, role: Role | null): string {
+export function homeDaInterface(
+  raw: unknown,
+  platform: boolean,
+  role: Role | null,
+  // FORK clinic (9014): com o menu da clínica ligado a casa é o Início. Ausente
+  // = a regra de sempre (Inbox primeiro).
+  preferida?: NavDestinationId,
+): string {
   const visible = destinosDaInterface(raw, platform, role);
   return (
+    (preferida ? visible.find((d) => d.href === preferida)?.href : undefined) ??
     visible.find((d) => d.href === "/app/inbox")?.href ??
     visible.find((d) => !essencial(d, role, platform))?.href ??
     "/app/settings/profile"

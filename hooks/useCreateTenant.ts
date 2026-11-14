@@ -16,6 +16,8 @@ export interface CreateTenantPayload {
   legal_name?: string;
   cnpj?: string;
   plan?: "standard" | "pro" | "enterprise";
+  /** FORK (card #159): plano de cobrança (só com o módulo `cobranca` ligado). */
+  plano_id?: string;
   owner_email: string;
   owner_interface_settings?: InterfaceSettings;
 }

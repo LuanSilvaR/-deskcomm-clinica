@@ -5,6 +5,11 @@ import { GET } from "@/app/api/v1/agenda/vinculos/route";
 import { VinculoDaMarcacao } from "@/components/agenda/VinculoDaMarcacao";
 
 const deps = vi.hoisted(() => ({ role: vi.fn(), from: vi.fn() }));
+// agenda S5: o escopo de pacientes é coberto em clinic-experiencia-do-profissional; aqui, sem recorte.
+vi.mock("@/lib/clinic/pacientes/escopo-de-pacientes", () => ({
+  pacienteNoEscopo: vi.fn(async () => true),
+  contatosDoEscopo: vi.fn(async () => null),
+}));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: deps.role }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ from: deps.from }) }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
@@ -80,7 +85,7 @@ beforeEach(() => {
     { ...contato, id: OUTRO_ID, organization_id: "org-b" },
     { ...contato, id: "anonimo", is_anonymized: true },
   ];
-  deps.role.mockResolvedValue({ ok: true, org: { orgId: "org-a" } });
+  deps.role.mockResolvedValue({ ok: true, org: { orgId: "org-a" }, user: { id: "usuario-a" } });
   deps.from.mockImplementation(consulta);
 });
 async function buscar(params: Record<string, string> = {}) {
@@ -146,7 +151,7 @@ describe("contatos da Agenda pelo nome exibido", () => {
       </QueryClientProvider>,
     );
     const espera = { timeout: 5000 };
-    const campo = screen.getByLabelText("Quem será atendido");
+    const campo = screen.getByLabelText(/Quem será atendido/);
     expect(campo).toHaveAttribute("data-contact-id", "");
     fireEvent.focus(campo);
     fireEvent.change(campo, { target: { value: "Cíntia" } });

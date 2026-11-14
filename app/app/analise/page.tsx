@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { NavHub } from "@/components/shell/NavHub";
+import { permissoesParaOMenu } from "@/lib/clinic/acesso/menu";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -36,6 +37,7 @@ export default async function AnaliseHubPage() {
       isPlatformAdmin={user.is_platform_admin && !user.support}
       role={activeOrg?.role ?? null}
       interfaceSettings={activeOrg?.interface_settings}
+      permissoes={await permissoesParaOMenu(activeOrg?.orgId)}
       title={traduzir("Análise", idioma)}
       subtitle={traduzir(
         "Como o negócio foi no período — e o histórico para quando alguém perguntar por quê.",

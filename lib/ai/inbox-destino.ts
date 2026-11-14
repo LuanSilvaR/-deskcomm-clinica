@@ -17,7 +17,7 @@ export const REFERENCIAS_DE_AVISO = {
   ai_agent: { tabela: "ai_agents", papel: "admin", rotulo: "Revisar agente", href: (id: string) => `/app/ai/agents/${id}`, ativo: true },
   appointment: {tabela:"calendar_appointments",papel:"agent",rotulo:"Abrir compromisso",href:(id:string)=>`/app/agenda?compromisso=${id}`},
   conversation: { tabela: "conversations", papel: "agent", rotulo: "Abrir conversa", href: (id: string) => `/app/inbox/${id}` },
-  contact: { tabela: "contacts", papel: "agent", rotulo: "Ver contato", href: (id: string) => `/app/contacts/${id}` },
+  contact: { tabela: "contacts", papel: "agent", rotulo: "Ver paciente", href: (id: string) => `/app/contacts/${id}` },
   lead: { tabela: "crm_leads", papel: "agent", rotulo: "Abrir negócio", href: (id: string, pipelineId?: string) => `/app/pipelines/${pipelineId}?lead=${id}` },
   followup_enrollment: { tabela: "followup_enrollments", papel: "viewer", rotulo: "Abrir acompanhamento", href: (id: string) => `/app/ai/followups/enrollments/${id}` },
   channel_session: { tabela: "channel_sessions", papel: "admin", rotulo: "Revisar conexão", href: () => "/app/connections", ativo: true },
@@ -77,6 +77,15 @@ export const POLITICAS_DE_AVISO = {
   // aviso não tem. Um contexto geral aqui seria caminho que nunca executa.
   // A orientação evita "revisar a conexão": nada caiu, e o conserto é um clique
   // de autorização em Conexões — dizer "revisar" mandaria procurar um defeito.
+  // FORK (card #160c; origem upstream): os avisos da régua da cobrança (sem
+  // referência) e o de 80% do teto de IA (ref_kind 'plano') levam ao mesmo lugar —
+  // Plano e cobrança, onde está o "Pagar agora" —, e só quem administra chega lá.
+  cobranca: {
+    refs: [],
+    orientacao:
+      "Abra Plano e cobrança: lá estão o link para pagar e a troca do cartão. Só quem administra a empresa vê essa tela.",
+    geral: { papel: "admin", href: "/app/settings/billing", rotulo: "Abrir plano e cobrança" },
+  },
   canal_mudo_sem_numero: { refs: ["channel_session"], orientacao: "Peça a quem administra para autorizar os números de teste em Conexões ou abrir o canal ao público." },
   promise_unfulfilled: { refs: ["conversation"], orientacao: "Confira o compromisso descrito e defina quem fica responsável." },
   contact_proposal_expired: { refs: ["organization"], orientacao: "A sugestão venceu. Se a informação ainda for relevante, confirme com o cliente antes de editar sua ficha." },

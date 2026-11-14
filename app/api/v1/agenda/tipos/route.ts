@@ -41,6 +41,7 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listaTiposDeAtendimento } from "@/lib/agenda/consulta";
+import { modelosQueOLembreteEnvia } from "@/lib/agenda/lembrete-por-modelo";
 import { TETO_DE_LEMBRETES_EXTRAS } from "@/lib/agenda/lembretes";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -122,6 +123,12 @@ const camposDoTipo = {
    * É semente do item da comanda, nunca o preço dele — o item congela o seu.
    */
   default_price_cents: z.number().int().min(0).max(100_000_000).nullish(),
+  /**
+   * O MODELO APROVADO do lembrete (#83) — usado quando a janela de 24 h fechou.
+   * `null` limpa. A org vem da sessão; a lista de modelos aceitos é a MESMA que
+   * a tela oferece (`modelosQueOLembreteEnvia`).
+   */
+  reminder_meta_template_id: z.string().uuid().nullable().optional(),
   reminder_minutes_before: z
     .number()
     .int()
@@ -201,6 +208,17 @@ const alterarSchema = criarSchema.partial().extend({
       return out;
     }),
 });
+/** Recusa (true) um modelo que o lembrete não envia nesta organização. */
+async function modeloRecusado(
+  admin: ReturnType<typeof createAdminClient>,
+  org: string,
+  modeloId: string | null | undefined,
+): Promise<boolean> {
+  if (!modeloId) return false;
+  const aceitos = await modelosQueOLembreteEnvia(admin, org);
+  return !aceitos.some((m) => m.id === modeloId);
+}
+
 const desativarSchema = z.object({ id: z.string().uuid() });
 
 /**
@@ -289,6 +307,9 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   const admin = createAdminClient();
+  if (await modeloRecusado(admin, autorizado.org.orgId, lido.data.reminder_meta_template_id)) {
+    return fail("validation_failed", t("Esse modelo não pode ser usado no lembrete."), 422, { requestId });
+  }
   const { data, error } = await admin
     .from("calendar_event_types")
     .insert({ ...lido.data, organization_id: autorizado.org.orgId, slug: slugDe(lido.data.name) })
@@ -340,6 +361,9 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   }
 
   const admin = createAdminClient();
+  if (await modeloRecusado(admin, autorizado.org.orgId, lido.data.reminder_meta_template_id)) {
+    return fail("validation_failed", t("Esse modelo não pode ser usado no lembrete."), 422, { requestId });
+  }
   const { data, error } = await admin
     .from("calendar_event_types")
     .update(campos)

@@ -154,8 +154,9 @@ import { loadChannelProvider, nomesDasFerramentas, runBeforeSend } from '../guar
 import { isStatusSendable } from '../../channels/meta/template-binding';
 import { capabilitiesOf } from '@/lib/channels/capabilities';
 import { renderTemplateBody } from '@/lib/channels/meta/render-template';
-import { esperarComoHumano } from './atraso-humano';
+import { acenderDigitando, esperarComoHumano } from './atraso-humano';
 import { sendInBubbles, splitForSend } from './split-message';
+import { criarFilaDeEnvio } from './fila-de-envio';
 import type { DisclosureMode } from '../guardrails/disclosure/template';
 import { decidePromise } from '../guardrails/promise/engine';
 import { loadPromiseTable } from '../guardrails/promise/table';
@@ -180,6 +181,7 @@ import { camadaLigada, lerCamadasDaOrg } from '../guardrails/camadas-da-org';
 import { fusoDaOrganizacao } from './fuso-da-org';
 import { renderAgora } from '@/lib/tempo/agora';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
+import { anotarUltimaInboundVista, ultimaInboundJaRespondida } from './turno-ja-respondido';
 
 /**
  * Superfície ESTÁTICA das tools do agente (description + inputSchema) — parte do
@@ -997,6 +999,35 @@ const AGENDA_CADEIA_SYSTEM_BLOCK =
   'Nunca invente um `slug`: ele vem da lista, escrito igualzinho.';
 
 /**
+ * O bloco de modo da PRÉVIA, por tipo (#3757).
+ *
+ * As duas prévias rodam o agente publicado, mas o destino do texto é outro:
+ *
+ *   - `sandbox` — o botão "Testar" do agente. Quem lê é quem está configurando o
+ *     agente, e a fala é do próprio agente. O texto abaixo NÃO muda: é o mesmo de
+ *     antes desta separação.
+ *   - `assisted` — o botão "Sugerir resposta" do Inbox. O rascunho cai na caixa do
+ *     atendente HUMANO, que vai revisar e enviar. Sem dizer isso, o prompt de
+ *     atendimento automático (que ensina a passar a vez a uma pessoa) vazava: a
+ *     sugestão saía na voz do assistente — "vou avisar o atendente e ele já te
+ *     responde" — e o atendente descartava o rascunho.
+ */
+const BLOCO_PREVIA: Record<TurnPreview['kind'], string> = {
+  sandbox:
+    'MODO PRÉVIA: proponha a resposta com send_message. Operações são propostas separadas; nunca diga que executou uma proposta. Nenhum envio real acontece.',
+  assisted:
+    'MODO ASSISTIDO: você escreve o RASCUNHO da próxima mensagem que o atendente humano desta conversa vai revisar e enviar ao cliente, em nome dele. ' +
+    'Escreva na primeira pessoa, como esse atendente, com base no histórico, nas notas e no conhecimento disponível. ' +
+    'Não fale como assistente nem como IA, não diga que vai avisar, chamar ou transferir para alguém e não proponha passar o atendimento. ' +
+    'Proponha a mensagem com send_message. Operações são propostas separadas; nunca diga que executou uma proposta. Nenhum envio real acontece.',
+};
+
+/** O bloco do modo de prévia que entra no `system` — decisão num lugar só, testável. */
+export function blocoDoModoDePrevia(kind: TurnPreview['kind']): string {
+  return BLOCO_PREVIA[kind];
+}
+
+/**
  * Os blocos de agenda que ESTE agente recebe — a decisão num lugar só, testável.
  *
  * A régua é o que o agente TEM: os dois blocos de ensino nomeiam ferramentas, e
@@ -1376,6 +1407,33 @@ export function parseCheckpointText(text: string): CheckpointContent {
     );
   }
   return parsed.data;
+}
+
+/**
+ * #142 — o fechamento do turno, com nova tentativa SÓ dele.
+ *
+ * O checkpoint é pedido em JSON livre e o modelo às vezes erra o formato (medido:
+ * 1 em 15 turnos com o Claude Haiku 5.5). Antes, o erro subia direto e a fila
+ * re-rodava o turno INTEIRO — o LLM principal de novo, o turno pago duas vezes —
+ * por causa de uma chamada pequena. Aqui quem repete é só o fechamento; o erro
+ * de sempre (sem o texto do modelo, que pode ter PII) só sobe depois de esgotar
+ * as tentativas, e aí vale o retry da fila como antes.
+ */
+export async function fecharTurnoComCheckpoint(
+  gerar: () => Promise<string>,
+  opts: { tentativas?: number; aoFalhar?: (tentativa: number, erro: Error) => void } = {},
+): Promise<CheckpointContent> {
+  const tentativas = Math.max(1, opts.tentativas ?? 2);
+  let ultimo: Error | null = null;
+  for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
+    try {
+      return parseCheckpointText(await gerar());
+    } catch (err) {
+      ultimo = err instanceof Error ? err : new Error(String(err));
+      if (tentativa < tentativas) opts.aoFalhar?.(tentativa, ultimo);
+    }
+  }
+  throw ultimo ?? new Error('fechamento do turno sem JSON de checkpoint — run re-tentado pela fila');
 }
 
 /**
@@ -2180,10 +2238,14 @@ async function executarTurnoDoAgente(
   // testada (o bloco da cadeia nomeia `crm_list_event_types`, e nomear
   // ferramenta ausente faz o modelo tentar chamá-la).
   if (agentConfig !== null) blocosResidentes.push(...blocosDeAgendaResidentes(agentConfig.toolIds));
-  if (preview)
-    blocosResidentes.push(
-      'MODO PRÉVIA: proponha a resposta com send_message. Operações são propostas separadas; nunca diga que executou uma proposta. Nenhum envio real acontece.',
-    );
+  // #3757: o bloco da prévia diz de QUEM é a voz. São duas prévias com donos
+  // diferentes — o "Testar" (sandbox) é do agente falando como agente, mas o
+  // "Sugerir resposta" (assisted) escreve o rascunho que o ATENDENTE humano vai
+  // revisar e enviar. Com um bloco só, o prompt de atendimento automático (que
+  // ensina a passar a vez a uma pessoa) vazava para a caixa do atendente e o
+  // rascunho saía em terceira pessoa — "vou avisar o atendente e ele responde".
+  // Vive em função de módulo (`blocoDoModoDePrevia`) para poder ser testada.
+  if (preview) blocosResidentes.push(blocoDoModoDePrevia(preview.kind));
   const system = blocosResidentes.join('\n\n');
   const previous = preview
     ? (preview.previous ?? null)
@@ -2525,6 +2587,11 @@ async function executarTurnoDoAgente(
   // turno com dois vetos ficaria mudo por mais de 20 segundos: o conserto do
   // "rápido demais" viraria o defeito simétrico, mais caro que o original.
   let jaEsperouComoHumano = false;
+  // Issue #143: `send_message`/`send_template` chamados no MESMO passo rodam em
+  // paralelo (o SDK faz `Promise.all` nas tool-calls). Sem a fila, a 1ª chamada
+  // pagava a pausa humana acima e as seguintes passavam na frente — balões fora de
+  // ordem no WhatsApp e `seq` do ledger fora da ordem de escrita. Por turno.
+  const filaDeEnvio = criarFilaDeEnvio();
   // Cap de envio (warm-up/diário) vetado neste turno — capturado aqui porque o veto
   // não empurra outcome nenhum a `outcomes` (ver comentário no ponto de captura, mais
   // abaixo). Diferente da janela horária (checada ANTES do modelo rodar, linha ~1233):
@@ -2686,7 +2753,7 @@ async function executarTurnoDoAgente(
     }),
     send_template: tool({
       ...AGENT_TOOL_DEFS.send_template,
-      execute: async ({ template_name, language, values }) => {
+      execute: ({ template_name, language, values }) => filaDeEnvio(async () => {
         if (seq >= maxSendsPerTurn) {
           return {
             ok: false,
@@ -2798,7 +2865,7 @@ async function executarTurnoDoAgente(
           };
         }
         return { ok: true, status: 'aceita_aguardando_canal' };
-      },
+      }),
     }),
     search_knowledge: tool({
       ...AGENT_TOOL_DEFS.search_knowledge,
@@ -2842,7 +2909,7 @@ async function executarTurnoDoAgente(
     }),
     send_message: tool({
       ...AGENT_TOOL_DEFS.send_message,
-      execute: async ({ body }) => {
+      execute: ({ body }) => filaDeEnvio(async () => {
         if (claimsCurrentInboundIsEmpty(body, mensagemDoJob)) {
           falseEmptyInboundVetoCount += 1;
           if (falseEmptyInboundVetoCount < MAX_VETOS_DE_FALSO_VAZIO) {
@@ -3196,7 +3263,7 @@ async function executarTurnoDoAgente(
             },
           };
         }
-      },
+      }),
     }),
     update_lead_state: tool({
       ...AGENT_TOOL_DEFS.update_lead_state,
@@ -3891,6 +3958,18 @@ async function executarTurnoDoAgente(
         ? openingTextOnly
         : [{ role: 'user', content: [{ type: 'text', text: openingText }, ...nativeParts] }];
 
+    // "digitando…" ENQUANTO o modelo pensa. A pausa humana antes da 1ª bolha
+    // (`esperaForaDoLock`) desconta este tempo e quase sempre zera — e com espera
+    // zero ela não acende presença. Sem esta linha o cliente esperava a chamada
+    // inteira do modelo sem indicador nenhum. Só em turno que fala com o lead:
+    // turno de retaguarda não abre o WhatsApp de ninguém.
+    if (channel?.signalTyping && turnoVaiFalarComOLead(liveJob())) {
+      acenderDigitando(
+        () => channel.signalTyping!({ tenantId, conversationId: input.conversationId }),
+        runLog,
+      );
+    }
+
     // O modelo decide tools livremente dentro do teto de steps (knob AGENT_MAX_STEPS).
     //
     // Sem escolta LOCAL: quem cobre o teto de gasto é `runAgentTurn`, que envolve
@@ -3914,6 +3993,12 @@ async function executarTurnoDoAgente(
         messages: openingMessages,
         tools,
         maxSteps,
+        // Rascunho: a resposta é o send_message ACEITO; a etapa seguinte só
+        // "encerrava". Aceito, e não chamado: o envio vetado pela cadeia
+        // before_send volta ao modelo para ele reescrever (o 1º veto ensina).
+        ...(preview?.kind === 'assisted'
+          ? { pararQuando: () => preview.result.candidates.length > 0 }
+          : {}),
         ...(agentConfig !== null
           ? {
               model: agentConfig.model,
@@ -3974,48 +4059,76 @@ async function executarTurnoDoAgente(
     // turno. Aqui o lead já recebeu resposta, mas a conversa ficaria sem
     // checkpoint e sem dono, e o próximo inbound cairia no mesmo bloqueio, agora
     // sem nada tendo mudado no meio.
-    const closing = await runModelCall(
-      pool,
-      deps.llmCfg,
-      {
-        tenantId,
-        leadId: leadId || null,
-        jobId: job?.id,
-        purpose: 'checkpoint',
-        ...(agentConfig !== null
-          ? {
-              model: agentConfig.model,
-              llmOverride: {
-                provider: agentConfig.provider,
-                credentialId: agentConfig.credentialId,
-              },
-            }
-          : {}),
-        system,
-        messages: [
-          // prune: o checkpoint reusa a abertura só como texto — a mídia nativa (cara) já
-          // fez seu trabalho na 1ª chamada e não precisa ir de novo.
-          ...openingTextOnly,
-          ...responseMessages,
-          { role: 'user', content: CHECKPOINT_INSTRUCTION },
-        ],
+    // Prévia sem candidato e sem impedimento: quem opera precisa saber que o agente não propôs nada.
+    const avisarSemCandidato = (p: NonNullable<typeof preview>): void => {
+      if (p.result.candidates.length === 0 && p.result.impediments.length === 0)
+        p.result.impediments.push({
+          code: 'no_candidate',
+          message: 'O agente não propôs uma resposta. Revise o cenário ou a configuração.',
+        });
+    };
+    // ⚠️ RASCUNHO (modo assistido) não fecha o turno com checkpoint. O checkpoint
+    // da prévia não é gravado (a prévia retorna antes do `insertCheckpoint`, logo
+    // abaixo) e o `reply-drafts.ts` não o lê — só a prévia de TESTE (sandbox) o
+    // mostra na tela. Mesmo assim, a chamada de fechamento segurava a entrega do
+    // rascunho: medido em produção (gpt-6-luna, 2026-09-24), resposta pronta às
+    // 12:32:40 e rascunho entregue às 12:32:56 — 16 dos 28 s que o operador
+    // esperava depois de clicar em "Sugerir resposta".
+    if (preview?.kind === 'assisted') {
+      avisarSemCandidato(preview);
+      return;
+    }
+    // Id da chamada que PRODUZIU o checkpoint aceito — o lastro da atividade, mais
+    // abaixo. Com nova tentativa, é sempre o da última (a que deu certo).
+    let closingCallId: string | undefined;
+    const content = await fecharTurnoComCheckpoint(
+      async () => {
+        const closing = await runModelCall(
+          pool,
+          deps.llmCfg,
+          {
+            tenantId,
+            leadId: leadId || null,
+            jobId: job?.id,
+            purpose: 'checkpoint',
+            ...(agentConfig !== null
+              ? {
+                  model: agentConfig.model,
+                  llmOverride: {
+                    provider: agentConfig.provider,
+                    credentialId: agentConfig.credentialId,
+                  },
+                }
+              : {}),
+            system,
+            messages: [
+              // prune: o checkpoint reusa a abertura só como texto — a mídia nativa (cara) já
+              // fez seu trabalho na 1ª chamada e não precisa ir de novo.
+              ...openingTextOnly,
+              ...responseMessages,
+              { role: 'user', content: CHECKPOINT_INSTRUCTION },
+            ],
+          },
+          { registry: deps.registry, log: runLog },
+        );
+        closingCallId = closing.callId ?? undefined;
+        return closing.result.text.replace(
+          /https:\/\/meet\.google\.com\/[a-zA-Z0-9-]+/g,
+          '[link da reunião disponível na Agenda]',
+        );
       },
-      { registry: deps.registry, log: runLog },
-    );
-    const content = parseCheckpointText(
-      closing.result.text.replace(
-        /https:\/\/meet\.google\.com\/[a-zA-Z0-9-]+/g,
-        '[link da reunião disponível na Agenda]',
-      ),
+      {
+        aoFalhar: (tentativa, erro) =>
+          runLog.warn('checkpoint inválido — repetindo só o fechamento do turno', {
+            tentativa,
+            error: erro.message.slice(0, 120),
+          }),
+      },
     );
 
     if (preview) {
       preview.result.checkpoint = content;
-      if (preview.result.candidates.length === 0 && preview.result.impediments.length === 0)
-        preview.result.impediments.push({
-          code: 'no_candidate',
-          message: 'O agente não propôs uma resposta. Revise o cenário ou a configuração.',
-        });
+      avisarSemCandidato(preview);
       return;
     }
 
@@ -4131,7 +4244,7 @@ async function executarTurnoDoAgente(
           // O lastro é a chamada de modelo que PRODUZIU este checkpoint
           // (llm_calls.id). Sem ele a linha entraria como 'system' e perderia a
           // autoria justamente no evento mais "de IA" que existe.
-          ...(closing.callId ? { evidence: { llm_call_ids: [closing.callId] } } : {}),
+          ...(closingCallId ? { evidence: { llm_call_ids: [closingCallId] } } : {}),
           ...(agentConfig?.agentId ? { agentId: agentConfig.agentId } : {}),
           reason: mudanca.reason,
           payload: {
@@ -4422,6 +4535,26 @@ export function createInboundTurnHandler(deps: InboundTurnDeps) {
       return;
     }
     if (operationAgent?.pausedAt) return;
+    // UMA RESPOSTA POR MENSAGEM: um turno que rodou antes deste pode ter lido a
+    // mensagem que acordou este job e já respondido a ela — ver o cabeçalho de
+    // `turno-ja-respondido.ts`, com o caso medido. A anotação vem DEPOIS da
+    // pergunta e ANTES de `runAgentTurn` ler a conversa: é ela que deixa o
+    // próximo turno fazer a mesma pergunta a respeito deste.
+    const alvo = {
+      organizationId: job.organization_id,
+      contactId: job.contact_id,
+      conversationId: payload.conversation_id,
+      jobId: job.id,
+    };
+    if (await ultimaInboundJaRespondida(pool, alvo)) {
+      deps.log.info('turno pulado — outro turno já viu e respondeu a última mensagem do cliente', {
+        job_id: job.id,
+        conversation_id: payload.conversation_id,
+        inbound_message_id: payload.inbound_message_id,
+      });
+      return;
+    }
+    await anotarUltimaInboundVista(pool, alvo);
     await runAgentTurn(deps, job, pool, ctx, {
       resolvedAgent,
       channelSessionId: payload.channel_session_id,

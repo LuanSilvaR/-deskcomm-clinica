@@ -119,12 +119,33 @@ export function ehSessaoAusente(error: { name?: string } | null | undefined): bo
   return error?.name === "AuthSessionMissingError";
 }
 
-export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
+/**
+ * O `getUser()` da requisição: UMA ida ao servidor de autenticação, partilhada
+ * por `loadAuthUser` e `isMfaEnrolled`.
+ *
+ * Cada tela de `/app` pedia o usuário ao GoTrue duas vezes — uma aqui, outra
+ * dentro do `listFactors()` do auth-js, que chama `getUser()` pela rede e só
+ * filtra `user.factors`. A resposta é a mesma; a segunda ida era uma espera a
+ * mais (e uma linha a mais no log do Supabase) em toda tela.
+ *
+ * O CLIENTE vai junto com a resposta, e não por enfeite: se o `getUser`
+ * renovou o token, é este cliente que tem o token novo — as consultas de
+ * `loadAuthUser` precisam sair dele, como sempre saíram.
+ */
+const sessaoDaRequisicao = cache(async () => {
   const supabase = await createClient();
+  const resposta = await supabase.auth.getUser();
+  return { supabase, resposta };
+});
+
+export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
   const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+    supabase,
+    resposta: {
+      data: { user },
+      error,
+    },
+  } = await sessaoDaRequisicao();
   // ⚠️ O `error` era DESCARTADO — nem chegava a ser desestruturado —, e aqui
   // `user: null` é tão ambíguo quanto o `data: null` que a query logo abaixo
   // trata com todo o cuidado: significa "não está logado" (estado normal) E
@@ -315,11 +336,24 @@ export async function requireAuth(): Promise<AuthUser> {
 /**
  * Returns true if the current session has at least one verified TOTP factor.
  * Use only in Server Components / Server Actions (cookie session).
+ *
+ * LANÇA quando não conseguiu ler os fatores. O `getUser()` do auth-js não
+ * lança: se falhar, ele DEVOLVE `{ data: { user: null }, error }`. Ler só
+ * `data` transformava essa falha em "não tem fator" — e `mfaEmDivida` liberava
+ * a sessão `aal1` de quem TEM fator. Uma leitura que não aconteceu não pode
+ * virar resposta: quem decide acesso falha fechado (a exceção vira 500 na rota,
+ * nunca 200).
+ *
+ * Lê `user.factors` da MESMA ida ao GoTrue que `loadAuthUser` já fez
+ * (`sessaoDaRequisicao`), com a regra do `listFactors()` do auth-js 2.117:
+ * fator `totp` com `status === "verified"`.
  */
 export const isMfaEnrolled = cache(async (): Promise<boolean> => {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.mfa.listFactors();
-  return !!data?.totp?.some((f) => f.status === "verified");
+  const {
+    resposta: { data, error },
+  } = await sessaoDaRequisicao();
+  if (error) throw error;
+  return !!data.user?.factors?.some((f) => f.factor_type === "totp" && f.status === "verified");
 });
 
 /**
@@ -410,6 +444,29 @@ export async function mfaEmDivida(): Promise<boolean> {
   // fator ignorado na sessão — o mesmo que não ter.
   //
   // Cadastrar e provar são perguntas diferentes. Quem TEM fator prova, sempre.
+  if (!(await isMfaEnrolled())) return false;
+  if ((await sessionAal()) === "aal2") return false;
+  // #89: `aal1` com fator. Só o banco sabe se esta sessão foi reconhecida por um
+  // dispositivo confiável (`lib/auth/dispositivo-confiavel.ts`): pergunta à MESMA
+  // função que as definer cobram, para app e banco não divergirem. A exclusão do
+  // admin da plataforma também mora lá. FALHA FECHADO: qualquer erro na pergunta
+  // conta como "em dívida" — pede o código, nunca dispensa.
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_session_mfa_proven");
+    if (error) return true;
+    return data !== true;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * A mesma dívida, SEM aceitar dispositivo confiável (#89): quem tem fator precisa
+ * do `aal2` do GoTrue, o código provado nesta sessão. É a régua das rotas da
+ * PLATAFORMA (`/api/v1/admin/**`) e de quem LIGA a confiança na empresa.
+ */
+export async function mfaEmDividaEstrita(): Promise<boolean> {
   if (!(await isMfaEnrolled())) return false;
   return (await sessionAal()) !== "aal2";
 }

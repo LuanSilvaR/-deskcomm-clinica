@@ -1,13 +1,14 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createTenantSchema } from "@/lib/schemas/tenant-creation";
 import { issueInvite } from "@/lib/auth/issue-invite";
-import { mfaEmDivida } from "@/lib/auth/server";
+import { mfaEmDividaEstrita } from "@/lib/auth/server";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { aplicarPacoteInicialClinica } from "@/lib/clinic/organizacao/pacote-inicial";
 import { createHash, randomUUID } from "node:crypto";
 
 // ---------------------------------------------------------------------------
@@ -168,7 +169,7 @@ export async function POST(req: NextRequest) {
       requestId,
     });
   }
-  if (await mfaEmDivida())
+  if (await mfaEmDividaEstrita())
     return fail("mfa_required", "Confirme a verificação em duas etapas", 403, { requestId });
   const key = req.headers.get("Idempotency-Key") ?? randomUUID();
   if (!z.string().uuid().safeParse(key).success) {
@@ -199,6 +200,12 @@ export async function POST(req: NextRequest) {
     p_hash: createHash("sha256").update(JSON.stringify(request)).digest("hex"),
   });
   if (error) {
+    // FORK (card #159): o plano de cobrança recusado tem nome próprio — não é
+    // slug repetido. `cobranca_desligada` = módulo desligado; `plano_invalido` =
+    // plano arquivado ou inexistente.
+    if (error.code === "22023" && (error.message === "cobranca_desligada" || error.message === "plano_invalido")) {
+      return fail(error.message, "Plano de cobrança inválido ou cobrança desligada", 422, { requestId });
+    }
     if (error.code === "23505" || error.code === "22023") {
       return fail("conflict", "Slug já existe ou a chave foi usada com outros dados", 409, {
         requestId,
@@ -206,6 +213,9 @@ export async function POST(req: NextRequest) {
     }
     return fail("internal_error", "Não foi possível criar a organização", 500, { requestId });
   }
+  // Fork clinic (#154): a clínica nasce com os módulos de clínica ligados.
+  // Só na criação de fato — a repetição idempotente não reaplica.
+  const pacoteClinica = org.created ? await aplicarPacoteInicialClinica(admin, org.id) : null;
   if (org.created) {
     await audit({
       action: "tenant.created_by_platform_admin",
@@ -220,6 +230,7 @@ export async function POST(req: NextRequest) {
         slug: org.slug,
         display_name: org.display_name,
         plan: request.plan,
+        plano_id: request.plano_id ?? null,
         creator_role: "admin",
       },
     });
@@ -247,6 +258,7 @@ export async function POST(req: NextRequest) {
       slug: org.slug,
       display_name: org.display_name,
       owner_invitation: ownerInvitation,
+      pacote_clinica_aplicado: pacoteClinica,
     },
     { status: 201, requestId },
   );

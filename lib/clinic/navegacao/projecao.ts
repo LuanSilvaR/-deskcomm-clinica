@@ -1,0 +1,67 @@
+/**
+ * FORK clinic (9014) — o que cada pessoa vê no menu da clínica.
+ *
+ * Função pura sobre `searchable()` (`lib/navigation/registry.ts`), que é a
+ * mesma decisão de acesso do menu de sempre (`destinosDaInterface`: interface
+ * da organização, `minRole`, `permissao`, módulo opcional). Esta função só
+ * AGRUPA o que já passou por lá — por construção não consegue mostrar uma tela
+ * que o menu antigo esconderia, nem esconder uma que ele mostraria.
+ */
+import type { Role } from "@/lib/auth/types";
+import type { ModuloOpcional } from "@/lib/instalacao/modulos";
+import type { InterfaceSettings } from "@/lib/navigation/interface";
+import { searchable, type NavDestination } from "@/lib/navigation/registry";
+
+import { mostraEmBreve, rotuloDaAgenda } from "@/lib/clinic/acesso/experiencia";
+
+import { ehEmBreve, MODULOS_CLINICA, type ModuloClinica } from "./modulos";
+
+export interface ModuloVisivel {
+  modulo: ModuloClinica;
+  /** As telas do módulo que esta pessoa vê, na ordem do módulo. */
+  itens: NavDestination[];
+  /** As mesmas telas agrupadas por seção, na ordem de primeira aparição. */
+  secoes: Array<{ secao: string; itens: NavDestination[] }>;
+  /** FORK clinic (#97): portas de outros módulos que esta pessoa vê, mostradas aqui como atalho. */
+  atalhos: Array<{ secao: string; destino: NavDestination }>;
+  emBreve: boolean;
+}
+
+export function modulosVisiveis(
+  isPlatformAdmin: boolean,
+  role: Role | null,
+  settings?: InterfaceSettings,
+  modulos?: readonly ModuloOpcional[],
+  permissoes?: readonly string[],
+): ModuloVisivel[] {
+  const porHref = new Map(
+    searchable(isPlatformAdmin, role, settings, modulos, permissoes).map((d) => [d.href as string, d]),
+  );
+  const resultado: ModuloVisivel[] = [];
+  for (const modulo of MODULOS_CLINICA) {
+    // FORK clinic (agenda S5): "Em breve" só para quem configura a clínica.
+    const emBreve = ehEmBreve(modulo) && mostraEmBreve(permissoes, isPlatformAdmin);
+    const secoes: ModuloVisivel["secoes"] = [];
+    const itens: NavDestination[] = [];
+    for (const porta of modulo.portas) {
+      const achado = porHref.get(porta.href);
+      if (!achado) continue;
+      // FORK clinic (agenda S5): quem só vê a própria agenda lê "Minha agenda".
+      const destino = porta.href === "/app/agenda" ? { ...achado, label: rotuloDaAgenda(permissoes, achado.label) } : achado;
+      itens.push(destino);
+      const atual = secoes.find((s) => s.secao === porta.secao);
+      if (atual) atual.itens.push(destino);
+      else secoes.push({ secao: porta.secao, itens: [destino] });
+    }
+    // Módulo construído que esvaziou para esta pessoa some — o mesmo que o menu
+    // antigo faz com um grupo sem porta visível. "Em breve" não abre nada, então
+    // não há o que esconder: aparece para todos.
+    // O atalho só aparece para quem já vê a porta; ele não faz o módulo aparecer.
+    const atalhos = (modulo.atalhos ?? []).flatMap((a) => {
+      const destino = porHref.get(a.href);
+      return destino ? [{ secao: a.secao, destino }] : [];
+    });
+    if (itens.length > 0 || emBreve) resultado.push({ modulo, itens, secoes, atalhos, emBreve });
+  }
+  return resultado;
+}

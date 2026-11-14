@@ -26,7 +26,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 
-import { DEEPSEEK_ENDPOINT } from "@/lib/agent-engine/edge/llm/providers";
+import { DEEPSEEK_ENDPOINT, GROQ_ENDPOINT } from "@/lib/agent-engine/edge/llm/providers";
 import { decryptKey, byteaToBuffer } from "@/lib/crypto/aes_gcm";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -369,6 +369,9 @@ function instanciar(
     // padrão com aviso — a tela ofereceria um provedor que estes workers ignoram.
     case "deepseek":
       return createOpenAI({ apiKey, baseURL: baseUrl ?? DEEPSEEK_ENDPOINT })(modelId);
+    // FORK clinic (estoque E9): Groq, OpenAI-compatível.
+    case "groq":
+      return createOpenAI({ apiKey, baseURL: baseUrl ?? GROQ_ENDPOINT })(modelId);
     default:
       return null;
   }

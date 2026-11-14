@@ -221,6 +221,19 @@ jobs:
     # resolvem a jornada — e ela CONFERE a própria precondição em `beforeAll`,
     # falhando alto em vez de se auto-pular.
     #
+    # ═══ `clinic-experiencia-do-profissional` (fork): DEPENDE DO SEED DE DEMONSTRAÇÃO ═══
+    #
+    # Ela prova a experiência do papel "Profissional de saúde" com a clínica de
+    # demonstração (`scripts/seed-demo-simulacao.ts`: Dr. Bruno profissional,
+    # Dra. Ana coordenação, 30 dias de agenda). O banco do e2e não tem esse
+    # seed, e ligar o modo por papéis na organização compartilhada do e2e
+    # mudaria o que as outras specs veem. As regras puras estão em
+    # `tests/unit/clinic-experiencia-do-profissional.test.ts` e as do banco em
+    # `tests/invariants/clinic-experiencia-do-profissional.test.ts`, que rodam
+    # no CI.
+    # `clinic-agenda-acl` (S6a) é do mesmo seed e fica fora pelo mesmo motivo;
+    # a regra da rota está em `tests/unit/clinic-guarda-da-agenda.test.ts`.
+    #
     # ═══ `aviso-de-caso-chega-no-whatsapp`: O CI NÃO TEM ENDEREÇO PÚBLICO ═══
     #
     # Ela prova o envio de verdade do aviso de caso, com um receptor HTTP no
@@ -722,6 +735,38 @@ jobs:
         protecao-de-envio-nao-congela-o-padrao.spec.ts
         agente-marca-consulta.spec.ts
         agenda-marcar-pela-tela.spec.ts
+        clinic-profissionais-e-bloqueios.spec.ts
+        clinic-ficha-do-paciente.spec.ts
+        clinic-status-da-visita.spec.ts
+        clinic-confirmacao-de-consulta.spec.ts
+        clinic-trava-de-sobreposicao.spec.ts
+        clinic-proximo-livre.spec.ts
+        clinic-dia-por-profissional.spec.ts
+        clinic-agenda-por-profissional.spec.ts
+        clinic-salas-e-equipamentos.spec.ts
+        clinic-faltas-e-prazo.spec.ts
+        clinic-indicadores.spec.ts
+        clinic-papeis-de-acesso.spec.ts
+        clinic-menu-da-clinica.spec.ts
+        clinic-inicio-da-recepcao.spec.ts
+        clinic-atendimento-fila.spec.ts
+        clinic-modelos-clinicos.spec.ts
+        clinic-documentos.spec.ts
+        clinic-agenda-melhorias.spec.ts
+        clinic-procedimentos.spec.ts
+        clinic-pop.spec.ts
+        clinic-estoque.spec.ts
+        clinic-estoque-baixa.spec.ts
+        clinic-estoque-kit.spec.ts
+        clinic-estoque-frascos.spec.ts
+        clinic-estoque-nfe.spec.ts
+        clinic-estoque-inventario.spec.ts
+        clinic-estoque-alertas.spec.ts
+        clinic-estoque-relatorios.spec.ts
+        clinic-estoque-revisao.spec.ts
+        clinic-orcamentos-precos.spec.ts
+        clinic-orcamentos-rascunho.spec.ts
+        clinic-orcamentos-contrato.spec.ts
         agenda-remarcar-e-cancelar.spec.ts
         agenda-tipos-de-agendamento.spec.ts
         cliente-pela-agenda.spec.ts
@@ -949,6 +994,7 @@ jobs:
         central-avisos-destino.spec.ts
         agenda-presenca-recuperacao.spec.ts
         agenda-google-sync.spec.ts
+        agenda-lembrete-com-reserva.spec.ts
         encerramento-atendimento.spec.ts
         passagem-com-contexto.spec.ts
         interface-por-vinculo.spec.ts
@@ -966,6 +1012,8 @@ jobs:
         organizacoes-criacao-convite-e-cache.spec.ts
         inbox-abas-espelham-o-comando.spec.ts
         moeda-da-organizacao.spec.ts
+        settings-organizacao-endereco.spec.ts
+        clinic-marca-favicon.spec.ts
         zona-de-perigo-apaga-dados-de-teste.spec.ts
         email-da-instalacao-pela-tela.spec.ts
         central-avisos-resolver-em-lote.spec.ts
@@ -1053,6 +1101,10 @@ jobs:
         inbox-busca-e-filtros-dizem-a-verdade.spec.ts
         extensoes-da-instalacao.spec.ts
         admin-credencial-google.spec.ts
+        admin-cobranca-planos.spec.ts
+        admin-cobranca-conexao.spec.ts
+        cobranca-plano-da-empresa.spec.ts
+        cobranca-suspensa-por-falta-de-pagamento.spec.ts
         agenda-primeira-pintura-no-fuso.spec.ts
         agenda-portao-de-hidratacao.spec.ts
         qa-l12-inbox.spec.ts
@@ -1069,6 +1121,7 @@ jobs:
         marca-logo.spec.ts
         suporte-temporario.spec.ts
         olhar-telas-do-epico.spec.ts
+        lgpd-atestado-anonimizacao.spec.ts
 
       # ─── FORA_DO_CI — as duas que ficaram, e o motivo continua onde sempre ───
       #
@@ -1079,6 +1132,8 @@ jobs:
         inbox-tempo-real.spec.ts
         cadastro-sem-confirmacao-de-email.spec.ts
         aviso-de-caso-chega-no-whatsapp.spec.ts
+        clinic-experiencia-do-profissional.spec.ts
+        clinic-agenda-acl.spec.ts
     steps:
       # ── O RELÓGIO DESTA PARTE: ONDE O TETO DE 30 MIN COMEÇA A CONTAR ──────
       #

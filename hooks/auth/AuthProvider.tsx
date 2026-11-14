@@ -96,6 +96,15 @@ export function useAuth(): AuthCtx {
   return ctx;
 }
 
+/**
+ * FORK clinic (agenda S4): o id de quem está logado SEM exigir o provedor —
+ * para componentes da clínica decidirem "sou o profissional deste
+ * agendamento?" também quando montados fora dele (testes de componente).
+ */
+export function useUsuarioIdOpcional(): string | null {
+  return useContext(Ctx)?.user.id ?? null;
+}
+
 export function useUser(): AuthUser {
   return useAuth().user;
 }

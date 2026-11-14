@@ -16,6 +16,39 @@ import type { Json } from "@/lib/database.types";
 // Public types
 // ---------------------------------------------------------------------------
 
+/**
+ * FORK clinic (#86): a ficha cadastral do paciente (`clinic_patient_profiles`) —
+ * endereço, documento de identidade, contato de emergência e responsável.
+ *
+ * Entra porque a anonimização APAGA a ficha (`trg_contacts_anonimizado_limpa_ficha_clinic`,
+ * migration 9002), e o que se apaga a pedido do titular é o que se entrega a
+ * pedido dele. O CPF do responsável fica de fora: é cifrado e é dado de terceiro.
+ */
+export interface FichaClinicaSnapshot {
+  social_name: string | null;
+  sex: string | null;
+  rg: string | null;
+  rg_issuer: string | null;
+  rg_uf: string | null;
+  profession: string | null;
+  marital_status: string | null;
+  referral_source: string | null;
+  cep: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  district: string | null;
+  city: string | null;
+  uf: string | null;
+  emergency_name: string | null;
+  emergency_relationship: string | null;
+  emergency_phone: string | null;
+  guardian_name: string | null;
+  guardian_relationship: string | null;
+  completed_at: string | null;
+  updated_at: string | null;
+}
+
 export interface ContactSnapshot {
   id: string;
   name: string | null;
@@ -34,6 +67,24 @@ export interface ContactSnapshot {
   last_activity_at: string | null;
   /** Primeiro atendimento marcado. Sobrevive à anonimização: é registro de operação. */
   first_service_at: string | null;
+  /**
+   * Os telefones EXTRAS da ficha (#85, upstream Spec 31 B1), com o `lid` do
+   * WhatsApp de cada número. Ausente quando a ficha não tem extra: o `data.json`
+   * dela sai como saía antes (a chave só aparece quando há o que entregar).
+   */
+  additional_phones?: ContactPhoneSnapshot[];
+}
+
+/** Um telefone extra da ficha, como o titular o recebe (#85). */
+export interface ContactPhoneSnapshot {
+  phone_number: string;
+  tipo: string;
+  whatsapp: string;
+  rotulo: string | null;
+  origem: string;
+  /** O `lid` do WhatsApp DAQUELE número. */
+  wa_lid: string | null;
+  created_at: string;
 }
 
 export interface ConsentRow {
@@ -92,6 +143,22 @@ export interface ActivityRow {
   type: string;
   source_module: string | null;
   performed_at: string;
+}
+
+/**
+ * O resumo que o agente guarda sobre o titular (`lead_checkpoints`).
+ *
+ * Entra porque a anonimização o REDIGE (migration 0391 do upstream; 8002 no fork): o resumo corrido, os
+ * compromissos e a próxima ação são texto que o modelo escreveu SOBRE a pessoa,
+ * e o que se apaga a pedido do titular é o que se entrega a pedido dele.
+ */
+export interface CheckpointRow {
+  id: string;
+  rolling_summary: string;
+  commitments: unknown;
+  objections: unknown;
+  next_action: string | null;
+  created_at: string;
 }
 
 /**
@@ -439,6 +506,8 @@ export interface ExportPayload {
   generated_at: string;
   no_local_footprint: boolean;
   contact: ContactSnapshot | null;
+  /** FORK clinic (#86): ausente/`null` quando o paciente não tem ficha clínica. */
+  ficha_clinica?: FichaClinicaSnapshot | null;
   consents: ConsentRow[];
   conversations: ConversationRow[];
   messages_count_total: number;
@@ -446,6 +515,7 @@ export interface ExportPayload {
   leads: LeadRow[];
   orders: OrderRow[];
   activities: ActivityRow[];
+  checkpoints: CheckpointRow[];
   appointments: AppointmentRow[];
   sales: SaleRow[];
   tasks: TaskRow[];
@@ -673,6 +743,33 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     }
   }
 
+  // (#85) Os telefones extras da ficha, com o `lid` de cada número. A consulta
+  // filtra organização e ficha: o cliente é o administrador (sem RLS).
+  if (contactId) {
+    const { data, error } = await admin
+      .from("contact_phones")
+      .select("phone_number, tipo, whatsapp, rotulo, origem, wa_lid, created_at")
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: true });
+    if (error) {
+      logger.warn("[lgpd-export-worker] contact phones load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    }
+    const telefonesExtras: ContactPhoneSnapshot[] = (data ?? []).map((t) => ({
+      phone_number: t.phone_number,
+      tipo: t.tipo,
+      whatsapp: t.whatsapp,
+      rotulo: t.rotulo ?? null,
+      origem: t.origem,
+      wa_lid: t.wa_lid ?? null,
+      created_at: t.created_at,
+    }));
+    if (contact && telefonesExtras.length > 0) contact.additional_phones = telefonesExtras;
+  }
+
   // No `consents` table in current schema; legal basis is in contacts.consent JSONB.
   const consents: ConsentRow[] = [];
   if (contact?.consent && typeof contact.consent === "object") {
@@ -692,6 +789,27 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
           granted_at: null,
         });
       }
+    }
+  }
+
+  // FORK clinic (#86): a ficha cadastral do paciente.
+  let ficha_clinica: FichaClinicaSnapshot | null = null;
+  if (contactId) {
+    const { data, error } = await admin
+      .from("clinic_patient_profiles")
+      .select(
+        "social_name, sex, rg, rg_issuer, rg_uf, profession, marital_status, referral_source, cep, street, number, complement, district, city, uf, emergency_name, emergency_relationship, emergency_phone, guardian_name, guardian_relationship, completed_at, updated_at",
+      )
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .maybeSingle();
+    if (error) {
+      logger.warn("[lgpd-export-worker] ficha clínica load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    } else if (data) {
+      ficha_clinica = data as FichaClinicaSnapshot;
     }
   }
 
@@ -840,6 +958,26 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       });
     } else if (data) {
       activities = data;
+    }
+  }
+
+  // Resumos do agente — contact_id direto em lead_checkpoints.
+  let checkpoints: CheckpointRow[] = [];
+  if (contactId) {
+    const { data, error } = await admin
+      .from("lead_checkpoints")
+      .select("id, rolling_summary, commitments, objections, next_action, created_at")
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      logger.warn("[lgpd-export-worker] checkpoints load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    } else if (data) {
+      checkpoints = data;
     }
   }
 
@@ -1360,6 +1498,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       orders.length === 0 &&
       prospecting_candidates.length === 0,
     contact,
+    ficha_clinica,
     consents,
     conversations,
     messages_count_total,
@@ -1367,6 +1506,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     leads,
     orders,
     activities,
+    checkpoints,
     appointments,
     sales,
     tasks,
@@ -1411,6 +1551,7 @@ function emptyPayload(
     leads: [],
     orders: [],
     activities: [],
+    checkpoints: [],
     appointments: [],
     sales: [],
     tasks: [],

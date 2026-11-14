@@ -2,6 +2,7 @@ import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 
 import { type Role } from "@/lib/auth/types";
 import {
+  Archive,
   Bell,
   BookOpen,
   Brain,
@@ -17,6 +18,7 @@ import {
   FlowArrow,
   Funnel,
   Gauge,
+  House,
   Inbox,
   Kanban,
   Key,
@@ -56,6 +58,7 @@ import { destinosDaInterface, type InterfaceSettings } from "./interface";
 export { NAV_GROUPS, GRUPO_NO_RODAPE } from "./catalogo";
 export type { NavGroup, NavGroupId } from "./catalogo";
 const ICONS = {
+  Archive,
   Bell,
   BookOpen,
   Brain,
@@ -71,6 +74,7 @@ const ICONS = {
   FlowArrow,
   Funnel,
   Gauge,
+  House,
   Inbox,
   Kanban,
   Key,
@@ -118,9 +122,10 @@ export function sidebarGroups(
   role: Role | null,
   settings?: InterfaceSettings,
   modulos?: readonly ModuloOpcional[],
+  permissoes?: readonly string[],
 ): Array<{ group: NavGroup; items: NavDestination[] }> {
   const visible = new Set<string>(
-    destinosDaInterface(settings, isPlatformAdmin, role, modulos).map((d) => d.href),
+    destinosDaInterface(settings, isPlatformAdmin, role, modulos, permissoes).map((d) => d.href),
   );
   return NAV_GROUPS.map((group) => ({
     group,
@@ -147,10 +152,11 @@ export function hubSections(
   role: Role | null,
   settings?: InterfaceSettings,
   modulos?: readonly ModuloOpcional[],
+  permissoes?: readonly string[],
 ): Array<{ section: string; items: NavDestination[] }> {
   const porSecao = new Map<string, NavDestination[]>();
   const visible = new Set<string>(
-    destinosDaInterface(settings, isPlatformAdmin, role, modulos).map((d) => d.href),
+    destinosDaInterface(settings, isPlatformAdmin, role, modulos, permissoes).map((d) => d.href),
   );
   for (const d of NAV_DESTINATIONS) {
     if (d.group !== group || !visible.has(d.href)) continue;
@@ -168,9 +174,10 @@ export function searchable(
   role: Role | null,
   settings?: InterfaceSettings,
   modulos?: readonly ModuloOpcional[],
+  permissoes?: readonly string[],
 ): NavDestination[] {
   const visible = new Set<string>(
-    destinosDaInterface(settings, isPlatformAdmin, role, modulos).map((d) => d.href),
+    destinosDaInterface(settings, isPlatformAdmin, role, modulos, permissoes).map((d) => d.href),
   );
   return NAV_DESTINATIONS.filter((d) => visible.has(d.href));
 }

@@ -24,6 +24,11 @@ import type { Json } from "@/lib/database.types";
  * para o modelo, e nenhum dos dois reimplementa a decisão.
  */
 import { coletaOQueOcupa, horariosLivresDaOrg } from "@/lib/agenda/consulta";
+import {
+  DURACAO_MAXIMA_MIN,
+  DURACAO_MINIMA_MIN,
+  duracaoEscolhidaValida,
+} from "@/lib/agenda/duracao-escolhida";
 import { colide } from "@/lib/agenda/horarios-livres";
 import {
   atividadeDaTransicao,
@@ -39,6 +44,7 @@ import {
   VINCULO_DE_AGENDAMENTO,
 } from "@/lib/agenda/tipos";
 import { ApiError } from "@/lib/api/types";
+import { exigePrazoDoPaciente } from "@/lib/clinic/agenda/prazo-do-paciente";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { roleAtLeast } from "@/lib/auth/types";
@@ -47,6 +53,11 @@ import { emitLeadActivity } from "@/lib/leads/activity-emitter";
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import { moverLeadParaEtapaDeAgendamento } from "@/lib/leads/appointment-stage-move";
 import { logger } from "@/lib/logger";
+import { habilitacaoNaConsulta } from "@/lib/clinic/agenda/regras-da-clinica";
+// FORK clinic (agenda S6b)
+import { conflitoEncaixavel, erroDoEncaixeNoBanco, exigeEncaixePossivel } from "@/lib/clinic/agenda/encaixe";
+import { fichaPermiteAtendimento } from "@/lib/clinic/pacientes/servidor";
+import { clinicProfissionaisLigado } from "@/lib/clinic/flags";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type SB = SupabaseClient;
@@ -57,12 +68,15 @@ const CODIGO_DA_RECUSA = {
   tipo_desativado: { status: 422, code: "agenda_tipo_desativado" },
   sem_responsavel: { status: 422, code: "agenda_sem_responsavel" },
   jornada_mal_configurada: { status: 422, code: "agenda_disponibilidade_invalida" },
+  profissional_nao_habilitado: { status: 422, code: "profissional_nao_habilitado" },
   erro_interno: { status: 500, code: "internal_error" },
 } as const;
 
 export interface MarcarInput {
   event_type_id: string;
   starts_at: string;
+  /** FORK clinic (agenda S6b): marcar por cima de outro compromisso, com motivo. Só pessoa. */
+  encaixe?: { motivo: string };
   owner_user_id?: string;
   contact_id?: string;
   conversation_id?: string;
@@ -90,6 +104,20 @@ export interface MarcarInput {
    * é o worker de push.
    */
   guest_email?: string;
+  /**
+   * A duração deste atendimento, em minutos — ausente, a do tipo (issue #3709).
+   *
+   * ⚠️ ELA É O COMPRIMENTO DO COMPROMISSO (`ends_at`), não uma coluna: em
+   * `calendar_appointments` a duração É o intervalo. Um valor fora de 5…1440 é
+   * recusado aqui com 422, e não silenciosamente trocado pelo do tipo — quem
+   * pediu 3 minutos precisa saber que não marcou 30.
+   *
+   * É o que muda o TAMANHO DO BLOCO e, com ele, tudo o que depende dele: a
+   * checagem de horário livre passa a exigir este tanto de tempo vago
+   * (`exigeHorarioLivre`), o Google publica o evento com este fim, e o lembrete
+   * continua sendo o do tipo.
+   */
+  duration_minutes?: number;
 }
 
 export interface AlterarInput {
@@ -240,6 +268,32 @@ export async function marcarAgendamentoHandler(
 ): Promise<Record<string, unknown>> {
   const inicio = new Date(input.starts_at);
 
+  // FORK clinic: todo agendamento é de um paciente. Sem `contact_id` não
+  // há para quem lembrar, cobrar nem registrar o atendimento — recusa nomeada,
+  // antes de qualquer outra (é o primeiro campo da tela).
+  if (!input.contact_id) {
+    throw new ApiError(422, "agenda_sem_paciente", undefined, ctx.requestId, "Escolha o paciente que será atendido.");
+  }
+
+  // FORK clinic (agenda S6b): encaixe é ato de PESSOA (C11) — IA/token/webhook nunca encaixam.
+  if (input.encaixe && ctx.actor.type !== "user") {
+    throw new ApiError(403, "encaixe_so_pessoa", undefined, ctx.requestId, "Encaixe só pode ser feito por uma pessoa da equipe.");
+  }
+  // A DURAÇÃO ESCOLHIDA NA MARCAÇÃO (issue #3709). Fora da faixa dos moldes é
+  // recusa NOMEADA, não troca silenciosa pelo padrão: quem digitou 3 ou 5000
+  // minutos precisa saber que não marcou o que pediu. A faixa é a mesma dos
+  // `check` de `calendar_event_types` e de `calendar_service_schedule`
+  // (`lib/agenda/duracao-escolhida.ts`).
+  if (input.duration_minutes !== undefined && !duracaoEscolhidaValida(input.duration_minutes)) {
+    throw new ApiError(
+      422,
+      "agenda_duracao_invalida",
+      undefined,
+      ctx.requestId,
+      `A duração precisa ser um número inteiro de minutos entre ${DURACAO_MINIMA_MIN} e ${DURACAO_MAXIMA_MIN}.`,
+    );
+  }
+
   const { data: tipo, error: erroTipo } = await supabase
     .from("calendar_event_types")
     .select(
@@ -264,6 +318,23 @@ export async function marcarAgendamentoHandler(
       undefined,
       ctx.requestId,
       `"${tipo.name}" não tem responsável definido, e sem responsável não há agenda.`,
+    );
+  }
+
+  // FORK clinic (migration 9001): com o módulo de profissionais ligado, o dono
+  // precisa ter a especialidade que o tipo exige. Fica AQUI, e não só na
+  // consulta de horários, porque o encaixe fora da grade não passa por ela.
+  const clinic = await habilitacaoNaConsulta(supabase, ctx.organization_id, tipo.id, donoId);
+  if (clinic.ligado && "erro" in clinic) {
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, clinic.erro);
+  }
+  if (clinic.ligado && "habilitado" in clinic && !clinic.habilitado) {
+    throw new ApiError(
+      422,
+      "profissional_nao_habilitado",
+      undefined,
+      ctx.requestId,
+      `Este profissional não tem a especialidade que "${tipo.name}" exige.`,
     );
   }
 
@@ -326,12 +397,19 @@ export async function marcarAgendamentoHandler(
     }
   }
 
-  const fim = new Date(inicio.getTime() + tipo.duration_minutes * 60_000);
+  // O FIM nasce da duração ESCOLHIDA quando ela veio, e do molde quando não.
+  // Tudo o que depende do tamanho do bloco sai daqui: a checagem de horário
+  // livre (que precisa exigir ESTE tanto de tempo vago), o `ends_at` gravado, o
+  // evento do Google e a altura do bloco na grade.
+  const duracaoMin = input.duration_minutes ?? Number(tipo.duration_minutes);
+  const fim = new Date(inicio.getTime() + duracaoMin * 60_000);
   const consulta = await exigeHorarioLivre(supabase, ctx, {
     eventTypeId: tipo.id,
     donoId,
     inicio,
     fim,
+    encaixe: Boolean(input.encaixe), // FORK clinic (agenda S6b)
+    duracaoMin,
   });
 
   const booking = tipo.location_kind === "google_meet" ? ctx.meetingBooking : undefined;
@@ -340,9 +418,7 @@ export async function marcarAgendamentoHandler(
   }
   const delivery = booking ? { state:"waiting_for_link",generation:randomUUID(),service_boundary:booking.boundary,source_operation_id:booking.sourceJobId,
     booking_claim:booking.claim,authorized_by:{kind:ctx.actor.type,id:ctx.actor.id} } : {state:"none"};
-  const { data: criado, error: erroInsert } = await supabase
-    .from("calendar_appointments")
-    .insert({
+  const linha = {
       organization_id: ctx.organization_id,
       event_type_id: tipo.id,
       title: input.title ?? tipo.name,
@@ -370,11 +446,48 @@ export async function marcarAgendamentoHandler(
       created_by_kind: autorParaCriacao(ctx.actor),
       created_by_user_id: ctx.actor.type === "user" ? ctx.actor.id : null,
       source: ctx.actor.type === "user" ? "ui" : "mcp",
-    })
-    .select("id, starts_at, ends_at, status, time_zone, revision, meeting_state, meeting_url")
-    .single();
-  if (erroInsert) {
-    throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroInsert.message);
+    };
+  // FORK clinic (agenda S6b): com `encaixe`, a MESMA linha entra pela função do banco (uma transação:
+  // confere chave/flag/motivo, grava o rastro e libera a trava só para este compromisso).
+  const colunas = "id, starts_at, ends_at, status, time_zone, revision, meeting_state, meeting_url";
+  let encaixeId: string | null = null;
+  type Criado = {
+    id: string;
+    starts_at: string;
+    ends_at: string;
+    status: string;
+    time_zone: string;
+    revision: number;
+    meeting_state: string | null;
+    meeting_url: string | null;
+  };
+  let criado: Criado | null = null;
+  let erroInsert: { code?: string; message: string } | null = null;
+  if (input.encaixe) {
+    const { data: novoId, error: erroRpc } = await supabase.rpc("fn_clinic_agenda_encaixar", {
+      p_row: linha as unknown as Json,
+      p_motivo: input.encaixe.motivo,
+    });
+    if (erroRpc) {
+      const conhecido = erroDoEncaixeNoBanco(erroRpc, ctx);
+      if (conhecido) throw conhecido;
+      erroInsert = erroRpc;
+    } else {
+      encaixeId = novoId as unknown as string;
+      const lido = await supabase.from("calendar_appointments").select(colunas).eq("id", encaixeId).eq("organization_id", ctx.organization_id).single();
+      criado = lido.data as unknown as Criado | null;
+      erroInsert = lido.error;
+    }
+  } else {
+    const inserido = await supabase.from("calendar_appointments").insert(linha).select(colunas).single();
+    criado = inserido.data as unknown as Criado | null;
+    erroInsert = inserido.error;
+  }
+  if (erroInsert || !criado) {
+    // FORK clinic (9005): a trava de sobreposição do banco fecha a corrida que a
+    // conferência acima não fecha (duas marcações no mesmo instante).
+    if (erroInsert?.code === HORARIO_OCUPADO_NO_BANCO) throw horarioOcupadoNoBanco(ctx, erroInsert.message);
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, erroInsert?.message);
   }
 
   const transicao: Transicao = criado.status === "pending" ? "pending" : "confirmed";
@@ -398,7 +511,20 @@ export async function marcarAgendamentoHandler(
     metadata: { event_type_id: tipo.id, owner_user_id: donoId, time_zone: criado.time_zone },
   });
 
-  return criado as Record<string, unknown>;
+  // FORK clinic (agenda S6b): o rastro do encaixe (a função do banco já gravou clinic_agenda_encaixes).
+  if (encaixeId) {
+    void audit({
+      action: "clinic.agenda.encaixe",
+      actorUserId: ctx.actor.type === "user" ? ctx.actor.id : null,
+      organizationId: ctx.organization_id,
+      resourceType: "calendar_appointment",
+      resourceId: criado.id,
+      requestId: ctx.requestId,
+      metadata: { owner_user_id: donoId, encaixe_id: encaixeId },
+    });
+    return { ...criado, encaixe: true };
+  }
+  return criado as unknown as Record<string, unknown>;
 }
 
 /**
@@ -428,6 +554,11 @@ export async function alterarAgendamentoHandler(
     "owner_user_id",
     "contact_id",
     "starts_at",
+    // `ends_at` entrou com a #3709: remarcar PRESERVA o comprimento do bloco.
+    // Sem ele o novo fim saía do molde do tipo, e um atendimento de 90 minutos
+    // voltava a ter 30 no primeiro arrasto — em silêncio, e com a grade
+    // desenhando um bloco que já não é o combinado.
+    "ends_at",
     "status",
     "time_zone",
   ]);
@@ -450,6 +581,41 @@ export async function alterarAgendamentoHandler(
     if (ctx.actor.type !== "user") throw new ApiError(403,"forbidden",undefined,ctx.requestId,"Peça à equipe para confirmar a presença no compromisso. Uma interpretação de texto não registra o fato.");
     if (input.outcome_message_id) mudanca.outcome_message_id=input.outcome_message_id;
   }
+  // FORK clinic (migration 9002): com a ficha obrigatória ligada, "Compareceu"
+  // exige a ficha cadastral completa — a mesma regra da chegada.
+  if (input.status === "completed" && input.status !== atual.status) {
+    const permite = await fichaPermiteAtendimento(supabase, ctx.organization_id, (atual.contact_id as string | null) ?? null);
+    if (!permite.ok && "erro" in permite) throw new ApiError(500, "internal_error", undefined, ctx.requestId, permite.erro);
+    if (!permite.ok) {
+      throw new ApiError(
+        422,
+        "ficha_incompleta",
+        { faltando: permite.faltando },
+        ctx.requestId,
+        `Complete a ficha do paciente antes de registrar o comparecimento. Falta: ${permite.faltando.join(", ")}.`,
+      );
+    }
+  }
+  // FORK clinic (agenda S4, 9043): na clínica, "realizado" é o fim do
+  // atendimento — e terminar o atendimento é SÓ do profissional do agendamento.
+  if (
+    input.status === "completed" &&
+    input.status !== atual.status &&
+    ctx.actor.type === "user" &&
+    atual.owner_user_id &&
+    atual.owner_user_id !== ctx.actor.id
+  ) {
+    const { data: org } = await supabase.from("organizations").select("settings").eq("id", ctx.organization_id).maybeSingle();
+    if (clinicProfissionaisLigado((org as { settings?: unknown } | null)?.settings)) {
+      throw new ApiError(
+        403,
+        "visita_so_o_profissional",
+        undefined,
+        ctx.requestId,
+        "Só o profissional do agendamento registra o atendimento como realizado.",
+      );
+    }
+  }
   if(input.confirmation_next_at) mudanca.confirmation_next_at=input.confirmation_next_at;
   if (input.notes !== undefined) mudanca.notes = input.notes;
   // Trocar SÓ o convidado não é remarcação nem mudança de situação, então não
@@ -461,6 +627,8 @@ export async function alterarAgendamentoHandler(
   let transicao: Transicao | null = null;
 
   if (input.starts_at) {
+    // FORK clinic (migration 9008): dentro do prazo, o agente de IA não remarca.
+    await exigePrazoDoPaciente(supabase, ctx, atual.starts_at as string | null);
     const novoInicio = new Date(input.starts_at);
     const { data: tipo } = await supabase
       .from("calendar_event_types")
@@ -472,7 +640,22 @@ export async function alterarAgendamentoHandler(
       throw new ApiError(404, "not_found", undefined, ctx.requestId, "O tipo deste agendamento não existe mais.");
     }
 
-    const novoFim = new Date(novoInicio.getTime() + tipo.duration_minutes * 60_000);
+    /**
+     * O COMPRIMENTO DO BLOCO QUE JÁ EXISTE — ele viaja com a remarcação.
+     *
+     * ⚠️ A duração é do COMPROMISSO, não do molde: quem marcou 90 minutos porque
+     * o atendimento é longo não pode ver o bloco virar 30 ao arrastá-lo de
+     * terça para quinta. O molde do tipo é só o PADRÃO de quem está marcando do
+     * zero (issue #3709). Um intervalo ilegível (linha antiga, fim antes do
+     * começo) cai no molde, que é o comportamento anterior.
+     */
+    const duracaoDoBlocoMin = duracaoDoBloco(
+      atual.starts_at as string,
+      atual.ends_at as string | null,
+      Number(tipo.duration_minutes),
+    );
+    const novoFim = new Date(novoInicio.getTime() + duracaoDoBlocoMin * 60_000);
+
     // ⚠️ O PRÓPRIO COMPROMISSO OCUPA O HORÁRIO DELE. Remarcar para o mesmo
     // instante é no-op — sem esta guarda ele se veria como conflito e recusaria
     // a si mesmo.
@@ -486,6 +669,10 @@ export async function alterarAgendamentoHandler(
         donoId: atual.owner_user_id as string,
         inicio: novoInicio,
         fim: novoFim,
+        // A grade confere o tamanho do bloco que ESTE compromisso tem, não o do
+        // molde — senão remarcar um atendimento de 90 minutos passaria por cima
+        // de outro de 30 (issue #3709).
+        duracaoMin: duracaoDoBlocoMin,
         ignorarAgendamentoId: atual.id as string,
       });
       mudanca.starts_at = novoInicio.toISOString();
@@ -589,6 +776,7 @@ export async function cancelarAgendamentoHandler(
     "event_type_id",
     "status",
     "time_zone",
+    "starts_at",
   ]);
 
   await exigeDonoDoCompromisso(supabase, ctx, atual);
@@ -599,6 +787,8 @@ export async function cancelarAgendamentoHandler(
   if (atual.status === "cancelled") {
     return { id: atual.id, status: "cancelled", ja_estava: true };
   }
+  // FORK clinic (migration 9008): dentro do prazo, o agente de IA não desmarca.
+  await exigePrazoDoPaciente(supabase, ctx, atual.starts_at as string | null);
 
   const salvo = await alteraComRevisao(supabase,ctx,input.id,input.revision ?? Number(atual.revision),{
     status:"cancelled",cancellation_reason:input.reason,
@@ -707,6 +897,23 @@ export function podeMarcarForaDaGrade(actor: Actor): boolean {
 }
 
 /**
+ * QUANTO DURA O BLOCO QUE JÁ EXISTE, em minutos — o comprimento que a
+ * remarcação carrega junto (issue #3709).
+ *
+ * A duração de um compromisso não é coluna: é `ends_at - starts_at`. Aqui ela é
+ * lida do par, com três guardas: datas ilegíveis, `ends_at` ausente e um
+ * intervalo fora da faixa dos moldes caem no PADRÃO do tipo — que é exatamente
+ * o comportamento anterior a esta entrega. Preferir o padrão a um número
+ * absurdo é a escolha segura: um fim inventado pode encavalar com o próximo
+ * paciente.
+ */
+function duracaoDoBloco(inicioISO: string, fimISO: string | null, padraoMin: number): number {
+  if (!fimISO) return padraoMin;
+  const minutos = Math.round((new Date(fimISO).getTime() - new Date(inicioISO).getTime()) / 60_000);
+  return duracaoEscolhidaValida(minutos) ? minutos : padraoMin;
+}
+
+/**
  * O horário pedido pode ser marcado por QUEM está pedindo?
  *
  * ⚠️ Pela MESMA coleta que responde o GET e as ferramentas de leitura
@@ -768,6 +975,17 @@ async function exigeHorarioLivre(
     inicio: Date;
     fim: Date;
     /**
+     * O comprimento que este pedido exige livre, em minutos — o mesmo de
+     * `fim - inicio`, quando quem chama quer a grade calculada para ele.
+     *
+     * ⚠️ SEM ISTO A GRADE MENTE. Ela confere o horário pedido contra os slots
+     * que `horariosLivres` calcula para a janela do pedido, e o slot tem o
+     * comprimento do MOLDE: um atendimento de 90 minutos sobre um de 30 às 09:30
+     * passava, porque a colisão checada era de 30 (issue #3709). Ausente, o
+     * motor usa a duração do tipo, como sempre.
+     */
+    duracaoMin?: number;
+    /**
      * O compromisso sendo remarcado: ocupa o horário de ONDE SAI, não o de DESTINO.
      *
      * Vale para os DOIS ramos. A pergunta é a mesma nos dois — "o que já está
@@ -779,6 +997,8 @@ async function exigeHorarioLivre(
      * (issue #1084).
      */
     ignorarAgendamentoId?: string;
+    /** FORK clinic (agenda S6b): marcar por cima, com autorização — troca a recusa por `exigeEncaixePossivel`. */
+    encaixe?: boolean;
   },
 ): Promise<{ fusoDaRegra: string }> {
   const consulta = await horariosLivresDaOrg(supabase, ctx.organization_id, {
@@ -788,6 +1008,7 @@ async function exigeHorarioLivre(
     ate: args.fim,
     agora: new Date(),
     ignorarAgendamentoId: args.ignorarAgendamentoId,
+    duracaoMin: args.duracaoMin ?? null,
   });
 
   if (!consulta.ok) {
@@ -805,8 +1026,31 @@ async function exigeHorarioLivre(
   }
 
   const foraDaGrade = podeMarcarForaDaGrade(ctx.actor);
-  if (foraDaGrade) {
-    await exigeSemSobreposicao(supabase, ctx, args);
+  if (foraDaGrade && args.encaixe) {
+    // FORK clinic (agenda S6b)
+    await exigeEncaixePossivel(supabase, ctx, {
+      organizationId: ctx.organization_id,
+      ownerUserId: args.donoId,
+      inicio: args.inicio,
+      fim: args.fim,
+      fusoDaRegra: consulta.fusoDaRegra,
+    });
+  } else if (foraDaGrade) {
+    try {
+      await exigeSemSobreposicao(supabase, ctx, args);
+    } catch (e) {
+      // FORK clinic (agenda S6b, D2): com a flag ligada e ator pessoa, a recusa vira 409 com quem ocupa.
+      if (e instanceof ApiError && e.code === "agenda_horario_indisponivel") {
+        const conflito = await conflitoEncaixavel(supabase, ctx, {
+          organizationId: ctx.organization_id,
+          ownerUserId: args.donoId,
+          inicio: args.inicio,
+          fim: args.fim,
+        });
+        if (conflito) throw conflito;
+      }
+      throw e;
+    }
   } else if (!consulta.slots.some((s) => s.inicio.getTime() === args.inicio.getTime())) {
     throw new ApiError(
       422,
@@ -960,6 +1204,9 @@ async function fecharOLaco(
         event_type_name: args.nomeDoTipo,
         time_zone: args.fusoDoCompromisso,
         transicao: args.transicao,
+        // Quem fez ESTA mudança — a mesma régua da coluna `created_by_kind`; o aviso
+        // de agendamento (#84) diz "marcado pela IA" ou "pela equipe" a partir dele.
+        autor: autorParaCriacao(ctx.actor),
       },
       // `request_id` sem o prefixo `rule:` de propósito: ele correlaciona com o
       // audit log e NÃO aciona o anti-loop do motor, que só barra o que uma
@@ -1073,8 +1320,29 @@ async function leadAtivoDoContato(
   return rota.routed ? rota.leadId : null;
 }
 
+/**
+ * FORK clinic (migration 9005): `23P01` é a trava de sobreposição do banco
+ * (`trg_clinic_trava_sobreposicao`, ligada por organização). Sai como o MESMO
+ * 422 da conferência do código — para a tela e para a IA é a mesma recusa.
+ */
+const HORARIO_OCUPADO_NO_BANCO = "23P01";
+function horarioOcupadoNoBanco(ctx: HandlerCtx, mensagemDoBanco?: string): ApiError {
+  // 9007: o mesmo 23P01 vem da alocação de sala/equipamento — a recusa diz qual.
+  const faltaRecurso = (mensagemDoBanco ?? "").includes("recurso_indisponivel");
+  return new ApiError(
+    422,
+    "agenda_horario_indisponivel",
+    undefined,
+    ctx.requestId,
+    faltaRecurso
+      ? "Não há sala ou equipamento livre para este atendimento neste horário. Consulte os horários livres e escolha outro."
+      : "Este horário acabou de ser ocupado na agenda de quem atende. Consulte os horários livres e escolha outro.",
+  );
+}
+
 async function alteraComRevisao(supabase:SB,ctx:HandlerCtx,id:string,revision:number,patch:Record<string,unknown>):Promise<Record<string,unknown>> {
   const {data,error}=await supabase.rpc("fn_appointment_change",{p_org:ctx.organization_id,p_id:id,p_revision:revision,p_patch:patch});
+  if(error?.code === HORARIO_OCUPADO_NO_BANCO) throw horarioOcupadoNoBanco(ctx, error.message);
   if(error) throw new ApiError(error.code === "40001" ? 409 : error.code === "42501" ? 403 : error.code === "P0002" ? 404 : 422,
     error.code === "40001" ? "conflict" : error.code === "42501" ? "forbidden" : error.code === "P0002" ? "not_found" : "validation_failed",undefined,ctx.requestId,
     error.code === "40001" ? "Este compromisso mudou. Atualize os dados antes de confirmar novamente." : "Não foi possível alterar este compromisso. Confira a presença, o horário e a mensagem vinculada.");

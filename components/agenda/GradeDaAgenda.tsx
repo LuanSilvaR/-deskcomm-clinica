@@ -1,5 +1,7 @@
 "use client";
 
+import { ROTULO_DO_TIPO_DE_BLOQUEIO, type TipoDeBloqueio } from "@/lib/clinic/agenda/conflito-do-bloqueio";
+import { StatusNoBloco, useRotuloDoStatusNaAgenda, useTituloDoBloco } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
 import * as React from "react";
 
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
@@ -26,11 +28,108 @@ import {
   type HorarioPublicado,
   type MotivoDaGradeTravada,
 } from "@/lib/agenda/grade-interativa";
+import type { FechamentoDaGrade } from "@/lib/agenda/fechamentos-na-grade";
 import { cn } from "@/lib/utils";
+import { Lock } from "@/lib/ui/icons";
 import { useT } from "@/hooks/i18n/useT";
 
 import { corDaTrilha, fundoDaTrilha } from "./paleta";
 import type { Agendamento, Pessoa, VisaoDaAgenda } from "./tipos";
+
+/**
+ * FORK clinic (agenda por profissional, S1) — o que NÃO é horário livre de UM
+ * profissional num dia, em minutos do dia local (0–1440): fora da jornada (a
+ * grade hachura) e bloqueios (bloco sólido "Bloqueado", distinto de
+ * compromisso). Ausente = a grade de sempre, sem camada nenhuma.
+ */
+export interface ForaDaAgendaDoDia {
+  jornada: { inicio_minuto: number; fim_minuto: number }[];
+  fora: { inicio_minuto: number; fim_minuto: number }[];
+  bloqueios: {
+    inicio_minuto: number;
+    fim_minuto: number;
+    motivo: string | null;
+    origem: "pessoa" | "clinica" | "indisponivel";
+    /** FORK clinic (agenda S5): almoço, reunião… — vira o rótulo do bloco. */
+    tipo?: string | null;
+  }[];
+}
+
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+/** Recorta a faixa à janela desenhada (07h–22h); fora dela, nada a pintar. */
+function naJanela(f: { inicio_minuto: number; fim_minuto: number }) {
+  const ini = Math.max(f.inicio_minuto, PRIMEIRA_HORA * 60);
+  const fim = Math.min(f.fim_minuto, (ULTIMA_HORA + 1) * 60);
+  return fim > ini ? { top: pixelsDe(ini - PRIMEIRA_HORA * 60), height: pixelsDe(fim - ini) } : null;
+}
+
+function CamadaForaDaAgenda({ chave, info }: { chave: string; info: ForaDaAgendaDoDia }) {
+  const t = useT();
+  const jornada = info.jornada.length
+    ? info.jornada.map((j) => `${hhmm(j.inicio_minuto)}–${hhmm(j.fim_minuto)}`).join(", ")
+    : null;
+  const rotuloFora = jornada
+    ? t("Fora do horário de atendimento (atende {jornada})").replace("{jornada}", jornada)
+    : t("Sem atendimento neste dia");
+  return (
+    <>
+      {info.fora.map((f) => {
+        const pos = naJanela(f);
+        if (!pos) return null;
+        return (
+          <div
+            key={`fora-${f.inicio_minuto}`}
+            data-testid={`indisponivel-${chave}-${hhmm(f.inicio_minuto)}`}
+            role="img"
+            aria-label={rotuloFora}
+            title={rotuloFora}
+            className="absolute inset-x-0"
+            style={{
+              ...pos,
+              // Listras finas sobre o fundo elevado: "ninguém atende aqui",
+              // sem parecer compromisso (que é cartão cheio) nem bloqueio (sólido).
+              background:
+                "repeating-linear-gradient(135deg, var(--color-border) 0 1px, transparent 1px 7px), var(--color-surface-elevated)",
+              opacity: 0.85,
+            }}
+          />
+        );
+      })}
+      {info.bloqueios.map((b) => {
+        const pos = naJanela(b);
+        if (!pos) return null;
+        const rotuloDoTipo = b.tipo ? ROTULO_DO_TIPO_DE_BLOQUEIO[b.tipo as TipoDeBloqueio] : undefined;
+        const origem =
+          b.origem === "clinica"
+            ? t("Clínica fechada")
+            : b.origem === "indisponivel"
+              ? t("Indisponível")
+              : rotuloDoTipo
+                ? t(rotuloDoTipo)
+                : t("Bloqueado");
+        const texto = `${origem}${b.motivo ? ` · ${b.motivo}` : ""} · ${hhmm(b.inicio_minuto)}–${hhmm(b.fim_minuto)}`;
+        return (
+          <div
+            key={`bloq-${b.inicio_minuto}-${b.fim_minuto}`}
+            data-testid={`bloqueio-${chave}-${hhmm(b.inicio_minuto)}`}
+            role="note"
+            aria-label={texto}
+            title={texto}
+            className="absolute inset-x-0.5 flex items-start gap-1 overflow-hidden rounded-sm border border-dashed border-border-strong bg-surface-elevated px-1.5 py-0.5"
+            style={pos}
+          >
+            <Lock size={12} weight="bold" aria-hidden className="mt-0.5 shrink-0 text-text-muted" />
+            <span className="truncate text-[11px] font-semibold uppercase leading-4 tracking-wide text-text-muted">
+              {origem}
+              {b.motivo ? <span className="ml-1 font-normal normal-case">{b.motivo}</span> : null}
+            </span>
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 /**
  * Altura de uma hora, em pixels. É a régua de toda a grade: posição e duração
@@ -81,6 +180,12 @@ export interface InteracaoDaGrade {
    * em vez de remarcar em silêncio ou aproximar para o horário mais perto.
    */
   onArrastarPara?: (entrada: { id: string; instante: string | null; razao: string }) => void;
+  /**
+   * FORK clinic (agenda S7 #70): arrastar sobre blocos LIVRES seleciona uma faixa.
+   * `inicio` é o instante PUBLICADO do primeiro bloco; `fim`, o fim do último.
+   * Ausente = nada muda (só o clique, como no upstream).
+   */
+  onSelecionarFaixa?: (faixa: { inicio: string; fim: string }) => void;
 }
 
 /** Onde um card arrastado está sendo proposto — o mesmo estado para ponteiro e teclado. */
@@ -230,9 +335,43 @@ function CamadaDeMarcacao({
   const localeDaData = useLocaleDeData();
   const chave = chaveDoDia(dia);
   const publicados = interacao.horariosPorDia[chave] ?? [];
+  // FORK clinic (agenda S7 #70): seleção de faixa por arraste (mouse/caneta).
+  const [selecao, setSelecao] = React.useState<{ de: number; ate: number } | null>(null);
+  const arrastando = React.useRef(false);
+  const moveu = React.useRef(false);
+  const selecionar = interacao.onSelecionarFaixa;
+  React.useEffect(() => {
+    if (!selecionar) return;
+    const soltar = () => {
+      if (!arrastando.current) return;
+      arrastando.current = false;
+      setSelecao((atual) => {
+        if (atual && moveu.current) {
+          const ini = Math.min(atual.de, atual.ate);
+          const fimMin = Math.max(atual.de, atual.ate) + PASSO_DA_CELULA_MIN;
+          const primeiro = horarioNaCelula(publicados, ini);
+          if (primeiro) selecionar({ inicio: primeiro.instante, fim: instanteDoMinuto(dia, fimMin).toISOString() });
+        }
+        return null;
+      });
+    };
+    window.addEventListener("pointerup", soltar);
+    return () => window.removeEventListener("pointerup", soltar);
+  }, [selecionar, publicados, dia]);
 
   return (
     <>
+      {selecao && selecao.ate !== selecao.de ? (
+        <div
+          aria-hidden
+          data-testid={`selecao-${chave}`}
+          className="pointer-events-none absolute inset-x-0.5 z-10 rounded-sm border-2 border-accent bg-accent-soft/60"
+          style={{
+            top: pixelsDe(Math.min(selecao.de, selecao.ate) - PRIMEIRA_HORA * 60),
+            height: pixelsDe(Math.abs(selecao.ate - selecao.de) + PASSO_DA_CELULA_MIN),
+          }}
+        />
+      ) : null}
       {CELULAS.map((minuto) => {
         const livre = horarioNaCelula(publicados, minuto);
         const inicio = instanteDoMinuto(dia, minuto);
@@ -265,7 +404,36 @@ function CamadaDeMarcacao({
                     .replace("{motivo}", razao)
             }
             title={livre ? undefined : razao}
-            onClick={livre ? () => interacao.onMarcarEm(livre.instante) : undefined}
+            onClick={
+              livre
+                ? () => {
+                    if (moveu.current) {
+                      moveu.current = false;
+                      return;
+                    }
+                    interacao.onMarcarEm(livre.instante);
+                  }
+                : undefined
+            }
+            onPointerDown={
+              livre && selecionar
+                ? (e) => {
+                    if (e.pointerType === "touch" || e.button !== 0) return;
+                    arrastando.current = true;
+                    moveu.current = false;
+                    setSelecao({ de: minuto, ate: minuto });
+                  }
+                : undefined
+            }
+            onPointerEnter={
+              selecionar
+                ? () => {
+                    if (!arrastando.current || !livre) return;
+                    moveu.current = true;
+                    setSelecao((s) => (s ? { ...s, ate: minuto } : s));
+                  }
+                : undefined
+            }
             className={cn(
               "absolute inset-x-0 z-0 transition-colors duration-fast ease-out",
               "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-500",
@@ -282,6 +450,115 @@ function CamadaDeMarcacao({
         );
       })}
     </>
+  );
+}
+
+/**
+ * O pedaço de um fechamento que cai NESTE dia, em minutos do dia (`0..1440`), no
+ * fuso da grade.
+ *
+ * O fechamento chega em INSTANTES, já convertidos no fuso da jornada da pessoa
+ * (`lib/agenda/fechamentos-na-grade.ts`) — a grade não sabe que fuso é esse e
+ * não precisa saber. Aqui ele é só recortado pelas bordas do dia, como um
+ * compromisso seria: num fuso diferente do da organização um "dia todo" pode
+ * atravessar a meia-noite da grade e virar dois pedaços, um em cada coluna.
+ */
+function trechoNoDia(
+  f: FechamentoDaGrade,
+  dia: Date,
+): { de: number; ate: number } | null {
+  // FORK: a grade do fork desenha no horário local do navegador (`instanteDoMinuto`),
+  // como os cards; o upstream recorta num fuso explícito que o fork ainda não tem.
+  const minutoDoInstante = (d: Date) => d.getHours() * 60 + d.getMinutes();
+  const inicioDoDia = instanteDoMinuto(dia, 0).getTime();
+  const inicioDoSeguinte = instanteDoMinuto(addDays(dia, 1), 0).getTime();
+  const comeca = new Date(f.comeca).getTime();
+  const termina = new Date(f.termina).getTime();
+  if (!(termina > inicioDoDia && comeca < inicioDoSeguinte)) return null;
+  const de = comeca <= inicioDoDia ? 0 : minutoDoInstante(new Date(comeca));
+  const ate = termina >= inicioDoSeguinte ? 24 * 60 : minutoDoInstante(new Date(termina));
+  return ate > de ? { de, ate } : null;
+}
+
+/** "14:00–15:30", ou "o dia todo" quando o trecho cobre o dia inteiro da grade. */
+function rotuloDoTrecho(trecho: { de: number; ate: number }, t: (s: string) => string): string {
+  if (trecho.de === 0 && trecho.ate === 24 * 60) return t("o dia todo");
+  const hhmm = (m: number) =>
+    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  return `${hhmm(trecho.de)}–${hhmm(trecho.ate)}`;
+}
+
+/**
+ * Hachura NEUTRA, com traço fino: diz "aqui não tem atendimento" sem parecer um
+ * compromisso (que tem fundo de trilha) nem a ocupação do Google (hachura larga,
+ * de bloco). Só tokens: o tema escuro troca as cores sem regra própria.
+ */
+const HACHURA_DO_FECHAMENTO =
+  "repeating-linear-gradient(135deg, var(--color-border) 0 1px, transparent 1px 7px), var(--color-surface-elevated)";
+
+/**
+ * A FAIXA FECHADA — o "Dias fora da rotina" desenhado na própria grade.
+ *
+ * Até aqui o fechamento só existia na lista das configurações e na AUSÊNCIA de
+ * horários: o dono fechava 14h–15h e a grade mostrava o mesmo vazio de sempre,
+ * sem nada que dissesse que aquele vazio era escolha dele (pedido real numa
+ * instalação em 02/11/2026: "isso aparece marcado com alguma cor?").
+ *
+ * ⚠️ NÃO INTERCEPTA O PONTEIRO. Os horários fechados já nascem desabilitados na
+ * camada de marcação (quem decide é a rota de horários livres, que conhece o
+ * fechamento); a faixa é só leitura por cima deles, e um card que caia ali —
+ * marcado antes do fechamento — continua clicável por cima dela.
+ *
+ * O comentário de `CamadaDeMarcacao` recusa pintar o vazio indisponível, e esta
+ * faixa não o contradiz: ela não pinta TODO horário sem oferta (fora da
+ * jornada, aviso mínimo, lotado), só o que alguém fechou de propósito — poucos
+ * trechos, cada um com nome.
+ */
+function FaixaFechada({
+  fechamento,
+  trecho,
+  pessoa,
+  mostrarQuem,
+}: {
+  fechamento: FechamentoDaGrade;
+  trecho: { de: number; ate: number };
+  pessoa: Pessoa | undefined;
+  /** Com duas pessoas ou mais na grade, a faixa diz DE QUEM é o fechamento. */
+  mostrarQuem: boolean;
+}) {
+  const t = useT();
+  const topo = Math.max(trecho.de, PRIMEIRA_HORA * 60);
+  const fim = Math.min(trecho.ate, (ULTIMA_HORA + 1) * 60);
+  // Fechamento todo fora da janela desenhada (22h–23h, por exemplo): não há
+  // onde pô-lo, e uma faixa de altura zero só confundiria o teste e o leitor.
+  if (fim <= topo) return null;
+  const texto = [t("Fechado"), mostrarQuem ? pessoa?.nome : null, fechamento.motivo]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div
+      data-testid={`fechamento-${fechamento.id}`}
+      data-responsavel={fechamento.responsavelId}
+      className="pointer-events-none absolute inset-x-0 overflow-hidden border-y border-border px-1.5 py-0.5"
+      style={{
+        top: pixelsDe(topo - PRIMEIRA_HORA * 60),
+        height: pixelsDe(fim - topo),
+        background: HACHURA_DO_FECHAMENTO,
+      }}
+    >
+      {mostrarQuem && pessoa && (
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-[3px]"
+          style={{ backgroundColor: corDaTrilha(pessoa.trilha) }}
+        />
+      )}
+      <span className="ml-1 block truncate text-[10px] font-semibold leading-4 text-text-muted">
+        {texto}
+        <span className="sr-only"> · {rotuloDoTrecho(trecho, t)}</span>
+      </span>
+    </div>
   );
 }
 
@@ -325,6 +602,9 @@ function BlocoDeAgendamento({
   };
 }) {
   const t = useT();
+  // FORK clinic: ", Na recepção" no aria-label (vazio fora da clínica).
+  const rotuloDoStatus = useRotuloDoStatusNaAgenda(agendamento);
+  const tituloDoBloco = useTituloDoBloco(agendamento);
   const comeca = new Date(agendamento.comeca);
   const termina = new Date(agendamento.termina);
   const duracao = Math.max(differenceInMinutes(termina, comeca), 15);
@@ -370,7 +650,9 @@ function BlocoDeAgendamento({
       // por `t()` fazia "Retorno" virar "Seguimiento" na leitura de tela.
       aria-label={`${agendamento.titulo}, ${format(comeca, "HH:mm")} ${t("às")} ${format(termina, "HH:mm")}${
         agendamento.quemSeraAtendido ? `, ${t("com")} ${agendamento.quemSeraAtendido}` : ""
-      }${pessoa ? `, ${t("atendido por")} ${pessoa.nome}` : ""}${
+      }${pessoa ? `, ${t("atendido por")} ${pessoa.nome}` : ""}${rotuloDoStatus}${
+        agendamento.etiqueta ? `, ${agendamento.etiqueta}` : ""
+      }${
         doGoogle ? `, ${t("ocupado na agenda do Google")}` : ""
       }`}
       className={cn(
@@ -425,7 +707,18 @@ function BlocoDeAgendamento({
         style={{ backgroundColor: doGoogle ? "var(--color-border-strong)" : corDaTrilha(trilha) }}
       />
       <span className="ml-1 truncate text-[11px] font-semibold leading-4 text-text">
-        {agendamento.titulo}
+        {/* FORK clinic: o ícone do status da visita (texto no aria-label). */}
+        <StatusNoBloco agendamento={agendamento} />
+        {tituloDoBloco}
+        {/* FORK clinic (agenda S6b): etiqueta de encaixe. */}
+        {agendamento.etiqueta ? (
+          <span
+            data-testid="etiqueta-do-compromisso"
+            className="ml-1 rounded-sm bg-warning/20 px-1 text-[9px] font-medium uppercase text-text"
+          >
+            {agendamento.etiqueta}
+          </span>
+        ) : null}
       </span>
       {duracao >= 45 && (
         <span className="ml-1 truncate text-[10px] leading-3 tabular-nums text-text-muted">
@@ -528,6 +821,7 @@ function ColunaDeDia({
   dia,
   agora,
   agendamentos,
+  fechamentos,
   pessoas,
   onAbrir,
   destacado,
@@ -535,10 +829,14 @@ function ColunaDeDia({
   interacao,
   proposta,
   arrasteDoCard,
+  foraDaAgenda,
 }: {
   dia: Date;
   agora: Date;
+  /** FORK clinic: jornada e bloqueios do profissional em contexto, neste dia. */
+  foraDaAgenda?: ForaDaAgendaDoDia;
   agendamentos: Agendamento[];
+  fechamentos: FechamentoDaGrade[];
   pessoas: Pessoa[];
   onAbrir?: (id: string) => void;
   destacado: boolean;
@@ -615,6 +913,21 @@ function ColunaDeDia({
             interacao={interacao}
           />
         )}
+        {foraDaAgenda && <CamadaForaDaAgenda chave={chaveDoDia(dia)} info={foraDaAgenda} />}
+        {/* Depois da camada de marcação e ANTES dos cards: a faixa cobre os
+            blocos (já desabilitados) e fica por baixo do que está marcado. */}
+        {fechamentos.map((f) => {
+          const trecho = trechoNoDia(f, dia);
+          return trecho ? (
+            <FaixaFechada
+              key={f.id}
+              fechamento={f}
+              trecho={trecho}
+              pessoa={pessoas.find((p) => p.id === f.responsavelId)}
+              mostrarQuem={pessoas.length > 1}
+            />
+          ) : null;
+        })}
         {repartirSobrepostos(doDia).map(({ agendamento, coluna, colunas }) => (
           <BlocoDeAgendamento
             key={agendamento.id}
@@ -643,11 +956,13 @@ function VisaoDeMes({
   ancora,
   agora,
   agendamentos,
+  fechamentos,
   pessoas,
 }: {
   ancora: Date;
   agora: Date;
   agendamentos: Agendamento[];
+  fechamentos: FechamentoDaGrade[];
   pessoas: Pessoa[];
 }) {
   const t = useT();
@@ -708,6 +1023,24 @@ function VisaoDeMes({
                 )}
               </div>
               <div className="space-y-0.5">
+                {/* O fechamento vem ANTES dos compromissos e não conta no "+N":
+                    é o estado do dia, não mais um item dele. */}
+                {fechamentos.flatMap((f) => {
+                  const trecho = trechoNoDia(f, d);
+                  if (!trecho) return [];
+                  return [
+                    <div
+                      key={`fechamento-${f.id}`}
+                      data-testid={`fechamento-mes-${f.id}`}
+                      className="truncate rounded-sm px-1 py-0.5 text-[10px] leading-4 text-text-muted"
+                      style={{ background: HACHURA_DO_FECHAMENTO }}
+                    >
+                      {trecho.de === 0 && trecho.ate === 24 * 60
+                        ? t("Fechado")
+                        : `${rotuloDoTrecho(trecho, t)} ${t("Fechado")}`}
+                    </div>,
+                  ];
+                })}
                 {doDia.slice(0, 2).map((c) => {
                   const trilha = pessoas.find((p) => p.id === c.responsavelId)?.trilha ?? 1;
                   return (
@@ -755,10 +1088,17 @@ export function GradeDaAgenda({
   agora,
   pessoas,
   agendamentos,
+  fechamentos = [],
   onAbrirAgendamento,
   interacao,
+  foraDaAgenda,
+  ocultarFimDeSemana = false,
   className,
 }: {
+  /** FORK clinic: por dia (`yyyy-MM-dd`), o que não é horário livre de quem está em contexto. */
+  foraDaAgenda?: Record<string, ForaDaAgendaDoDia>;
+  /** FORK clinic (agenda S2 #67): a semana mostra só segunda a sexta. A visão de dia não muda. */
+  ocultarFimDeSemana?: boolean;
   visao: VisaoDaAgenda;
   /** O período que a grade mostra. */
   ancora: Date;
@@ -772,12 +1112,20 @@ export function GradeDaAgenda({
   agora: Date;
   pessoas: Pessoa[];
   agendamentos: Agendamento[];
+  /**
+   * As faixas fechadas em "Dias fora da rotina", já em instantes e já filtradas
+   * pela mesma pessoa que os agendamentos. Ausente = nenhuma (a vitrine).
+   */
+  fechamentos?: FechamentoDaGrade[];
   onAbrirAgendamento?: (id: string) => void;
   /** Ausente = grade só de leitura, como a vitrine a monta. Ver `InteracaoDaGrade`. */
   interacao?: InteracaoDaGrade;
   className?: string;
 }) {
-  const dias = visao === "dia" ? [ancora] : diasDaSemanaDe(ancora);
+  const dias =
+    visao === "dia"
+      ? [ancora]
+      : diasDaSemanaDe(ancora).filter((d) => !ocultarFimDeSemana || (d.getDay() !== 0 && d.getDay() !== 6));
 
   const gradeRef = React.useRef<HTMLDivElement>(null);
   const [proposta, setProposta] = React.useState<PropostaDeRemarcacao | null>(null);
@@ -988,7 +1336,7 @@ export function GradeDaAgenda({
       )}
     >
       {visao === "mes" ? (
-        <VisaoDeMes ancora={ancora} agora={agora} agendamentos={agendamentos} pessoas={pessoas} />
+        <VisaoDeMes ancora={ancora} agora={agora} agendamentos={agendamentos} fechamentos={fechamentos} pessoas={pessoas} />
       ) : (
         // A rolagem mora AQUI dentro, e não na página: `html, body` têm
         // `overflow-x: hidden` no globals.css, então uma grade que estourasse a
@@ -1002,6 +1350,7 @@ export function GradeDaAgenda({
                 dia={d}
                 agora={agora}
                 agendamentos={agendamentos}
+                fechamentos={fechamentos}
                 pessoas={pessoas}
                 onAbrir={onAbrirAgendamento}
                 destacado={visao === "semana" && isSameDay(d, agora)}
@@ -1009,6 +1358,7 @@ export function GradeDaAgenda({
                 interacao={interacao}
                 proposta={proposta}
                 arrasteDoCard={arrasteDoCard}
+                foraDaAgenda={foraDaAgenda?.[chaveDoDia(d)]}
               />
             ))}
           </div>

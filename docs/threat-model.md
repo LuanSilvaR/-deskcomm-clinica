@@ -213,6 +213,15 @@ Não avaliado por falta de execução/instância:
 - Se `next.config.ts` define CSP / security headers.
 - Storage: se o bucket `whatsapp-media` está privado de fato e se a expiração das signed
   URLs é adequada.
+- Storage, MEDIDO (fork clinic, migration 9024): `clinical-files` guarda fotos e anexos de
+  PRONTUÁRIO. Nasce `public = false`, com **zero policy** em `storage.objects` citando o
+  bucket — ninguém lê nem grava direto; só as rotas `app/api/v1/clinic/pacientes/[id]/anexos`
+  e `app/api/v1/clinic/anexos/[id]`, pelo `service_role`, DEPOIS de a linha de
+  `clinic_anexos` passar pela RLS (`fotos.ver`/`anexos.ver`, chaves clínicas, sem atalho de
+  platform admin). Download por URL assinada de **60 s**, auditado, com limite por pessoa.
+  Caminho `<org>/<paciente>/<uuid>.<ext>` conferido no banco. Tipo decidido pelos BYTES
+  (sem SVG/HTML). `tests/invariants/clinic-anexos-e-fotos.test.ts` reprova se o bucket
+  virar público ou ganhar policy.
 - Storage, e este é MEDIDO e DECLARADO em vez de "não avaliado": `brand-logos` (migration
   0158) é o **único bucket público** do repositório — os outros quatro nascem
   `public = false`. A exceção existe porque o logo é renderizado num `<img>` da tela de

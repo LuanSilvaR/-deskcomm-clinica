@@ -147,4 +147,15 @@ export {
   GoogleLogo,
   MapPin,
   ArrowsOutSimple,
+  // FORK clinic: módulos do menu da clínica (equipamentos, financeiro, comissões)
+  Wrench,
+  CurrencyCircleDollar,
+  Percent,
+  // FORK clinic (melhorias da Agenda): o selo de cada status leva ícone, não só cor.
+  DoorOpen,
+  Stethoscope,
+  UserMinus,
+  XCircle,
+  // FORK clinic (Início da recepção): cadastrar paciente.
+  UserPlus,
 } from "@phosphor-icons/react/dist/ssr";

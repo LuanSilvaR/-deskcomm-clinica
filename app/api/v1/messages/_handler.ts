@@ -47,6 +47,7 @@ import type { ListMessagesQuery, SendMessageInput } from "@/lib/schemas";
 import { sendTemplateForSession } from "@/lib/channels/meta/send-template-for-session";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { enderecoDaUltimaRecebida } from "@/lib/channels/endereco-da-ultima-recebida";
 import type { Message } from "@/lib/types/messaging";
 
 type SB = SupabaseClient;
@@ -175,7 +176,7 @@ export function origemDaMensagem(actor: Actor): "user" | "ai" | "automation" | "
 }
 
 const MSG_COLS =
-  "id, organization_id, conversation_id, channel_session_id, contact_id, external_id, type, direction, status, ack, error_code, error_message, body, media_url, media_mime, media_size_bytes, media_storage_path, sent_via, sent_by_user_id, sent_at, delivered_at, read_at, metadata, edited_at, revoked_at, reply_to_message_id, created_at";
+  "id, organization_id, conversation_id, channel_session_id, contact_id, external_id, type, direction, status, ack, error_code, error_message, body, media_url, media_mime, media_size_bytes, media_storage_path, media_derived_text, media_derived_status, sent_via, sent_by_user_id, sent_at, delivered_at, read_at, metadata, edited_at, revoked_at, reply_to_message_id, created_at";
 
 /**
  * `Actor.type` → o vocabulário de `messages.sent_via` (o CHECK da coluna:
@@ -666,12 +667,23 @@ export async function sendMessageHandler(
   // (`conversations.channel_session_id` é NOT NULL com FK ON DELETE RESTRICT),
   // e ainda assim mantido para não trocar o desfecho desse ramo defensivo.
   const adapter = getAdapter(c.channel_sessions?.provider ?? DEFAULT_CHANNEL_PROVIDER);
+  // Ficha com telefone extra: a resposta volta pelo número que a pessoa escreveu.
+  // A porta de canal decide quem tem isso. A organização vem de `ctx` (fonte
+  // confiável), não do corpo.
+  const ultimoRecebidoChatId = await enderecoDaUltimaRecebida(supabase, {
+    provider: c.channel_sessions?.provider,
+    isGroup: c.is_group,
+    organizationId: ctx.organization_id,
+    conversationId: c.id,
+    contactId: c.contact_id,
+  });
   const chatId = adapter.resolveRecipient({
     isGroup: c.is_group,
     groupChatId: c.group_chat_id,
     phoneNumber: c.contacts?.phone_number,
     waIdentity: c.contacts?.wa_identity,
     waLid: c.contacts?.wa_lid,
+    ultimoRecebidoChatId,
   });
 
   // Releitura no sink: o operador pode ter fechado o canal enquanto o modelo
@@ -815,6 +827,10 @@ export async function sendMessageHandler(
           : await sendTemplateForSession(supabase, {
               beforeSend: checkBoundary,
               organizationId: ctx.organization_id,
+              // A conexão desta conversa: com dois canais espelhando o mesmo
+              // modelo (oficial + parceiro), sem ela a busca acha duas linhas
+              // e o envio falha com template_lookup_failed.
+              channelSessionId: c.channel_session_id ?? null,
               // O número DESTA conexão: é por ele (com a organização) que a
               // credencial da tela é achada. Sem ele, a resolução não casaria
               // linha nenhuma e o envio voltaria ao ambiente.

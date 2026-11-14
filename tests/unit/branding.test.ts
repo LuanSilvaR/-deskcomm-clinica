@@ -810,6 +810,17 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "endpoint da plataforma que roda o crawler do Google Places (`lib/prospecting/provider.ts`). É o destino do request, com a chave da PRÓPRIA organização — trocar pelo domínio do revendedor quebraria a chamada, e esconder o nome não esconde para onde o dado vai.",
   },
+  // ── FORK clinic (#86): consulta de CEP da ficha do paciente ──
+  "viacep.com.br": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "serviço público de CEP que preenche o endereço da ficha do paciente (`lib/clinic/pacientes/cep.ts`), chamado pelo SERVIDOR com só o CEP. É o destino do request — trocar pelo domínio do revendedor faria a consulta não chegar a lugar nenhum.",
+  },
+  "brasilapi.com.br": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "fonte de reserva da mesma consulta de CEP (`lib/clinic/pacientes/cep.ts`), usada quando a ViaCEP falha ou demora. Mesmo motivo: é o destino da chamada, não texto de tela.",
+  },
   // ── identificador de fio: NÃO é destino de chamada nem texto de tela ──────
   "s.whatsapp.net": {
     categoria: "PROTOCOLO",
@@ -836,6 +847,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     categoria: "FORNECEDOR",
     motivo:
       "endpoint da API da DeepSeek (OpenAI-compatível) no registry de produção, no runtime de ensaio, no validador de chave e na prova de crédito. É o destino do request, não texto de interface; trocar pelo domínio do revendedor faria a chamada não chegar.",
+  },
+  "api.groq.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "FORK clinic (estoque E9): endpoint da API da Groq (OpenAI-compatível) no registry de produção, no runtime de ensaio, no gateway, no validador de chave e na prova de crédito. Destino do request, não texto de interface.",
   },
   "generativelanguage.googleapis.com": {
     categoria: "FORNECEDOR",
@@ -901,6 +917,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "painel onde o usuário gera a PRÓPRIA chave da DeepSeek (`ondePegarAChave` em lib/ai/pontos/provedores.ts). Endereço do fornecedor, não nosso.",
   },
+  "console.groq.com": {
+    categoria: "CONSOLE",
+    motivo:
+      "FORK clinic (estoque E9): painel onde o usuário gera a PRÓPRIA chave da Groq (`ondePegarAChave` em lib/ai/pontos/provedores.ts). Endereço do fornecedor, não nosso.",
+  },
   "aistudio.google.com": {
     categoria: "CONSOLE",
     motivo: "Google AI Studio — onde o usuário cria a chave do Gemini.",
@@ -946,6 +967,22 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     categoria: "PROTOCOLO",
     motivo:
       "sufixo do iCalUID gravado no Google Calendar do cliente (lib/agenda/google/evento.ts). Identificador de fio que reconhecemos meses depois — já congelado como PROTOCOLO pela catraca de marca.",
+  },
+  // FORK (card #160a): os endpoints dos provedores de cobrança (origem upstream).
+  "api.stripe.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint da API da Stripe (`lib/cobranca/provedores/stripe.ts`): é por onde o DONO da instalação cobra as empresas dele, com a chave da conta Stripe DELE. É o destino do request; trocar pelo domínio do revendedor faria a cobrança não chegar a lugar nenhum.",
+  },
+  "api.asaas.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint de PRODUÇÃO da API do Asaas (`lib/cobranca/provedores/asaas.ts`): Pix e boleto recorrentes com que o DONO da instalação cobra as empresas dele, com a chave da conta Asaas DELE. Destino do request, não marca.",
+  },
+  "api-sandbox.asaas.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint do SANDBOX do Asaas (`lib/cobranca/provedores/asaas.ts`): a chave `$aact_hmlg_` do dono só funciona aqui, e é com ela que ele testa antes de publicar.",
   },
 };
 
@@ -1093,6 +1130,7 @@ describe("catraca de host de terceiro no código que embarca", () => {
       "000000000000-xxxxxxxx.apps.googleusercontent.com",
       "aistudio.google.com",
       "console.anthropic.com",
+      "console.groq.com",
       "deskcomm.app",
       "meet.google.com",
       "meusistema.com",

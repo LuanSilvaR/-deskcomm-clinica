@@ -36,7 +36,7 @@ const FRASE_DA_LANDING = "atendimento e vendas por WhatsApp com agentes de IA";
 const TELAS: ReadonlyArray<readonly [string, string]> = [
   ["/app/inbox", "Inbox"],
   ["/app/crm", "CRM"],
-  ["/app/contacts", "Contatos"],
+  ["/app/contacts", "Pacientes"],
   ["/app/kanban", "Funis"],
   ["/app/team", "Equipe"],
   ["/app/tasks", "Tarefas"],

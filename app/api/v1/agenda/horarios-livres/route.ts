@@ -42,9 +42,11 @@ import {
   MAXIMO_DE_DIAS,
   type CodigoDeRecusaDaConsulta,
 } from "@/lib/agenda/consulta";
+import { DURACAO_MAXIMA_MIN, DURACAO_MINIMA_MIN } from "@/lib/agenda/duracao-escolhida";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
+import { escopoDaAgendaNoServidor } from "@/lib/clinic/agenda/escopo-no-servidor";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 const querySchema = z.object({
@@ -52,6 +54,19 @@ const querySchema = z.object({
   owner_user_id: z.string().uuid().optional(),
   de: z.string().datetime({ offset: true }),
   ate: z.string().datetime({ offset: true }),
+  /**
+   * A duração escolhida para este atendimento, em minutos (issue #3709).
+   *
+   * A faixa é a MESMA dos moldes (`lib/agenda/duracao-escolhida.ts`). Recusar
+   * um valor fora dela aqui é o que impede a tela de pedir 3 minutos e receber
+   * uma lista que a escrita vai barrar depois.
+   */
+  duracao_minutos: z.coerce
+    .number()
+    .int()
+    .min(DURACAO_MINIMA_MIN)
+    .max(DURACAO_MAXIMA_MIN)
+    .optional(),
 });
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -68,6 +83,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     owner_user_id: url.searchParams.get("owner_user_id") ?? undefined,
     de: url.searchParams.get("de") ?? undefined,
     ate: url.searchParams.get("ate") ?? undefined,
+    duracao_minutos: url.searchParams.get("duracao_minutos") ?? undefined,
   });
   if (!parsed.success) {
     return fail("validation_failed", t("Consulta inválida."), 422, {
@@ -91,16 +107,30 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const supabase = await createClient();
 
+  // FORK clinic (agenda por profissional, 9042): sem `agenda.ver_outros`, a
+  // disponibilidade consultada é a da própria agenda — pedir a de um colega
+  // responde 403, e não pedir dono deixa de cair no dono padrão do tipo.
+  const escopo = await escopoDaAgendaNoServidor(supabase, activeOrg.orgId, authz.user.id, parsed.data.owner_user_id ?? null);
+  if (!escopo.ok) {
+    return fail("forbidden_permission", traduzir("Você só pode ver a sua própria agenda.", authz.user.idioma), 403, {
+      requestId,
+      details: { permissao: "agenda.ver_outros" },
+    });
+  }
+
   // O miolo mora em `lib/agenda/consulta.ts` porque as ferramentas MCP precisam
   // do MESMO cálculo sem ter request nem cookie. Duas coletas dariam à IA e à
   // tela respostas diferentes sobre o mesmo horário.
   const consulta = await horariosLivresDaOrg(supabase, activeOrg.orgId, {
     eventTypeId: parsed.data.event_type_id,
     eventTypeSlug: null,
-    ownerUserId: parsed.data.owner_user_id ?? null,
+    ownerUserId: escopo.dono,
     de,
     ate,
     agora: new Date(),
+    // A duração escolhida na tela; ausente = a do serviço. O motor usa o valor
+    // para exigir o tamanho certo livre em cada slot (issue #3709).
+    duracaoMin: parsed.data.duracao_minutos ?? null,
   });
 
   if (!consulta.ok) {
@@ -112,6 +142,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       tipo_desativado: { codigo: "validation_failed", http: 422 },
       sem_responsavel: { codigo: "validation_failed", http: 422 },
       jornada_mal_configurada: { codigo: "validation_failed", http: 422 },
+      profissional_nao_habilitado: { codigo: "validation_failed", http: 422 },
       erro_interno: { codigo: "internal_error", http: 500 },
     };
     const { codigo, http } = status[consulta.codigo];

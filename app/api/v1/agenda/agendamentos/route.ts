@@ -17,6 +17,7 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { listaAgendamentos, type AgendamentoListado } from "@/lib/agenda/consulta";
+import { DURACAO_MAXIMA_MIN, DURACAO_MINIMA_MIN } from "@/lib/agenda/duracao-escolhida";
 import { donosDaAgenda } from "@/lib/agenda/donos-da-agenda";
 import { lerOcupacaoExterna } from "@/lib/agenda/ocupacao-externa";
 import { fail, ok } from "@/lib/api/wrappers";
@@ -34,6 +35,8 @@ type AgendamentoDaResposta = AgendamentoListado & { origem?: "google_sync" };
 import { ApiError } from "@/lib/api/types";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
+import { escopoDaAgendaNoServidor } from "@/lib/clinic/agenda/escopo-no-servidor";
+import { exigeChavesDaAgenda, type VerboDaAgenda } from "@/lib/clinic/agenda/guarda-da-agenda";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 import {
@@ -87,6 +90,17 @@ const marcarSchema = z.object({
   description: z.string().max(2000).optional(),
   location_details: z.string().max(300).optional(),
   guest_email: emailDoConvidado.optional(),
+  // FORK clinic (agenda S6b): encaixe sobre outro compromisso do profissional — motivo obrigatório.
+  encaixe: z.object({ motivo: z.string().trim().min(5).max(500) }).optional(),
+  /**
+   * A duração DESTE atendimento, em minutos (issue #3709) — ausente, a do tipo.
+   *
+   * A faixa é a dos moldes (`lib/agenda/duracao-escolhida.ts`), e recusar aqui
+   * é o que impede um valor absurdo de virar um bloco de três minutos ou de
+   * 25 horas. O handler confere de novo porque a ferramenta MCP o chama sem
+   * passar por este schema.
+   */
+  duration_minutes: z.number().int().min(DURACAO_MINIMA_MIN).max(DURACAO_MAXIMA_MIN).optional(),
 });
 
 const alterarSchema = z
@@ -95,7 +109,7 @@ const alterarSchema = z
     revision: z.number().int().positive().optional(),
     outcome_message_id: z.string().uuid().optional(),
     confirmation_next_at: z.string().datetime({ offset: true }).optional(),
-    /** Remarcar: o novo início. A duração vem do tipo, como na criação. */
+    /** Remarcar: o novo início. O FIM conserva o comprimento do bloco que já existe (#3709). */
     starts_at: z.string().datetime({ offset: true }).optional(),
     /**
      * `rescheduled` NÃO entra aqui: remarcar se pede mandando `starts_at`, e é
@@ -172,10 +186,29 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   const supabase = await createClient();
+
+  // FORK clinic (agenda por profissional, 9042): a leitura da AGENDA (recorte por
+  // período, sem contato nem lead) só alcança a agenda de colegas com
+  // `agenda.ver_outros`; sem ela, o dono é sempre quem pede. A listagem por
+  // contato/lead (ficha, Inbox) segue como no núcleo.
+  let dono = parsed.data.owner_user_id ?? null;
+  const leituraDaAgenda =
+    !parsed.data.contact_id && !parsed.data.lead_id && Boolean(parsed.data.dia || (parsed.data.de && parsed.data.ate));
+  if (leituraDaAgenda) {
+    const escopo = await escopoDaAgendaNoServidor(supabase, activeOrg.orgId, authz.user.id, dono);
+    if (!escopo.ok) {
+      return fail("forbidden_permission", t("Você só pode ver a sua própria agenda."), 403, {
+        requestId,
+        details: { permissao: "agenda.ver_outros" },
+      });
+    }
+    dono = escopo.dono;
+  }
+
   const resultado = await listaAgendamentos(supabase, activeOrg.orgId, {
     contactId: parsed.data.contact_id ?? null,
     leadId: parsed.data.lead_id ?? null,
-    ownerUserId: parsed.data.owner_user_id ?? null,
+    ownerUserId: dono,
     dia: parsed.data.dia ?? null,
     de: parsed.data.de ?? null,
     ate: parsed.data.ate ?? null,
@@ -260,6 +293,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       });
     }
     for (const e of blocos) {
+      // FORK clinic: com um dono no recorte, só a ocupação dele.
+      if (leituraDaAgenda && dono && e.donoId !== dono) continue;
       externos.push({
         id: e.id,
         // Rótulo, NUNCA o título do evento: a tabela tem a coluna `title` e esta
@@ -289,21 +324,21 @@ export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  return despachar(req, marcarSchema, marcarAgendamentoHandler, 201);
+  return despachar(req, marcarSchema, marcarAgendamentoHandler, 201, "marcar");
 }
 
 export async function PATCH(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  return despachar(req, alterarSchema, alterarAgendamentoHandler, 200);
+  return despachar(req, alterarSchema, alterarAgendamentoHandler, 200, "alterar");
 }
 
 export async function DELETE(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
-  return despachar(req, cancelarSchema, cancelarAgendamentoHandler, 200);
+  return despachar(req, cancelarSchema, cancelarAgendamentoHandler, 200, "cancelar");
 }
 
 /**
@@ -322,6 +357,7 @@ async function despachar<T>(
     input: T,
   ) => Promise<Record<string, unknown>>,
   status: 200 | 201,
+  verbo: VerboDaAgenda,
 ): Promise<Response> {
   const requestId = randomUUID();
 
@@ -339,6 +375,14 @@ async function despachar<T>(
   }
 
   const supabase = await createClient();
+  // FORK clinic (agenda S6a): além do papel, a CHAVE da ação (agenda.marcar/remarcar/cancelar/registrar_desfecho).
+  const negado = await exigeChavesDaAgenda(
+    supabase,
+    { organizationId: activeOrg.orgId, userId: user.id, role: activeOrg.role, idioma: user.idioma, requestId },
+    verbo,
+    parsed.data,
+  );
+  if (negado) return negado;
   try {
     const resultado = await handler(
       supabase,

@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { EntradaDaAgenda } from "@/components/agenda/EntradaDaAgenda";
 import { EnderecoDaMarcacao } from "@/components/agenda/EnderecoDaMarcacao";
@@ -16,11 +18,11 @@ import { AvisoDaConexaoGoogle } from "./_components/AvisoDaConexaoGoogle";
 import { CartaoDaConexaoGoogle } from "./_components/CartaoDaConexaoGoogle";
 
 import { AgendaInterativa } from "@/components/agenda/AgendaInterativa";
-import { FiltroDePessoas } from "@/components/agenda/FiltroDePessoas";
 import { HistoricoDaAgenda } from "@/components/agenda/HistoricoDaAgenda";
 import type { Agendamento, HorarioLivre, VisaoDaAgenda } from "@/components/agenda/tipos";
 import { EmptyAgenda } from "@/components/empty";
 import { rotuloDoLocal } from "@/lib/agenda/locais";
+import { duracaoEscolhidaValida } from "@/lib/agenda/duracao-escolhida";
 import { ancoraAoFecharPainel } from "@/lib/agenda/ancora-depois-de-marcar";
 import { ancoraLocalDoDia } from "@/lib/agenda/semana-semente";
 import { janelaDoMesVisivel } from "@/lib/agenda/janela-do-mes-visivel";
@@ -28,17 +30,39 @@ import { resolverResponsavelDoPainel } from "@/lib/agenda/responsavel-do-painel"
 import { useVinculoDaMarcacao } from "@/lib/agenda/vinculo-da-marcacao";
 import { Button } from "@/components/ui/button";
 import { PainelDeMarcacao } from "@/components/agenda/PainelDeMarcacao";
+import { EscolhaDoProfissional, useRegrasDeProfissionaisLigadas } from "@/components/clinic/EscolhaDoProfissional";
+import { BarraDeFiltrosDaAgenda, useFiltrosDaAgenda } from "@/components/clinic/agenda/BarraDeFiltrosDaAgenda";
+import { ProvedorDaInfoDaClinica, useInfoDaClinica } from "@/components/clinic/agenda/InfoDaClinicaNaAgenda";
+import { ListaDoDiaDaAgenda } from "@/components/clinic/agenda/ListaDoDiaDaAgenda";
+import { ProcedimentosDaMarcacao, salvarProcedimentosDoAgendamento } from "@/components/clinic/agenda/ProcedimentosDaMarcacao";
+import { EstadoDosDias } from "@/components/clinic/agenda/EstadoDosDias";
+import { JanelaDeAtalhos, useAtalhosDaAgenda, useFavoritosDaAgenda, usePreferenciasDaAgenda } from "@/components/clinic/agenda/AtalhosDaAgenda";
+import { ordenarComFavoritos, vizinho } from "@/lib/clinic/agenda/produtividade";
+import { CabecalhoDoProfissional } from "@/components/clinic/agenda/SeletorDeProfissional";
+import type { ForaDaAgendaDoDia } from "@/components/agenda/GradeDaAgenda";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useContextoDaAgenda, useDisponibilidadeDaAgenda } from "@/hooks/clinic/useContextoDaAgenda";
+import { tiposDoProfissional, type ContextoDaUrl } from "@/lib/clinic/agenda/contexto-da-agenda";
+import { algumFiltroAtivo, passaNosFiltros } from "@/lib/clinic/agenda/filtros-da-agenda";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAgendamentos } from "@/hooks/agenda/useAgendamentos";
+import { useFechamentosDaGrade } from "@/hooks/agenda/useFechamentosDaGrade";
 import { useHorariosLivres } from "@/hooks/agenda/useHorariosLivres";
-import { useMarcarAgendamento } from "@/hooks/agenda/useMarcarAgendamento";
+import { useMarcarAgendamento, type NovoAgendamento } from "@/hooks/agenda/useMarcarAgendamento";
+// FORK clinic (agenda S6b)
+import { useQuery } from "@tanstack/react-query";
+import { HorarioOcupadoEEncaixe, type HorarioOcupado } from "@/components/clinic/agenda/HorarioOcupadoEEncaixe";
+import { ApiError } from "@/lib/api/types";
+import { apiClient } from "@/lib/api/client";
 import {
   useCancelarAgendamento,
   useRegistrarDesfecho,
   useRemarcarAgendamento,
 } from "@/hooks/agenda/useRemarcarAgendamento";
 import { usePessoasDaAgenda } from "@/hooks/agenda/usePessoasDaAgenda";
-import { CalendarPlus, CaretLeft, CaretRight } from "@/lib/ui/icons";
+import { CalendarPlus, CaretLeft, CaretRight, Lock } from "@/lib/ui/icons";
+import { FormularioDeBloqueio, type ValoresIniciaisDoBloqueio } from "@/components/clinic/FormularioDeBloqueio";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const VISOES: Array<{ id: VisaoDaAgenda; rotulo: string }> = [
@@ -72,6 +96,8 @@ const VISOES: Array<{ id: VisaoDaAgenda; rotulo: string }> = [
  * `tests/unit/telas-sem-dado-de-mentira.test.ts` impede que alguém religue os
  * imports sem querer.
  */
+const SEM_PERMISSOES: readonly string[] = [];
+
 export function AgendaClient({
   fusoDeApresentacao,
   hojeNaOrganizacao,
@@ -83,7 +109,13 @@ export function AgendaClient({
   linkDeConfiguracaoDoGoogle,
   tiposIniciais,
   agendamentosIniciais,
+  permissoes = SEM_PERMISSOES,
   podeMarcar,
+  orgId,
+  filtrosDaUrl = "",
+  contextoDaUrl = { profissional: null, data: null, visao: null },
+  tituloLivreLigado = false,
+  duracaoNaMarcacaoLigada = false,
 }: {
   fusoDeApresentacao: string | null;
   /**
@@ -121,7 +153,25 @@ export function AgendaClient({
    * com a recusa chegando DEPOIS do gesto, que é o defeito que este nome veio
    * fechar. Esconder aqui é cortesia: quem decide segue sendo a rota.
    */
+  /** FORK clinic (agenda S5): permissões efetivas, lidas no servidor. */
+  permissoes?: readonly string[];
   podeMarcar: boolean;
+  /** FORK clinic: a organização (tempo real) e os filtros que vieram na URL. */
+  orgId?: string;
+  filtrosDaUrl?: string;
+  /**
+   * FORK clinic (agenda por profissional): `profissional`, `data` e `visao` que
+   * vieram na URL — a agenda abre neles (F5, link interno, voltar do navegador).
+   */
+  contextoDaUrl?: ContextoDaUrl;
+  /** FORK clinic (#81): `settings.clinic.titulo_livre` — o campo "Título do compromisso" só aparece ligado. */
+  tituloLivreLigado?: boolean;
+  /**
+   * FORK clinic (#80): `settings.clinic.duracao_na_marcacao` — o campo "Duração
+   * (minutos)" só aparece ligado. Desligado, a marcação usa a duração do tipo,
+   * como antes. Remarcar preserva o comprimento do bloco nos dois casos.
+   */
+  duracaoNaMarcacaoLigada?: boolean;
 }) {
   const localeDaData = useLocaleDeData();
   const t = useT();
@@ -190,7 +240,25 @@ export function AgendaClient({
   // vazia) = a pessoa editou, e o tipo novo não pode devolver o que ela apagou.
   const [enderecoEditado, setEnderecoEditado] = React.useState<string | null>(null);
   const [observacao, setObservacao] = React.useState("");
+  // FORK clinic (agenda S3 #68): procedimentos do novo agendamento, na ordem escolhida.
+  const [procedimentosDaMarcacao, setProcedimentosDaMarcacao] = React.useState<string[]>([]);
+  /**
+   * O TÍTULO LIVRE DO COMPROMISSO (#3766) — a agenda também serve para
+   * atendimento externo, e "OS 1234" ou "Atendimento fulano" é o que quem olha
+   * a grade precisa ler.
+   *
+   * ⚠️ A COLUNA JÁ EXISTIA (`calendar_appointments.title`), e a rota já a
+   * aceitava: o que faltava era o CAMPO. Vazio manda `undefined`, e aí a
+   * decisão de hoje continua valendo — `title: input.title ?? tipo.name`, num
+   * lugar só (`app/api/v1/agenda/agendamentos/_handler.ts:508`). É de propósito
+   * que a tela NÃO repita o nome do tipo: duas cópias da mesma regra divergem
+   * na primeira vez que alguém mudar uma delas.
+   */
+  const [tituloLivre, setTituloLivre] = React.useState("");
   const marcar = useMarcarAgendamento();
+  // FORK clinic (agenda S6b): o 409 de horário ocupado e o instante que o provocou.
+  const [ocupado, setOcupado] = React.useState<{ instante: string; duracaoMin?: number; dados: HorarioOcupado } | null>(null);
+  const [erroDoEncaixe, setErroDoEncaixe] = React.useState<string | null>(null);
   const remarcar = useRemarcarAgendamento();
   const cancelar = useCancelarAgendamento();
   const desfecho = useRegistrarDesfecho();
@@ -201,9 +269,36 @@ export function AgendaClient({
   // tela. As categorias existiam no banco, no seed e na API — e a tela oferecia
   // uma. Achado escrevendo a spec de marcar, não lendo o código.
   const [tipoId, setTipoId] = React.useState<string | null>(() => tiposIniciais[0]?.id ?? null);
-  const tipo = tiposIniciais.find((t) => t.id === tipoId) ?? tiposIniciais[0] ?? null;
+  // FORK clinic: com as regras de profissionais ligadas, QUEM atende é escolhido
+  // entre os habilitados do tipo (`EscolhaDoProfissional`). Desligadas, fica
+  // `null` e tudo segue com o dono padrão do tipo, como no upstream.
+  const [profissionalClinic, setProfissionalClinic] = React.useState<string | null>(null);
+  // FORK clinic (E1.4): a porta do "Dia por profissional" só aparece com as regras ligadas.
+  const regrasDeProfissionais = useRegrasDeProfissionaisLigadas();
+  // FORK clinic (agenda S5): o que as permissões desenham nesta tela — rótulo
+  // "Minha agenda", a porta da recepção e o "Bloquear horário" (PF18).
+  const can = React.useCallback((chave: string) => permissoes.includes(chave), [permissoes]);
+  const [bloqueando, setBloqueando] = React.useState<ValoresIniciaisDoBloqueio | null>(null);
+  /**
+   * FORK clinic (agenda por profissional): UM profissional é o contexto da tela.
+   * Tudo abaixo — compromissos, horários livres, jornada, bloqueios e o que se
+   * marca — é dele. Ele vem da URL, da memória deste navegador ou da própria
+   * agenda de quem está logado (`useContextoDaAgenda`).
+   */
+  const contexto = useContextoDaAgenda({ orgId: orgId ?? "", usuarioId, daUrl: contextoDaUrl.profissional });
+  const donoDaAgenda = contexto.profissionalId;
+  // Os tipos que ESTE profissional atende: oferecer um tipo cuja especialidade
+  // ele não tem travaria a grade com "não consegui carregar os horários".
+  const tiposDoContexto = React.useMemo(
+    () => tiposDoProfissional(tiposIniciais, contexto.profissional),
+    [tiposIniciais, contexto.profissional],
+  );
+  const tipo = tiposDoContexto.find((t) => t.id === tipoId) ?? tiposDoContexto[0] ?? null;
+  // Quem atende o que se marca: o profissional em contexto; sem contexto (clínica
+  // sem lista de profissionais), a escolha do painel, como antes.
+  const profissionalDaMarcacao = donoDaAgenda ?? profissionalClinic;
   const endereco = enderecoEditado ?? tipo?.localDetalhes ?? "";
-  const [visao, setVisao] = React.useState<VisaoDaAgenda>("semana");
+  const [visao, setVisao] = React.useState<VisaoDaAgenda>(contextoDaUrl.visao ?? "semana");
   /**
    * No CELULAR a agenda abre no DIA, não na semana.
    *
@@ -221,10 +316,36 @@ export function AgendaClient({
   React.useEffect(() => {
     // O aviso da regra é justo em geral; aqui trocar a visão É o ponto do efeito.
     // A largura só existe no cliente, e decidir antes divergiria da hidratação.
+    // Visão pedida na URL vence: é escolha de quem mandou o link ou recarregou.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (window.matchMedia("(max-width: 767px)").matches) setVisao("dia");
+    if (!contextoDaUrl.visao && window.matchMedia("(max-width: 767px)").matches) setVisao("dia");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só na montagem, como antes
   }, []);
-  const [isolada, setIsolada] = React.useState<string | null>(null);
+  // FORK clinic (melhorias da Agenda): filtros da clínica e o modo da visão Dia.
+  const { filtros, mudar: mudarFiltro, limpar: limparFiltros } = useFiltrosDaAgenda(filtrosDaUrl);
+  // FORK clinic (agenda S7 #70): favoritos, ‹ ›, preferências e atalhos.
+  const { favoritos, alternar: alternarFavorito } = useFavoritosDaAgenda(orgId ?? "", usuarioId);
+  const { prefs, lidas: prefsLidas, mudar: mudarPrefs } = usePreferenciasDaAgenda(orgId ?? "", usuarioId);
+  const [atalhosAbertos, setAtalhosAbertos] = React.useState(false);
+  const listaOrdenada = React.useMemo(() => ordenarComFavoritos(contexto.lista, favoritos), [contexto.lista, favoritos]);
+  const irParaVizinho = React.useCallback(
+    (direcao: -1 | 1) => {
+      if (!contexto.podeVerOutros) return;
+      const alvo = vizinho(listaOrdenada, contexto.profissional?.user_id ?? null, direcao);
+      if (alvo) contexto.trocar(alvo.user_id);
+    },
+    [contexto, listaOrdenada],
+  );
+  const prefsAplicadas = React.useRef(false);
+  React.useEffect(() => {
+    if (!prefsLidas || prefsAplicadas.current) return;
+    prefsAplicadas.current = true;
+    // A URL vence (link compartilhado, recarga): a preferência só vale sem ela.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- preferência do navegador, lida depois da hidratação
+    if (!contextoDaUrl.visao && prefs.visao) setVisao(prefs.visao);
+    if (!prefs.mostrarFimDeSemana && !new URLSearchParams(filtrosDaUrl).has("fds")) mudarFiltro({ fds: "0" });
+  }, [prefsLidas, prefs, contextoDaUrl.visao, filtrosDaUrl, mudarFiltro]);
+  const [diaEmLista, setDiaEmLista] = React.useState(false);
   /**
    * A ÂNCORA NASCE DO RELÓGIO DA ORGANIZAÇÃO, não do navegador.
    *
@@ -240,7 +361,22 @@ export function AgendaClient({
    * `ancoraLocalDoDia` transforma a data numa `Date` local ao meio-dia — a doze
    * horas de qualquer borda de horário de verão.
    */
-  const [ancora, setAncora] = React.useState(() => ancoraLocalDoDia(hojeNaOrganizacao));
+  const [ancora, setAncora] = React.useState(() => ancoraLocalDoDia(contextoDaUrl.data ?? hojeNaOrganizacao));
+
+  // FORK clinic (agenda por profissional): profissional, data e visão na URL —
+  // F5 não perde o contexto e o voltar do navegador leva de volta. `replaceState`,
+  // como os filtros: o App Router acompanha sem pedir a página ao servidor, e as
+  // outras chaves (`compromisso`, filtros) ficam como estão.
+  React.useEffect(() => {
+    const url = new URLSearchParams(window.location.search);
+    if (donoDaAgenda) url.set("profissional", donoDaAgenda);
+    url.set("data", format(ancora, "yyyy-MM-dd"));
+    url.set("visao", visao);
+    const destino = `${window.location.pathname}?${url}`;
+    if (destino !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState(window.history.state, "", destino);
+    }
+  }, [donoDaAgenda, ancora, visao]);
 
   // AS PESSOAS SÃO REAIS, e vêm da lista MÍNIMA da agenda — `/api/v1/agenda/pessoas`
   // (`ROTA_DA_LISTA_DE_PESSOAS`, `lib/agenda/lista-de-pessoas.ts`), papel mínimo
@@ -269,6 +405,20 @@ export function AgendaClient({
   // A estabilidade continua: a chave do React Query só muda quando o mês, o
   // tipo ou a abertura mudam — nunca a cada render. `new Date()` aqui corre
   // uma vez por essas mudanças, não no corpo.
+  /**
+   * A DURAÇÃO ESCOLHIDA NA MARCAÇÃO (issue #3709) — `null` = a do serviço.
+   *
+   * Vive AQUI, e não no painel, porque é ela que entra na chave da consulta de
+   * horários: quem oferece os slots é a rota. O painel é quem a escolhe e a
+   * anuncia (`onDuracaoMudar`), inclusive ao abrir — é assim que os dois lados
+   * nunca discordam sobre "para quanto tempo" a lista foi calculada.
+   */
+  const [duracaoEscolhida, setDuracaoEscolhida] = React.useState<number | null>(null);
+  // Trocar o serviço volta ao padrão DELE: a duração escolhida era do outro, e
+  // não deve nem por um render viajar na consulta do serviço novo.
+  React.useEffect(() => {
+    setDuracaoEscolhida(null);
+  }, [tipoId]);
   // Mesmo relógio da grade: o mini-calendário abre no mês da ORGANIZAÇÃO.
   const [mesDoPainel, setMesDoPainel] = React.useState(() =>
     startOfMonth(ancoraLocalDoDia(hojeNaOrganizacao)),
@@ -289,28 +439,10 @@ export function AgendaClient({
     return { de: de.toISOString(), ate: ate.toISOString() };
   }, [mesDoPainel, agoraDaAbertura]);
 
-  // Os horários vêm da rota real — a mesma que a IA usa, então tela e agente
-  // oferecem exatamente os mesmos horários. Só consulta quando o painel abre.
-  // `isError` junto, e não só `data`: sem ele a tela MENTE por default. O
-  // `publicouHorarios={horarios?.publicou_horarios ?? true}` abaixo transforma
-  // "a consulta falhou" em "publicou, só não tem vaga" — dias travados e aviso
-  // nenhum, que é exatamente o que uma instalação fresca produz (a rota devolve
-  // 422 porque ninguém está em `attendant_availability`).
-  const { data: horarios, isError: horariosFalharam } = useHorariosLivres(
-    marcando && tipo
-      ? { event_type_id: tipo.id, de: janelaDeBusca.de, ate: janelaDeBusca.ate }
-      : null,
-  );
+  // A consulta de horários mora MAIS ABAIXO (#3709): ela precisa da duração do
+  // compromisso que está sendo remarcado, que só existe depois da lista de
+  // agendamentos. Movê-la para lá é o que permite a lista e o PATCH concordarem.
 
-  const horariosPorDia = React.useMemo(() => {
-    const mapa: Record<string, Array<{ instante: string; rotulo: string }>> = {};
-    for (const s of horarios?.slots ?? []) {
-      const d = new Date(s.inicio);
-      const chave = format(d, "yyyy-MM-dd");
-      (mapa[chave] ??= []).push({ instante: s.inicio, rotulo: format(d, "HH:mm") });
-    }
-    return mapa;
-  }, [horarios]);
 
   // OS AGENDAMENTOS SÃO REAIS, e agora TAMBÉM se atualizam sem recarregar.
   //
@@ -340,6 +472,10 @@ export function AgendaClient({
         : addDays(inicio, visao === "semana" ? 7 : 1);
     return { de: inicio.toISOString(), ate: fim.toISOString() };
   }, [visao, ancora]);
+  const recorteDoDono = React.useMemo(
+    () => ({ ...recorteDaGrade, ...(donoDaAgenda ? { owner_user_id: donoDaAgenda } : {}) }),
+    [recorteDaGrade, donoDaAgenda],
+  );
 
   // A janela que o SERVIDOR pintou. Sem esta comparação, navegar para outra
   // semana mostraria os compromissos DESTA por um instante — o fallback estaria
@@ -359,22 +495,120 @@ export function AgendaClient({
   const naJanelaDoServidor =
     recorteDaGrade.de === recorteDoServidor.de && recorteDaGrade.ate === recorteDoServidor.ate;
 
-  const { data: agendamentosVivos } = useAgendamentos(recorteDaGrade);
+  const { data: agendamentosVivos, isLoading: agendaCarregando } = useAgendamentos(
+    contexto.carregando ? null : recorteDoDono,
+  );
   const todos: Agendamento[] =
     agendamentosVivos ?? (naJanelaDoServidor ? agendamentosIniciais : []);
 
+  // FORK clinic: status da visita, confirmação, faltas e fichas da janela.
+  const { data: infoDaClinica } = useInfoDaClinica(orgId ?? "", recorteDaGrade, filtros.q);
   const agendamentos = React.useMemo(
-    () => (isolada === null ? todos : todos.filter((a) => a.responsavelId === isolada)),
-    [isolada, todos],
+    () =>
+      (donoDaAgenda === null ? todos : todos.filter((a) => a.responsavelId === donoDaAgenda)).filter((a) =>
+        passaNosFiltros(a, filtros, infoDaClinica),
+      ),
+    [donoDaAgenda, todos, filtros, infoDaClinica],
   );
+  // FORK clinic: jornada e bloqueios do profissional em contexto, por dia.
+  const { data: disponibilidade } = useDisponibilidadeDaAgenda(
+    donoDaAgenda && visao !== "mes"
+      ? {
+          profissional: donoDaAgenda,
+          de: format(new Date(recorteDaGrade.de), "yyyy-MM-dd"),
+          ate: format(addDays(new Date(recorteDaGrade.ate), -1), "yyyy-MM-dd"),
+        }
+      : null,
+  );
+  const foraDaAgenda = React.useMemo(() => {
+    if (!disponibilidade) return undefined;
+    const mapa: Record<string, ForaDaAgendaDoDia> = {};
+    for (const d of disponibilidade.dias) {
+      mapa[d.dia] = { jornada: d.jornada, fora: d.fora_da_jornada, bloqueios: d.bloqueios };
+    }
+    return mapa;
+  }, [disponibilidade]);
+  const especialidades = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of Object.values(infoDaClinica?.profissionais ?? {})) for (const e of f.especialidades) m.set(e.id, e.nome);
+    return [...m].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  }, [infoDaClinica]);
+
+  /**
+   * A DURAÇÃO DO COMPROMISSO QUE ESTÁ SENDO REMARCADO (#3709).
+   *
+   * Remarcar move o bloco e PRESERVA o comprimento (`_handler.ts` passou a ler
+   * `ends_at - starts_at`). A lista ao lado tem de ser calculada para o MESMO
+   * comprimento, senão ela oferece um horário que o PATCH recusa: um atendimento
+   * de 90 minutos num serviço de 30 veria slots de 30 e levaria 422 em cima do
+   * primeiro clique. `null` = não sei (linha sem fim, fora da faixa), e aí vale
+   * o padrão do serviço, como antes.
+   */
+  const duracaoDoCompromisso = React.useMemo(() => {
+    if (!remarcandoId) return null;
+    const alvo = agendamentos.find((a) => a.id === remarcandoId);
+    if (!alvo) return null;
+    const minutos = Math.round(
+      (new Date(alvo.termina).getTime() - new Date(alvo.comeca).getTime()) / 60_000,
+    );
+    return duracaoEscolhidaValida(minutos) ? minutos : null;
+  }, [remarcandoId, agendamentos]);
+
+  // Os horários vêm da rota real — a mesma que a IA usa, então tela e agente
+  // oferecem exatamente os mesmos horários. Só consulta quando o painel abre.
+  // `isError` junto, e não só `data`: sem ele a tela MENTE por default. O
+  // `publicouHorarios={horarios?.publicou_horarios ?? true}` abaixo transforma
+  // "a consulta falhou" em "publicou, só não tem vaga" — dias travados e aviso
+  // nenhum, que é exatamente o que uma instalação fresca produz (a rota devolve
+  // 422 porque ninguém está em `attendant_availability`).
+  const { data: horarios, isError: horariosFalharam } = useHorariosLivres(
+    marcando && tipo
+      ? {
+          event_type_id: tipo.id,
+          de: janelaDeBusca.de,
+          ate: janelaDeBusca.ate,
+          ...(profissionalDaMarcacao ? { owner_user_id: profissionalDaMarcacao } : {}),
+          // A DURAÇÃO ENTRA NA CONSULTA (#3709): quem decide o que está livre é
+          // o motor, no servidor, e ele precisa saber quanto tempo cada slot
+          // exige. Remarcando, é o comprimento do bloco que vai ser movido;
+          // marcando, é a escolha da tela (ou o padrão do serviço). Sem isso a
+          // lista e a escrita discordariam sobre o mesmo horário.
+          duracao_minutos: duracaoDoCompromisso ?? duracaoEscolhida ?? tipo.duracaoMin,
+        }
+      : null,
+  );
+
+  const horariosPorDia = React.useMemo(() => {
+    const mapa: Record<string, Array<{ instante: string; rotulo: string }>> = {};
+    for (const s of horarios?.slots ?? []) {
+      const d = new Date(s.inicio);
+      const chave = format(d, "yyyy-MM-dd");
+      (mapa[chave] ??= []).push({ instante: s.inicio, rotulo: format(d, "HH:mm") });
+    }
+    return mapa;
+  }, [horarios]);
 
   // A GRADE não mostra cancelado — ele fica só na aba "Cancelados" do
   // histórico, que lê `agendamentos` (cheio) e o separa sozinha em `separar()`.
   // Mesma fonte, dois recortes: a grade responde "o que está de pé", o
   // histórico responde "o que aconteceu", cancelado incluso.
+  // FORK clinic (agenda S2 #67): "+ Mais filtros › Mostrar cancelados na grade" traz o cancelado de volta.
   const agendamentosDaGrade = React.useMemo(
-    () => agendamentos.filter((a) => a.situacao !== "cancelled"),
-    [agendamentos],
+    () => (filtros.cancelados ? agendamentos : agendamentos.filter((a) => a.situacao !== "cancelled")),
+    [agendamentos, filtros.cancelados],
+  );
+
+  // As faixas FECHADAS em "Dias fora da rotina" — e pela MESMA pessoa isolada que
+  // os agendamentos: isolar a Ana e ver o fechamento do Bruno faria a grade dela
+  // parecer fechada sem estar.
+  // FORK: a grade do fork desenha no horário do navegador, então o recorte de dias
+  // da consulta usa o mesmo fuso; a pessoa isolada é o `donoDaAgenda` do fork.
+  const fusoDoNavegador = React.useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  const { data: fechamentosVivos } = useFechamentosDaGrade(recorteDaGrade, fusoDoNavegador);
+  const fechamentosDaGrade = React.useMemo(
+    () =>
+      (fechamentosVivos ?? []).filter((f) => !donoDaAgenda || f.responsavelId === donoDaAgenda),
+    [fechamentosVivos, donoDaAgenda],
   );
 
   /**
@@ -394,6 +628,20 @@ export function AgendaClient({
   );
 
   const passo = visao === "mes" ? 30 : visao === "semana" ? 7 : 1;
+  // FORK clinic (agenda S7 #70): N novo · T hoje · D/S/M visão · [ ] profissional · ? ajuda.
+  useAtalhosDaAgenda((acao) => {
+    if (acao === "novo") {
+      if (podeMarcar) {
+        setHorarioEscolhido(null);
+        setRemarcandoId(null);
+        abrirMarcacao();
+      }
+    } else if (acao === "hoje") setAncora(ancoraLocalDoDia(hojeNaOrganizacao));
+    else if (acao === "dia" || acao === "semana" || acao === "mes") setVisao(acao);
+    else if (acao === "anterior") irParaVizinho(-1);
+    else if (acao === "seguinte") irParaVizinho(1);
+    else if (acao === "ajuda") setAtalhosAbertos(true);
+  });
   // O PADRÃO de formato também muda de idioma, não só o locale: em português
   // "d 'de' MMMM" tem a preposição escrita à mão dentro do padrão, e em
   // espanhol ela também é "de" — mas quem garante isso é a chave no dicionário,
@@ -406,7 +654,86 @@ export function AgendaClient({
         ? `${format(startOfWeek(ancora, { weekStartsOn: 0 }), t("d 'de' MMM"), { locale: localeDaData })} — ${format(addDays(startOfWeek(ancora, { weekStartsOn: 0 }), 6), t("d 'de' MMM"), { locale: localeDaData })}`
         : format(ancora, t("EEEE, d 'de' MMMM"), { locale: localeDaData });
 
+  // FORK clinic (agenda S6b): marcar (e, com `encaixe`, encaixar) no instante. Um só
+  // lugar monta o corpo, para o "Encaixar" reenviar EXATAMENTE a marcação recusada.
+  // A duração escolhida no painel (#80/#3709) vai junto, também no reenvio do encaixe.
+  const marcarEm = (instante: string, encaixe?: { motivo: string }, duracaoMin?: number) => {
+    if (!tipo) return Promise.reject(new Error(t("Escolha um tipo de agendamento.")));
+    // FORK clinic: agendamento sem paciente não existe — a rota recusa também.
+    if (!contactId) return Promise.reject(new Error(t("Escolha o paciente antes de confirmar.")));
+    const corpo: NovoAgendamento = {
+      event_type_id: tipo.id,
+      ...(profissionalDaMarcacao ? { owner_user_id: profissionalDaMarcacao } : {}),
+      contact_id: contactId || undefined,
+      conversation_id: conversationId || undefined,
+      starts_at: instante,
+      ...(duracaoMin !== undefined ? { duration_minutes: duracaoMin } : {}),
+      guest_email: emailConvidadoLimpo || undefined,
+      location_details: endereco.trim(),
+      description: observacao.trim() || undefined,
+      // TÍTULO LIVRE (#3766/#81): vazio fica FORA do corpo e a rota grava o nome do tipo.
+      ...(tituloLivreLigado && tituloLivre.trim() ? { title: tituloLivre.trim() } : {}),
+      ...(encaixe ? { encaixe } : {}),
+    };
+    const procedimentosEscolhidos = procedimentosDaMarcacao;
+    return marcar.mutateAsync(corpo).then(
+      async (r) => {
+        // FORK clinic (agenda S3 #68): grava os procedimentos com o id que a marcação devolveu.
+        // Falhar aqui não desfaz a marcação: o agendamento existe; avisamos e seguimos.
+        if (procedimentosEscolhidos.length && r?.data?.id) {
+          await salvarProcedimentosDoAgendamento(r.data.id, procedimentosEscolhidos).catch(() => {
+            toast.error(t("O agendamento foi marcado, mas os procedimentos não foram salvos. Abra o agendamento e tente de novo."));
+          });
+        }
+        setProcedimentosDaMarcacao([]);
+        setOcupado(null);
+        setErroDoEncaixe(null);
+        setEmailConvidado("");
+        setEnderecoEditado(null);
+        setObservacao("");
+        setTituloLivre("");
+        // Guardado para o fechamento saber para onde levar a grade.
+        setMarcadoEm(instante);
+        return r;
+      },
+      (err: unknown) => {
+        if (err instanceof ApiError && err.status === 409 && err.code === "agenda_horario_ocupado") {
+          const d = err.details as Partial<HorarioOcupado> | undefined;
+          setOcupado({
+            instante,
+            duracaoMin,
+            dados: { agendamentos: d?.agendamentos ?? [], pode_encaixar: d?.pode_encaixar === true },
+          });
+        } else if (encaixe) {
+          setErroDoEncaixe(
+            err instanceof ApiError && err.status >= 400 && err.status < 500 ? err.message : t("Não foi encaixado. Tente de novo."),
+          );
+        }
+        throw err;
+      },
+    );
+  };
+
+  // FORK clinic (agenda S6b): as marcas "Encaixe" da janela visível. Mesma raiz de chave
+  // (`["agenda", ...]`) da lista, então marcar/encaixar invalida as duas.
+  const { data: marcasDeEncaixe } = useQuery({
+    queryKey: ["agenda", "encaixes", recorteDaGrade.de, recorteDaGrade.ate],
+    enabled: !contexto.carregando && can("agenda.ver"),
+    retry: false,
+    queryFn: async () =>
+      (
+        await apiClient.get<{ data: { encaixes: Array<{ appointment_id: string }> } }>(
+          `/api/v1/clinic/agenda/encaixes?de=${encodeURIComponent(recorteDaGrade.de)}&ate=${encodeURIComponent(recorteDaGrade.ate)}`,
+        )
+      ).data.encaixes,
+  });
+  const etiquetasDeEncaixe = React.useMemo(
+    () => (marcasDeEncaixe?.length ? Object.fromEntries(marcasDeEncaixe.map((m) => [m.appointment_id, "Encaixe"])) : undefined),
+    [marcasDeEncaixe],
+  );
+
   return (
+    <ProvedorDaInfoDaClinica valor={infoDaClinica ?? null}>
     <div
       data-testid="tela-agenda"
       data-fonte={agendamentosIniciais.length > 0 ? "api" : "api-sem-dado"}
@@ -420,7 +747,19 @@ export function AgendaClient({
       */}
       <React.Suspense fallback={null}>
         <AvisoDaConexaoGoogle />
-        <EntradaDaAgenda onContext={onContext} />
+        <EntradaDaAgenda
+          onContext={onContext}
+          // FORK clinic (agenda S6a): o detalhe mostra só as ações das chaves que a pessoa tem.
+          acoes={{ marcar: can("agenda.marcar"), cancelar: can("agenda.cancelar"), desfecho: can("agenda.registrar_desfecho") }}
+          onRemarcar={
+            podeMarcar && can("agenda.remarcar")
+              ? (id) => {
+                  setRemarcandoId(id);
+                  setMarcando(true);
+                }
+              : undefined
+          }
+        />
       </React.Suspense>
 
       <CartaoDaConexaoGoogle
@@ -433,12 +772,39 @@ export function AgendaClient({
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("Agenda")}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t(can("agenda.ver") && !can("agenda.ver_outros") ? "Minha agenda" : "Agenda")}</h1>
           <p className="text-sm text-muted-foreground">
             {t("O que está marcado, com quem, e quem atende — seu e da equipe.")}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {/* FORK clinic (9003): a porta diária do painel da recepção — ele saiu
+              do menu lateral, que está no teto da dobra. */}
+          {can("recepcao.ver_painel") ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/app/recepcao" data-testid="agenda-abrir-recepcao">
+                {t("Painel da recepção")}
+              </Link>
+            </Button>
+          ) : null}
+          {can("agenda.bloquear_horario") ? (
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="agenda-bloquear-horario"
+              onClick={() => setBloqueando({ data: format(ancora, "yyyy-MM-dd") })}
+            >
+              <Lock size={16} weight="bold" aria-hidden />
+              {t("Bloquear horário")}
+            </Button>
+          ) : null}
+          {regrasDeProfissionais && can("agenda.ver_outros") ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/app/agenda/profissionais" data-testid="agenda-abrir-dia-por-profissional">
+                {t("Dia por profissional")}
+              </Link>
+            </Button>
+          ) : null}
           {/* "Hoje" é o hoje DA ORGANIZAÇÃO. Com `new Date()` o botão desfazia a
               âncora do servidor e devolvia a semana do navegador — o defeito que
               a tela acabou de fechar, a um clique de distância. */}
@@ -502,6 +868,23 @@ export function AgendaClient({
         </div>
       </header>
 
+      {/* FORK clinic (agenda por profissional): QUEM é o contexto da tela — vem
+          antes de QUANDO (a navegação abaixo) e de O QUÊ (a grade). */}
+      {orgId ? (
+        <CabecalhoDoProfissional
+          profissional={contexto.profissional}
+          lista={contexto.lista}
+          recentes={contexto.recentes}
+          podeTrocar={contexto.podeVerOutros}
+          carregando={contexto.carregando}
+          onTrocar={contexto.trocar}
+          favoritos={favoritos}
+          onFavoritar={alternarFavorito}
+          onAnterior={() => irParaVizinho(-1)}
+          onSeguinte={() => irParaVizinho(1)}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex items-center gap-0.5">
@@ -545,7 +928,30 @@ export function AgendaClient({
             gente no filtro, ela estoura igual — e o `overflow-x: hidden` corta o
             alternador de visão em silêncio. */}
         <div className="flex flex-wrap items-center gap-3">
-          <FiltroDePessoas pessoas={pessoas} isolada={isolada} onIsolar={setIsolada} />
+          {/* FORK clinic: na visão Dia, a lista por profissional (ocupação e vagas). */}
+          {visao === "dia" && orgId ? (
+            <div data-testid="modo-do-dia" className="flex items-center gap-0.5 rounded-md border border-border bg-surface p-0.5">
+              {([
+                [false, "Grade"],
+                [true, "Lista por profissional"],
+              ] as const).map(([lista, rotulo]) => (
+                <button
+                  key={rotulo}
+                  type="button"
+                  data-testid={lista ? "modo-do-dia-lista" : "modo-do-dia-grade"}
+                  aria-pressed={diaEmLista === lista}
+                  onClick={() => setDiaEmLista(lista)}
+                  className={cn(
+                    "rounded-sm px-2.5 py-1 text-xs transition-colors duration-fast ease-out",
+                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500",
+                    diaEmLista === lista ? "bg-accent font-semibold text-accent-foreground" : "text-text-muted hover:bg-surface-elevated hover:text-text",
+                  )}
+                >
+                  {t(rotulo)}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div
             data-testid="alternador-de-visao"
             className="flex items-center gap-0.5 rounded-md border border-border bg-surface p-0.5"
@@ -569,14 +975,32 @@ export function AgendaClient({
               </button>
             ))}
           </div>
+          {/* FORK clinic (agenda S7 #70): atalhos e preferências. */}
+          <Button variant="ghost" size="sm" data-testid="abrir-atalhos" aria-label={t("Atalhos e preferências da agenda")} title={t("Atalhos e preferências da agenda") + " (?)"} onClick={() => setAtalhosAbertos(true)}>
+            ?
+          </Button>
         </div>
       </div>
+      <JanelaDeAtalhos aberta={atalhosAbertos} onFechar={() => setAtalhosAbertos(false)} prefs={prefs} onMudarPrefs={mudarPrefs} />
 
       {/*
         O HISTÓRICO na tela do produto, e não só na vitrine. Ele aparece mesmo
         sem dado: as quatro abas com contador zero respondem "não há nada" sem
         gastar um clique, e some-lo faria a tela parecer menor do que é.
       */}
+      {/* FORK clinic (melhorias da Agenda): filtros de especialidade, status,
+          período, paciente e horários livres — valem na grade, na lista do dia
+          e no histórico. */}
+      <BarraDeFiltrosDaAgenda
+        filtros={filtros}
+        mudar={mudarFiltro}
+        limpar={limparFiltros}
+        especialidades={especialidades}
+        salas={infoDaClinica?.salas ?? []}
+        procedimentos={infoDaClinica?.procedimentos ?? []}
+        total={agendamentos.length}
+      />
+
       <Sheet
         open={marcando}
         onOpenChange={(aberto) => {
@@ -588,12 +1012,19 @@ export function AgendaClient({
           if (!aberto) {
             setRemarcandoId(null);
             setHorarioEscolhido(null);
+            setOcupado(null); // FORK clinic (agenda S6b)
+            setErroDoEncaixe(null);
             // Pelo mesmo motivo das duas linhas acima: um convidado digitado e
             // não usado reapareceria na PRÓXIMA marcação, que é de outro
             // cliente — convite para a pessoa errada, sem ninguém ter pedido.
             setEmailConvidado("");
             setEnderecoEditado(null);
             setObservacao("");
+            // O título livre digitado e não usado é o mesmo caso do convidado:
+            // reapareceria na marcação seguinte, que é de OUTRO atendimento —
+            // e um título que não corresponde ao compromisso é pior que um
+            // genérico, porque parece de propósito.
+            setTituloLivre("");
             // E o próprio cliente, que é o pior dos quatro a sobrar: medido numa
             // instalação real em 2026-09-12, "Novo agendamento" abriu com um
             // contato JÁ selecionado, herdado de uma abertura anterior feita a
@@ -664,6 +1095,24 @@ export function AgendaClient({
               {remarcandoId ? t("Remarcar agendamento") : t("Novo agendamento")}
             </SheetTitle>
           </SheetHeader>
+          {/* FORK clinic (agenda S6b): horário ocupado — quem ocupa e, com a chave, "Encaixar". */}
+          {ocupado && !remarcandoId ? (
+            <HorarioOcupadoEEncaixe
+              ocupado={ocupado.dados}
+              podeEncaixar={can("agenda.encaixe")}
+              enviando={marcar.isPending}
+              erro={erroDoEncaixe}
+              onEncaixar={(motivo) =>
+                marcarEm(ocupado.instante, { motivo }, ocupado.duracaoMin).then(
+                  () => {
+                    setAncora(startOfDay(new Date(ocupado.instante)));
+                    setMarcando(false);
+                  },
+                  () => undefined,
+                )
+              }
+            />
+          ) : null}
           <div className="grid shrink-0 gap-3 rounded-lg border p-3 lg:grid-cols-2">
             {!remarcandoId ? (
               <div className="lg:col-span-2">
@@ -674,11 +1123,11 @@ export function AgendaClient({
               />
               </div>
             ) : null}
-            {tiposIniciais.length > 1 && (
+            {tiposDoContexto.length > 1 && (
               <div className="lg:col-span-2" data-testid="tipos-de-agendamento">
                 <p className="mb-2 text-sm font-medium">{t("Tipo de agendamento")}</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {tiposIniciais.map((opcao) => (
+                  {tiposDoContexto.map((opcao) => (
                     <button
                       key={opcao.id}
                       type="button"
@@ -704,6 +1153,40 @@ export function AgendaClient({
                 </div>
               </div>
             )}
+            {tituloLivreLigado && !remarcandoId ? (
+              /*
+                O TÍTULO LIVRE (#3766) — no fork, atrás da opção da clínica (#81) — opcional, e por isso vem ANTES dos
+                outros campos opcionais: é o que a grade mostra no bloco.
+
+                Sem texto, o corpo do POST sai sem `title` e a rota grava o
+                nome do tipo, como sempre. Com texto, é ELE o título do
+                compromisso na grade, no histórico, no evento do Google e
+                no lembrete que vai ao cliente (`montarLembrete` usa `title`).
+              */
+              <div className="lg:col-span-2">
+                <label className="block" htmlFor="titulo-do-compromisso">
+                  {t("Título do compromisso")}{" "}
+                  <span className="font-normal opacity-70">({t("opcional")})</span>
+                </label>
+                <input
+                  id="titulo-do-compromisso"
+                  data-testid="titulo-do-compromisso"
+                  type="text"
+                  autoComplete="off"
+                  // 200 é o teto do schema da rota (`marcarSchema`): o mesmo
+                  // número aqui evita um 422 por uma letra a mais.
+                  maxLength={200}
+                  value={tituloLivre}
+                  onChange={(e) => setTituloLivre(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-border bg-surface p-2 outline-hidden focus:border-border-strong"
+                  placeholder={t("OS 1234 · Atendimento fulano")}
+                  aria-describedby="ajuda-do-titulo"
+                />
+                <p id="ajuda-do-titulo" className="mt-1 text-xs text-text-muted">
+                  {t("Aparece na agenda e também para o cliente, no lembrete e no convite. Em branco, usa o nome do tipo de agendamento.")}
+                </p>
+              </div>
+            ) : null}
             {/*
               O CONVIDADO — opcional. O e-mail da ficha do cliente já entra no
               convite do Google; este campo é para outra pessoa (acompanhante).
@@ -754,6 +1237,11 @@ export function AgendaClient({
                   value={endereco}
                   onChange={setEnderecoEditado}
                 />
+                <ProcedimentosDaMarcacao
+                  catalogo={infoDaClinica?.procedimentos ?? []}
+                  valor={procedimentosDaMarcacao}
+                  onChange={setProcedimentosDaMarcacao}
+                />
                 <div>
                   <label className="block" htmlFor="observacao-do-compromisso">
                     {t("Observação")}{" "}
@@ -776,6 +1264,43 @@ export function AgendaClient({
               </>
             ) : null}
           </div>
+          {tipo && !remarcandoId && contexto.profissional ? (
+            // FORK clinic (agenda por profissional): o profissional JÁ é o da agenda
+            // aberta — pedir de novo seria a pergunta que a tela acabou de responder.
+            <p data-testid="profissional-do-contexto" className="mt-4 text-sm">
+              <span className="text-text-muted">{t("Profissional")}: </span>
+              <span className="font-semibold">{contexto.profissional.nome}</span>
+            </p>
+          ) : tipo && !remarcandoId ? (
+            <div className="mt-4">
+              <EscolhaDoProfissional
+                tipoId={tipo.id}
+                donoPadraoId={tipo.donoId}
+                pessoas={pessoas}
+                valor={profissionalClinic}
+                onChange={setProfissionalClinic}
+                instante={horarioEscolhido?.instante ?? null}
+                duracaoMin={duracaoEscolhida ?? tipo.duracaoMin}
+                fuso={horarios?.fuso_da_regra}
+                onEscolherHorario={(userId, instante) => {
+                  setProfissionalClinic(userId);
+                  setHorarioEscolhido({ instante, rotulo: format(new Date(instante), "HH:mm") });
+                }}
+              />
+            </div>
+          ) : null}
+          {tipo && !remarcandoId ? (
+            // FORK clinic (agenda S3 #68): estado dos próximos dias do profissional.
+            <EstadoDosDias
+              profissional={profissionalDaMarcacao ?? tipo.donoId ?? null}
+              horariosPorDia={horariosPorDia}
+              hoje={ancoraLocalDoDia(hojeNaOrganizacao)}
+              onEscolher={(dia) => {
+                const primeiro = horariosPorDia[dia]?.[0];
+                if (primeiro) setHorarioEscolhido(primeiro);
+              }}
+            />
+          ) : null}
           {tipo && (
             <div className="mt-4 lg:min-h-0 lg:flex-1">
               <PainelDeMarcacao
@@ -792,10 +1317,19 @@ export function AgendaClient({
                   // regra está em `lib/agenda/responsavel-do-painel.ts`: com a
                   // lista da equipe vazia (o 403 do item 1 da issue 896) este
                   // fallback dizia "Você" para a jornada de OUTRA pessoa.
-                  resolverResponsavelDoPainel({ pessoas, donoId: tipo.donoId, usuarioId })
+                  resolverResponsavelDoPainel({ pessoas, donoId: profissionalDaMarcacao ?? tipo.donoId, usuarioId })
                 }
                 tipo={tipo.nome}
-                duracaoMin={tipo.duracaoMin}
+                duracaoMin={duracaoDoCompromisso ?? tipo.duracaoMin}
+                /*
+                  A DURAÇÃO É ESCOLHIDA AQUI, E SÓ AQUI (issue #3709).
+
+                  Desligada na remarcação: o PATCH move o bloco e PRESERVA o
+                  comprimento que ele já tem — oferecer o campo seria oferecer um
+                  caminho que não existe.
+                */
+                permiteEscolherDuracao={duracaoNaMarcacaoLigada && !remarcandoId}
+                onDuracaoMudar={setDuracaoEscolhida}
                 // O LOCAL e o FUSO de verdade, que a tela tinha e não passava.
                 //
                 // `PainelDeMarcacao` trazia `local = "Presencial · Sala 2"` e
@@ -823,9 +1357,11 @@ export function AgendaClient({
                 // rota permite sair da grade. Vale também para REMARCAR, que é
                 // este mesmo painel com PATCH — e a rota aplica a mesma regra lá.
                 permiteEncaixe={podeMarcar}
+                // FORK clinic: sem paciente o "Confirmar" fica travado (remarcar mantém o do compromisso).
+                pendencia={!remarcandoId && !contactId ? t("Escolha o paciente antes de confirmar.") : undefined}
                 // ESTE é o fio que faltava. Sem ele o "Marcado ✓" era estado
                 // local do React e nenhuma linha nascia no banco.
-                onConfirmar={(instante) => {
+                onConfirmar={(instante, duracaoDoAtendimento) => {
                   // ⚠️ SEM `owner_user_id`, e é isto que conserta o 422.
                   //
                   // Isto mandava `pessoas[0]?.id` — a PRIMEIRA pessoa da lista.
@@ -867,24 +1403,8 @@ export function AgendaClient({
                         return r;
                       });
                   }
-                  return marcar
-                    .mutateAsync({
-                      event_type_id: tipo.id,
-                      contact_id: contactId || undefined,
-                      conversation_id: conversationId || undefined,
-                      starts_at: instante,
-                      guest_email: convidado,
-                      location_details: endereco.trim(),
-                      description: observacao.trim() || undefined,
-                    })
-                    .then((r) => {
-                      setEmailConvidado("");
-                      setEnderecoEditado(null);
-                      setObservacao("");
-                      // Guardado para o fechamento saber para onde levar a grade.
-                      setMarcadoEm(instante);
-                      return r;
-                    });
+                  // FORK clinic (agenda S6b): o corpo é o mesmo do encaixe (ver `marcarEm`).
+                  return marcarEm(instante, undefined, duracaoNaMarcacaoLigada ? duracaoDoAtendimento : undefined);
                 }}
                 // "VER NA AGENDA" — o botão que não fazia nada.
                 //
@@ -1011,20 +1531,24 @@ export function AgendaClient({
         melhor. A ocupação continua inteira onde ela serve.
       */}
       <HistoricoDaAgenda
+        // FORK clinic (agenda S6b): etiqueta "Encaixe".
+        etiquetas={etiquetasDeEncaixe}
         agendamentos={agendamentosAcionaveis}
         pessoas={pessoas}
         agora={new Date()}
         className="max-h-[320px]"
+        // FORK clinic (agenda S6a): cada ação só com a sua chave; sem ela o botão some.
+        ocultarAcoesAusentes
         // ⚠️ ESTAS DUAS PROPS FALTAVAM, e a ausência tinha cara de permissão.
         // `HistoricoDaAgenda` usa `disabled={!onRemarcar}`; sem elas os botões
         // nasciam cinzas em toda linha, de toda organização — e o `title` dizia
         // "Disponível quando a agenda estiver conectada", que é falso: PATCH e
         // DELETE não tocam o Google. Só a IA conseguia remarcar ou cancelar.
-        onRemarcar={(id) => {
+        onRemarcar={!can("agenda.remarcar") ? undefined : (id) => {
           setRemarcandoId(id);
           setMarcando(true);
         }}
-        onCancelar={(id) => {
+        onCancelar={!can("agenda.cancelar") ? undefined : (id) => {
           setMotivo("");
           setCancelandoId(id);
         }}
@@ -1039,21 +1563,23 @@ export function AgendaClient({
         // CONFIRMAR usa o mesmo `desfecho` que realizado/faltou: os três são o
         // mesmo PATCH com outro `status`. Criar um hook próprio duplicaria a
         // invalidação de cache e o tratamento de erro por nada.
-        onConfirmar={(id) =>
+        onConfirmar={!can("agenda.marcar") ? undefined : (id) =>
           desfecho.mutate({
             id,
             revision: agendamentos.find((a) => a.id === id)?.revision,
             status: "confirmed",
           })
         }
-        onRealizado={(id) =>
+        // FORK clinic (agenda S4): na clínica, "realizado" é só do profissional
+        // do agendamento (o servidor confere de novo).
+        onRealizado={!can("agenda.registrar_desfecho") || (regrasDeProfissionais && donoDaAgenda !== usuarioId) ? undefined : (id) =>
           desfecho.mutate({
             id,
             revision: agendamentos.find((a) => a.id === id)?.revision,
             status: "completed",
           })
         }
-        onFaltou={(id) =>
+        onFaltou={!can("agenda.registrar_desfecho") ? undefined : (id) =>
           desfecho.mutate({
             id,
             revision: agendamentos.find((a) => a.id === id)?.revision,
@@ -1077,7 +1603,32 @@ export function AgendaClient({
           dados de execuções anteriores) e reprovou no CI, onde o banco nasce
           limpo. O mesmo formato do defeito que `agenda-tela-do-produto` já
           tinha pago: verde por banco sujo. */}
-      {agendamentos.length === 0 ? (
+      {agendamentos.length === 0 && algumFiltroAtivo(filtros) && !filtros.soLivres ? (
+        // FORK clinic: com filtro ativo, "nada aqui" é do filtro, não da agenda.
+        <div className="rounded-lg border border-dashed border-border bg-surface p-4 text-sm" data-testid="agenda-sem-resultado">
+          <p>{t("Nada com esses filtros.")}</p>
+          <Button size="sm" variant="outline" className="mt-2" onClick={limparFiltros}>
+            {t("Limpar filtros")}
+          </Button>
+        </div>
+      ) : agendamentos.length === 0 && !algumFiltroAtivo(filtros) && contexto.profissional && !agendaCarregando ? (
+        // FORK clinic: a agenda vazia CONTINUA marcável — os horários livres
+        // seguem na grade abaixo e o botão está aqui.
+        <div data-testid="agenda-livre-do-profissional" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 text-sm">
+          <div>
+            <p className="font-semibold">{t("Nenhum agendamento neste período.")}</p>
+            <p className="text-text-muted">
+              {t("A agenda de {nome} está livre.").replace("{nome}", contexto.profissional.nome)}
+            </p>
+          </div>
+          {podeMarcar && tipo ? (
+            <Button size="sm" variant="outline" onClick={abrirMarcacao}>
+              <CalendarPlus size={16} weight="bold" aria-hidden />
+              <span>{t("Novo agendamento")}</span>
+            </Button>
+          ) : null}
+        </div>
+      ) : agendamentos.length === 0 && !algumFiltroAtivo(filtros) && !contexto.profissional ? (
         <div className="rounded-lg border border-border bg-surface p-4">
           <EmptyAgenda />
         </div>
@@ -1086,14 +1637,64 @@ export function AgendaClient({
           remarca. Toda a fiação (a consulta de horários da janela desenhada, a
           proposta de remarcação, o otimismo com volta atrás) mora em
           `AgendaInterativa`; aqui fica só o que esta tela já sabia. */}
+      {visao === "dia" && diaEmLista && orgId ? (
+        <ListaDoDiaDaAgenda
+          orgId={orgId}
+          dia={format(ancora, "yyyy-MM-dd")}
+          filtros={filtros}
+          isolada={donoDaAgenda}
+          nomeDaPessoa={(id) => pessoas.find((p) => p.id === id)?.nome}
+          onAbrir={(id) => router.push(`/app/agenda?compromisso=${id}`)}
+          onMarcarEm={
+            podeMarcar
+              ? (profissionalId, instante) => {
+                  setProfissionalClinic(profissionalId);
+                  setHorarioEscolhido({ instante, rotulo: format(new Date(instante), "HH:mm") });
+                  setRemarcandoId(null);
+                  abrirMarcacao();
+                }
+              : undefined
+          }
+        />
+      ) : contexto.carregando ? (
+        // Skeleton SÓ na área do calendário: cabeçalho, navegação e filtros
+        // continuam na tela enquanto o contexto resolve.
+        <div data-testid="grade-carregando" aria-busy className="flex min-h-0 flex-1 flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+          {Array.from({ length: 8 }, (_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
+      ) : (
+      <div className="relative flex min-h-0 flex-1 flex-col" aria-busy={agendaCarregando || undefined}>
+      {agendaCarregando ? (
+        <p role="status" data-testid="agenda-atualizando" className="pointer-events-none absolute right-3 top-2 z-30 rounded-full bg-surface-elevated px-2 py-0.5 text-xs text-text-muted shadow-sm">
+          {t("Carregando…")}
+        </p>
+      ) : null}
       <AgendaInterativa
+        donoId={donoDaAgenda}
+        foraDaAgenda={filtros.semIndisponiveis ? undefined : foraDaAgenda}
+        ocultarFimDeSemana={filtros.semFimDeSemana}
+        // FORK clinic (agenda S7 #70): arrastar numa faixa livre abre "Novo agendamento" com início e fim
+        // (a duração só vale com a opção "Duração na marcação"; sem ela, vale a do tipo).
+        onSelecionarFaixa={
+          podeMarcar
+            ? ({ inicio, fim }) => {
+                setRemarcandoId(null);
+                setHorarioEscolhido({ instante: inicio, rotulo: format(new Date(inicio), "HH:mm") });
+                if (duracaoNaMarcacaoLigada) setDuracaoEscolhida(Math.round((Date.parse(fim) - Date.parse(inicio)) / 60_000));
+                abrirMarcacao();
+              }
+            : undefined
+        }
         visao={visao}
         ancora={ancora}
         agora={new Date()}
         pessoas={pessoas}
         agendamentos={agendamentosDaGrade}
+        fechamentos={filtros.semIndisponiveis ? [] : fechamentosDaGrade}
         recorte={recorteDaGrade}
-        tipos={tiposIniciais.map((t) => ({ id: t.id, nome: t.nome, duracaoMin: t.duracaoMin }))}
+        tipos={tiposDoContexto.map((t) => ({ id: t.id, nome: t.nome, duracaoMin: t.duracaoMin }))}
         tipo={tipo ? { id: tipo.id, duracaoMin: tipo.duracaoMin } : null}
         onEscolherTipo={setTipoId}
         // SEGUNDA PORTA: o clique num bloco livre da grade. Sem `onMarcarEm`, a
@@ -1108,7 +1709,18 @@ export function AgendaClient({
                 // livre abre uma marcação NOVA, e ela nasce com o vínculo da rota.
                 abrirMarcacao();
               }
-            : undefined
+            : can("agenda.bloquear_horario") && donoDaAgenda === usuarioId
+              ? // FORK clinic (agenda S5, PF18): quem não marca (o profissional)
+                // bloqueia a própria agenda pelo horário clicado.
+                (instante) => {
+                  const ini = new Date(instante);
+                  setBloqueando({
+                    data: format(ini, "yyyy-MM-dd"),
+                    horaDe: format(ini, "HH:mm"),
+                    horaAte: format(new Date(ini.getTime() + (tipo?.duracaoMin ?? 60) * 60_000), "HH:mm"),
+                  });
+                }
+              : undefined
         }
         /* Tocar num card abre o detalhe. A prop já atravessava `AgendaInterativa`
            e `GradeDaAgenda` e chegava `undefined` aqui: o toque não fazia nada, e
@@ -1117,8 +1729,32 @@ export function AgendaClient({
            não `replace`, porque é o que o Histórico faz com `<Link>` e é o que faz
            o botão voltar do celular fechar o detalhe. */
         onAbrirAgendamento={(id) => router.push(`/app/agenda?compromisso=${id}`)}
+        // FORK clinic (agenda S6a): sem `agenda.remarcar`, o card não arrasta.
+        podeRemarcar={can("agenda.remarcar")}
+        // FORK clinic (agenda S6b): etiqueta "Encaixe" nos compromissos que nasceram de encaixe.
+        etiquetas={etiquetasDeEncaixe}
         className="min-h-0 flex-1"
       />
+      </div>
+      )}
+      <Dialog open={bloqueando !== null} onOpenChange={(aberto) => (aberto ? null : setBloqueando(null))}>
+        <DialogContent data-testid="dialogo-bloquear-horario" className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t("Bloquear horário")}</DialogTitle>
+            <DialogDescription>{t("O horário bloqueado deixa de ser oferecido para marcar.")}</DialogDescription>
+          </DialogHeader>
+          {bloqueando ? (
+            <FormularioDeBloqueio
+              usuarioAtualId={usuarioId}
+              ehGerencia={can("agenda.configurar")}
+              inicial={can("agenda.configurar") && donoDaAgenda ? { ...bloqueando, usuarioId: donoDaAgenda } : bloqueando}
+              simples
+              onCriado={() => setBloqueando(null)}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
+    </ProvedorDaInfoDaClinica>
   );
 }

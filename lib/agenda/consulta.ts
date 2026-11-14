@@ -74,6 +74,8 @@ import { nomeDoContato, type ContatoNomeavel } from "@/lib/contacts/rotulo-do-co
 import { diaLocalISO } from "./fuso";
 import { horariosLivres, type ExcecaoDeData, type Slot } from "./horarios-livres";
 import { lerJornadaDoBanco } from "./jornada";
+import { bloqueiosDaClinicaComoExcecoes, habilitacaoNaConsulta } from "@/lib/clinic/agenda/regras-da-clinica";
+import { ocupadosPorFaltaDeRecurso } from "@/lib/clinic/agenda/recursos";
 import {
   agendaExternaNuncaLida,
   ocupadosDoDono,
@@ -91,6 +93,8 @@ export type CodigoDeRecusaDaConsulta =
   | "tipo_desativado"
   | "sem_responsavel"
   | "jornada_mal_configurada"
+  // FORK clinic (migration 9001): o dono não tem a especialidade que o tipo exige.
+  | "profissional_nao_habilitado"
   | "erro_interno";
 
 export interface ParametrosDaConsulta {
@@ -109,6 +113,21 @@ export interface ParametrosDaConsulta {
   ownerUserId?: string | null;
   de: Date;
   ate: Date;
+  /**
+   * A duração escolhida para ESTE atendimento, em minutos — ausente, a do tipo
+   * (issue #3709).
+   *
+   * Desce até `horariosLivres` como o comprimento de cada slot, e portanto é
+   * ela que decide o que está livre: pedir 90 minutos e receber a lista dos
+   * slots de 30 faria a tela oferecer um horário que a escrita precisa recusar.
+   *
+   * ⚠️ NÃO VALE PARA `service_enabled`. Ali quem manda no comprimento é a
+   * agenda do SERVIÇO (`calendar_service_schedule.duration_minutes`, com
+   * capacidade e ocorrências), e sobrepor uma duração avulsa à reserva
+   * quebraria a conta de vagas. A rota e o handler recusam a escolha nesse
+   * caminho em vez de ignorá-la em silêncio.
+   */
+  duracaoMin?: number | null;
   /** INJETADO, como em `horariosLivres`. Relógio lido aqui dentro é o defeito que `janela-do-canal.ts` documenta. */
   agora: Date;
   /**
@@ -235,6 +254,26 @@ export async function horariosLivresDaOrg(
     };
   }
 
+  // FORK clinic: com o módulo de profissionais ligado, só quem tem a
+  // especialidade exigida pelo tipo tem agenda para este atendimento.
+  const clinic = await habilitacaoNaConsulta(supabase, organizationId, tipo.id, donoId);
+  if (clinic.ligado && "erro" in clinic) {
+    return {
+      ok: false,
+      codigo: "erro_interno",
+      motivoParaOperador: clinic.erro,
+      motivoParaCliente: `Não consegui consultar a agenda agora. ${NAO_OFERECA}`,
+    };
+  }
+  if (clinic.ligado && "habilitado" in clinic && !clinic.habilitado) {
+    return {
+      ok: false,
+      codigo: "profissional_nao_habilitado",
+      motivoParaOperador: `Este profissional não tem a especialidade que "${tipo.name}" exige.`,
+      motivoParaCliente: `Esse profissional não faz "${tipo.name}". Ofereça outro profissional da equipe ou avise que alguém confirma o horário.`,
+    };
+  }
+
   const { data: disponibilidade, error: erroDisp } = await supabase
     .from("attendant_availability")
     .select("schedule")
@@ -324,6 +363,24 @@ export async function horariosLivresDaOrg(
   }
   const { ocupados, fontesDefasadas } = oQueOcupa;
 
+  // FORK clinic (migration 9007): horário em que falta sala ou equipamento
+  // entra como ocupação — o motor não muda. Opção desligada devolve [].
+  const semRecurso = await ocupadosPorFaltaDeRecurso(supabase, organizationId, {
+    eventTypeId: tipo.id,
+    de: new Date(params.de.getTime() - Number(tipo.buffer_before_minutes ?? 0) * MINUTO),
+    ate: new Date(params.ate.getTime() + Number(tipo.buffer_after_minutes ?? 0) * MINUTO),
+    ignorarAgendamentoId: params.ignorarAgendamentoId,
+  });
+  if (!semRecurso.ok) {
+    return {
+      ok: false,
+      codigo: "erro_interno",
+      motivoParaOperador: semRecurso.erro,
+      motivoParaCliente: `Não consegui consultar a agenda agora. ${NAO_OFERECA}`,
+    };
+  }
+  ocupados.push(...semRecurso.ocupados);
+
   // A situação das conexões do dono, para distinguir "não tem Google" de "tem
   // Google que nunca foi lido". Sem `.select` de erro: conexão ilegível cai no
   // mesmo lado de "não sei", que é o lado seguro.
@@ -346,6 +403,27 @@ export async function horariosLivresDaOrg(
     fimMinuto: linha.end_minute,
   }));
 
+  // FORK clinic: bloqueios por período, recorrentes e da clínica toda entram
+  // como exceções de indisponibilidade — o motor não muda.
+  if (clinic.ligado) {
+    const extras = await bloqueiosDaClinicaComoExcecoes(
+      supabase,
+      organizationId,
+      donoId,
+      primeiroDiaDaRegra,
+      ultimoDiaDaRegra,
+    );
+    if (!extras.ok) {
+      return {
+        ok: false,
+        codigo: "erro_interno",
+        motivoParaOperador: extras.erro,
+        motivoParaCliente: `Não consegui consultar a agenda agora. ${NAO_OFERECA}`,
+      };
+    }
+    excecoes.push(...extras.excecoes);
+  }
+
   const slots = horariosLivres({
     jornada: leitura.jornada,
     excecoes,
@@ -358,6 +436,9 @@ export async function horariosLivresDaOrg(
       intervaloMin: tipo.slot_interval_minutes,
       janelaDias: tipo.booking_window_days,
     },
+    // A escolha da tela entra no MOTOR, e não só no INSERT: é o comprimento do
+    // slot que decide se um horário está livre (issue #3709).
+    duracaoMin: params.duracaoMin ?? null,
     de: params.de,
     ate: params.ate,
     agora: params.agora,

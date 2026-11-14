@@ -466,6 +466,15 @@ const ENSINO_POR_CODIGO: Record<string, string> = {
     "esse tipo de atendimento não está sendo agendado agora. Pergunte que outro atendimento serve, ou avise que alguém da equipe confirma.",
   agenda_sem_responsavel:
     "esse atendimento ainda não tem responsável definido. Não invente horários: avise que alguém da equipe confirma.",
+  // FORK clinic (migration 9001): o profissional não tem a especialidade do atendimento.
+  profissional_nao_habilitado:
+    "esse profissional não faz esse atendimento. Não marque com ele: ofereça outro profissional da equipe ou avise que alguém confirma o horário.",
+  // FORK clinic (migration 9008): prazo mínimo para o paciente desmarcar.
+  agenda_fora_do_prazo:
+    "está perto demais do horário para desmarcar ou remarcar por aqui. Não cancele nem remarque: avise com gentileza que a recepção vai entrar em contato para resolver, e passe a conversa para uma pessoa da equipe.",
+  // FORK clinic (migration 9002): a ficha cadastral do paciente está incompleta.
+  ficha_incompleta:
+    "a ficha cadastral do paciente ainda não está completa. Não registre o comparecimento: avise que a recepção completa a ficha quando o paciente chegar.",
   agenda_disponibilidade_invalida:
     "não consigo ler a agenda desse atendente agora. Não ofereça horários e não diga que está sem vaga — avise que alguém da equipe confirma.",
   agenda_ja_cancelado:

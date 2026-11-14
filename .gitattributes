@@ -66,3 +66,7 @@ supabase/migrations/MANIFEST.md merge=union
 # texto é normalizado. Os blobs JÁ estão em LF, então isto não reescreve
 # arquivo nenhum: muda apenas o que o checkout entrega.
 * text=auto eol=lf
+
+# Fork: o CLAUDE.md deste fork é curto e próprio; o do upstream não entra no merge.
+# Requer `git config merge.ours.driver true` em cada clone.
+CLAUDE.md merge=ours

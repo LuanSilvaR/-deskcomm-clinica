@@ -108,13 +108,13 @@ function GrupoDeDuplicados({
       // que alguém precisa olhar.
       if (pendentes > 0) {
         toast.warning(
-          t("Contatos juntados. {n} registro(s) continuaram no cadastro antigo — veja a auditoria.").replace(
+          t("Pacientes juntados. {n} registro(s) continuaram no cadastro antigo — veja a auditoria.").replace(
             "{n}",
             String(pendentes),
           ),
         );
       } else {
-        toast.success(t("Contatos juntados."));
+        toast.success(t("Pacientes juntados."));
       }
       onFundido();
     } catch {
@@ -190,7 +190,7 @@ function GrupoDeDuplicados({
             <AlertDialogTitle>{t("Juntar estes cadastros?")}</AlertDialogTitle>
             <AlertDialogDescription>
               {`${nomeDeQuemFica} ${t("fica.")} ${nomesAbsorvidos} ${t(
-                "será absorvido e sai da lista de contatos. Mensagens, negócios e histórico passam para quem fica. Não há como desfazer.",
+                "será absorvido e sai da lista de pacientes. Mensagens, negócios e histórico passam para quem fica. Não há como desfazer.",
               )}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -201,7 +201,7 @@ function GrupoDeDuplicados({
               onClick={() => void juntar()}
               disabled={merge.isPending}
             >
-              {merge.isPending ? t("Juntando…") : t("Juntar contatos")}
+              {merge.isPending ? t("Juntando…") : t("Juntar pacientes")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -219,7 +219,7 @@ export function MergeDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{t("Contatos duplicados")}</DialogTitle>
+          <DialogTitle>{t("Pacientes duplicados")}</DialogTitle>
           <DialogDescription>
             {t(
               "A mesma pessoa cadastrada duas vezes. Escolha qual cadastro fica; o outro é absorvido sem perder histórico.",
@@ -231,7 +231,7 @@ export function MergeDialog({ open, onOpenChange }: Props) {
           <Skeleton className="h-40 w-full" />
         ) : grupos.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            {t("Nenhum contato duplicado encontrado.")}
+            {t("Nenhum paciente duplicado encontrado.")}
           </p>
         ) : (
           <div className="space-y-3">
@@ -253,7 +253,7 @@ export function MergeDialog({ open, onOpenChange }: Props) {
         {q.data?.meta?.varreu_tudo === false ? (
           <p className="text-xs text-muted-foreground">
             {t(
-              "Mostrando os duplicados entre os contatos mais antigos. Junte estes e reabra para ver os próximos.",
+              "Mostrando os duplicados entre os pacientes mais antigos. Junte estes e reabra para ver os próximos.",
             )}
           </p>
         ) : null}

@@ -7,7 +7,7 @@ import { NewContactDialog } from "@/components/contacts/NewContactDialog";
 import { cn } from "@/lib/utils";
 
 type Vinculos = {
-  contacts: Array<{ id: string; name: string }>;
+  contacts: Array<{ id: string; name: string; detalhe?: string | null }>;
   conversations: Array<{ id: string; created_at: string; status: string }>;
 };
 
@@ -58,10 +58,10 @@ export function VinculoDaMarcacao({
   // vira o nome, e o contato volta selecionado.
   const buscou = termo.length > 0 && !contactId;
   const nadaEncontrado = buscou && !lista.isLoading && contatos.length === 0;
-  const opcoes = [
-    { id: "", name: t("Compromisso pessoal, sem cliente") },
-    ...contatos,
-  ];
+  // FORK clinic: sem a opção "Compromisso pessoal, sem cliente" — todo
+  // agendamento é de um paciente (a rota recusa com `agenda_sem_paciente`).
+  // Tempo do profissional sem paciente é "Bloquear horário".
+  const opcoes: Array<{ id: string; name: string; detalhe?: string | null }> = contatos;
 
   function abrir() {
     setAberto(true);
@@ -106,20 +106,23 @@ export function VinculoDaMarcacao({
     <div className="space-y-3">
       <div>
         <label className="block">
-          {t("Quem será atendido")}
+          {t("Quem será atendido")}{" "}
+          {/* FORK clinic: o paciente é obrigatório (`agenda_sem_paciente`). */}
+          <span className="font-normal opacity-70">({t("obrigatório")})</span>
           <div className="relative">
           <input
             id="quem-sera-atendido"
             data-testid="quem-sera-atendido"
             data-contact-id={contactId}
             role="combobox"
+            aria-required="true"
             aria-expanded={aberto}
             aria-controls={listaId}
             aria-autocomplete="list"
             aria-activedescendant={aberto ? `${listaId}-${destacado}` : undefined}
             className="mt-1 w-full rounded-md border bg-surface p-2 outline-hidden"
             value={valor}
-            placeholder={t("Compromisso pessoal, sem cliente")}
+            placeholder={t("Nome, telefone, CPF ou nascimento (DD/MM/AAAA)")}
             autoComplete="off"
             onFocus={abrir}
             onChange={(e) => aoDigitar(e.target.value)}
@@ -135,7 +138,7 @@ export function VinculoDaMarcacao({
             >
               {opcoes.map((opcao, i) => (
                 <li
-                  key={opcao.id || "pessoal"}
+                  key={opcao.id}
                   id={`${listaId}-${i}`}
                   role="option"
                   aria-selected={opcao.id === contactId}
@@ -147,6 +150,9 @@ export function VinculoDaMarcacao({
                   onClick={() => escolher(opcao.id, opcao.name)}
                 >
                   {opcao.name}
+                  {opcao.detalhe ? (
+                    <span className="ml-2 text-xs text-text-muted">{opcao.detalhe}</span>
+                  ) : null}
                 </li>
               ))}
               {nadaEncontrado ? (

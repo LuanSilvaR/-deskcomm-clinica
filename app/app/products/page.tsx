@@ -1,3 +1,4 @@
+import { exigePermissaoNaPagina } from "@/lib/clinic/acesso/pagina";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -30,6 +31,9 @@ export const metadata: Metadata = { title: "Produtos" };
  * novo — a tela esconder o botão é cortesia, não autorização.
  */
 export default async function ProdutosPage() {
+  // FORK clinic (agenda S5): tela administrativa — sem a chave, "acesso não autorizado" (o menu já a esconde).
+  const negado = await exigePermissaoNaPagina("produtos.ver");
+  if (negado) return negado;
   const user = await requireAuth();
   const t = (texto: string) => traduzir(texto, user.idioma);
   const activeOrg = await resolveActiveOrg(user);

@@ -122,11 +122,13 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
   },
   {
     fn: "fn_set_channel_routing(uuid,uuid,uuid[],boolean)",
-    razao: "PATCH app/api/v1/settings/routing/channels/route.ts usa createClient da sessão; RPC exige manager, suporte de escrita, MFA e canal/membros da org na mesma transação. tests/invariants/channel-routing.test.ts prova viewer, tenants A/B, membro revogado, policy vazia e MFA platform aal1/aal2.",
+    razao:
+      "PATCH app/api/v1/settings/routing/channels/route.ts usa createClient da sessão; RPC exige manager, suporte de escrita, MFA e canal/membros da org na mesma transação. tests/invariants/channel-routing.test.ts prova viewer, tenants A/B, membro revogado, policy vazia e MFA platform aal1/aal2.",
   },
   {
     fn: "fn_reserve_channel_connection(uuid,uuid,text,text,boolean)",
-    razao: "lib/channels/connect-waha.ts recebe createClient das rotas channel-sessions e onboarding/whatsapp/session; RPC exige admin, suporte e MFA, cria identidade org-owned com recibo privado. tests/invariants/channel-routing.test.ts prova lease/replay/ACL do recibo e MFA platform aal1/aal2.",
+    razao:
+      "lib/channels/connect-waha.ts recebe createClient das rotas channel-sessions e onboarding/whatsapp/session; RPC exige admin, suporte e MFA, cria identidade org-owned com recibo privado. tests/invariants/channel-routing.test.ts prova lease/replay/ACL do recibo e MFA platform aal1/aal2.",
   },
   {
     fn: "fn_google_selection(uuid,jsonb,uuid[],uuid)",
@@ -240,6 +242,20 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "função recusa tudo que não seja admin da própria organização.",
   },
   {
+    fn: "fn_definir_aviso_de_agendamento(uuid,boolean,uuid,text,boolean,boolean,text)",
+    razao:
+      "A ÚNICA porta de escrita de `config_aviso_de_agendamento` (migration 0707) — " +
+      "a tabela só tem `grant select` sob RLS de admin. PUT " +
+      "app/api/v1/agenda/aviso/route.ts chama com createClient da sessão. A função " +
+      "exige auth.uid(), fn_role_at_least(p_org,'admin'), " +
+      "fn_support_write_allowed(p_org) e fn_session_mfa_proven(); com número próprio, " +
+      "E.164, conexão DA organização e não arquivada, recusa do número da própria " +
+      "organização e de número que já é contato sem confirmação. " +
+      "tests/invariants/aviso-de-agendamento-escrita.test.ts prova agent e viewer " +
+      "recusados, admin aprovado, admin de OUTRA organização recusado, conexão do " +
+      "vizinho recusada e anon sem EXECUTE.",
+  },
+  {
     fn: "fn_vocabulario_de_tags_operar(uuid,text,text,text,text)",
     razao:
       "POST app/api/v1/tags/vocabulario/route.ts chama com createClient da " +
@@ -258,6 +274,601 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "junção 'vip'+'VIP' sem duplicata e exclusão que informa — sem apagar — a " +
       "regra do agente; tests/invariants/tags-cor-de-etiqueta.test.ts prova a " +
       "cor.",
+  },
+  {
+    // FORK clinic (migration 9004).
+    fn: "fn_clinic_definir_confirmacao_automatica(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.confirmacao_automatica da organização informada. " +
+      "tests/invariants/clinic-confirmacao-de-consulta.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8023, #83).
+    fn: "fn_clinic_definir_lembrete_com_reserva(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.lembrete_com_reserva da organização informada. " +
+      "tests/invariants/clinic-lembrete-meta-com-reserva.test.ts prova não-admin recusado (42501) e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (ACL, migration 9012).
+    fn: "fn_clinic_definir_acesso_por_permissoes(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (sessão); exige papeis.gerenciar, ser Administrador, MFA e suporte com escrita; liga só com um Administrador na empresa. tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
+    // FORK clinic (ACL, migration 9012).
+    fn: "fn_acesso_modo_ligado(uuid)",
+    razao:
+      "Booleano do modo da empresa, só para quem é membro dela (fn_user_org_ids) ou plataforma; fora disso devolve false. lib/clinic/acesso (sessão). tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
+    // FORK clinic (ACL, migrations 9009-9010).
+    fn: "fn_member_permissions(uuid)",
+    razao:
+      "lib/clinic/acesso/resolver.ts chama com createClient da sessão; devolve só as permissões do PRÓPRIO auth.uid() na empresa pedida (vínculo ativo) — outra empresa devolve vazio. tests/invariants/clinic-papeis-de-acesso.test.ts prova isolamento e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (ACL, migrations 9009-9010).
+    fn: "fn_has_permission(uuid,text)",
+    razao:
+      "Usada na RLS e no resolver; lê só fn_member_permissions do próprio auth.uid(). tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
+    // FORK clinic (ACL, migrations 9009-9010).
+    fn: "fn_acesso_salvar_papel(uuid,uuid,text,text,boolean,text[])",
+    razao:
+      "app/api/v1/clinic/acesso/papeis (sessão); exige papeis.gerenciar, MFA, suporte com escrita; regra de concessão, dependências e antitravamento no corpo. tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
+    // FORK clinic (ACL, migrations 9009-9010).
+    fn: "fn_acesso_excluir_papel(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/acesso/papeis/[id] (sessão); exige papeis.gerenciar; papel de sistema e papel em uso recusados. tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
+    // FORK clinic (ACL, migrations 9009-9010).
+    fn: "fn_acesso_atribuir_papeis(uuid,uuid,uuid[])",
+    razao:
+      "app/api/v1/clinic/acesso/membros (sessão); exige equipe.atribuir_papeis; só concede o que o ator possui; nunca deixa a empresa sem Administrador. tests/invariants/clinic-papeis-de-acesso.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9008).
+    fn: "fn_clinic_definir_prazo_do_paciente(uuid,integer)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.prazo_paciente_horas (0 a 168) da organização informada. " +
+      "tests/invariants/clinic-prazo-do-paciente.test.ts prova gerente recusado (42501), faixa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9014).
+    fn: "fn_clinic_definir_menu_clinica(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.menu_clinica da organização informada. " +
+      "tests/invariants/clinic-menu-da-clinica.test.ts prova gerente recusado (42501), admin liga e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8024).
+    fn: "fn_clinic_definir_atestado_anonimizacao(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, e a escrita é só a chave settings.clinic.atestado_anonimizacao da organização informada. tests/invariants/clinic-atestado-anonimizacao.test.ts prova gerente recusado (clinic_flag_forbidden), admin liga e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9015).
+    fn: "fn_clinic_definir_procedimentos(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, e a escrita é só a chave settings.clinic.procedimentos. tests/invariants/clinic-procedimentos-e-pop.test.ts prova gerente recusado e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9015).
+    fn: "fn_pop_criar(uuid,text,jsonb,text)",
+    razao:
+      "Rota do POP (sessão). A organização vem do procedimento e precisa estar em fn_user_org_ids(); fn_acesso_exigir confere sessão, suporte, MFA e pops.editar. tests/invariants/clinic-procedimentos-e-pop.test.ts prova outra empresa e quem não tem a permissão recusados.",
+  },
+  {
+    // FORK clinic (migration 9015).
+    fn: "fn_pop_aprovar(uuid,integer)",
+    razao:
+      "Rota de aprovação (sessão). A versão precisa ser da empresa de quem pede (fn_user_org_ids); fn_acesso_exigir confere pops.aprovar; lock por POP. tests/invariants/clinic-procedimentos-e-pop.test.ts prova recusa sem pops.aprovar, de outra empresa e a troca da vigente.",
+  },
+  {
+    // FORK clinic (migration 9015).
+    fn: "fn_pop_nova_versao(uuid,boolean,text)",
+    razao:
+      "Rota de nova versão (sessão). O POP precisa ser da empresa de quem pede (fn_user_org_ids); fn_acesso_exigir confere pops.editar; lock por POP. tests/invariants/clinic-procedimentos-e-pop.test.ts prova numeração 1.1/2.0 e um rascunho por vez.",
+  },
+  {
+    // FORK clinic (migration 9018).
+    fn: "fn_clinic_salvar_formulario(uuid,uuid,text,uuid,jsonb,integer)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/formularios/[tipo]/route.ts (PUT) chama com createClient da sessão; " +
+      "fn_acesso_exigir exige atendimento.registrar (chave clínica), suporte de escrita e MFA; o atendimento e a versão do modelo são conferidos na organização informada; versão esperada evita sobrescrita. " +
+      "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9020).
+    fn: "fn_clinic_definir_requisitos(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/requisitos/route.ts (PUT) chama com createClient da sessão; fn_acesso_exigir exige modelos_clinicos.gerenciar, suporte de escrita e MFA; tipo e especialidade conferidos na organização informada. tests/invariants/clinic-requisitos-e-modelos.test.ts prova recusa sem a permissão, tipo de outra empresa recusado e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9020).
+    fn: "fn_clinic_modelo_criar(uuid,text,text,text,uuid[],jsonb)",
+    razao:
+      "app/api/v1/clinic/modelos/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige modelos_clinicos.gerenciar; especialidades conferidas na organização informada. tests/invariants/clinic-requisitos-e-modelos.test.ts prova recusa sem a permissão e especialidade de outra empresa recusada.",
+  },
+  {
+    // FORK clinic (migration 9020).
+    fn: "fn_clinic_modelo_publicar_versao(uuid,uuid,jsonb,integer)",
+    razao:
+      "app/api/v1/clinic/modelos/[id]/versoes/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige modelos_clinicos.gerenciar; o modelo precisa ser da organização informada; conflito de versão. tests/invariants/clinic-requisitos-e-modelos.test.ts prova versão anterior intacta, conflito e modelo de outra empresa.",
+  },
+  {
+    // FORK clinic (migration 9020).
+    fn: "fn_clinic_modelo_atualizar(uuid,uuid,text,text,uuid[],boolean)",
+    razao:
+      "app/api/v1/clinic/modelos/[id]/route.ts (PATCH) chama com createClient da sessão; fn_acesso_exigir exige modelos_clinicos.gerenciar; o modelo precisa ser da organização informada. tests/invariants/clinic-requisitos-e-modelos.test.ts prova modelo de outra empresa não encontrado.",
+  },
+  {
+    // FORK clinic (migration 9019).
+    fn: "fn_clinic_salvar_evolucao(uuid,uuid,text,text,text,text,text,integer)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/evolucao/route.ts (PUT) chama com createClient da sessão; " +
+      "fn_acesso_exigir exige atendimento.registrar (chave clínica), suporte de escrita e MFA; o atendimento é conferido na organização informada; versão esperada evita sobrescrita. " +
+      "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9019).
+    fn: "fn_clinic_adicionar_adendo(uuid,uuid,text,uuid,text,text)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/adendos/route.ts (POST) chama com createClient da sessão; " +
+      "fn_acesso_exigir exige prontuario.adendo (chave clínica), suporte de escrita e MFA; só em atendimento finalizado da organização informada; o alvo precisa ser do atendimento. " +
+      "tests/invariants/clinic-prontuario-registros.test.ts prova recusas e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9021).
+    fn: "fn_clinic_salvar_conduta(uuid,uuid,text,text,text,integer)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/conduta/route.ts (PUT) chama com createClient da sessão; fn_acesso_exigir exige atendimento.registrar (chave clínica), suporte de escrita e MFA; atendimento em andamento da organização informada; conflito de versão. tests/invariants/clinic-conduta-e-planos.test.ts prova recusas, conflito, imutabilidade e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9021).
+    fn: "fn_clinic_plano_salvar(uuid,uuid,uuid,text,text,text,date,date,uuid,uuid,text,integer)",
+    razao:
+      "app/api/v1/clinic/pacientes/[contactId]/planos/route.ts (POST) e app/api/v1/clinic/planos/[id]/route.ts (PATCH) chamam com createClient da sessão; fn_acesso_exigir exige planos.gerenciar; paciente, especialidade e atendimento de origem conferidos na organização informada. tests/invariants/clinic-conduta-e-planos.test.ts prova paciente de outra empresa recusado e conflito de versão.",
+  },
+  {
+    // FORK clinic (migration 9021).
+    fn: "fn_clinic_plano_adicionar_sessoes(uuid,uuid,text,uuid,uuid,integer,date,integer)",
+    razao:
+      "app/api/v1/clinic/planos/[id]/sessoes/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige planos.gerenciar; plano, tipo e procedimento conferidos na organização informada. tests/invariants/clinic-conduta-e-planos.test.ts prova plano de outra empresa não encontrado.",
+  },
+  {
+    // FORK clinic (migration 9021).
+    fn: "fn_clinic_plano_sessao_mudar(uuid,uuid,text,uuid,text)",
+    razao:
+      "app/api/v1/clinic/planos/sessoes/[id]/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige planos.gerenciar; sessão da organização informada; agendamento precisa ser do mesmo paciente. tests/invariants/clinic-conduta-e-planos.test.ts prova agendamento de outro paciente recusado e realizada imutável.",
+  },
+  {
+    // FORK clinic (migration 9022).
+    fn: "fn_clinic_procedimento_salvar(uuid,uuid,uuid,jsonb,jsonb,integer)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/procedimentos/route.ts (PUT) chama com createClient da sessão; fn_acesso_exigir exige atendimento.registrar (chave clínica), suporte de escrita e MFA; atendimento aberto da organização informada; procedimento, tipo, sessão e produtos conferidos na mesma organização. tests/invariants/clinic-procedimentos-realizados.test.ts prova produto de outra empresa recusado, conflito de versão e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9022).
+    fn: "fn_clinic_procedimento_anular(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/procedimentos/[pid]/anular/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige atendimento.registrar; só rascunho da organização informada, com motivo. tests/invariants/clinic-procedimentos-realizados.test.ts prova anulado em vez de apagado.",
+  },
+  {
+    // FORK clinic (migration 9023).
+    fn: "fn_clinic_documento_modelo_salvar(uuid,uuid,text,text,text,jsonb,boolean,integer)",
+    razao:
+      "app/api/v1/clinic/documentos/modelos/route.ts (POST/PATCH) chama com createClient da sessão; fn_acesso_exigir exige modelos_clinicos.gerenciar, suporte de escrita e MFA; modelo da organização informada; conflito de versão. tests/invariants/clinic-documentos-e-aceites.test.ts prova versão nova sem mexer na anterior e recusa sem a permissão.",
+  },
+  {
+    // FORK clinic (migration 9023).
+    fn: "fn_clinic_documento_emitir(uuid,uuid,uuid,text,text,uuid,uuid,date)",
+    razao:
+      "app/api/v1/clinic/pacientes/[contactId]/documentos/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige documentos.emitir; paciente, versão, atendimento e plano conferidos na organização informada. tests/invariants/clinic-documentos-e-aceites.test.ts prova paciente de outra empresa recusado.",
+  },
+  {
+    // FORK clinic (migration 9023).
+    fn: "fn_clinic_documento_aceitar(uuid,uuid,text,jsonb,text)",
+    razao:
+      "app/api/v1/clinic/documentos/[id]/aceite/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige documentos.colher_aceite; documento da organização informada; opções completas e obrigatórias marcadas. tests/invariants/clinic-documentos-e-aceites.test.ts prova escolhas incompletas recusadas e aceite duplicado recusado.",
+  },
+  {
+    // FORK clinic (migration 9023).
+    fn: "fn_clinic_documento_link_criar(uuid,uuid,text,integer)",
+    razao:
+      "app/api/v1/clinic/documentos/[id]/link/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige documentos.colher_aceite; só o hash do token é gravado; documento emitido da organização informada. tests/invariants/clinic-documentos-e-aceites.test.ts prova uso único e expiração.",
+  },
+  {
+    // FORK clinic (migration 9023).
+    fn: "fn_clinic_documento_encerrar(uuid,uuid,text,text)",
+    razao:
+      "app/api/v1/clinic/documentos/[id]/encerrar/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige documentos.revogar (revogar) ou documentos.emitir (cancelar); documento da organização informada; motivo obrigatório. tests/invariants/clinic-documentos-e-aceites.test.ts prova revogação append-only.",
+  },
+  {
+    // FORK clinic (migration 9024).
+    fn: "fn_clinic_anexo_registrar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/pacientes/[contactId]/anexos/route.ts (POST) chama com createClient da sessão depois de subir o arquivo; fn_acesso_exigir exige fotos.enviar ou anexos.enviar (chaves clínicas), suporte de escrita e MFA; paciente, atendimento, plano e o PREFIXO do caminho conferidos na organização informada; cota com trava. tests/invariants/clinic-anexos-e-fotos.test.ts prova caminho de outra empresa recusado, cota e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9024).
+    fn: "fn_clinic_anexo_mudar(uuid,uuid,text,text)",
+    razao:
+      "app/api/v1/clinic/anexos/[id]/route.ts (PATCH) chama com createClient da sessão; anexo da organização informada; fn_acesso_exigir por tipo; divulgação só com fn_clinic_uso_de_imagem_autorizado. tests/invariants/clinic-anexos-e-fotos.test.ts prova divulgação recusada sem termo e anulado imutável.",
+  },
+  {
+    // FORK clinic (migration 9024).
+    fn: "fn_clinic_uso_de_arquivos(uuid)",
+    razao:
+      "app/api/v1/clinic/pacientes/[contactId]/anexos/route.ts (GET) chama com createClient da sessão; só devolve totais (bytes usados e cota) e exige que a organização esteja em fn_user_org_ids(). tests/invariants/clinic-anexos-e-fotos.test.ts prova outra empresa recusada.",
+  },
+  {
+    // FORK clinic (migration 9045).
+    fn: "fn_clinic_agenda_encaixar(jsonb,text)",
+    razao:
+      "POST app/api/v1/agenda/agendamentos (corpo com `encaixe`) chama com createClient da sessão: a função exige pessoa logada, a organização do corpo em fn_user_org_ids(), a chave agenda.encaixe, a flag settings.clinic.encaixe e motivo de 5 a 500 caracteres; liga o GUC clinic.encaixe_id só nessa transação. tests/invariants/clinic-agenda-encaixe.test.ts prova as recusas, o isolamento entre empresas e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9043): passou a security definer para decidir QUEM.
+    fn: "fn_clinic_mudar_status_visita(uuid,uuid,text,text)",
+    razao:
+      "lib/clinic/visitas/mudar-status.ts (rota app/api/v1/clinic/agendamentos/[id]/visita) chama com createClient da sessão; a função exige membro agent+ da organização e suporte de escrita, e decide por transição: recepção (recepcao.mudar_status_visita / corrigir_status) até 'pronto'; em atendimento e finalizado só o dono do agendamento; sair de finalizado só o dono no mesmo dia ou atendimento.reabrir. tests/invariants/clinic-fluxo-operacional.test.ts e clinic-status-da-visita.test.ts provam as recusas, o isolamento entre empresas e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9025).
+    fn: "fn_clinic_reabrir_atendimento(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/reabrir/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige atendimento.reabrir (chave clínica, gerência), suporte de escrita e MFA; atendimento finalizado da organização informada; motivo obrigatório. tests/invariants/clinic-reabrir-atendimento.test.ts prova recusa sem a permissão, registros finalizados continuam imutáveis e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9026).
+    fn: "fn_clinic_cabecalho_salvar(uuid,uuid,text,text,integer)",
+    razao:
+      "app/api/v1/clinic/pacientes/[contactId]/cabecalho/route.ts (PUT) chama com createClient da sessão; fn_acesso_exigir exige atendimento.registrar (chave clínica), suporte de escrita e MFA; paciente da organização informada; conflito de versão; toda mudança vai para clinic_prontuario_alteracoes. tests/invariants/clinic-cabecalho-e-anulacao.test.ts prova recusa sem a permissão, paciente de outra empresa, histórico e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9026).
+    fn: "fn_clinic_anular_atendimento(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/anular/route.ts (POST) chama com createClient da sessão; fn_acesso_exigir exige atendimento.finalizar; atendimento em andamento da organização informada, sem registro clínico; motivo obrigatório. tests/invariants/clinic-cabecalho-e-anulacao.test.ts prova recusa com registro e o reinício do mesmo agendamento.",
+  },
+  {
+    // FORK clinic (migration 9027).
+    fn: "fn_clinic_anexo_divulgar(uuid,uuid,text,text[])",
+    razao:
+      "app/api/v1/clinic/anexos/[id]/route.ts (PATCH, acao divulgacao) chama com createClient da sessão; fn_acesso_exigir exige fotos.enviar (chave clínica), suporte de escrita e MFA; foto ativa da organização informada; finalidade E cada canal autorizados por termo de uso de imagem aceito, no prazo e não revogado (fn_clinic_divulgacao_autorizada). tests/invariants/clinic-revisao-conformidade.test.ts prova recusa sem canal, canal não autorizado, termo vencido e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9046, agenda S6b).
+    fn: "fn_clinic_definir_encaixe(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, opção encaixe) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_estoque); só grava settings.clinic.encaixe. tests/invariants/clinic-agenda-encaixe.test.ts prova recusa a não-admin e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8003, agenda #81).
+    fn: "fn_clinic_definir_titulo_livre(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, opção titulo_livre) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_encaixe); só grava settings.clinic.titulo_livre. tests/invariants/clinic-titulo-livre-opcao.test.ts prova recusa a não-admin e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8004, profissionais #97).
+    fn: "fn_clinic_salvar_meu_registro(uuid,text,text,text)",
+    razao:
+      "app/api/v1/clinic/profissionais/eu/route.ts (PATCH) chama com createClient da sessão; fn_acesso_exigir exige agenda.bloquear_horario, suporte de escrita e MFA; só altera conselho, número e UF da ficha de auth.uid() na organização informada e não cria ficha. tests/invariants/clinic-profissional-proprio-registro.test.ts prova que a ficha de outro não muda, especialidades e ativo ficam, sem ficha recusa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8005, agenda #80).
+    fn: "fn_clinic_definir_duracao_na_marcacao(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, opção duracao_na_marcacao) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_titulo_livre); só grava settings.clinic.duracao_na_marcacao. tests/invariants/clinic-duracao-na-marcacao-opcao.test.ts prova recusa a não-admin e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8019, pacientes #85).
+    fn: "fn_clinic_definir_varios_telefones(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, opção varios_telefones) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_duracao_na_marcacao); só grava settings.clinic.varios_telefones. tests/invariants/clinic-varios-telefones-opcao.test.ts prova recusa a não-admin e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8006, orçamento O1).
+    fn: "fn_clinic_definir_orcamentos(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, opção orcamentos) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_duracao_na_marcacao); só grava settings.clinic.orcamentos. tests/invariants/clinic-orcamentos-precos.test.ts prova recusa a não-admin e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8006, orçamento O1).
+    fn: "fn_clinic_preco_publicar(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/precos/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.precos, suporte de escrita, MFA e a opção ligada; só INSERE em clinic_precos da organização informada, com item (procedimento ou tipo de serviço) da mesma organização. tests/invariants/clinic-orcamentos-precos.test.ts prova recusa a atendente/visualizador, item de outra empresa, outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_orcamento_salvar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/orcamentos/route.ts (POST) e [id]/route.ts (PATCH) chamam com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção ligada; paciente, atendimento e preço conferidos na organização informada; preço e descrição vêm da vigência atual de clinic_precos; só edita rascunho. tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa a visualizador, outra empresa, preço desatualizado, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_orcamento_aprovar_desconto(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/aprovar-desconto/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.aprovar_desconto, suporte de escrita, MFA e a opção; só marca o desconto pendente de um rascunho da organização informada. tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa ao atendente e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_orcamento_cancelar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/cancelar/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.cancelar, suporte de escrita, MFA e a opção; motivo obrigatório; só cancela rascunho da organização informada (nada se apaga). tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa ao atendente, sem motivo, cancelado de novo e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8007, orçamento O2).
+    fn: "fn_clinic_definir_orcamentos_desconto_max(uuid,numeric)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH, orcamentos_desconto_max_pct) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_orcamentos); só grava settings.clinic.orcamentos_desconto_max_pct entre 0 e 100. tests/invariants/clinic-orcamentos-rascunho.test.ts prova recusa ao gerente e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8008, orçamento O3).
+    fn: "fn_clinic_orcamento_enviar(uuid,uuid,uuid,text,text)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/enviar/route.ts (POST) chama com createClient da sessão, com o texto montado no servidor a partir do orçamento gravado; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; só envia rascunho da organização informada, sem desconto pendente e na validade; o modelo tem de ser contrato da mesma organização; emite por fn_clinic_documento_emitir (documentos.emitir, prontuário ligado). tests/invariants/clinic-orcamentos-contrato.test.ts prova recusa a outra empresa, desconto pendente, vencido, modelo errado, prontuário desligado e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8008, orçamento O3).
+    fn: "fn_clinic_orcamento_recusar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/recusar/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; motivo obrigatório; só recusa orçamento ENVIADO da organização informada e cancela o contrato não respondido. tests/invariants/clinic-orcamentos-contrato.test.ts prova sem motivo e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8008, orçamento O3).
+    fn: "fn_clinic_orcamento_nova_versao(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/nova-versao/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; só de enviado/recusado/expirado da organização informada; uma versão aberta por número; o enviado vira substituído e o contrato não respondido é cancelado. tests/invariants/clinic-orcamentos-contrato.test.ts prova a versão aberta única e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 8009, orçamento O4).
+    fn: "fn_clinic_orcamento_reprocessar(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/orcamentos/[id]/reprocessar/route.ts (POST) chama com createClient da sessão; fn_clinic_orcamentos_exigir exige orcamentos.criar, suporte de escrita, MFA e a opção; só age em orçamento APROVADO da organização informada e é idempotente (não duplica plano nem comanda). tests/invariants/clinic-orcamentos-pos-aceite.test.ts prova a idempotência, outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_definir_estoque(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; exige admin, suporte de escrita e MFA provado (mesmo molde de fn_clinic_definir_procedimentos); só grava settings.clinic.estoque e, ao ligar, cria o local padrão. tests/invariants/clinic-estoque-base.test.ts prova o local padrão e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_produto_salvar(uuid,uuid,jsonb,integer)",
+    razao:
+      "app/api/v1/clinic/estoque/produtos/[productId]/route.ts (PUT) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.configurar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; conflito de versão. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_local_salvar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/locais (POST/PATCH) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.configurar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; sala (clinic_resources) da mesma empresa. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_entrada(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/movimentos/route.ts (POST entrada) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; lote vencido recusado; produto rastreado exige lote. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_transferir(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/movimentos/route.ts (POST transferencia) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; trava o lote e recusa saldo negativo. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_perda(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/movimentos/route.ts (POST perda) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; motivo obrigatório; trava o lote e recusa saldo negativo (inclusive concorrente). tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_ajustar(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/movimentos/route.ts (POST ajuste) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.inventariar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; motivo obrigatório; saldo alvo >= 0. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9028).
+    fn: "fn_clinic_estoque_estornar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/operacoes/[id]/estorno/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.estornar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; ids conferidos na organização informada; uma vez só, nunca estorno de estorno, recusa saldo negativo. tests/invariants/clinic-estoque-base.test.ts prova recusa sem permissão, outra empresa, opção desligada e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9030).
+    fn: "fn_clinic_estoque_pendencia_resolver(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/pendencias/[id]/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; pendência e lote conferidos na organização informada (lote do mesmo produto); motivo obrigatório para descartar/ciente; uma vez só. tests/invariants/clinic-estoque-consumo.test.ts prova recusa sem permissão, outra empresa e pendência fechada.",
+  },
+  {
+    // FORK clinic (migration 9031).
+    fn: "fn_clinic_estoque_kit_salvar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/procedimentos/[id]/kit/route.ts (PUT) chama com createClient da sessão; fn_acesso_exigir('procedimentos.gerenciar') (suporte de escrita, MFA, permissão); procedimento e produtos conferidos na organização informada; até 50 itens sem repetir produto. tests/invariants/clinic-estoque-kits-reservas.test.ts prova recusa sem permissão, produto/procedimento de outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9031).
+    fn: "fn_clinic_estoque_disponibilidade(uuid)",
+    razao:
+      "app/api/v1/clinic/procedimentos/opcoes/route.ts (GET) chama com createClient da sessão; só leitura (stable): exige membro da organização informada E (atendimento.registrar OU estoque.ver); devolve saldo disponível e lote sugerido por produto, sem dado de paciente. tests/invariants/clinic-estoque-kits-reservas.test.ts prova recusa de quem não é da empresa e de quem não tem a permissão.",
+  },
+  {
+    // FORK clinic (migration 9032).
+    fn: "fn_clinic_estoque_frasco_abrir(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/frascos/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção settings.clinic.estoque ligada; lote e local conferidos na organização informada; só produto fracionável e lote não vencido; trava o lote e confere cada gaveta. tests/invariants/clinic-estoque-frascos.test.ts prova recusa sem permissão, produto não fracionável, outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9032).
+    fn: "fn_clinic_estoque_frasco_encerrar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/frascos/[id]/encerrar/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') + opção ligada; frasco conferido na organização informada; motivo obrigatório; uma vez só (trava o frasco). tests/invariants/clinic-estoque-frascos.test.ts prova motivo, encerrar duas vezes e outra empresa.",
+  },
+  {
+    // FORK clinic (migration 9033).
+    fn: "fn_clinic_estoque_nfe_registrar(uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/nfe/route.ts (POST) chama com createClient da sessão depois de ler o XML no servidor; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.compras') (suporte de escrita, MFA, permissão) + opção ligada; chave única por empresa; sugestão de produto de outra empresa vira nula. tests/invariants/clinic-estoque-nfe.test.ts prova duplicada, sem permissão, outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9033).
+    fn: "fn_clinic_estoque_nfe_item_conferir(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/nfe/[id]/itens/[itemId]/route.ts (PATCH) chama com createClient da sessão; estoque.compras + opção ligada; item e produto conferidos na organização informada; nota em conferência; lote/validade obrigatórios em produto rastreado; vencido recusado. tests/invariants/clinic-estoque-nfe.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9033).
+    fn: "fn_clinic_estoque_nfe_lancar(uuid,uuid,jsonb)",
+    razao:
+      "app/api/v1/clinic/estoque/nfe/[id]/lancar/route.ts (POST) chama com createClient da sessão; estoque.compras + opção ligada; nota da organização informada, em conferência e com todos os itens conferidos; local da empresa; conta a pagar só com financeiro.lancar e conta da empresa. tests/invariants/clinic-estoque-nfe.test.ts prova entradas, custo, de/para, conta a pagar e recusas.",
+  },
+  {
+    // FORK clinic (migration 9033).
+    fn: "fn_clinic_estoque_nfe_cancelar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/nfe/[id]/cancelar/route.ts (POST) chama com createClient da sessão; estoque.compras + opção ligada; nota da organização informada e em conferência; motivo obrigatório. tests/invariants/clinic-estoque-nfe.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9034).
+    fn: "fn_clinic_estoque_inventario_abrir(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/estoque/inventarios/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.inventariar') (suporte de escrita, MFA, permissão) + opção ligada; local conferido na organização informada; um aberto por local. tests/invariants/clinic-estoque-inventario.test.ts prova recusa sem permissão, local de outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9034).
+    fn: "fn_clinic_estoque_inventario_contar(uuid,uuid,numeric)",
+    razao:
+      "app/api/v1/clinic/estoque/inventarios/[id]/itens/[itemId]/route.ts (PATCH) chama com createClient da sessão; estoque.inventariar + opção ligada; item da organização informada; inventário aberto; contado >= 0. tests/invariants/clinic-estoque-inventario.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9034).
+    fn: "fn_clinic_estoque_inventario_fechar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/inventarios/[id]/fechar/route.ts (POST) chama com createClient da sessão; estoque.inventariar + opção ligada; inventário da organização informada e aberto; trava os lotes e confere saldo por gaveta. tests/invariants/clinic-estoque-inventario.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9034).
+    fn: "fn_clinic_estoque_inventario_cancelar(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/estoque/inventarios/[id]/cancelar/route.ts (POST) chama com createClient da sessão; estoque.inventariar + opção ligada; inventário da organização informada e aberto; não mexe no saldo. tests/invariants/clinic-estoque-inventario.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9035).
+    fn: "fn_clinic_estoque_alerta_dispensar(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/alertas/[id]/dispensar/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir → fn_acesso_exigir('estoque.movimentar') (suporte de escrita, MFA, permissão) + opção ligada; alerta conferido na organização informada; só aberto; motivo obrigatório. tests/invariants/clinic-estoque-alertas.test.ts prova recusa sem permissão, outra empresa e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9036).
+    fn: "fn_clinic_estoque_rel_consumo(uuid,date,date,text)",
+    razao:
+      "app/api/v1/clinic/estoque/relatorios/consumo/route.ts (GET) chama com createClient da sessão; só leitura (stable): membro da organização informada + estoque.ver (fn_clinic_estoque_pode); custo só com estoque.custos; sem dado de paciente. tests/invariants/clinic-estoque-relatorios.test.ts prova recusa de outra empresa e de quem não tem a permissão.",
+  },
+  {
+    // FORK clinic (migration 9036).
+    fn: "fn_clinic_estoque_rel_perdas(uuid,date,date)",
+    razao:
+      "app/api/v1/clinic/estoque/relatorios/perdas/route.ts (GET) chama com createClient da sessão; só leitura (stable): membro + estoque.ver; custo só com estoque.custos; sem paciente. tests/invariants/clinic-estoque-relatorios.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9036).
+    fn: "fn_clinic_estoque_rel_compra(uuid)",
+    razao:
+      "app/api/v1/clinic/estoque/relatorios/compra/route.ts (GET) chama com createClient da sessão; só leitura (stable): membro + estoque.ver; sem paciente. tests/invariants/clinic-estoque-relatorios.test.ts.",
+  },
+  {
+    // FORK clinic (migration 9038).
+    fn: "fn_clinic_estoque_rel_rastreio_lote(uuid,uuid,text)",
+    razao:
+      "app/api/v1/clinic/estoque/relatorios/rastreio/route.ts (GET) chama com createClient da sessão. Recall com chave CLÍNICA estoque.rastreio_lote (fn_clinic_estoque_pode: membro + permissão); tipo da consulta categórico; limite de 30 consultas/hora por pessoa contado no próprio api_audit_log; grava a auditoria (só ids, contagem e tipo) na mesma transação. tests/invariants/clinic-estoque-revisao.test.ts prova recusa de administrador sem papel clínico, atendente, outra empresa, o limite e o registro.",
+  },
+  {
+    // FORK clinic (migration 9038).
+    fn: "fn_clinic_estoque_lote_bloquear(uuid,uuid,boolean,text)",
+    razao:
+      "app/api/v1/clinic/estoque/lotes/[id]/bloqueio/route.ts (POST) chama com createClient da sessão; fn_clinic_estoque_exigir(org, 'estoque.configurar') (membro + permissão + suporte com MFA) antes de tudo; lote conferido na organização; motivo obrigatório. tests/invariants/clinic-estoque-revisao.test.ts prova a recusa sem permissão e de outra empresa.",
+  },
+  {
+    // FORK clinic (migration 9038).
+    fn: "fn_clinic_estoque_custos_lotes(uuid,uuid)",
+    razao:
+      "lib/clinic/estoque/posicao.ts chama com o client da sessão só quando a pessoa vê custos; só leitura (stable): fn_clinic_estoque_pode(org, 'estoque.custos'). tests/invariants/clinic-estoque-revisao.test.ts prova a recusa de quem só tem estoque.ver e de outra empresa.",
+  },
+  {
+    // FORK clinic (migration 9017).
+    fn: "fn_clinic_iniciar_atendimento(uuid,uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/agendamentos/[id]/atendimento/route.ts (POST) chama com createClient da sessão; " +
+      "fn_acesso_exigir exige atendimento.iniciar (chave clínica), suporte de escrita e MFA; a opção prontuario precisa estar ligada; " +
+      "o agendamento é conferido na organização informada. tests/invariants/clinic-atendimentos.test.ts prova recusas e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9017).
+    fn: "fn_clinic_finalizar_atendimento(uuid,uuid)",
+    razao:
+      "app/api/v1/clinic/atendimentos/[id]/finalizar/route.ts (POST) chama com createClient da sessão; " +
+      "fn_acesso_exigir exige atendimento.finalizar (chave clínica), suporte de escrita e MFA; o atendimento é conferido na organização informada. " +
+      "tests/invariants/clinic-atendimentos.test.ts prova recusas e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9016).
+    fn: "fn_clinic_definir_prontuario(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.prontuario da organização informada. " +
+      "tests/invariants/clinic-acesso-clinico.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9007).
+    fn: "fn_clinic_definir_recursos(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.recursos da organização informada. " +
+      "tests/invariants/clinic-salas-e-equipamentos.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9005).
+    fn: "fn_clinic_definir_trava_sobreposicao(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.trava_sobreposicao da organização informada. " +
+      "tests/invariants/clinic-trava-de-sobreposicao.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9002).
+    fn: "fn_clinic_definir_ficha_obrigatoria(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.ficha_obrigatoria da organização informada. " +
+      "tests/invariants/clinic-ficha-do-paciente.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
+  },
+  {
+    // FORK clinic (migration 9001).
+    fn: "fn_clinic_definir_flag(uuid,boolean)",
+    razao:
+      "app/api/v1/clinic/config/route.ts (PATCH) chama com createClient da sessão; " +
+      "auth.uid() exige admin da própria organização, suporte de escrita e MFA comprovado, " +
+      "e a escrita é só a chave settings.clinic.profissionais da organização informada. " +
+      "tests/invariants/clinic-profissionais-rls.test.ts prova gerente recusado (42501) e anon sem EXECUTE.",
   },
 ];
 

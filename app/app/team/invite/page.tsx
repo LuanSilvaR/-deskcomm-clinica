@@ -7,7 +7,12 @@ import { InviteForm } from "./_components/InviteForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeamInvitePage() {
+export default async function TeamInvitePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ email?: string }>;
+}) {
+  const { email } = await searchParams;
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg || ROLE_RANK[activeOrg.role] < ROLE_RANK.admin) {
@@ -24,7 +29,7 @@ export default async function TeamInvitePage() {
           {t("Cole até 20 emails (um por linha) e escolha a role compartilhada.")}
         </p>
       </header>
-      <InviteForm />
+      <InviteForm emailInicial={typeof email === "string" ? email.slice(0, 320) : ""} />
     </div>
   );
 }
